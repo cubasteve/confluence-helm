@@ -134,6 +134,34 @@ Manual equivalent, any time:
 cd ~/helm && git pull && bash deploy.sh
 ```
 
+### Which version am I looking at
+
+`deploy.sh` stamps the served copy with the commit it published, and the
+panel prints it under SWIPE DOWN TO CLOSE:
+
+```
+SWIPE DOWN TO CLOSE   87b205f
+```
+
+A `+` means the repo had uncommitted changes when it was deployed. The
+literal `__BUILD__` means the page came from `~/helm` over `file://` and
+was never deployed at all.
+
+This exists because the copies drift, and for a long time nothing said so.
+Three of them can disagree at once: the repo, the served copy, and
+whatever a running Chromium still has in memory. The specific trap is a
+`git pull` run by hand - it moves the repo without deploying, and
+`autopull` used to compare only commits, so from then on every poll saw
+`before == after` and never noticed that what AvNav was serving was a
+different vintage. It now asks `deploy.sh --check` each cycle and
+republishes on drift, whatever the commits say.
+
+Each Chromium launch also gets a fresh `?v=` - the kiosk loop and the
+windowed one the helper starts. Without it Chromium paints the copy it
+already has, so a restart shows the old panel for a moment before the
+network catches up. The query string does not change the origin, so chart
+tiles and the track library in browser storage survive it.
+
 ## Connectivity
 
 A row of radios sits at the top of the control panel. No words on them -

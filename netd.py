@@ -505,7 +505,10 @@ def go_windowed():
     run(['pkill', '-f', 'start-kiosk.sh'], 10)
     run(['pkill', '-f', 'chromium.*' + KIOSK_FLAG], 10)
     time.sleep(1.5)
-    spawn([CHROME, WIN_FLAG, '--noerrdialogs', '--disable-infobars', APP_URL])
+    # ?v= for the same reason start-kiosk.sh uses one: without it Chromium
+    # paints the copy it already has and the old panel flashes up first.
+    spawn([CHROME, WIN_FLAG, '--noerrdialogs', '--disable-infobars',
+           APP_URL + ('&' if '?' in APP_URL else '?') + 'v=%d' % int(time.time())])
     # Never strand the helm with no browser at all. If the windowed one
     # did not come up, put the kiosk back rather than leave black glass
     # and SSH as the only way in.

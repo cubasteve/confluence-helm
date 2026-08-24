@@ -43,30 +43,42 @@ while true; do
 
   after=$(git rev-parse HEAD 2>/dev/null || echo none)
 
+  # Two reasons to publish, not one. The obvious one is that the pull
+  # brought something new. The other is drift: a `git pull` run by hand
+  # moves the repo without deploying, and a commit-only test then sees
+  # before == after for ever and never notices that what AvNav is serving
+  # is a different vintage from what is checked out. That is how a Pi ends
+  # up running three versions of this app at once.
   if [ "$before" != "$after" ]; then
     log "updated $(git log --oneline -1 "$after" 2>/dev/null)"
-    # The radio helper runs from the repo, so a pushed change to it would
-    # otherwise sit there until the next session restart. Killing the
-    # python process is enough: netd.sh's loop brings the new one back.
-    # Anchored on python3 so the supervising loop itself survives.
-    if git diff --name-only "$before" "$after" 2>/dev/null | grep -q '^netd\.py$'; then
-      pkill -f '^python3 .*netd\.py' 2>/dev/null && log "radio helper restarting"
-    fi
+  elif ! bash "$REPO/deploy.sh" --check 2>/dev/null; then
+    log "served copy is stale - redeploying"
+  else
+    sleep "$INTERVAL"; continue
+  fi
 
-    if bash "$REPO/deploy.sh"; then
-      if [ "$RELOAD" = "1" ]; then
-        # start-kiosk.sh runs chromium in a restart loop, so killing it is
-        # all it takes - no window-manager tooling, no xdotool. Matches the
-        # kiosk instance only, leaving the desktop-shortcut window alone.
-        if pkill -f 'chromium-browser --kiosk' 2>/dev/null; then
-          log "kiosk restarting with the new version"
-        fi
-      else
-        log "deployed; reload suppressed (AUTOPULL_RELOAD=0)"
+  # The radio helper runs from the repo, so a pushed change to it would
+  # otherwise sit there until the next session restart. Killing the python
+  # process is enough: netd.sh's loop brings the new one back. Anchored on
+  # python3 so the supervising loop itself survives.
+  if [ "$before" != "$after" ] &&
+     git diff --name-only "$before" "$after" 2>/dev/null | grep -q '^netd\.py$'; then
+    pkill -f '^python3 .*netd\.py' 2>/dev/null && log "radio helper restarting"
+  fi
+
+  if bash "$REPO/deploy.sh"; then
+    if [ "$RELOAD" = "1" ]; then
+      # start-kiosk.sh runs chromium in a restart loop, so killing it is
+      # all it takes - no window-manager tooling, no xdotool. Matches the
+      # kiosk instance only, leaving the desktop-shortcut window alone.
+      if pkill -f 'chromium-browser --kiosk' 2>/dev/null; then
+        log "kiosk restarting with the new version"
       fi
     else
-      log "deploy failed - leaving the running version alone"
+      log "deployed; reload suppressed (AUTOPULL_RELOAD=0)"
     fi
+  else
+    log "deploy failed - leaving the running version alone"
   fi
 
   sleep "$INTERVAL"

@@ -310,6 +310,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* the status element is now the centred .t-status line above the rail */
 .hint{font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7;
   text-align:center;margin-top:34px}
+/* which build is on the glass. Small, permanent, and the only way to tell
+   three copies of this file apart at a glance. */
+.build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
 /* --- ambient screensaver --- */
 #saver{position:absolute;inset:0;background:var(--bg);opacity:0;
   pointer-events:none;transition:opacity .5s}
@@ -611,7 +614,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       </div>
     </div>
 
-    <div class="hint">SWIPE DOWN TO CLOSE</div>
+    <!-- deploy.sh rewrites __BUILD__ with the commit it published. A panel
+         still showing the literal placeholder is a page loaded from ~/helm
+         over file://, not the deployed one - which is the whole point of
+         printing it. -->
+    <div class="hint">SWIPE DOWN TO CLOSE<span class="build">__BUILD__</span></div>
   </div>
 
   <!-- ---- the picker, over the panel ----

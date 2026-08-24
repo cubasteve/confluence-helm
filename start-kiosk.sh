@@ -28,9 +28,15 @@ done
 
 # Restart if Chromium dies - a crash on a boat should self-heal rather
 # than leave a blank helm.
+#
+# Each launch gets a fresh ?v=, because without it Chromium will happily
+# paint the copy it already has - you deploy, the kiosk restarts, and the
+# old panel appears for a moment before the network catches up. The query
+# string does not change the origin, so the chart tiles and the track
+# library in browser storage survive it.
 while true; do
   chromium-browser --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
-    "$URL"
+    "$URL?v=$(date +%s)"
   sleep 3
 done

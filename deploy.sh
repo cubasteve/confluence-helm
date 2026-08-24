@@ -10,7 +10,13 @@
 # does not support creating them. So this script keeps them in step, and
 # is the only thing that should ever write the served copy.
 #
-# Usage:  bash ~/helm/deploy.sh
+# The served copy is stamped with the commit it came from, and the panel
+# prints it under SWIPE DOWN TO CLOSE. Without that there is no way to
+# tell which of the copies on this Pi you are looking at - and they do
+# drift, because a `git pull` by hand moves the repo without deploying.
+#
+# Usage:  bash ~/helm/deploy.sh            publish
+#         bash ~/helm/deploy.sh --check    exit 0 if the served copy is current
 set -e
 
 SRC="$HOME/helm/confluence_helm.html"
@@ -20,10 +26,24 @@ DST="$DST_DIR/confluence_helm.html"
 [ -f "$SRC" ] || { echo "no source at $SRC" >&2; exit 1; }
 [ -d "$DST_DIR" ] || { echo "no served dir at $DST_DIR - is AvNav installed?" >&2; exit 1; }
 
-cp "$SRC" "$DST"
+# The repo copy keeps the literal __BUILD__, so a page showing that is a
+# page loaded straight from ~/helm over file:// - never a deployed one.
+build_id(){
+  local b
+  b=$(git -C "$HOME/helm" rev-parse --short HEAD 2>/dev/null || echo unknown)
+  git -C "$HOME/helm" diff --quiet 2>/dev/null || b="$b+"     # + means uncommitted
+  printf '%s' "$b"
+}
+stamp(){ sed "s/__BUILD__/$(build_id)/" "$SRC"; }
 
-if cmp -s "$SRC" "$DST"; then
-  echo "deployed  $(wc -c < "$DST") bytes  ->  $DST"
+if [ "${1:-}" = "--check" ]; then
+  stamp | cmp -s - "$DST" && exit 0 || exit 1
+fi
+
+stamp > "$DST"
+
+if stamp | cmp -s - "$DST"; then
+  echo "deployed  $(build_id)  $(wc -c < "$DST") bytes  ->  $DST"
 else
   echo "COPY VERIFY FAILED - served copy does not match source" >&2
   exit 1
