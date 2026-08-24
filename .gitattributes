@@ -1,0 +1,8 @@
+# The Pi serves these verbatim and runs the scripts under bash, where a
+# stray CR is a syntax error. Normalise on commit and check out LF
+# everywhere, so editing from Windows cannot reintroduce CRLF the way a
+# Python io.open(...,'w') pass once did to the HTML.
+* text=auto eol=lf
+*.svg text eol=lf
+*.png binary
+*.jpg binary
