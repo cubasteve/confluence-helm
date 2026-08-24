@@ -192,24 +192,30 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* :active handled by the single .mini:active rule above */
 
 /* --- connectivity ------------------------------------------------
-   Two tiles that behave like the iOS control centre: state legible at
-   a glance, one tap to the picker. Outlined rather than filled when
-   on, for the same reason as everything else on this panel - a
-   291 x 132 block of accent is a lamp in the face at night, and the
-   night palette is red precisely so that nothing is.               */
-.conn{display:flex;gap:18px}
-.ctile{flex:1;min-width:0;height:132px;border-radius:26px;background:var(--chip);
-  border:2px solid transparent;padding:0 22px;font-family:var(--font);text-align:left;
-  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
-  gap:4px;color:var(--label)}
-.ctile svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:2;
+   A row of radios at the top of the panel. No words on them, because
+   the state IS the icon: arcs filled to signal for a client, a base
+   station for an adapter that is itself the hotspot, a slash for one
+   that is down.
+
+   One button per adapter rather than one for "WiFi". Two radios with
+   opposite jobs is the normal case here - the onboard one running the
+   hotspot everything aboard is joined to, a dongle reaching out to a
+   marina - and a single switch cannot say that. Onboard first, then
+   USB, and the USB one wears a small aerial. That order has to hold
+   across reboots, which is why the helper keys it off the bus and not
+   off wlan0/wlan1 - those can swap.
+
+   Outlined, never filled, like everything else on this panel.      */
+.conn{display:flex;justify-content:center;gap:26px;margin-bottom:32px}
+.cbtn{width:104px;height:104px;border-radius:50%;background:none;flex:none;
+  border:2px solid var(--hairline);color:var(--label);font-family:var(--font);
+  display:flex;align-items:center;justify-content:center}
+.cbtn svg{width:54px;height:54px;fill:none;stroke:currentColor;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
-.ctile .ct-k{font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
-.ctile .ct-v{font-size:20px;font-weight:600;letter-spacing:.04em;color:var(--label);
-  max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.ctile:active{background:var(--hairline)}
-.ctile.on{color:var(--accent);border-color:var(--accent)}
-.ctile.on .ct-v{color:var(--ink)}
+.cbtn svg .f{fill:currentColor;stroke:none}
+.cbtn:active{background:var(--chip)}
+.cbtn.on{color:var(--accent);border-color:var(--accent)}
+.cbtn.off{opacity:.42}
 
 /* --- the picker -------------------------------------------------
    Full-bleed over the panel, exactly as the race library sits over
@@ -223,6 +229,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   padding-bottom:14px;border-bottom:2px solid var(--hairline)}
 .ns-title{font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
   text-transform:uppercase}
+/* which adapter this picker is driving - the panel itself says nothing,
+   so this is the only place the two are told apart in words */
+.ns-for{font-size:19px;font-weight:600;letter-spacing:.12em;color:var(--label);
+  text-transform:uppercase;margin-top:8px;opacity:.75}
 /* the only switch in the app, so it may as well look like one */
 .sw{width:104px;height:56px;border-radius:28px;background:var(--hairline);
   position:relative;flex:none;border:none;padding:0;transition:background .18s}
@@ -560,6 +570,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   <div class="grab"></div>
   <div class="sheet">
 
+    <!-- Filled in by the app once netd.py answers, and left empty when it
+         does not: on a phone loading this same page over boat WiFi the
+         helper is unreachable, and dead radios would be worse than none. -->
+    <div class="conn" id="conn-sec" style="display:none"></div>
+
     <div class="slab">Display <span id="dim-pct">100%</span></div>
     <div class="dimrow">
       <button class="tile" id="theme-btn">
@@ -596,30 +611,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       </div>
     </div>
 
-    <!-- Hidden until netd.py answers. On a phone or tablet loading this
-         same page over boat WiFi the helper is not reachable at all, and
-         dead tiles would be worse than no tiles. -->
-    <div id="conn-sec" style="display:none">
-      <div class="slab">Connectivity</div>
-      <div class="conn">
-        <button class="ctile" id="wifi-tile">
-          <svg viewBox="0 0 24 24">
-            <path d="M2.5 8.5a15 15 0 0 1 19 0"/>
-            <path d="M6 12.6a10 10 0 0 1 12 0"/>
-            <path d="M9.4 16.7a5 5 0 0 1 5.2 0"/>
-            <circle cx="12" cy="20.3" r="1.1" fill="currentColor" stroke="none"/>
-          </svg>
-          <span class="ct-k">Wi-Fi</span>
-          <span class="ct-v" id="wifi-sub">—</span>
-        </button>
-        <button class="ctile" id="bt-tile">
-          <svg viewBox="0 0 24 24"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></svg>
-          <span class="ct-k">Bluetooth</span>
-          <span class="ct-v" id="bt-sub">—</span>
-        </button>
-      </div>
-    </div>
-
     <div class="hint">SWIPE DOWN TO CLOSE</div>
   </div>
 
@@ -628,7 +619,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   <div id="netsheet">
     <div class="ns" id="ns-list-view">
       <div class="ns-head">
-        <div class="ns-title" id="ns-title">Wi-Fi</div>
+        <div>
+          <div class="ns-title" id="ns-title">Wi-Fi</div>
+          <div class="ns-for" id="ns-for"></div>
+        </div>
         <button class="sw" id="ns-sw"><b></b></button>
       </div>
       <div class="ns-list" id="ns-list"></div>
@@ -1754,22 +1748,26 @@ $('t-minus').addEventListener('pointerup',e=>{e.stopPropagation();nudge(-60);});
 $('t-plus') .addEventListener('pointerup',e=>{e.stopPropagation();nudge( 60);});
 
 /* ==================================================================
-   CONNECTIVITY  ·  WiFi and Bluetooth
+   CONNECTIVITY  ·  WiFi adapters and Bluetooth
    A browser cannot see either radio. There is no web API for WiFi at
    all, and navigator.bluetooth pairs a device to the *page*, which is
-   a different thing from pairing it to the Pi. So the tiles talk to
+   a different thing from pairing it to the Pi. So the buttons talk to
    netd.py over loopback, and it shells out to nmcli and bluetoothctl.
 
    Being loopback-only does the access control for free: on a phone
    loading this same page over boat WiFi, CFG.netd resolves to the
-   phone, nothing answers, and the whole section stays hidden. No
-   guest gets to re-point the boat's networking, and you cannot cut
-   your own connection by switching off the AP you are talking over.
+   phone, nothing answers, and the row stays empty. No guest gets to
+   re-point the boat's networking.
+
+   WiFi is per adapter. The onboard radio is usually the hotspot the
+   whole boat is joined to and the dongle is the one reaching out, so
+   they get a button each - and taking the hotspot down needs a second,
+   deliberate tap, because everything aboard is riding on it.
    ================================================================== */
 const netsheet=$('netsheet');
-const NET={ kind:'wifi', page:0, rows:[], powered:false, scanning:false,
-            busy:'', have:{wifi:false,bt:false}, pw:null,
-            poll:null, tick:null };
+const NET={ kind:'wifi', dev:null, page:0, rows:[], powered:false, ap:false,
+            scanning:false, busy:'', pw:null, st:{}, tilesHtml:'',
+            confirm:'', confirmT:null, poll:null, tick:null };
 const PAGE=4;                      /* rows per page - matches .ns-list height */
 
 /* SSIDs and Bluetooth names come off the air and go into innerHTML.
@@ -1801,22 +1799,73 @@ function setMsg(txt,bad){
   });
 }
 
-/* ---- tiles ---- */
+/* ---- the icons ----
+   These are the whole interface, so each state has to be readable at a
+   glance and unmistakable for the others. */
+function icoWifi(d){
+  const off=!d.up;
+  let o='';
+  if(d.ap){
+    /* a base station with waves coming off it. Deliberately NOT the
+       client fan, which is also arcs over a dot and would read the
+       same from a metre away. */
+    o+='<rect x="4" y="13.6" width="16" height="6.6" rx="2.2"/>'
+      +'<circle class="f" cx="7.6" cy="16.9" r="1"/>'
+      +'<path d="M9.2 10.3a5.6 5.6 0 0 1 5.6 0"/>'
+      +'<path d="M6.6 6.7a10.5 10.5 0 0 1 10.8 0"/>';
+  }else{
+    const lvl = d.signal>=70?3 : d.signal>=45?2 : d.signal>0?1:0;
+    const fade=n=>off?0.9:(n<=lvl?1:0.22);
+    o+='<path d="M2.5 8.6a15 15 0 0 1 19 0" opacity="'+fade(3)+'"/>'
+      +'<path d="M6 12.7a10 10 0 0 1 12 0" opacity="'+fade(2)+'"/>'
+      +'<path d="M9.4 16.8a5 5 0 0 1 5.2 0" opacity="'+fade(1)+'"/>'
+      +'<circle class="f" cx="12" cy="20.4" r="1.2" opacity="'+fade(1)+'"/>';
+  }
+  /* the dongle wears an aerial, so two adapters in the same state are
+     still telling apart without a word on the button */
+  if(d.bus==='usb')
+    o+='<path d="M1.4 22.7h3.6M3.2 22.7v-3.6"/>'
+      +'<circle class="f" cx="3.2" cy="17.7" r="1.25"/>';
+  if(off) o+='<path d="M3.6 3.6l16.8 16.8"/>';
+  return '<svg viewBox="0 0 24 24">'+o+'</svg>';
+}
+function icoBt(b){
+  let o='<path d="M7.5 7.8l9 8.4-4.5 4.2V3.6l4.5 4.2-9 8.4"/>';
+  if(!b.powered) o+='<path d="M3.6 3.6l16.8 16.8"/>';
+  return '<svg viewBox="0 0 24 24">'+o+'</svg>';
+}
+
+function paintTiles(){
+  const w=NET.st.wifi||{}, b=NET.st.bt||{};
+  let o='';
+  (w.devices||[]).forEach(d=>{
+    o+='<button class="cbtn '+(d.up?'on':'off')+'" data-k="wifi" data-dev="'
+      +esc(d.dev)+'">'+icoWifi(d)+'</button>';
+  });
+  if(b.available){
+    const cls = !b.powered ? 'off'
+      : ((b.connected&&b.connected.length) ? 'on' : '');
+    o+='<button class="cbtn '+cls+'" data-k="bt">'+icoBt(b)+'</button>';
+  }
+  /* Rewriting innerHTML on every poll would kill the :active flash
+     under a finger and repaint for nothing. Only when it changed. */
+  if(o!==NET.tilesHtml){ $('conn-sec').innerHTML=o; NET.tilesHtml=o; }
+}
+
 async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{};
-  NET.have={wifi:!!w.available, bt:!!b.available};
-  if(!NET.have.wifi && !NET.have.bt){
-    $('conn-sec').style.display='none'; closeNet(); return false; }
+  NET.st={wifi:w,bt:b};
+  if(!w.available && !b.available){
+    $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
   $('conn-sec').style.display='';
-  $('wifi-tile').style.display=NET.have.wifi?'':'none';
-  $('bt-tile')  .style.display=NET.have.bt  ?'':'none';
-  $('wifi-tile').classList.toggle('on',!!w.powered);
-  $('bt-tile')  .classList.toggle('on',!!b.powered);
-  $('wifi-sub').textContent = !w.powered ? 'OFF' : (w.ssid || 'NOT JOINED');
-  $('bt-sub').textContent   = !b.powered ? 'OFF'
-    : (b.connected&&b.connected.length ? b.connected.join(', ') : 'NO DEVICE');
-  NET.powered = NET.kind==='wifi' ? !!w.powered : !!b.powered;
+  paintTiles();
+  /* keep the open picker's own switch honest */
+  if(NET.kind==='bt') NET.powered=!!b.powered;
+  else if(NET.dev){
+    const d=(w.devices||[]).find(x=>x.dev===NET.dev.dev);
+    if(d){ NET.dev=d; NET.powered=!!d.up; NET.ap=!!d.ap; }
+  }
   return true;
 }
 
@@ -1832,9 +1881,15 @@ function netPanelOpen(){
 function netPanelClose(){ clearInterval(NET.poll); NET.poll=null; closeNet(); }
 
 /* ---- the picker ---- */
-function openNet(kind){
+function openNet(kind,dev){
   NET.kind=kind; NET.page=0; NET.rows=[]; NET.busy=''; NET.scanning=false;
+  NET.confirm=''; clearTimeout(NET.confirmT);
+  const devs=(NET.st.wifi&&NET.st.wifi.devices)||[];
+  NET.dev = kind==='wifi' ? (devs.find(d=>d.dev===dev)||devs[0]||null) : null;
+  NET.ap  = !!(NET.dev&&NET.dev.ap);
   $('ns-title').textContent = kind==='wifi' ? 'Wi-Fi' : 'Bluetooth';
+  $('ns-for').textContent = (kind==='wifi'&&NET.dev)
+    ? (NET.dev.bus==='usb'?'USB ADAPTER · ':'BUILT-IN · ')+NET.dev.dev : '';
   showPw(false); setMsg('');
   netsheet.classList.add('on');
   netStatus().then(ok=>{
@@ -1843,7 +1898,9 @@ function openNet(kind){
 }
 function closeNet(){
   netsheet.classList.remove('on');
-  clearTimeout(NET.tick); NET.tick=null; showPw(false);
+  clearTimeout(NET.tick); NET.tick=null;
+  clearTimeout(NET.confirmT); NET.confirm='';
+  showPw(false);
 }
 /* A self-rescheduling timeout rather than an interval, so a Bluetooth
    scan can be watched closely for its twelve seconds and then left
@@ -1858,12 +1915,18 @@ function netTick(){
 async function netRefresh(rescan){
   if(NET.busy) return;
   const j = NET.kind==='wifi'
-    ? await netApi('/wifi/list', rescan?{rescan:true}:null)
+    ? await netApi('/wifi/list',{dev:NET.dev?NET.dev.dev:'', rescan:!!rescan})
     : await netApi('/bt/list');
   if(!j) return;
-  NET.powered=!!j.powered;
+  if(NET.kind==='wifi'){
+    NET.powered=!!j.up;             /* the switch means THIS adapter */
+    NET.ap=!!j.ap;
+    NET.rows=j.nets||[];
+  }else{
+    NET.powered=!!j.powered;
+    NET.rows=j.devices||[];
+  }
   NET.scanning=!!j.scanning;
-  NET.rows = NET.kind==='wifi' ? (j.nets||[]) : (j.devices||[]);
   const pages=Math.max(1,Math.ceil(NET.rows.length/PAGE));
   if(NET.page>=pages) NET.page=pages-1;
   renderRows();
@@ -1882,6 +1945,11 @@ function bars(sig){
   }
   return '<svg class="bars" viewBox="0 0 34 34">'+o+'</svg>';
 }
+const AP_GLYPH='<svg class="bars" viewBox="0 0 24 24" fill="none" '
+  +'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+  +'stroke-linejoin="round"><rect x="4" y="13.6" width="16" height="6.6" rx="2.2"/>'
+  +'<path d="M9.2 10.3a5.6 5.6 0 0 1 5.6 0"/>'
+  +'<path d="M6.6 6.7a10.5 10.5 0 0 1 10.8 0"/></svg>';
 const BT_GLYPH='<svg class="bars" viewBox="0 0 24 24" fill="none" '
   +'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
   +'stroke-linejoin="round"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></svg>';
@@ -1894,7 +1962,8 @@ function renderRows(){
   $('ns-up')  .classList.toggle('dim', NET.page<=0);
   $('ns-down').classList.toggle('dim', (NET.page+1)*PAGE>=NET.rows.length);
   if(!NET.powered){
-    box.innerHTML='<div class="ns-empty">'+(wifi?'WI-FI IS OFF':'BLUETOOTH IS OFF')+'</div>';
+    box.innerHTML='<div class="ns-empty">'
+      +(wifi?'THIS ADAPTER IS OFF':'BLUETOOTH IS OFF')+'</div>';
     $('ns-count').textContent=''; return; }
   if(!NET.rows.length){
     box.innerHTML='<div class="ns-empty">'
@@ -1910,15 +1979,17 @@ function renderRows(){
 
 function rowHtml(r,idx,wifi){
   const live = wifi ? r.active : r.connected;
+  const hot  = wifi && r.active && NET.ap;      /* our own hotspot, not a network we joined */
   const sub  = wifi
-    ? (r.active ? 'CONNECTED · '+r.signal+'%'
-                : (r.saved?'SAVED · ':'')+(r.secure?'SECURED':'OPEN')+' · '+r.signal+'%')
+    ? (hot ? 'HOTSPOT · THE BOAT IS ON THIS'
+           : r.active ? 'CONNECTED · '+r.signal+'%'
+           : (r.saved?'SAVED · ':'')+(r.secure?'SECURED':'OPEN')+' · '+r.signal+'%')
     : (r.connected?'CONNECTED':(r.paired?'PAIRED':'AVAILABLE'));
-  /* ✕ only on things the Pi remembers - forgetting a network it has
-     never joined would be a button that does nothing. */
-  const known = wifi ? r.saved : r.paired;
+  /* ✕ only on things the Pi remembers - and never on the running
+     hotspot, where it would delete the profile the boat runs on. */
+  const known = (wifi ? r.saved : r.paired) && !hot;
   return '<div class="ns-row'+(live?' live':'')+'" data-i="'+idx+'">'
-    +(wifi?bars(r.signal):BT_GLYPH)
+    +(hot?AP_GLYPH:(wifi?bars(r.signal):BT_GLYPH))
     +'<div class="ns-main"><div class="ns-name">'+esc(wifi?r.ssid:r.name)+'</div>'
     +'<div class="ns-sub">'+sub+'</div></div>'
     +(known?'<button class="mini" data-forget="'+idx+'">✕</button>':'')
@@ -1938,13 +2009,32 @@ async function netDo(label,path,body){
   return !!(j&&j.ok);
 }
 
+/* Anything that would take the hotspot down gets a second tap. Every
+   phone, tablet and laptop aboard is on it - including, quite often,
+   the one you would use to put it back. */
+function needsConfirm(key,words){
+  if(!NET.ap) return false;
+  if(NET.confirm===key){ NET.confirm=''; clearTimeout(NET.confirmT); return false; }
+  NET.confirm=key;
+  clearTimeout(NET.confirmT);
+  NET.confirmT=setTimeout(()=>{ NET.confirm=''; setMsg(''); },6000);
+  setMsg(words,true);
+  return true;
+}
+
 function netTap(i){
   const r=NET.rows[i]; if(!r||NET.busy) return;
+  const dev=NET.dev?NET.dev.dev:'';
   if(NET.kind==='wifi'){
-    if(r.active)            return netDo('LEAVING '+r.ssid,'/wifi/disconnect');
+    if(r.active){
+      if(needsConfirm('off:'+r.ssid,'TAP AGAIN TO STOP THE HOTSPOT')) return;
+      return netDo('STOPPING '+r.ssid,'/wifi/disconnect',{dev:dev});
+    }
+    if(needsConfirm('join:'+r.ssid,'TAP AGAIN · THIS DROPS THE HOTSPOT')) return;
     /* A saved profile already carries its key, and an open network has
        none to carry - either way there is nothing to type. */
-    if(r.saved||!r.secure)  return netDo('JOINING '+r.ssid,'/wifi/connect',{ssid:r.ssid});
+    if(r.saved||!r.secure)
+      return netDo('JOINING '+r.ssid,'/wifi/connect',{dev:dev,ssid:r.ssid});
     return showPw(true,r.ssid);
   }
   if(r.connected) return netDo('DISCONNECTING','/bt/disconnect',{mac:r.mac});
@@ -1957,14 +2047,17 @@ function netForget(i){
   else                  netDo('UNPAIRING '+r.name,'/bt/forget',{mac:r.mac});
 }
 
+$('conn-sec').addEventListener('click',e=>{
+  const btn=e.target.closest('.cbtn'); if(!btn) return;
+  e.stopPropagation();
+  openNet(btn.dataset.k, btn.dataset.dev);
+});
 $('ns-list').addEventListener('click',e=>{
   const f=e.target.closest('[data-forget]');
   if(f) return netForget(+f.dataset.forget);
   const row=e.target.closest('.ns-row');
   if(row) netTap(+row.dataset.i);
 });
-$('wifi-tile').addEventListener('click',e=>{ e.stopPropagation(); openNet('wifi'); });
-$('bt-tile')  .addEventListener('click',e=>{ e.stopPropagation(); openNet('bt');   });
 $('ns-done')  .addEventListener('click',closeNet);
 $('ns-up')  .addEventListener('click',()=>{ if(NET.page>0){NET.page--;renderRows();} });
 $('ns-down').addEventListener('click',()=>{
@@ -1978,9 +2071,12 @@ $('ns-scan').addEventListener('click',()=>{
 $('ns-sw').addEventListener('click',()=>{
   if(NET.busy) return;
   const on=!NET.powered;
+  if(!on && NET.kind==='wifi'
+     && needsConfirm('sw','TAP AGAIN TO STOP THE HOTSPOT')) return;
   NET.powered=on; NET.rows=[]; NET.page=0; renderRows();   /* answer the touch now */
   netDo(on?'TURNING ON':'TURNING OFF',
-        NET.kind==='wifi'?'/wifi/power':'/bt/power',{on:on});
+        NET.kind==='wifi'?'/wifi/power':'/bt/power',
+        NET.kind==='wifi'?{dev:NET.dev?NET.dev.dev:'',on:on}:{on:on});
 });
 
 /* ---- password entry ----
@@ -2039,7 +2135,8 @@ $('pw-cancel').addEventListener('click',()=>{ showPw(false); setMsg(''); });
 async function pwJoin(){
   const pw=NET.pw; if(!pw||NET.busy) return;
   if(pw.val.length<8) return setMsg('WPA KEYS ARE 8 CHARACTERS OR MORE',true);
-  const ok=await netDo('JOINING '+pw.ssid,'/wifi/connect',{ssid:pw.ssid,psk:pw.val});
+  const ok=await netDo('JOINING '+pw.ssid,'/wifi/connect',
+                       {dev:NET.dev?NET.dev.dev:'', ssid:pw.ssid, psk:pw.val});
   /* A refusal keeps the keyboard up with what you typed still in it. It
      is nearly always one wrong character, not the wrong password. */
   if(ok) showPw(false);

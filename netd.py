@@ -8,6 +8,11 @@
 # instead - a small local service that shells out to nmcli and bluetoothctl
 # and hands back JSON.
 #
+# WiFi is modelled per adapter, not per machine. A boat Pi typically has the
+# onboard radio running the hotspot everything aboard is connected to, and a
+# USB dongle reaching out to a marina - two radios with opposite jobs, which
+# a single on/off switch cannot express.
+#
 # Bound to 127.0.0.1 on purpose. Only Chromium on the Pi can reach it, so a
 # phone loading the same page over boat WiFi finds nothing and hides the
 # tiles - which is the behaviour we want. No guest on the boat network gets
@@ -30,6 +35,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
 BIND = os.environ.get('HELM_NETD_BIND', '127.0.0.1')
+# Only ever anything else in a test rig: there is no way to fake an adapter
+# on a real Pi, and bus detection is the one thing here that reads hardware.
+SYSFS = os.environ.get('HELM_SYSFS', '/sys')
 
 # The kiosk loads the app from AvNav on :8080, and falls back to file:// when
 # AvNav is slow to come up - which arrives here as a null Origin. Both are the
@@ -81,12 +89,13 @@ def terse(line):
 
 _cap = {'at': 0, 'nm': False, 'bt': False}
 _lock = threading.Lock()          # one mutating radio command at a time
+_apmemo = {}                      # profile name -> (checked_at, is_access_point)
 
 
 def capabilities():
     """What this Pi can actually do, re-probed occasionally.
 
-    Cached because /status is polled while the panel is open and shelling
+    Cached because /status is polled while the panel is open, and shelling
     out twice a second to learn something that changes once a year is the
     kind of idle work this display is careful not to do."""
     now = time.time()
@@ -94,52 +103,136 @@ def capabilities():
         return _cap
     _cap['at'] = now
     # nmcli existing is not enough - it exits non-zero when NetworkManager
-    # itself is not running, which is exactly the Bullseye/wpa_supplicant
-    # case we want to detect rather than half-support.
+    # itself is not running, which is exactly the wpa_supplicant case we
+    # want to detect rather than half-support.
     _cap['nm'] = bool(shutil.which('nmcli')) and run(['nmcli', '-t', '-f', 'STATE', 'general'], 6)[0] == 0
     _cap['bt'] = bool(shutil.which('bluetoothctl')) and 'No default controller' not in run(['bluetoothctl', 'show'], 6)[1]
     return _cap
 
 
-def wifi_dev():
-    """First managed WiFi interface, or None."""
-    rc, out, _ = run(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE', 'device'], 8)
-    if rc:
-        return None
+def wifi_powered():
+    """The global rfkill switch. It is all-or-nothing across every adapter,
+    which is exactly why the per-adapter toggles do not use it."""
+    return run(['nmcli', '-t', '-f', 'WIFI', 'radio'], 6)[1].strip() == 'enabled'
+
+
+def dev_bus(dev):
+    """Onboard or plugged in.
+
+    The Pi's own radio hangs off SDIO; a dongle hangs off USB, so the
+    device symlink says which is which. It decides the order the tiles
+    appear in and which one gets the aerial mark, so it has to be stable
+    across reboots - which a name like wlan1 is not."""
+    path = '%s/class/net/%s/device' % (SYSFS, dev)
+    try:
+        return 'usb' if '/usb' in os.path.realpath(path) else 'onboard'
+    except OSError:
+        return 'onboard'
+
+
+def con_is_ap(name):
+    """Is this profile a hotspot rather than a network we joined?
+
+    Two ways of saying it, and images differ on which they set, so accept
+    either: 802-11-wireless.mode=ap is the radio in master mode, and
+    ipv4.method=shared is NetworkManager handing out the addresses."""
+    hit = _apmemo.get(name)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    rc, out, _ = run(['nmcli', '-t', '-f', '802-11-wireless.mode,ipv4.method',
+                      'connection', 'show', name], 8)
+    mode = meth = ''
     for line in out.splitlines():
         f = terse(line)
-        if len(f) >= 3 and f[1] == 'wifi' and f[2] != 'unmanaged':
-            return f[0]
-    return None
+        if len(f) >= 2:
+            if f[0] == '802-11-wireless.mode':
+                mode = f[1]
+            elif f[0] == 'ipv4.method':
+                meth = f[1]
+    val = (mode == 'ap') or (meth == 'shared')
+    _apmemo[name] = (time.time(), val)
+    return val
 
 
-def wifi_powered():
-    return run(['nmcli', '-t', '-f', 'WIFI', 'radio'], 6)[1].strip() == 'enabled'
+def dev_signal(dev):
+    rc, out, _ = run(['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'device', 'wifi',
+                      'list', 'ifname', dev], 12)
+    for line in out.splitlines():
+        f = terse(line)
+        if len(f) >= 2 and f[0] == '*':
+            try:
+                return int(f[1])
+            except ValueError:
+                return 0
+    return 0
+
+
+def wifi_devices():
+    """Every managed WiFi adapter and what it is doing.
+
+    One `device show` covers the lot - state, profile and address for all
+    of them in a single call - because this is polled, and a subprocess
+    per adapter per field adds up fast on a Pi."""
+    rc, out, _ = run(['nmcli', '-t', '-f',
+                      'GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,'
+                      'GENERAL.CONNECTION,IP4.ADDRESS', 'device', 'show'], 15)
+    if rc:
+        return []
+    raw, cur = [], None
+    for line in out.splitlines():
+        f = terse(line)
+        if len(f) < 2:
+            continue
+        k, v = f[0], f[1]
+        if k == 'GENERAL.DEVICE':
+            cur = {'dev': v, 'type': '', 'state': '', 'con': '', 'ip': ''}
+            raw.append(cur)
+        elif cur is None:
+            continue
+        elif k == 'GENERAL.TYPE':
+            cur['type'] = v
+        elif k == 'GENERAL.STATE':
+            cur['state'] = v                      # e.g. "100 (connected)"
+        elif k == 'GENERAL.CONNECTION':
+            cur['con'] = '' if v in ('', '--') else v
+        elif k.startswith('IP4.ADDRESS') and not cur['ip']:
+            cur['ip'] = v.split('/')[0]
+
+    devs = []
+    for d in raw:
+        if d['type'] != 'wifi' or 'unmanaged' in d['state']:
+            continue
+        ap = con_is_ap(d['con']) if d['con'] else False
+        row = {'dev': d['dev'], 'bus': dev_bus(d['dev']),
+               'up': '(connected)' in d['state'],
+               'ssid': d['con'], 'ap': ap, 'ip': d['ip'], 'signal': 0,
+               'state': d['state'].split('(')[-1].rstrip(')')}
+        # Signal is meaningless for an adapter that is itself the AP, and
+        # costs a scan to ask for, so only clients get asked.
+        if row['up'] and not ap:
+            row['signal'] = dev_signal(d['dev'])
+        devs.append(row)
+    # Onboard first, then dongles: a stable order matters when the tiles
+    # carry no words to tell them apart.
+    devs.sort(key=lambda r: (r['bus'] == 'usb', r['dev']))
+    return devs
 
 
 def wifi_status():
     if not capabilities()['nm']:
         return {'available': False}
-    powered = wifi_powered()
-    st = {'available': True, 'powered': powered, 'ssid': '', 'signal': 0, 'ip': ''}
-    dev = wifi_dev()
-    if not dev or not powered:
-        return st
-    rc, out, _ = run(['nmcli', '-t', '-f', 'GENERAL.CONNECTION,IP4.ADDRESS', 'device', 'show', dev], 8)
-    for line in out.splitlines():
-        f = terse(line)
-        if len(f) < 2:
-            continue
-        if f[0] == 'GENERAL.CONNECTION' and f[1] not in ('', '--'):
-            st['ssid'] = f[1]
-        elif f[0].startswith('IP4.ADDRESS') and not st['ip']:
-            st['ip'] = f[1].split('/')[0]
-    if st['ssid']:
-        for n in wifi_list()['nets']:
-            if n['active']:
-                st['signal'] = n['signal']
-                break
-    return st
+    devs = wifi_devices()
+    return {'available': bool(devs), 'radio': wifi_powered(), 'devices': devs}
+
+
+def find_dev(dev):
+    """Resolve a device name from the panel, falling back to the first
+    adapter so a single-radio Pi never has to send one."""
+    devs = wifi_devices()
+    for d in devs:
+        if d['dev'] == dev:
+            return d
+    return devs[0] if devs else None
 
 
 def saved_wifi():
@@ -152,12 +245,14 @@ def saved_wifi():
     return names
 
 
-def wifi_list(rescan=False):
+def wifi_list(dev, rescan=False):
     if not capabilities()['nm']:
         return {'available': False, 'nets': []}
-    fields = 'IN-USE,SSID,SIGNAL,SECURITY'
-    argv = ['nmcli', '-t', '-f', fields, 'device', 'wifi', 'list',
-            '--rescan', 'yes' if rescan else 'auto']
+    d = find_dev(dev)
+    if not d:
+        return {'available': False, 'nets': []}
+    argv = ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi',
+            'list', 'ifname', d['dev'], '--rescan', 'yes' if rescan else 'auto']
     rc, out, err = run(argv, 40 if rescan else 15)
     if rc:
         # --rescan landed in nmcli 1.12. On anything older the flag is the
@@ -165,6 +260,7 @@ def wifi_list(rescan=False):
         rc, out, err = run(argv[:-2], 15)
         if rc:
             return {'available': True, 'powered': wifi_powered(), 'nets': [],
+                    'dev': d['dev'], 'ap': d['ap'], 'up': d['up'],
                     'error': err or 'scan failed'}
     saved = saved_wifi()
     best = {}
@@ -189,12 +285,19 @@ def wifi_list(rescan=False):
         if not old or (row['active'] or (not old['active'] and sig > old['signal'])):
             best[ssid] = row
     nets = sorted(best.values(), key=lambda n: (not n['active'], -n['signal']))
-    return {'available': True, 'powered': wifi_powered(), 'nets': nets}
+    return {'available': True, 'powered': wifi_powered(), 'nets': nets,
+            'dev': d['dev'], 'ap': d['ap'], 'up': d['up']}
 
 
 def wifi_error(err):
-    """nmcli's failures, in words that fit on a tile."""
-    e = (err or '').lower()
+    """nmcli's failures, in words that fit on a tile.
+
+    Empty in, empty out: a command that said nothing succeeded, and
+    labelling that FAILED is how a working join comes back looking
+    broken."""
+    if not err:
+        return ''
+    e = err.lower()
     if 'secrets were required' in e or 'no secrets' in e or '802-11-wireless-security.psk' in e:
         return 'WRONG PASSWORD'
     if 'timeout' in e or 'timed out' in e:
@@ -206,28 +309,53 @@ def wifi_error(err):
     return (err or 'FAILED')[:120]
 
 
-def wifi_connect(ssid, psk):
-    dev = wifi_dev()
-    if not dev:
+def wifi_connect(dev, ssid, psk):
+    d = find_dev(dev)
+    if not d:
         return {'ok': False, 'error': 'NO WIFI ADAPTER'}
     with _lock:
         # A saved profile carries its own key, and re-supplying one we were
         # never given would overwrite it with nothing. So a saved network
         # with no password typed is a plain `connection up`.
         if not psk and ssid in saved_wifi():
-            rc, out, err = run(['nmcli', '-w', '35', 'connection', 'up', 'id', ssid], 45)
+            rc, out, err = run(['nmcli', '-w', '35', 'connection', 'up', 'id', ssid,
+                                'ifname', d['dev']], 45)
         else:
-            argv = ['nmcli', '-w', '35', 'device', 'wifi', 'connect', ssid, 'ifname', dev]
+            argv = ['nmcli', '-w', '35', 'device', 'wifi', 'connect', ssid,
+                    'ifname', d['dev']]
             if psk:
                 argv += ['password', psk]
             rc, out, err = run(argv, 45)
         if rc:
             # A rejected key leaves a broken profile behind that would then
-            # be offered as "saved" and fail forever. Bin it.
+            # be offered as "saved" and fail for ever. Bin it.
             if psk:
                 run(['nmcli', 'connection', 'delete', 'id', ssid], 10)
             return {'ok': False, 'error': wifi_error(err or out)}
+    _apmemo.clear()                       # this adapter's role may have changed
     return {'ok': True}
+
+
+def wifi_power(dev, on):
+    """Per-adapter, so one radio can be off while the other stays up.
+
+    This is `device disconnect` / `device connect`, not rfkill: rfkill is
+    global on this hardware, so turning one adapter off that way would
+    take the other down with it - and on a boat that other one is often
+    the hotspot everything else is talking over."""
+    d = find_dev(dev)
+    if not d:
+        return {'ok': False, 'error': 'NO WIFI ADAPTER'}
+    with _lock:
+        if on:
+            # Something else may have rfkilled the lot; an adapter cannot
+            # come up underneath that, and the error would not say so.
+            if not wifi_powered():
+                run(['nmcli', 'radio', 'wifi', 'on'], 20)
+            rc, out, err = run(['nmcli', '-w', '30', 'device', 'connect', d['dev']], 45)
+        else:
+            rc, out, err = run(['nmcli', 'device', 'disconnect', d['dev']], 30)
+    return {'ok': rc == 0, 'error': wifi_error(err or out)}
 
 
 # ----------------------------------------------------------- bluetooth
@@ -327,22 +455,20 @@ def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status()}
 
+    # Every wifi route is per-adapter. An absent dev means "the only one
+    # you have", which is what a single-radio Pi will always send.
     if path == '/wifi/list':
-        return dict(wifi_list(rescan=bool(body.get('rescan'))), ok=True)
+        return dict(wifi_list(str(body.get('dev', '')), bool(body.get('rescan'))), ok=True)
     if path == '/wifi/power':
-        on = 'on' if body.get('on') else 'off'
-        with _lock:
-            rc, _, err = run(['nmcli', 'radio', 'wifi', on], 20)
-        return {'ok': rc == 0, 'error': wifi_error(err)}
+        return wifi_power(str(body.get('dev', '')), bool(body.get('on')))
     if path == '/wifi/connect':
         ssid = str(body.get('ssid', ''))[:64]
         psk = str(body.get('psk', ''))[:96]
-        return wifi_connect(ssid, psk) if ssid else {'ok': False, 'error': 'NO SSID'}
+        if not ssid:
+            return {'ok': False, 'error': 'NO SSID'}
+        return wifi_connect(str(body.get('dev', '')), ssid, psk)
     if path == '/wifi/disconnect':
-        dev = wifi_dev()
-        with _lock:
-            rc, _, err = run(['nmcli', 'device', 'disconnect', dev], 20) if dev else (1, '', 'no adapter')
-        return {'ok': rc == 0, 'error': wifi_error(err)}
+        return wifi_power(str(body.get('dev', '')), False)
     if path == '/wifi/forget':
         with _lock:
             rc, _, err = run(['nmcli', 'connection', 'delete', 'id', str(body.get('ssid', ''))[:64]], 20)
