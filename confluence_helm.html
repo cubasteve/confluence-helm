@@ -589,7 +589,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       </button>
       <button class="tile" id="fs-btn">
         <svg id="fs-ico" viewBox="0 0 24 24"></svg>
-        <span>FULL</span>
+        <span id="fs-lbl">FULL</span>
         <span class="sub" id="fs-sub">OFF</span>
       </button>
       <input id="dim" type="range" min="25" max="100" value="100">
@@ -1854,8 +1854,9 @@ function paintTiles(){
 
 async function netStatus(){
   const j=await netApi('/status');
-  const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{};
-  NET.st={wifi:w,bt:b};
+  const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{};
+  NET.st={wifi:w,bt:b,display:dsp};
+  drawFs();                      /* the FULL/KIOSK tile reads this too */
   if(!w.available && !b.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
   $('conn-sec').style.display='';
@@ -2784,17 +2785,39 @@ function drawAmbient(){
    not the Fullscreen API, so on the Pi this reads OFF even though the
    display is genuinely full screen; tapping it is still harmless.     */
 const fsOn=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+/* Two different things can make this display full, and only one of them
+   is visible to the page. A phone or a laptop has the Fullscreen API.
+   The Pi runs --kiosk, which the API cannot see at all - which is why
+   this tile used to read OFF on a display that was manifestly full, and
+   why tapping it flipped its own label without changing a pixel.
+   So: ask the helper which world we are in, and drive whichever one is
+   real here. */
+const kioskLive=()=>{
+  const d=(typeof NET!=='undefined'&&NET.st&&NET.st.display)||{};
+  return !!(d.available&&(d.kiosk||d.windowed));
+};
 function drawFs(){
-  const on=fsOn();
+  const d=(typeof NET!=='undefined'&&NET.st&&NET.st.display)||{};
+  const kiosk=kioskLive();
+  const on = kiosk ? !!d.kiosk : fsOn();
   $('fs-ico').innerHTML = on
     ? '<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>'   /* arrows inward  */
     : '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>';  /* arrows outward */
+  $('fs-lbl').textContent = kiosk ? 'KIOSK' : 'FULL';
   $('fs-sub').textContent = on ? 'ON' : 'OFF';
   $('fs-btn').classList.toggle('on', on);
   $('fs-btn').classList.toggle('off', !on);
 }
-$('fs-btn').addEventListener('click',e=>{
-  e.stopPropagation();
+function fsTap(){
+  if(kioskLive()){
+    /* The helper answers before it acts, because what it does next is
+       kill the browser this page is running in. This label is very
+       likely the last thing this page ever draws. */
+    const to = NET.st.display.kiosk ? 'window' : 'kiosk';
+    $('fs-sub').textContent = to==='window' ? 'WINDOW…' : 'KIOSK…';
+    netApi('/display/mode',{mode:to});
+    return;
+  }
   const el=document.documentElement;
   if(fsOn()){
     const x=document.exitFullscreen||document.webkitExitFullscreen;
@@ -2803,7 +2826,40 @@ $('fs-btn').addEventListener('click',e=>{
     const q=el.requestFullscreen||el.webkitRequestFullscreen;
     if(q) Promise.resolve(q.call(el)).catch(()=>{});   /* refused: leave it OFF */
   }
+}
+
+/* Tap toggles how much screen this takes. HOLD reloads the app where it
+   stands - the kiosk is left exactly as it is, which is how a deploy
+   gets picked up at the helm with no SSH and no keyboard. A held reload
+   is also the only kind a gesture can offer: killing the browser process
+   needs a page that is already dead, and a dead page has nothing left to
+   hold down. Same tap-versus-hold as the SAVER tile beside it. */
+let fsHold=null, fsPt=null;
+const fsFar=e=>!fsPt||Math.hypot(e.clientX-fsPt.x,e.clientY-fsPt.y)>24;
+$('fs-btn').addEventListener('pointerdown',e=>{
+  /* Deliberately NOT stopping propagation. This tile sits almost dead
+     centre of the open panel, which is where a dismiss swipe starts -
+     swallow the event and swipe-down stops closing the panel. So let it
+     through, and tell a tap from a drag the way the dial does: 24 px. */
+  fsPt={x:e.clientX,y:e.clientY};
+  fsHold=setTimeout(()=>{ fsHold=null;
+    $('fs-sub').textContent='RELOAD';
+    setTimeout(()=>location.reload(),300); },600);
 });
+/* On the window, not the button: a finger that leaves the tile mid-drag
+   never delivers pointerup to it, and the hold timer would go off under
+   a swipe that was only ever passing through. */
+addEventListener('pointermove',e=>{
+  if(fsPt && fsHold!==null && fsFar(e)){ clearTimeout(fsHold); fsHold=null; }
+});
+addEventListener('pointerup',e=>{
+  if(!fsPt) return;
+  const held = fsHold===null;                     /* the hold already fired */
+  const drag = fsFar(e);
+  clearTimeout(fsHold); fsHold=null; fsPt=null;
+  if(!held && !drag) fsTap();
+});
+addEventListener('pointercancel',()=>{ clearTimeout(fsHold); fsHold=null; fsPt=null; });
 /* Circle when we are actually on round glass (a square viewport) or
    deliberately full screen; square everywhere else. Keyed off the shape
    of the viewport rather than fullscreen alone, because the Pi runs

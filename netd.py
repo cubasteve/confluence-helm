@@ -449,11 +449,114 @@ def bt_connect(mac):
     return {'ok': False, 'error': 'CONNECT FAILED'}
 
 
+# ------------------------------------------------------------- display
+#
+# The panel's FULL tile used to be wired to the Fullscreen API, which on
+# this Pi is wired to nothing: --kiosk is not the Fullscreen API, so
+# document.fullscreenElement is null while the display is manifestly full
+# screen. The tile read OFF, and tapping it flipped its own label without
+# changing a pixel. These endpoints give it something real to drive.
+
+CHROME = shutil.which('chromium-browser') or shutil.which('chromium') or ''
+APP_URL = os.environ.get('HELM_URL',
+                         'http://localhost:8080/user/helm/confluence_helm.html')
+KIOSK_FLAG = '--kiosk'
+WIN_FLAG = '--start-maximized'          # how we tell our windowed one apart
+LOOP = os.path.expanduser('~/helm/start-kiosk.sh')
+
+
+def xenv():
+    """A desktop to launch into.
+
+    Inherited for free from the autostart session; defaulted so that the
+    same call still works when netd was started by hand over SSH."""
+    env = dict(os.environ)
+    env.setdefault('DISPLAY', ':0')
+    env.setdefault('XAUTHORITY', os.path.expanduser('~/.Xauthority'))
+    return env
+
+
+def spawn(argv):
+    subprocess.Popen(argv, env=xenv(), stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+
+
+def display_status():
+    """One pgrep for the lot - this rides along with /status, which the
+    panel polls, so it is not the place for three subprocesses."""
+    if not CHROME:
+        return {'available': False}
+    rc, out, _ = run(['pgrep', '-af', 'chromium|start-kiosk'], 8)
+    kiosk = win = loop = False
+    for line in out.splitlines():
+        if 'start-kiosk.sh' in line:
+            loop = True
+        elif KIOSK_FLAG in line:
+            kiosk = True
+        elif WIN_FLAG in line:
+            win = True
+    return {'available': bool(kiosk or win or os.environ.get('DISPLAY')),
+            'kiosk': kiosk, 'windowed': win, 'loop': loop}
+
+
+def go_windowed():
+    # The loop first, or it simply puts the kiosk back three seconds later.
+    run(['pkill', '-f', 'start-kiosk.sh'], 10)
+    run(['pkill', '-f', 'chromium.*' + KIOSK_FLAG], 10)
+    time.sleep(1.5)
+    spawn([CHROME, WIN_FLAG, '--noerrdialogs', '--disable-infobars', APP_URL])
+    # Never strand the helm with no browser at all. If the windowed one
+    # did not come up, put the kiosk back rather than leave black glass
+    # and SSH as the only way in.
+    time.sleep(6)
+    if not display_status().get('windowed'):
+        go_kiosk()
+
+
+def go_kiosk():
+    run(['pkill', '-f', 'chromium.*' + WIN_FLAG], 10)
+    time.sleep(1.0)
+    if not display_status().get('loop'):
+        spawn(['bash', LOOP])
+
+
+def display_restart():
+    """Bring the browser back fresh. If nothing is supervising it, start
+    the loop instead - killing it would leave nothing to relaunch."""
+    if display_status().get('loop'):
+        run(['pkill', '-f', 'chromium.*' + KIOSK_FLAG], 10)
+    else:
+        spawn(['bash', LOOP])
+
+
+def later(fn):
+    """Answer first, act after.
+
+    Every one of these kills the browser that made the request, so doing
+    the work inline means the response never arrives and the panel cannot
+    tell a success from a crash."""
+    threading.Timer(0.4, fn).start()
+    return {'ok': True}
+
+
 # --------------------------------------------------------------- http
 
 def route(path, body):
     if path == '/status':
-        return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status()}
+        return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
+                'display': display_status()}
+
+    if path == '/display/status':
+        return dict(display_status(), ok=True)
+    if path == '/display/mode':
+        if not CHROME:
+            return {'ok': False, 'error': 'NO BROWSER'}
+        return later(go_kiosk if body.get('mode') == 'kiosk' else go_windowed)
+    if path == '/display/restart':
+        if not CHROME:
+            return {'ok': False, 'error': 'NO BROWSER'}
+        return later(display_restart)
 
     # Every wifi route is per-adapter. An absent dev means "the only one
     # you have", which is what a single-radio Pi will always send.
@@ -558,5 +661,6 @@ if __name__ == '__main__':
           % ('yes' if cap['nm'] else 'NO', 'yes' if cap['bt'] else 'NO'), flush=True)
     if not (cap['nm'] or cap['bt']):
         print('[netd] neither stack is usable - the panel will hide its tiles', flush=True)
+    print('[netd] browser control: %s' % (CHROME or 'NO - chromium not found'), flush=True)
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

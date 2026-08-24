@@ -56,6 +56,48 @@ a slow boot degrades rather than leaving a blank helm.
 **Autostart changes need a session restart.** A running Chromium never
 re-reads `~/.config/autostart/`.
 
+### The KIOSK tile
+
+The panel's third display tile used to be wired to the Fullscreen API,
+which on this Pi is wired to nothing. `--kiosk` is not the Fullscreen API:
+`document.fullscreenElement` is null under it, so the tile read `OFF` on a
+display that was manifestly full, and tapping it flipped its own label
+without changing a pixel.
+
+It now asks `netd.py` what is actually on the screen and drives whatever
+is real there:
+
+| where | label | tap | hold |
+|---|---|---|---|
+| the Pi | `KIOSK` | kiosk ⇄ windowed browser | reload the app in place |
+| phone, laptop | `FULL` | the Fullscreen API, as before | reload the app in place |
+
+Hold is a reload rather than a browser restart on purpose. A gesture can
+only be made when the page is alive, and a live page needs nothing heavier
+than `location.reload()`; restarting the process matters exactly when the
+page is dead, and a dead page has nothing left to hold down. It is how a
+deploy gets picked up at the helm with no SSH and no keyboard.
+
+Switching to windowed stops `start-kiosk.sh` first - otherwise its restart
+loop puts the kiosk back three seconds later - then replaces Chromium. The
+helper answers the request *before* it acts, because what it does next is
+kill the browser that asked. And if the windowed browser does not come up
+within six seconds it puts the kiosk back, rather than leaving black glass
+and SSH as the only way in.
+
+By hand, if you would rather:
+
+```bash
+pkill -f start-kiosk.sh                  # the loop first, or it relaunches
+pkill -f 'chromium-browser --kiosk'
+curl -s -X POST -d '{"mode":"kiosk"}' localhost:8091/display/mode   # and back
+```
+
+The display actions need `DISPLAY` and `XAUTHORITY`, which the helper
+inherits from the autostart session. Started by hand over SSH it defaults
+them to `:0` and `~/.Xauthority`, which usually works but is not the
+supported path.
+
 ## Editing from anywhere
 
 The repo is the source of truth; the Pi is a deployment target.
@@ -262,6 +304,11 @@ The `base` layer fills it.
 
 - `chmod` does not take over the sshfs mount. Anything needing an exec bit
   or `0600` has to be set on the Pi.
+- A swipe that begins on one of the display tiles still closes the panel:
+  those tiles let the event through and tell a tap from a drag with the
+  same 24 px rule the dial uses. Worth knowing before adding another tile
+  there - the row sits almost exactly where a dismiss swipe starts, and a
+  tile that swallows pointer events breaks swipe-down from that spot.
 - The Spotify config at `~/.config/confluence-spotify.json` holds a client
   secret and refresh token. It should be `0600`.
 - WiFi passwords typed at the panel go to NetworkManager and are stored by
