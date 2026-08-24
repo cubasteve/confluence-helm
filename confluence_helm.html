@@ -269,6 +269,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   font-weight:600;letter-spacing:.12em;color:var(--label)}
 .ns-msg.bad{color:var(--alarm)}
 
+/* --- the confirm screen --- */
+.ask-title{font-size:40px;font-weight:600;color:var(--ink);text-align:center;
+  letter-spacing:.02em}
+.ask-body{font-size:25px;line-height:1.5;color:var(--label);text-align:center;
+  margin:26px 0 36px}
+.mini.wide.danger{color:var(--alarm);border-color:var(--alarm)}
+.ns-row.danger .ns-name{color:var(--alarm)}
+
 /* --- password entry ---
    A keyboard of our own. The helm has no keyboard, and Chromium under
    --kiosk has no on-screen one to offer, so without this a WPA key is
@@ -643,6 +651,19 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
         <button class="mini wide" id="ns-done">DONE</button>
       </div>
       <div class="ns-msg" id="ns-msg"></div>
+    </div>
+
+    <!-- Power actions get a full confirm rather than the second-tap the
+         hotspot uses. A mis-tap there costs the boat its network; a
+         mis-tap here costs it every instrument at once. -->
+    <div class="ns" id="ns-ask-view" style="display:none">
+      <div class="ask-title" id="ask-title">Reboot?</div>
+      <div class="ask-body" id="ask-body"></div>
+      <div class="ns-pager">
+        <button class="mini wide" id="ask-no">CANCEL</button>
+        <button class="mini wide danger" id="ask-yes">CONFIRM</button>
+      </div>
+      <div class="ns-msg" id="ask-msg"></div>
     </div>
 
     <div class="ns" id="ns-pw-view" style="display:none">
@@ -1800,7 +1821,7 @@ async function netApi(path, body){
 }
 
 function setMsg(txt,bad){
-  ['ns-msg','pw-msg'].forEach(id=>{
+  ['ns-msg','pw-msg','ask-msg'].forEach(id=>{
     $(id).textContent=txt||'';
     $(id).classList.toggle('bad',!!bad&&!!txt);
   });
@@ -1841,6 +1862,8 @@ function icoBt(b){
   if(!b.powered) o+='<path d="M3.6 3.6l16.8 16.8"/>';
   return '<svg viewBox="0 0 24 24">'+o+'</svg>';
 }
+const ICO_POWER='<svg viewBox="0 0 24 24"><path d="M12 3.4v8.2"/>'
+  +'<path d="M6.9 6.7a8 8 0 1 0 10.2 0"/></svg>';
 
 function paintTiles(){
   const w=NET.st.wifi||{}, b=NET.st.bt||{};
@@ -1854,6 +1877,9 @@ function paintTiles(){
       : ((b.connected&&b.connected.length) ? 'on' : '');
     o+='<button class="cbtn '+cls+'" data-k="bt">'+icoBt(b)+'</button>';
   }
+  /* Rightmost, and never lit: this one is not a state, it is a door. */
+  if((NET.st.power||{}).available)
+    o+='<button class="cbtn" data-k="power">'+ICO_POWER+'</button>';
   /* Rewriting innerHTML on every poll would kill the :active flash
      under a finger and repaint for nothing. Only when it changed. */
   if(o!==NET.tilesHtml){ $('conn-sec').innerHTML=o; NET.tilesHtml=o; }
@@ -1861,11 +1887,12 @@ function paintTiles(){
 
 async function netStatus(){
   const j=await netApi('/status');
-  const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{};
-  NET.st={wifi:w,bt:b,display:dsp};
+  const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
+        pwr=(j&&j.power)||{};
+  NET.st={wifi:w,bt:b,display:dsp,power:pwr};
   NET.probed=true;               /* answered, even if the answer was nothing */
   drawFs();                      /* the FULL/KIOSK tile reads this too */
-  if(!w.available && !b.available){
+  if(!w.available && !b.available && !pwr.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
   $('conn-sec').style.display='';
   paintTiles();
@@ -1896,9 +1923,17 @@ function openNet(kind,dev){
   const devs=(NET.st.wifi&&NET.st.wifi.devices)||[];
   NET.dev = kind==='wifi' ? (devs.find(d=>d.dev===dev)||devs[0]||null) : null;
   NET.ap  = !!(NET.dev&&NET.dev.ap);
-  $('ns-title').textContent = kind==='wifi' ? 'Wi-Fi' : 'Bluetooth';
+  $('ns-title').textContent =
+    kind==='wifi' ? 'Wi-Fi' : kind==='bt' ? 'Bluetooth' : 'Power';
   $('ns-for').textContent = (kind==='wifi'&&NET.dev)
-    ? (NET.dev.bus==='usb'?'USB ADAPTER · ':'BUILT-IN · ')+NET.dev.dev : '';
+    ? (NET.dev.bus==='usb'?'USB ADAPTER · ':'BUILT-IN · ')+NET.dev.dev
+    : kind==='power' ? 'UP '+(((NET.st.power)||{}).uptime||'?') : '';
+  /* Power has no radio to switch and nothing to scan for. */
+  const pw_=kind==='power';
+  $('ns-sw').style.display   = pw_?'none':'';
+  $('ns-scan').style.display = pw_?'none':'';
+  $('ns-up').parentElement.style.display = pw_?'none':'';
+  showAsk(false);
   showPw(false); setMsg('');
   netsheet.classList.add('on');
   netStatus().then(ok=>{
@@ -1909,7 +1944,7 @@ function closeNet(){
   netsheet.classList.remove('on');
   clearTimeout(NET.tick); NET.tick=null;
   clearTimeout(NET.confirmT); NET.confirm='';
-  showPw(false);
+  showPw(false); showAsk(false);
 }
 /* A self-rescheduling timeout rather than an interval, so a Bluetooth
    scan can be watched closely for its twelve seconds and then left
@@ -1923,6 +1958,11 @@ function netTick(){
 
 async function netRefresh(rescan){
   if(NET.busy) return;
+  if(NET.kind==='power'){          /* nothing to poll but the clock */
+    await netStatus();
+    $('ns-for').textContent='UP '+(((NET.st.power)||{}).uptime||'?');
+    renderRows(); return;
+  }
   const j = NET.kind==='wifi'
     ? await netApi('/wifi/list',{dev:NET.dev?NET.dev.dev:'', rescan:!!rescan})
     : await netApi('/bt/list');
@@ -1942,6 +1982,29 @@ async function netRefresh(rescan){
   if(NET.scanning && !NET.busy) setMsg('SCANNING…');
   else if(!NET.busy && $('ns-msg').textContent==='SCANNING…') setMsg('');
 }
+
+/* Least destructive first. On a touch panel the top of a list is where
+   a hurried finger lands, and that should not be the shutdown. */
+const POWER_ACTIONS=[
+ {a:'display', name:'Restart display', sub:'RELOADS THE APP · A FEW SECONDS',
+  ico:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/>',
+  ask:'The screen goes black and the app comes back on its own. '
+     +'Nothing else on the Pi is touched.'},
+ {a:'helper',  name:'Restart helper',  sub:'RADIO CONTROLS · COMES BACK ITSELF',
+  ico:'<rect x="5" y="5" width="14" height="14" rx="3"/>'
+     +'<circle class="f" cx="12" cy="12" r="2.2"/>',
+  ask:'The WiFi, Bluetooth and power controls disappear for a few seconds '
+     +'while netd restarts. The instruments carry on.'},
+ {a:'reboot',  name:'Reboot',          sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
+  ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
+  ask:'Instruments, charts and the hotspot all go down for about a minute. '
+     +'Anything joined to the boat WiFi drops with it.'},
+ {a:'poweroff',name:'Shut down',       sub:'THEN WAIT FOR THE LED', danger:1,
+  ico:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>',
+  ask:'Everything goes down. Wait for the green LED to stop blinking '
+     +'before cutting power - pulling it early is how the card gets '
+     +'corrupted.'},
+];
 
 /* four bars, dimmed above the level - the same glyph everyone reads */
 function bars(sig){
@@ -1965,6 +2028,16 @@ const BT_GLYPH='<svg class="bars" viewBox="0 0 24 24" fill="none" '
 
 function renderRows(){
   const box=$('ns-list'), wifi=NET.kind==='wifi';
+  if(NET.kind==='power'){
+    box.innerHTML=POWER_ACTIONS.map((p,i)=>
+      '<div class="ns-row'+(p.danger?' danger':'')+'" data-i="'+i+'">'
+      +'<svg class="bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+      +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p.ico+'</svg>'
+      +'<div class="ns-main"><div class="ns-name">'+p.name+'</div>'
+      +'<div class="ns-sub">'+p.sub+'</div></div></div>').join('');
+    $('ns-count').textContent='';
+    return;
+  }
   $('ns-sw').classList.toggle('on',!!NET.powered);
   $('ns-scan').textContent = wifi ? 'SCAN' : (NET.scanning?'SCANNING':'SCAN');
   /* A live-looking arrow that does nothing is worse than a dim one. */
@@ -2032,6 +2105,7 @@ function needsConfirm(key,words){
 }
 
 function netTap(i){
+  if(NET.kind==='power'){ return showAsk(true,POWER_ACTIONS[i]); }
   const r=NET.rows[i]; if(!r||NET.busy) return;
   const dev=NET.dev?NET.dev.dev:'';
   if(NET.kind==='wifi'){
@@ -2140,6 +2214,36 @@ $('kb').addEventListener('click',e=>{
   if(a==='join') return pwJoin();
 });
 $('pw-cancel').addEventListener('click',()=>{ showPw(false); setMsg(''); });
+
+/* ---- the confirm screen ----
+   Three views share the sheet - the list, the keyboard and this - and
+   only one is ever up. */
+function showAsk(on,act){
+  $('ns-ask-view') .style.display = on?'':'none';
+  $('ns-list-view').style.display = on?'none':'';
+  if(!on){ NET.ask=null; return; }
+  NET.ask=act;
+  $('ask-title').textContent=act.name+'?';
+  $('ask-body') .textContent=act.ask;
+  setMsg('');
+}
+$('ask-no') .addEventListener('click',()=>{ showAsk(false); setMsg(''); });
+$('ask-yes').addEventListener('click',askYes);
+
+async function askYes(){
+  const act=NET.ask; if(!act||NET.busy) return;
+  const heavy = act.a==='poweroff' || act.a==='reboot';
+  NET.busy=act.name; setMsg(act.name.toUpperCase()+'…');
+  const j=await netApi('/power/do',{action:act.a});
+  NET.busy='';
+  /* A shutdown takes the helper down with everything else, so silence is
+     the success case. Saying HELPER NOT ANSWERING there would read as a
+     failure at the exact moment it worked. */
+  if(!j) return setMsg(heavy?'GOING DOWN…':'NO ANSWER', !heavy);
+  if(!j.ok) return setMsg(j.error||'FAILED',true);
+  setMsg(act.a==='poweroff'?'SHUTTING DOWN…':act.a==='reboot'?'REBOOTING…':'DONE');
+  if(!heavy) setTimeout(()=>{ showAsk(false); setMsg(''); },1400);
+}
 
 async function pwJoin(){
   const pw=NET.pw; if(!pw||NET.busy) return;

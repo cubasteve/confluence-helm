@@ -312,6 +312,49 @@ The list is paged rather than scrolled. `html`/`body` carry
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
 
+## Power
+
+A fourth button sits right of Bluetooth, and it is deliberately never
+lit: the radios show a state, this one is a door.
+
+| | |
+|---|---|
+| Restart display | kills Chromium; `start-kiosk.sh` brings it back |
+| Restart helper | kills `netd.py`; `netd.sh` brings it back |
+| Reboot | `systemctl reboot` |
+| Shut down | `systemctl poweroff` |
+
+Least destructive first, because the top of a list is where a hurried
+finger lands and that should not be the shutdown.
+
+This exists mostly for the last one. Cutting power to a running Pi is the
+usual way an SD card dies, and the helm has no keyboard - so until now the
+only clean shutdown was over SSH, from a phone, over the hotspot the Pi
+itself is running.
+
+Every action gets a full confirm screen with CANCEL and CONFIRM, not the
+second-tap the hotspot uses. A mis-tap there costs the boat its network; a
+mis-tap here costs it every instrument at once.
+
+`poweroff` and `reboot` go through logind, which polkit grants to a local
+*active* session without a password - the same reason `netd.py` runs from
+the desktop session rather than a systemd unit. Run from SSH they come
+back `Interactive authentication required`, and the panel says `NOT
+PERMITTED FROM HERE` rather than appearing to work.
+
+Those two run inline rather than deferred, unlike everything else here
+that kills the browser mid-request. `systemctl` returns as soon as logind
+has accepted the job, and running it inline is the only way a refusal can
+be reported at all - deferred, it would look exactly like success. The
+flip side is that a *successful* shutdown may take the helper down before
+its reply arrives, so silence from those two is treated as `GOING DOWN…`
+rather than an error.
+
+**Restart helper only comes back if something is supervising it.** Started
+from `~/.config/autostart/`, `netd.sh` relaunches it after five seconds.
+Started by hand with `nohup`, nothing does, and the radio controls stay
+gone until you start it again.
+
 ## Data
 
 SignalK on `:3000` over a WebSocket. Subscriptions are `policy:'fixed'`

@@ -601,12 +601,73 @@ def later(fn):
     return {'ok': True}
 
 
+# ---------------------------------------------------------------- power
+#
+# Shutting down properly matters more on a boat than on a desk. Cutting
+# power to a running Pi is the usual way an SD card dies, and the helm has
+# no keyboard to do it the normal way - so until now the only clean
+# shutdown was over SSH, from a phone, over the hotspot the Pi is running.
+#
+# poweroff and reboot go through logind, which polkit grants to a local
+# ACTIVE session without a password - the same reason netd runs from the
+# desktop session rather than a systemd unit. From SSH they come back
+# "Interactive authentication required", which is reported rather than
+# swallowed.
+
+HAS_SYSTEMCTL = bool(shutil.which('systemctl'))
+
+
+def uptime_txt():
+    """Straight from /proc - a subprocess for this would be silly, and it
+    rides along on every /status."""
+    try:
+        secs = float(open('/proc/uptime').read().split()[0])
+    except Exception:
+        return ''
+    d, rest = divmod(int(secs), 86400)
+    h, rest = divmod(rest, 3600)
+    m = rest // 60
+    if d:
+        return '%dd %dh' % (d, h)
+    if h:
+        return '%dh %dm' % (h, m)
+    return '%dm' % m
+
+
+def power_status():
+    return {'available': HAS_SYSTEMCTL, 'uptime': uptime_txt()}
+
+
+def power_do(action):
+    if action == 'display':
+        return later(display_restart)
+    if action == 'helper':
+        # netd.sh's loop brings it straight back with whatever is on disk.
+        # Deferred, because this one kills the process answering.
+        return later(lambda: run(['pkill', '-f', r'^python3 .*netd\.py'], 10))
+    if action not in ('poweroff', 'reboot'):
+        return {'ok': False, 'error': 'UNKNOWN ACTION'}
+    if not HAS_SYSTEMCTL:
+        return {'ok': False, 'error': 'NO SYSTEMCTL'}
+    # Inline rather than deferred, unlike everything else here that kills
+    # the browser. systemctl returns as soon as logind has accepted the
+    # job, and running it inline is the only way a refusal can be reported
+    # at all - a deferred one would look identical to success.
+    rc, out, err = run(['systemctl', action], 12)
+    if rc == 0:
+        return {'ok': True}
+    e = (err or out).lower()
+    if 'interactive authentication' in e or 'not authorized' in e or 'access denied' in e:
+        return {'ok': False, 'error': 'NOT PERMITTED FROM HERE'}
+    return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
+
+
 # --------------------------------------------------------------- http
 
 def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
-                'display': display_status()}
+                'display': display_status(), 'power': power_status()}
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
@@ -614,6 +675,8 @@ def route(path, body):
         if not CHROME:
             return {'ok': False, 'error': 'NO BROWSER'}
         return later(go_kiosk if body.get('mode') == 'kiosk' else go_windowed)
+    if path == '/power/do':
+        return power_do(str(body.get('action', '')))
     if path == '/display/restart':
         if not CHROME:
             return {'ok': False, 'error': 'NO BROWSER'}
