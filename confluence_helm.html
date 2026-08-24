@@ -1773,7 +1773,7 @@ $('t-plus') .addEventListener('pointerup',e=>{e.stopPropagation();nudge( 60);});
    ================================================================== */
 const netsheet=$('netsheet');
 const NET={ kind:'wifi', dev:null, page:0, rows:[], powered:false, ap:false,
-            scanning:false, busy:'', pw:null, st:{}, tilesHtml:'',
+            scanning:false, busy:'', pw:null, st:{}, tilesHtml:'', probed:false,
             confirm:'', confirmT:null, poll:null, tick:null };
 const PAGE=4;                      /* rows per page - matches .ns-list height */
 
@@ -1863,6 +1863,7 @@ async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{};
   NET.st={wifi:w,bt:b,display:dsp};
+  NET.probed=true;               /* answered, even if the answer was nothing */
   drawFs();                      /* the FULL/KIOSK tile reads this too */
   if(!w.available && !b.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
@@ -2807,6 +2808,16 @@ function drawFs(){
   const d=(typeof NET!=='undefined'&&NET.st&&NET.st.display)||{};
   const kiosk=kioskLive();
   const on = kiosk ? !!d.kiosk : fsOn();
+  /* Before the helper has answered, this tile knows nothing - and a tile
+     reading FULL / OFF beside an empty radio row is indistinguishable
+     from the release before this one. Say "asking" instead of guessing. */
+  if(typeof NET!=='undefined' && !NET.probed && !fsOn()){
+    $('fs-ico').innerHTML='<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>';
+    $('fs-lbl').textContent='FULL';
+    $('fs-sub').textContent='…';
+    $('fs-btn').classList.remove('on','off');
+    return;
+  }
   $('fs-ico').innerHTML = on
     ? '<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>'   /* arrows inward  */
     : '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>';  /* arrows outward */
@@ -2915,6 +2926,11 @@ if('wakeLock' in navigator){
 }
 
 drawBezelTicks();
+/* Warm the radio state at boot rather than on first panel open. The call
+   costs a handful of subprocesses on the Pi, and doing it here means it
+   has long finished by the time anyone swipes up - instead of the panel
+   drawing its empty state and filling in while you watch. */
+netStatus();
 drawDepth(); paintTrack(); applyTheme(); connect(); render(); tick();
 </script>
 </body>

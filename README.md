@@ -332,6 +332,18 @@ The `base` layer fills it.
 
 - `chmod` does not take over the sshfs mount. Anything needing an exec bit
   or `0600` has to be set on the Pi.
+- The panel's empty state - no radios, and the display tile reading
+  `FULL / OFF` - is exactly what the release *before* the radios looked
+  like. So a slow first `/status` does not read as "waiting", it reads as
+  "the old version loaded and then corrected itself". It is worth knowing
+  that those two are indistinguishable by eye: the build stamp is the
+  test, because it does not change during the flash.
+
+  Two things keep it from happening. The app asks at boot rather than on
+  first panel open, so the answer is there before anyone swipes up. And
+  `netd.py` serves cached answers while refreshing behind them, rather
+  than expiring and making the next poll pay again - `/status` went from
+  about two seconds to under ten milliseconds, most of it Bluetooth.
 - A swipe that begins on one of the display tiles still closes the panel:
   those tiles let the event through and tell a tap from a drag with the
   same 24 px rule the dial uses. Worth knowing before adding another tile

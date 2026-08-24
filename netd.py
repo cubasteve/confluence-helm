@@ -90,6 +90,52 @@ def terse(line):
 _cap = {'at': 0, 'nm': False, 'bt': False}
 _lock = threading.Lock()          # one mutating radio command at a time
 _apmemo = {}                      # profile name -> (checked_at, is_access_point)
+_cache = {}
+
+
+_gen = [0]
+
+
+def memo(key, ttl, fn):
+    """Answer from cache, refresh behind the answer.
+
+    /status is what the panel waits on before it can draw the radios, and
+    the Bluetooth half of it costs three or four subprocesses - two whole
+    seconds on real hardware. A plain TTL cache does not fix that: it
+    expires, and the next poll pays the full price again while someone is
+    looking at the panel. So a stale entry is served immediately and
+    refreshed on a thread. Only the very first call ever waits."""
+    hit = _cache.get(key)
+    now = time.time()
+    if hit:
+        if now - hit[0] >= ttl and not hit[2]:
+            hit[2] = True                    # one refresh in flight, not five
+            threading.Thread(target=_refresh, args=(key, fn, _gen[0]),
+                             daemon=True).start()
+        return hit[1]
+    val = fn()
+    _cache[key] = [now, val, False]
+    return val
+
+
+def _refresh(key, fn, gen):
+    try:
+        val = fn()
+    except Exception:
+        val = None
+    # A bust() while this was running means the world changed underneath
+    # it; writing the result now would put the stale answer back.
+    if val is not None and gen == _gen[0]:
+        _cache[key] = [time.time(), val, False]
+    elif key in _cache:
+        _cache[key][2] = False
+
+
+def bust():
+    """After anything that changes a radio, every cached answer is a lie."""
+    _gen[0] += 1
+    _cache.clear()
+    _apmemo.clear()
 
 
 def capabilities():
@@ -113,7 +159,8 @@ def capabilities():
 def wifi_powered():
     """The global rfkill switch. It is all-or-nothing across every adapter,
     which is exactly why the per-adapter toggles do not use it."""
-    return run(['nmcli', '-t', '-f', 'WIFI', 'radio'], 6)[1].strip() == 'enabled'
+    return memo('wifipow', 3, lambda:
+                run(['nmcli', '-t', '-f', 'WIFI', 'radio'], 6)[1].strip() == 'enabled')
 
 
 def dev_bus(dev):
@@ -155,6 +202,12 @@ def con_is_ap(name):
 
 
 def dev_signal(dev):
+    # A scan to learn one number, on a poll. Ten seconds of staleness in a
+    # signal percentage is not worth what asking every time costs.
+    return memo('sig:' + dev, 10, lambda: _dev_signal(dev))
+
+
+def _dev_signal(dev):
     rc, out, _ = run(['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'device', 'wifi',
                       'list', 'ifname', dev], 12)
     for line in out.splitlines():
@@ -368,7 +421,8 @@ def bt_call(args, timeout=15):
 
 
 def bt_powered():
-    return re.search(r'Powered:\s*yes', bt_call(['show'], 8)[1]) is not None
+    return memo('btpow', 3, lambda:
+                re.search(r'Powered:\s*yes', bt_call(['show'], 8)[1]) is not None)
 
 
 def bt_status():
@@ -392,6 +446,10 @@ def bt_named(args):
 
 
 def bt_devices():
+    return memo('bt', 3, _bt_devices)
+
+
+def _bt_devices():
     if not capabilities()['bt']:
         return {'available': False, 'devices': []}
     powered = bt_powered()
@@ -605,6 +663,12 @@ def route(path, body):
     return None
 
 
+# Anything that changes a radio invalidates the caches above. One list,
+# checked in one place, rather than a bust() sprinkled through the routes.
+MUTATING = {'/wifi/power', '/wifi/connect', '/wifi/disconnect', '/wifi/forget',
+            '/bt/power', '/bt/connect', '/bt/disconnect', '/bt/forget', '/bt/scan'}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = 'helm-netd/1.0'
 
@@ -638,6 +702,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].rstrip('/') or '/status'
         try:
             res = route(path, body)
+            if path in MUTATING:
+                bust()
         except Exception as e:                       # a radio wobble is not a 500
             return self._send({'ok': False, 'error': str(e)[:160]}, 200)
         if res is None:
@@ -666,4 +732,9 @@ if __name__ == '__main__':
         print('[netd] neither stack is usable - the panel will hide its tiles', flush=True)
     print('[netd] browser control: %s' % (CHROME or 'NO - chromium not found'), flush=True)
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
+    # Fill the caches before anyone asks. The kiosk often comes up at the
+    # same moment this does, and the first /status is the one that decides
+    # whether the panel draws its radios or its empty state.
+    threading.Thread(target=lambda: (wifi_status(), bt_status()),
+                     daemon=True).start()
     ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()
