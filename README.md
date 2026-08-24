@@ -58,6 +58,34 @@ a slow boot degrades rather than leaving a blank helm.
 **Autostart changes need a session restart.** A running Chromium never
 re-reads `~/.config/autostart/`.
 
+### Chromium is single-instance, and the kiosk loop has to know it
+
+Only one Chromium can own a browser profile. A second launch does not
+start a second browser: it hands the URL to the window already running and
+exits immediately. Everything on this Pi shares one profile on purpose -
+the desktop shortcut, the windowed browser the panel can start, and the
+kiosk - so that saved races and cached tiles are the same everywhere.
+
+That makes an instant exit ambiguous, and `start-kiosk.sh` used to read it
+the wrong way. Kill the kiosk while the desktop window is open and the
+loop relaunches, the new process hands off and quits, and three seconds
+later it does it again - forever, poking that window into reloading every
+time. That is what a "Restart display" looked like from the helm, and
+`autopull.sh` could do the same thing on any deploy.
+
+So the loop now distinguishes three cases:
+
+| Chromium exits | means | response |
+|---|---|---|
+| after running | a crash | restart at once, as before |
+| at once, another window has the profile | a handoff | wait for that window to close, then take the screen back |
+| at once, nothing else has it | Chromium is unhappy | back off 5s, 10s, … to 30s rather than hammer it |
+
+The process patterns are anchored on the executable (`^[^ ]*chromium[^ ]*
+…`). An unanchored `pgrep -f` also matches any shell whose command line
+merely mentions the flag, and a false positive in the wait loop would hang
+the kiosk for ever - the worst outcome available.
+
 ### The desktop shortcut
 
 `desktop/confluence-helm.desktop` opens the app in its own 1080x1080
@@ -319,13 +347,18 @@ lit: the radios show a state, this one is a door.
 
 | | |
 |---|---|
-| Restart display | kills Chromium; `start-kiosk.sh` brings it back |
+| Reload the app | the page reloads where it stands; nothing is killed |
 | Restart helper | kills `netd.py`; `netd.sh` brings it back |
 | Reboot | `systemctl reboot` |
 | Shut down | `systemctl poweroff` |
 
 Least destructive first, because the top of a list is where a hurried
 finger lands and that should not be the shutdown.
+
+The first one is a page reload rather than a browser restart, and that is
+deliberate twice over. It can only be tapped on a page that is alive, and
+a live page needs nothing heavier. And killing Chromium there is actively
+wrong when another window owns the browser profile - see below.
 
 This exists mostly for the last one. Cutting power to a running Pi is the
 usual way an SD card dies, and the helm has no keyboard - so until now the

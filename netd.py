@@ -520,6 +520,10 @@ APP_URL = os.environ.get('HELM_URL',
                          'http://localhost:8080/user/helm/confluence_helm.html')
 KIOSK_FLAG = '--kiosk'
 WIN_FLAG = '--start-maximized'          # how we tell our windowed one apart
+# Anchored on the executable: an unanchored -f pattern also matches any
+# shell whose command line happens to mention the flag.
+KIOSK_PAT = r'^[^ ]*chromium[^ ]* .*--kiosk'
+WIN_PAT = r'^[^ ]*chromium[^ ]* .*--start-maximized'
 LOOP = os.path.expanduser('~/helm/start-kiosk.sh')
 
 
@@ -546,23 +550,35 @@ def display_status():
     if not CHROME:
         return {'available': False}
     rc, out, _ = run(['pgrep', '-af', 'chromium|start-kiosk'], 8)
-    kiosk = win = loop = False
+    kiosk = win = loop = other = False
     for line in out.splitlines():
         if 'start-kiosk.sh' in line:
             loop = True
+        elif '--type=' in line:
+            continue          # a renderer or gpu child, not a browser launch
         elif KIOSK_FLAG in line:
             kiosk = True
         elif WIN_FLAG in line:
             win = True
-    return {'available': bool(kiosk or win or os.environ.get('DISPLAY')),
-            'kiosk': kiosk, 'windowed': win, 'loop': loop}
+        elif 'chromium' in line:
+            # Something else owns the profile - the desktop shortcut, most
+            # likely. It matters because Chromium is single-instance: while
+            # this is true, no other launch can take the screen.
+            other = True
+    return {'available': bool(kiosk or win or other or os.environ.get('DISPLAY')),
+            'kiosk': kiosk, 'windowed': win, 'loop': loop, 'other': other}
 
 
 def go_windowed():
     # The loop first, or it simply puts the kiosk back three seconds later.
     run(['pkill', '-f', 'start-kiosk.sh'], 10)
-    run(['pkill', '-f', 'chromium.*' + KIOSK_FLAG], 10)
+    run(['pkill', '-f', KIOSK_PAT], 10)
     time.sleep(1.5)
+    # If a window already owns the profile - the desktop shortcut - then
+    # launching another gets us nothing: Chromium would hand that window
+    # the URL and quit. Stopping the kiosk was the whole job.
+    if display_status().get('other'):
+        return
     # ?v= for the same reason start-kiosk.sh uses one: without it Chromium
     # paints the copy it already has and the old panel flashes up first.
     spawn([CHROME, WIN_FLAG, '--noerrdialogs', '--disable-infobars',
@@ -576,7 +592,7 @@ def go_windowed():
 
 
 def go_kiosk():
-    run(['pkill', '-f', 'chromium.*' + WIN_FLAG], 10)
+    run(['pkill', '-f', WIN_PAT], 10)
     time.sleep(1.0)
     if not display_status().get('loop'):
         spawn(['bash', LOOP])
@@ -586,7 +602,7 @@ def display_restart():
     """Bring the browser back fresh. If nothing is supervising it, start
     the loop instead - killing it would leave nothing to relaunch."""
     if display_status().get('loop'):
-        run(['pkill', '-f', 'chromium.*' + KIOSK_FLAG], 10)
+        run(['pkill', '-f', KIOSK_PAT], 10)
     else:
         spawn(['bash', LOOP])
 

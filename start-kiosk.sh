@@ -34,9 +34,49 @@ done
 # old panel appears for a moment before the network catches up. The query
 # string does not change the origin, so the chart tiles and the track
 # library in browser storage survive it.
+#
+# The immediate-exit case is not a crash and must not be treated as one.
+# Chromium is single-instance per profile: if another window already owns
+# it - the desktop shortcut, or the windowed browser the panel can start -
+# a second launch hands that window the URL and quits at once. Relaunching
+# three seconds later just does it again, forever, poking the existing
+# window into reloading every time. That is a restart loop, not recovery.
+#
+# So an exit inside five seconds means "someone else has the profile", and
+# the right response is to wait for that window to close rather than
+# spin. The kiosk takes the screen back the moment it does.
+# Anchored on the executable. An unanchored -f pattern also matches any
+# shell whose command line merely mentions these flags, and a false
+# positive here would wait for ever - the worst outcome available.
+owned_by_another(){
+  pgrep -f '^[^ ]*chromium[^ ]* .*--app=' >/dev/null 2>&1 ||
+  pgrep -f '^[^ ]*chromium[^ ]* .*--start-maximized' >/dev/null 2>&1
+}
+
+quick=0
 while true; do
+  started=$(date +%s)
   chromium-browser --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
     "$URL?v=$(date +%s)"
+
+  if [ $(( $(date +%s) - started )) -ge 5 ]; then
+    quick=0                                   # it ran; an ordinary restart
+  elif owned_by_another; then
+    quick=0
+    echo "helm: chromium exited at once - another window owns the browser" >&2
+    echo "      profile. Waiting for it to close instead of relaunching." >&2
+    while owned_by_another; do sleep 5; done
+    echo "helm: it closed - taking the screen back" >&2
+  else
+    # Instant exit with nothing else holding the profile means Chromium
+    # itself is unhappy. Back off rather than hammering a broken browser
+    # every three seconds for the rest of the voyage.
+    quick=$(( quick + 1 ))
+    back=$(( quick * 5 )); [ "$back" -gt 30 ] && back=30
+    echo "helm: chromium exited immediately ($quick in a row) - retrying in ${back}s" >&2
+    sleep "$back"
+  fi
+
   sleep 3
 done

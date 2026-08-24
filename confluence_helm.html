@@ -1986,10 +1986,14 @@ async function netRefresh(rescan){
 /* Least destructive first. On a touch panel the top of a list is where
    a hurried finger lands, and that should not be the shutdown. */
 const POWER_ACTIONS=[
- {a:'display', name:'Restart display', sub:'RELOADS THE APP · A FEW SECONDS',
+ /* A reload, not a browser restart. This can only be tapped on a page
+    that is alive, and a live page needs nothing heavier - whereas killing
+    Chromium here would hand the screen to whatever else owns the browser
+    profile and leave the kiosk waiting for it to close. */
+ {a:'reload', name:'Reload the app', sub:'THIS PAGE ONLY · INSTANT',
   ico:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/>',
-  ask:'The screen goes black and the app comes back on its own. '
-     +'Nothing else on the Pi is touched.'},
+  ask:'Reloads the helm app where it stands. The kiosk is left exactly as '
+     +'it is and nothing else on the Pi is touched.'},
  {a:'helper',  name:'Restart helper',  sub:'RADIO CONTROLS · COMES BACK ITSELF',
   ico:'<rect x="5" y="5" width="14" height="14" rx="3"/>'
      +'<circle class="f" cx="12" cy="12" r="2.2"/>',
@@ -2232,6 +2236,12 @@ $('ask-yes').addEventListener('click',askYes);
 
 async function askYes(){
   const act=NET.ask; if(!act||NET.busy) return;
+  /* Handled here rather than by the helper: the page is the thing being
+     reloaded, and it is right in front of us. */
+  if(act.a==='reload'){
+    setMsg('RELOADING…');
+    return setTimeout(()=>location.reload(),300);
+  }
   const heavy = act.a==='poweroff' || act.a==='reboot';
   NET.busy=act.name; setMsg(act.name.toUpperCase()+'…');
   const j=await netApi('/power/do',{action:act.a});
