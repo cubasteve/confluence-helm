@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Confluence helm: the round dial, in the app's own day palette -->
+  <circle cx="64" cy="64" r="61" fill="#F4F6F7" stroke="#B9C1C7" stroke-width="3"/>
+
+  <!-- bearing ticks, major every 45 -->
+  <g stroke="#5A636A" stroke-linecap="round">
+    <g stroke-width="3">
+      <path d="M64 9v10M64 109v10M9 64h10M109 64h10"/>
+    </g>
+    <g stroke-width="2" opacity=".65">
+      <path d="M25 25l7 7M96 96l7 7M103 25l-7 7M32 96l-7 7"/>
+    </g>
+  </g>
+
+  <!-- inner ring -->
+  <circle cx="64" cy="64" r="44" fill="none" stroke="#B9C1C7" stroke-width="1.5" opacity=".8"/>
+
+  <!-- the needle, running NE the way a boat sails to windward -->
+  <path d="M64 64 L88 40" stroke="#0B4FD6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M64 64 L52 78" stroke="#3A4248" stroke-width="4" stroke-linecap="round" opacity=".75"/>
+  <circle cx="64" cy="64" r="6.5" fill="#0B4FD6"/>
+  <circle cx="64" cy="64" r="2.5" fill="#F4F6F7"/>
+</svg>

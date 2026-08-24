@@ -1,0 +1,17 @@
+# Satellite tile pack - 33 MB of Esri imagery, regenerable by re-seeding.
+# Binary, huge, and not ours to redistribute; keep it out of the history.
+tiles/
+
+# Runtime state written by the Spotify poller, not source.
+nowplaying.json
+
+# Pre-git safety net. These are the only record of earlier versions, so
+# they stay on disk - but git supersedes them from here on. Delete them
+# once you trust the history.
+confluence_helm.backup-*.html
+*.bak-*
+
+# Editor/OS noise
+*.swp
+*~
+.DS_Store

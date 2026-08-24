@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>CONFLUENCE · Helm</title>
+<style>
+/* ==================================================================
+   CONFLUENCE HELM  ·  1080x1080 round panel  ·  Signal K
+   Swipe UP anywhere -> control panel.  Swipe DOWN -> dismiss.
+
+   Sizing is against the real glass: 178.15 mm across 1080 px, so
+   6.06 px/mm. Touch targets are 110 px = 18 mm, which is what wet
+   hands on a heeled boat actually need - phone-sized targets are
+   not usable out there.
+   ================================================================== */
+:root{--font:'Poppins','Inter',-apple-system,'Segoe UI',Roboto,sans-serif}
+
+body{                                   /* DAY - built to beat sun   */
+  --bg:#F4F6F7; --ink:#080A0C; --ink-dim:#3A4248; --label:#5A636A;
+  --hairline:#B9C1C7; --accent:#0B4FD6; --port:#C81E1E; --stbd:#0E7A43;
+  --warn:#B36A00; --alarm:#C81E1E; --panel:#E4E8EA; --chip:#D2D8DC;
+  --w-huge:600; --w-val:600; --w-lbl:600;
+}
+body.dusk{
+  --bg:#0B0C0E; --ink:#F2F4F6; --ink-dim:#9AA2A9; --label:#6C757C;
+  --hairline:#242A2F; --accent:#4A9EFF; --port:#FF4D4D; --stbd:#24D17E;
+  --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
+  --w-huge:300; --w-val:300; --w-lbl:500;
+}
+body.night{
+  --bg:#050303; --ink:#C8342E; --ink-dim:#8A2723; --label:#5E1A17;
+  --hairline:#1C0A09; --accent:#E04A3F; --port:#C8342E; --stbd:#C8342E;
+  --warn:#C8342E; --alarm:#FF5A4E; --panel:#0E0605; --chip:#1A0A09;
+  --w-huge:300; --w-val:300; --w-lbl:500;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:#000;font-family:var(--font);
+  overflow:hidden;-webkit-user-select:none;user-select:none;cursor:none;
+  touch-action:none}
+body{display:flex;align-items:center;justify-content:center}
+#stage{width:100vmin;height:100vmin;margin:0 auto;position:relative;
+  border-radius:50%;overflow:hidden;background:var(--bg);flex:none}
+
+/* ---- windowed mode ----------------------------------------------------
+   No page can change a monitor's resolution - the Fullscreen API only
+   changes how much of the screen we occupy - so 100vmin already scales
+   this to fit any window and nothing is ever off-screen. What IS hidden
+   on a rectangular screen is the four corners of the 1080 square, eaten
+   by the round-bezel mask. Off the glass that mask is a liability: it
+   hides real content (the library hint lived there once). So on a
+   non-square viewport we drop the mask and show the whole square, with
+   a dashed line marking where the physical bezel would actually cut.
+   Fullscreen, or a square viewport - i.e. the real panel - puts the
+   circle back.                                                        */
+html.win #stage{border-radius:0}
+html.win #stage::after{content:'';position:absolute;inset:0;border-radius:50%;
+  border:2px dashed var(--hairline);opacity:.5;pointer-events:none;z-index:60}
+svg{width:100%;height:100%;display:block}
+
+.huge{font-size:268px;font-weight:var(--w-huge);fill:var(--ink);letter-spacing:-.02em}
+.value{font-size:104px;font-weight:var(--w-val);fill:var(--ink)}
+.value-s{font-size:68px;font-weight:var(--w-val);fill:var(--ink-dim)}
+.unit{font-size:34px;font-weight:600;fill:var(--label);letter-spacing:.14em}
+.label{font-size:32px;font-weight:var(--w-lbl);letter-spacing:.20em;
+  fill:var(--label);text-transform:uppercase}
+.tick-lbl{font-size:32px;font-weight:600;fill:var(--label)}
+#mark{font-size:1320px;font-weight:700;fill:var(--ink);opacity:.032;
+  letter-spacing:-.06em;pointer-events:none}
+body.dusk #mark{opacity:.055}
+body.night #mark{opacity:.07}
+.sen{stroke:var(--label);fill:var(--label);opacity:.28;
+  transition:opacity .3s,stroke .3s,fill .3s}
+.sen.live{stroke:var(--stbd);fill:var(--stbd);opacity:1}
+.tbtn circle{fill:none;stroke:var(--hairline);stroke-width:3}
+.tbtn rect{fill:var(--label)}
+.tbtn:active circle{fill:var(--chip)}
+.strip{font-size:32px;font-weight:600;fill:var(--ink-dim);letter-spacing:.06em}
+.strip.good{fill:var(--stbd)}.strip.bad{fill:var(--port)}
+.pbtn rect{fill:none;stroke:var(--label);stroke-width:3}
+.pbtn text{font-size:28px;font-weight:600;letter-spacing:.18em;fill:var(--label)}
+.pbtn.set rect{stroke:var(--stbd)} .pbtn.set text{fill:var(--stbd)}
+.pbtn:active rect{fill:var(--chip)}
+.stale{opacity:.30}.alarm{fill:var(--alarm)!important}.warn{fill:var(--warn)!important}
+text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
+
+/* ---------------- control panel ----------------
+   Everything lives in a 600 px column, vertically centred. A circle
+   only offers 680 px of width between y=140 and y=940, so nothing is
+   allowed outside that band - which is what was clipping before.
+   Rows are hairline-separated rather than chunky chips: discreet, and
+   the whole row is the touch target (600 x 112 = 99 x 18 mm).        */
+#panel{
+  position:absolute;inset:0;background:var(--panel);
+  transform:translateY(100%);
+  transition:transform .42s cubic-bezier(.16,1,.3,1);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--ink);
+}
+#panel.open{transform:translateY(0)}
+/* Layer promotion only while a slide is actually running. Holding three
+   1080x1080 layers on the GPU permanently costs real texture memory, and
+   when that is tight the compositor re-uploads them anyway - which is the
+   very hitch will-change was meant to prevent. JS adds .sliding as the
+   slide starts and drops it once the transition has had time to finish. */
+#panel.sliding,#tmap.sliding,#music.sliding{will-change:transform}
+.sheet{width:600px;display:flex;flex-direction:column;align-items:stretch}
+.grab{width:120px;height:8px;border-radius:4px;background:var(--label);
+  opacity:.45;position:absolute;top:70px;left:50%;margin-left:-60px}
+.p-title{font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
+  text-transform:uppercase;text-align:center;margin-bottom:26px}
+
+.row{height:112px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:2px solid var(--hairline);transition:background .1s}
+.row:active{background:var(--chip)}
+.row .k{font-size:27px;font-weight:600;letter-spacing:.16em;color:var(--label);
+  text-transform:uppercase}
+.row .v{font-size:38px;font-weight:600;color:var(--accent);
+  display:flex;align-items:center;gap:16px}
+.row .v .sub{font-size:22px;font-weight:500;letter-spacing:.14em;
+  color:var(--label)}
+.chev{font-size:26px;color:var(--label);opacity:.7}
+
+/* Outlined, never filled - the panel now speaks the same language as the
+   rail. Round for the steppers, pill for anything wearing words.      */
+.mini{width:86px;height:86px;border-radius:50%;background:none;
+  color:var(--ink);font-size:40px;font-weight:400;
+  border:2px solid var(--hairline);font-family:var(--font);
+  display:flex;align-items:center;justify-content:center}
+.mini:active{background:var(--chip)}
+.numv{min-width:120px;text-align:center;font-size:40px;font-weight:600;
+  color:var(--accent)}
+
+.slab{font-size:27px;font-weight:600;letter-spacing:.16em;color:var(--label);
+  text-transform:uppercase;margin:30px 0 14px;padding-bottom:12px;
+  border-bottom:2px solid var(--hairline)}
+/* slimmer track, round accent thumb - the same restraint as the rail */
+#dim{flex:1;height:14px;-webkit-appearance:none;appearance:none;
+  background:var(--hairline);border-radius:7px;outline:none}
+#dim::-webkit-slider-thumb{-webkit-appearance:none;width:76px;height:76px;
+  border-radius:50%;background:var(--accent);border:6px solid var(--panel)}
+
+/* --- theme control: a rail item that happens to sit beside the slider --- */
+.tile{width:104px;flex:none;background:none;border:none;padding:8px 0;
+  color:var(--label);font-family:var(--font);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:9px}
+.tile svg{width:42px;height:42px;overflow:visible}
+.tile span{font-size:17px;font-weight:600;letter-spacing:.1em}
+/* the second line: what AUTO currently resolves to, or the idle delay */
+.tile .sub{font-size:14px;font-weight:600;letter-spacing:.06em;
+  color:var(--accent);margin-top:-4px}
+.tile.off .sub{color:var(--label)}
+#ss-ico,#fs-ico{fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+#ss-ico text{fill:currentColor;stroke:none;font-family:var(--font)}
+.tile.on{color:var(--accent)}
+.tile:active{color:var(--ink)}
+
+/* --- brightness ---
+   Both tiles and the slider share one row. The slider keeps whatever is
+   left of the 600 px sheet after three tiles - about 234 px - which is
+   short for a drag control, so the thumb stays large to compensate.   */
+.dimrow{display:flex;align-items:center;gap:18px;padding-top:10px}
+.dimico{width:34px;height:34px;color:var(--label);flex:none}
+.dimico.sm{width:24px;height:24px}
+#dim-pct{float:right;color:var(--accent);letter-spacing:.06em}
+
+/* --- depth widget: threshold and live reading on one scale --- */
+.depthwrap{display:flex;flex-direction:column;gap:10px}
+.bar{position:relative;height:46px;border-radius:12px;background:var(--chip);
+  overflow:hidden}
+.bar-alarm{position:absolute;left:0;top:0;bottom:0;background:var(--alarm);opacity:.55}
+.bar-warn {position:absolute;top:0;bottom:0;background:var(--warn);opacity:.35}
+.bar-now  {position:absolute;top:-5px;bottom:-5px;width:7px;border-radius:4px;
+  background:var(--ink);box-shadow:0 0 0 4px var(--panel)}
+.bar-scale{display:flex;justify-content:space-between;font-size:19px;
+  font-weight:600;color:var(--label);letter-spacing:.1em}
+.steprow{display:flex;align-items:center;gap:14px;margin-top:6px}
+.numv{min-width:118px;text-align:center;font-size:40px;font-weight:600;color:var(--accent)}
+.numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
+  letter-spacing:.12em}
+/* This was a second, full copy of .mini that still carried the old chip
+   look and won on cascade order - the reason the outlined restyle above
+   appeared to do nothing. Reduced to the one property it actually adds,
+   so the two definitions can no longer drift apart.                   */
+.mini{flex:none}
+/* a wide button inheriting border-radius:50% renders as an ellipse, not a
+   pill - give it a real corner radius of its own */
+.mini.wide{width:auto;flex:1;border-radius:43px;font-size:22px;font-weight:600;
+  letter-spacing:.14em;color:var(--label)}
+/* :active handled by the single .mini:active rule above */
+
+/* --- live sensor pills --- */
+.pills{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pill{height:70px;border-radius:16px;background:var(--chip);display:flex;
+  align-items:center;justify-content:center;gap:10px;font-size:19px;
+  font-weight:600;letter-spacing:.12em;color:var(--label)}
+.pill i{width:14px;height:14px;border-radius:50%;background:var(--label);
+  opacity:.4;transition:background .2s,opacity .2s}
+.pill.live{color:var(--ink)}
+.pill.live i{background:var(--stbd);opacity:1}
+
+/* record state is carried by .rbtn.rec.on */
+/* (the panel's ambient rail was folded into .dimrow - rule retired) */
+/* the status element is now the centred .t-status line above the rail */
+.hint{font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7;
+  text-align:center;margin-top:34px}
+/* --- ambient screensaver --- */
+#saver{position:absolute;inset:0;background:var(--bg);opacity:0;
+  pointer-events:none;transition:opacity .5s}
+#saver.on{opacity:1;pointer-events:auto}
+#ss-cv{position:absolute;inset:0;width:100%;height:100%}
+.ss-mid{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;pointer-events:none}
+.ss-lbl{font-size:30px;font-weight:600;letter-spacing:.24em;color:var(--label);
+  text-transform:uppercase}
+.ss-val{font-size:300px;font-weight:var(--w-huge);color:var(--ink);
+  line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.ss-unit{font-size:32px;font-weight:600;letter-spacing:.2em;color:var(--label)}
+.ss-foot{position:absolute;bottom:150px;left:0;right:0;text-align:center;
+  font-size:38px;font-weight:600;color:var(--label);letter-spacing:.1em;
+  pointer-events:none}
+
+/* --- track map --- */
+#tmap{position:absolute;inset:0;background:var(--panel);
+  transform:translateX(-100%);
+  transition:transform .42s cubic-bezier(.16,1,.3,1);
+  color:var(--ink)}
+#tmap.open{transform:translateX(0)}
+#t-svg{position:absolute;inset:0}
+.t-title{position:absolute;top:112px;left:0;right:0;text-align:center;
+  font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
+  text-transform:uppercase}
+.t-stats{position:absolute;bottom:306px;left:50%;margin-left:-300px;width:600px;
+  display:grid;grid-template-columns:repeat(4,1fr);text-align:center}
+/* Two rows now. Row one sits at y~802-888 (chord 826) and row two at
+   y~898-984 (chord 614), so the narrower second row clears the curve.  */
+/* ---- rail: the shared control language --------------------------------
+   Borderless icon over a caption, one hairline above the group, nothing
+   filled. Used by the track slide-out AND the control panel so the two
+   read as one instrument rather than two apps bolted together.
+   92 px targets - 15 mm - with the caption doing the work an icon alone
+   cannot do when your hands are wet and it is blowing 20.             */
+.rail{display:flex;justify-content:space-between;align-items:flex-start;
+  border-top:2px solid var(--hairline);padding-top:20px}
+.rbtn{background:none;border:none;padding:0;font-family:var(--font);
+  display:flex;flex-direction:column;align-items:center;gap:9px;
+  width:92px;padding:8px 0;color:var(--label);
+  -webkit-tap-highlight-color:transparent}
+.rbtn svg{width:42px;height:42px;fill:none;stroke:currentColor;
+  stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.rbtn svg .f{fill:currentColor;stroke:none}
+.rbtn b{font-size:17px;font-weight:600;letter-spacing:.1em}
+.rbtn:active{color:var(--ink)}
+.rbtn.on{color:var(--accent)}
+.rbtn.rec.on{color:var(--port)}
+
+.t-status{position:absolute;bottom:258px;left:0;right:0;text-align:center;
+  font-size:24px;font-weight:600;letter-spacing:.1em;color:var(--label)}
+/* Lifted clear of the curve: at bottom:112 the rail's bottom corners sat
+   at 97.9% of the radius, ~11 px from the glass edge. Here they sit near
+   94%, which is a margin rather than a coincidence.                   */
+.t-rail{position:absolute;bottom:134px;left:50%;margin-left:-310px;width:620px}
+.t-attr{position:absolute;top:150px;left:0;right:0;text-align:center;
+  font-size:17px;letter-spacing:.1em;color:var(--label);opacity:.55}
+
+/* --- track library --- */
+#t-lib{position:absolute;inset:0;background:var(--panel);opacity:0;
+  pointer-events:none;transition:opacity .22s;display:flex;
+  flex-direction:column;align-items:center;justify-content:center}
+#t-lib.on{opacity:1;pointer-events:auto}
+.lib-list{width:600px;max-height:600px;overflow-y:auto;overscroll-behavior:contain}
+.lib-row{display:flex;align-items:center;gap:16px;height:112px;
+  border-bottom:2px solid var(--hairline)}
+.lib-row:active{background:var(--chip)}
+.lib-main{flex:1;text-align:left;min-width:0}
+.lib-name{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:.04em}
+.lib-sub{font-size:22px;font-weight:500;color:var(--label);letter-spacing:.08em;
+  margin-top:6px}
+.lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
+/* The library's hint says more than the map's, and bottom:44px is the
+   narrowest part of the circle - 637 px of text into a 491 px chord, so
+   73 px fell off each end. Lift it to where the chord is 629 px and set
+   a smaller face, which leaves ~100 px of clearance.                  */
+#lib-hint{bottom:88px;font-size:19px;letter-spacing:.12em}
+.t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
+.t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
+.t-hint{position:absolute;bottom:44px;left:0;right:0;text-align:center;
+  font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7}
+
+/* --- now playing --- */
+#music{position:absolute;inset:0;background:var(--panel);
+  transform:translateX(100%);
+  transition:transform .42s cubic-bezier(.16,1,.3,1);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--ink)}
+#music.open{transform:translateX(0)}
+.m-sheet{width:600px;display:flex;flex-direction:column;align-items:center}
+.art{width:300px;height:300px;border-radius:50%;background:var(--chip);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  color:var(--label);margin-bottom:26px;flex:none}
+.art img{width:100%;height:100%;object-fit:cover}
+.art svg{width:90px;height:90px}
+.m-lbl{font-size:24px;font-weight:600;letter-spacing:.22em;color:var(--label);
+  text-transform:uppercase;margin-bottom:14px}
+.m-title{font-size:50px;font-weight:600;max-width:600px;text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-artist{font-size:34px;font-weight:500;color:var(--ink-dim);margin-top:8px;
+  max-width:600px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-bar{width:520px;height:12px;border-radius:6px;background:var(--chip);
+  margin-top:30px;overflow:hidden}
+.m-fill{height:100%;width:0;background:var(--accent);border-radius:6px}
+.m-time{width:520px;display:flex;justify-content:space-between;margin-top:12px;
+  font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em}
+
+/* --- instruments on the music panel ---------------------------------
+   Wind ANGLE goes on the bezel rather than in a cell: it is an angular
+   quantity and a ring reads it at a glance in a way a number cannot.
+   The scalars - speed, wind speed, depth - stay as numbers below.    */
+.m-bezel{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mb-tick{stroke:var(--label);opacity:.28}
+.mb-tick.maj{opacity:.5}
+#mb-wind{
+  transform-box:view-box;transform-origin:540px 540px;
+  /* The transition IS the animation - one composited property, no rAF
+     loop. Duration is matched to the update period and the easing is
+     LINEAR on purpose: a 0.7s ease restarted every 250ms never finished
+     and reset its curve each time, so the wedge perpetually chased and
+     the motion came out rubbery. Matched-and-linear means each segment
+     lands exactly as the next begins, which is continuous motion.    */
+  transition:transform .26s linear, opacity .35s;
+  opacity:0}
+#mb-wind.on{opacity:1}
+.mb-wedge{fill:var(--accent)}
+.mb-tail{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round;opacity:.45}
+#mb-wind.port .mb-wedge{fill:var(--port)}
+#mb-wind.port .mb-tail{stroke:var(--port)}
+#mb-wind.stbd .mb-wedge{fill:var(--stbd)}
+#mb-wind.stbd .mb-tail{stroke:var(--stbd)}
+
+/* One quiet row above the art. The instruments are context for the
+   music here, not the subject - the dial proper is where you read them
+   properly - so they sit small and stay out of the way.              */
+.ms-head{display:flex;align-items:center;justify-content:center;gap:20px;
+  min-height:40px;margin-bottom:28px;
+  font-size:22px;font-weight:600;letter-spacing:.1em;color:var(--label)}
+.ms-head b{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:0}
+.ms-head i{width:2px;height:24px;background:var(--hairline);display:block;flex:none}
+
+#veil{position:absolute;inset:0;background:#000;opacity:0;
+  pointer-events:none;transition:opacity .2s}
+
+/* --- frame probe readout (CFG.fpsProbe) --- */
+#fps{position:absolute;left:50%;top:118px;transform:translateX(-50%);
+  background:#000;color:#3BE07A;font:600 26px/1 ui-monospace,monospace;
+  padding:16px 22px;border-radius:12px;opacity:0;pointer-events:none;
+  transition:opacity .2s;letter-spacing:.04em;z-index:99}
+#fps.on{opacity:.93}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<svg id="svg" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="540" cy="540" r="540" fill="var(--bg)"/>
+
+  <!-- Hull number, oversized so the circle crops it - texture, not a
+       label.  x is 484, not 540, for two reasons:
+         1. maths  - negative letter-spacing is applied after the last
+            glyph too, so text-anchor centres on an advance width
+            (font x 0.06)/2 = 44 px short.  That puts x at 496.
+         2. optics - the 5 carries more visual mass than the 4, so the
+            perceived centre sits right of the geometric one.  A
+            further 12 px left settles it.
+       If you change font-size, redo step 1: x = 540 - (size*0.06)/2 - 12 -->
+  <text id="mark" x="488" y="672" text-anchor="middle">45</text>
+
+  <g id="rose"></g>
+  <path id="groove-s" fill="var(--accent)" opacity=".12"/>
+  <path id="groove-p" fill="var(--accent)" opacity=".12"/>
+
+  <g id="twa-mark" opacity="0">
+    <path d="M540 92 L562 136 L518 136 Z" fill="none"
+          stroke="var(--ink-dim)" stroke-width="5"/>
+  </g>
+  <g id="awa-mark" opacity="0">
+    <path id="awa-tri" d="M540 80 L572 140 L540 124 L508 140 Z" fill="var(--accent)"/>
+  </g>
+
+  <text id="timer-lbl" class="label" x="540" y="196" text-anchor="middle">START</text>
+  <text id="timer" class="value" x="540" y="268" text-anchor="middle">5:00</text>
+  <!-- sync: nudge the countdown a whole minute either way -->
+  <g id="t-plus" class="tbtn">
+    <circle cx="356" cy="268" r="46"/>
+    <rect x="332" y="263" width="48" height="10" rx="5"/>
+    <rect x="351" y="244" width="10" height="48" rx="5"/>
+  </g>
+  <g id="t-minus" class="tbtn">
+    <circle cx="724" cy="268" r="46"/>
+    <rect x="700" y="263" width="48" height="10" rx="5"/>
+  </g>
+
+  <text id="spd-label" class="label" x="540" y="432" text-anchor="middle">SOG</text>
+  <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
+  <text class="unit" x="540" y="664" text-anchor="middle">KNOTS</text>
+
+  <!-- performance strip: hidden during the countdown, replaced by pings -->
+  <g id="strip">
+    <text id="p-tws" class="strip" x="322" y="706" text-anchor="middle">TWS ––</text>
+    <text id="p-tgt" class="strip" x="540" y="706" text-anchor="middle">TGT ––</text>
+    <text id="p-shf" class="strip" x="758" y="706" text-anchor="middle">––</text>
+  </g>
+
+  <!-- start line pings, only while the countdown runs -->
+  <g id="pings" style="display:none">
+    <g id="ping-pin" class="pbtn">
+      <rect x="322" y="676" width="160" height="62" rx="16"/>
+      <text x="402" y="708" text-anchor="middle">PIN</text>
+    </g>
+    <g id="ping-boat" class="pbtn">
+      <rect x="598" y="676" width="160" height="62" rx="16"/>
+      <text x="678" y="708" text-anchor="middle">BOAT</text>
+    </g>
+  </g>
+
+  <text id="c1-lbl" class="label" x="326" y="758" text-anchor="middle">DEPTH</text>
+  <text id="dpt" class="value" x="326" y="826" text-anchor="middle">––</text>
+  <text id="dpt-u" class="unit" x="326" y="884" text-anchor="middle">FEET</text>
+  <text id="c3-u" class="unit" x="754" y="884" text-anchor="middle">KNOTS</text>
+
+  <text id="c3-lbl" class="label" x="754" y="758" text-anchor="middle">VMG</text>
+  <text id="vmg" class="value" x="754" y="826" text-anchor="middle">––</text>
+
+  <text id="c2-lbl" class="label" x="540" y="762" text-anchor="middle">HEEL</text>
+  <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
+  <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
+
+  <!-- sensor status: one glyph per source, colour = live -->
+  <g id="sensors" transform="translate(540 958)">
+    <g class="sen" id="s-gps" transform="translate(-141 0)">
+      <circle r="15" fill="none" stroke-width="3"/>
+      <circle r="4"/>
+      <path d="M0 -22v7M0 15v7M-22 0h7M15 0h7" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <g class="sen" id="s-dpt" transform="translate(-47 0)">
+      <path d="M-19 -16q9 -7 19 0t19 0" fill="none" stroke-width="3" stroke-linecap="round"/>
+      <path d="M-13 -4q6.5 -6 13 0t13 0" fill="none" stroke-width="3" stroke-linecap="round"/>
+      <path d="M0 6v11M-7 11l7 8 7-8" fill="none" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g class="sen" id="s-wnd" transform="translate(47 0)">
+      <path d="M-20 -9h22a7 7 0 1 0 -7 -7" fill="none" stroke-width="3" stroke-linecap="round"/>
+      <path d="M-20 3h30a7 7 0 1 1 -7 7" fill="none" stroke-width="3" stroke-linecap="round"/>
+      <path d="M-20 15h16" fill="none" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <g class="sen" id="s-hdg" transform="translate(141 0)">
+      <circle r="18" fill="none" stroke-width="3"/>
+      <path d="M0 -11 L6 4 L0 0 L-6 4 Z"/>
+    </g>
+  </g>
+</svg>
+
+<!-- ============== CONTROL PANEL ============== -->
+<div id="panel">
+  <div class="grab"></div>
+  <div class="sheet">
+
+    <div class="slab">Display <span id="dim-pct">100%</span></div>
+    <div class="dimrow">
+      <button class="tile" id="theme-btn">
+        <svg id="theme-ico" viewBox="0 0 40 40"></svg>
+        <span id="theme-lbl">AUTO</span>
+        <span class="sub" id="theme-sub"></span>
+      </button>
+      <button class="tile" id="ss-btn">
+        <svg id="ss-ico" viewBox="0 0 24 24"></svg>
+        <span id="ss-lbl2">SAVER</span>
+        <span class="sub" id="ss-sub">OFF</span>
+      </button>
+      <button class="tile" id="fs-btn">
+        <svg id="fs-ico" viewBox="0 0 24 24"></svg>
+        <span>FULL</span>
+        <span class="sub" id="fs-sub">OFF</span>
+      </button>
+      <input id="dim" type="range" min="25" max="100" value="100">
+    </div>
+
+    <div class="slab">Shallow alarm</div>
+    <div class="depthwrap">
+      <div class="bar">
+        <div class="bar-alarm" id="bar-alarm"></div>
+        <div class="bar-warn"  id="bar-warn"></div>
+        <div class="bar-now"   id="bar-now"></div>
+      </div>
+      <div class="bar-scale"><span>0</span><span id="bar-mid"></span><span id="bar-max"></span></div>
+      <div class="steprow">
+        <button class="mini" id="d-down">–</button>
+        <div class="numv"><span id="d-val">6</span><i id="d-unit">FT</i></div>
+        <button class="mini" id="d-up">+</button>
+        <button class="mini wide" id="r-units">FT / M</button>
+      </div>
+    </div>
+
+    <div class="hint">SWIPE DOWN TO CLOSE</div>
+  </div>
+</div>
+
+<!-- ============== NOW PLAYING ==============
+     Slides in from the right. Metadata comes from librespot's
+     onevent hook writing nowplaying.json - the Pi is the Spotify
+     Connect device, so there is no account polling and no OAuth. -->
+<div id="music">
+  <svg class="m-bezel" viewBox="0 0 1080 1080" aria-hidden="true">
+    <g id="mb-ticks"></g>
+    <g id="mb-wind">
+      <!-- drawn at the bow; the whole group rotates to the wind angle -->
+      <path class="mb-tail" d="M540 92 L540 150"/>
+      <path class="mb-wedge" d="M540 40 L562 86 L518 86 Z"/>
+    </g>
+  </svg>
+  <div class="m-sheet">
+    <div class="ms-head" id="ms-strip"></div>
+    <div class="art" id="m-art">
+      <svg viewBox="0 0 40 40" id="m-note"><path
+        d="M15 28V10l16-3v18" fill="none" stroke="currentColor"
+        stroke-width="3" stroke-linecap="round"/>
+        <circle cx="11" cy="28" r="4.5" fill="currentColor"/>
+        <circle cx="27" cy="25" r="4.5" fill="currentColor"/></svg>
+    </div>
+    <div class="m-lbl" id="m-state">NOW PLAYING</div>
+    <div class="m-title" id="m-title">Nothing playing</div>
+    <div class="m-artist" id="m-artist">—</div>
+    <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
+    <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
+    <div class="hint">SWIPE RIGHT TO CLOSE</div>
+  </div>
+</div>
+
+<!-- ============== TRACK MAP ==============
+     Draws whatever has been recorded, coloured by speed so the slow
+     patches are obvious. Reads the plugin when it is there, the local
+     buffer when it is not. -->
+<div id="tmap">
+  <div class="t-title" id="t-title">Race track</div>
+  <svg id="t-svg" viewBox="0 0 1080 1080">
+    <defs><clipPath id="t-clip"><circle cx="540" cy="430" r="250"/></clipPath></defs>
+    <g clip-path="url(#t-clip)">
+      <g id="t-tiles"></g>       <!-- satellite basemap slots in here -->
+      <g id="t-path"></g>
+    </g>
+  </svg>
+  <div class="t-stats">
+    <div><b id="t-dist">–</b><span>NM</span></div>
+    <div><b id="t-dur">–</b><span>TIME</span></div>
+    <div><b id="t-avg">–</b><span>AVG KT</span></div>
+    <div><b id="t-max">–</b><span>MAX KT</span></div>
+  </div>
+  <div class="t-attr" id="t-attr">IMAGERY © ESRI</div>
+  <div class="t-status" id="trk-n">no track</div>
+  <div class="t-rail rail">
+    <button class="rbtn rec" id="trk-rec"><svg viewBox="0 0 24 24">
+      <circle class="f" cx="12" cy="12" r="7"/></svg><b>REC</b></button>
+    <button class="rbtn" id="trk-save"><svg viewBox="0 0 24 24">
+      <path d="M7 4h10v16l-5-4-5 4z"/></svg><b>SAVE</b></button>
+    <button class="rbtn" id="trk-lib"><svg viewBox="0 0 24 24">
+      <path d="M4 7h16M4 12h16M4 17h16"/></svg><b>RACES</b></button>
+    <button class="rbtn" id="trk-cache"><svg viewBox="0 0 24 24">
+      <path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><b>MAP</b></button>
+    <button class="rbtn" id="trk-exp"><svg viewBox="0 0 24 24">
+      <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><b>GPX</b></button>
+    <button class="rbtn" id="trk-clr"><svg viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
+  </div>
+  <div class="t-hint" id="t-hint">SWIPE LEFT TO CLOSE</div>
+
+  <div id="t-lib">
+    <div class="t-title">Library</div>
+    <div class="lib-list" id="lib-list"></div>
+    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · TAP OUTSIDE TO CLOSE</div>
+  </div>
+</div>
+
+<!-- ============== AMBIENT / SCREENSAVER ==============
+     Streaks flow across the face in the direction the apparent wind
+     is actually blowing, at a rate set by its actual speed. So the
+     motion is data - a glance tells you the breeze filled in even if
+     you never read a number. One big value cycles underneath. -->
+<div id="saver">
+  <canvas id="ss-cv"></canvas>
+  <div class="ss-mid">
+    <div class="ss-lbl" id="ss-lbl">SOG</div>
+    <div class="ss-val" id="ss-val">–</div>
+    <div class="ss-unit" id="ss-unit">KNOTS</div>
+  </div>
+  <div class="ss-foot" id="ss-clock">--:--</div>
+</div>
+
+<div id="veil"></div>
+<div id="fps"></div>
+</div>
+
+<script>
+/* ================================================================== */
+const CFG={
+  host:'localhost:3000', theme:'auto', demo:false,
+
+  /* ---- feature switches -------------------------------------------
+     racePro turns on the start-line pings, polar target % and the
+     lift/header readout. All the code stays in the file, it just is
+     not drawn or evaluated. Flip to true when you want it back.
+     showHeel needs the BNO080 heading node to be publishing
+     navigation.attitude.                                            */
+  racePro:false,
+  showHeel:true,
+
+  /* fpsProbe measures every slide, keeps the samples in localStorage and
+     writes them to ~/Downloads every fpsProbeN slides. Turn it off once
+     the numbers are in - it is an extra rAF loop per slide.            */
+  fpsProbe:false,
+  fpsProbeN:20,
+
+  /* Satellite basemap. Tiles are cached on disk under ~/helm/tiles/{z}/{x}/{y}.jpg
+     so the chart works with no network at all - which on the water is
+     precisely when you want it. Outside the cached box the map simply
+     shows no imagery; the track still draws.                           */
+  /* windDemo makes up wind and depth so the bezel animation can be
+     judged before the vane and transducer are fitted. It writes into the
+     same store the real sensors use, so switching it off leaves nothing
+     behind. Turn it OFF once the hardware is in - it would otherwise
+     sit on top of your real instruments.                             */
+  windDemo:true,
+
+  basemap:true, tileBase:'tiles', tileMinZ:13, tileMaxZ:17,
+  /* Anything not in the on-disk pack is fetched once and kept in
+     IndexedDB, so new water caches itself the first time you look at it
+     with a signal, and works offline every time after.                */
+  tileFetch:true, tileCap:6000,
+  tileRemote:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile',
+
+  depthAlarm:6, depthWarn:12, depthUnit:'ft',
+  grooveMin:35, grooveMax:50,
+  staleAfter:8000, startMins:5,
+  /* smoothing time constant in ms. Longer = calmer but laggier. Must stay
+     above the SignalK feed period (250 ms) or the steps show through. */
+  smoothTau:420,
+  lat:28.61, lon:-81.27              // fallback until GPS gives a fix
+};
+const MS_TO_KT=1.94384, M_TO_FT=3.28084, DEG=180/Math.PI;
+const CX=540, CY=540, R_OUT=516, R_MIN=492, R_MAJ=474, R_LBL=436;
+const $=i=>document.getElementById(i);
+
+function polar(r,d){const a=(d-90)*Math.PI/180;
+  return [CX+r*Math.cos(a),CY+r*Math.sin(a)];}
+function arcPath(r0,r1,d0,d1){
+  const[x0,y0]=polar(r1,d0),[x1,y1]=polar(r1,d1),
+       [x2,y2]=polar(r0,d1),[x3,y3]=polar(r0,d0);
+  const b=Math.abs(d1-d0)>180?1:0;
+  return `M${x0} ${y0} A${r1} ${r1} 0 ${b} 1 ${x1} ${y1}
+          L${x2} ${y2} A${r0} ${r0} 0 ${b} 0 ${x3} ${y3} Z`;}
+
+(function(){let o='';
+  for(let d=-180;d<180;d+=5){const m=d%30===0;
+    const[a,b]=polar(m?R_MAJ:R_MIN,d),[c,e]=polar(R_OUT,d);
+    o+=`<line x1="${a}" y1="${b}" x2="${c}" y2="${e}"
+        stroke="${m?'var(--label)':'var(--hairline)'}"
+        stroke-width="${m?4:2}" stroke-linecap="round"/>`;}
+  [0,30,60,90,120,-30,-60,-90,-120].forEach(d=>{const[x,y]=polar(R_LBL,d);
+    o+=`<text class="tick-lbl" x="${x}" y="${y}" text-anchor="middle">${Math.abs(d)}</text>`;});
+  $('rose').innerHTML=o;
+  $('groove-s').setAttribute('d',arcPath(R_LBL+18,R_OUT,CFG.grooveMin,CFG.grooveMax));
+  $('groove-p').setAttribute('d',arcPath(R_LBL+18,R_OUT,-CFG.grooveMax,-CFG.grooveMin));
+})();
+
+/* ---------------- state ---------------- */
+const S={},sm={},smA={};
+const put=(p,v)=>S[p]={v,t:Date.now()};
+function get(p){const e=S[p];if(!e)return null;
+  return Date.now()-e.t>CFG.staleAfter?null:e.v;}
+/* ---- smoothing ---------------------------------------------------------
+   This used to apply a fixed 0.25 per CALL. render() runs at 60 fps, so a
+   reading reached its new value in about four frames - 70 ms - and then
+   sat perfectly still for the rest of the 250 ms until the next delta
+   arrived. Four little steps a second, each one a fast ease followed by
+   a dead stop. That is exactly what reads as jitter rather than motion.
+
+   Working from elapsed time against a time constant makes the filter
+   frame-rate independent AND lets one step spread across the whole gap
+   between readings, so the needle and the numbers move continuously.
+   Tau wants to be comfortably longer than the feed period (250 ms).   */
+let smAlpha=0.25, smPrev=0;
+function tickSmoothing(){
+  const now=performance.now();
+  const dt=smPrev ? Math.min(now-smPrev, 500) : 16;   /* cap: after a slide
+                                                        or a tab wake, do not
+                                                        jump the whole way */
+  smPrev=now;
+  smAlpha=1-Math.exp(-dt/(CFG.smoothTau||420));
+}
+function smooth(k,v){if(v===null)return null;
+  sm[k]=sm[k]===undefined?v:sm[k]+(v-sm[k])*smAlpha;return sm[k];}
+function smoothAngle(k,deg){if(deg===null)return null;
+  const r=deg*Math.PI/180,s=smA[k]||(smA[k]={x:Math.cos(r),y:Math.sin(r)});
+  s.x+=(Math.cos(r)-s.x)*smAlpha;s.y+=(Math.sin(r)-s.y)*smAlpha;
+  return Math.atan2(s.y,s.x)*DEG;}
+/* read the already-smoothed angle without advancing the filter - the
+   music bezel runs on its own timer and must not disturb the dial's */
+const smoothedAngle=k=>smA[k]?Math.atan2(smA[k].y,smA[k].x)*DEG:null;
+
+/* ---------------- Signal K ---------------- */
+const PATHS=['navigation.speedOverGround','navigation.speedThroughWater',
+ 'navigation.position','navigation.headingMagnetic','navigation.courseOverGroundTrue',
+ 'navigation.attitude','navigation.rateOfTurn','environment.wind.directionTrue',
+ 'environment.depth.belowTransducer','environment.depth.belowKeel',
+ 'environment.wind.angleApparent','environment.wind.speedApparent',
+ 'environment.wind.angleTrueWater','environment.wind.speedTrue',
+ 'performance.velocityMadeGood',
+ 'confluence.track.recording','confluence.track.points'];
+let ws,retry=1000;
+const setLink=(c,t)=>{ document.getElementById('sensors').style.opacity =
+  (t==='SIGNAL K'||t==='DEMO') ? '1' : '.35'; };
+
+let skQueue=[];
+function skDrain(){ const q=skQueue; skQueue=[]; q.forEach(skMessage); }
+function skMessage(data){
+  let m; try{m=JSON.parse(data)}catch(x){return}
+  if(m.requestId && puts[m.requestId]){          // answer to one of our PUTs
+    puts[m.requestId](m); delete puts[m.requestId]; }
+  (m.updates||[]).forEach(u=>(u.values||[]).forEach(v=>{
+    if(typeof v.value==='number'||typeof v.value==='boolean')put(v.path,v.value);
+    else if(v.path==='navigation.position'&&v.value&&v.value.latitude!==undefined){
+      put('pos.lat',v.value.latitude); put('pos.lon',v.value.longitude);
+      CFG.lat=v.value.latitude;CFG.lon=v.value.longitude;}     // GPS drives sunset
+    else if(v.path==='navigation.attitude'&&v.value){          // BNO080, 9-axis
+      if(typeof v.value.roll ==='number')put('att.roll', v.value.roll);
+      if(typeof v.value.pitch==='number')put('att.pitch',v.value.pitch);}
+  }));
+}
+
+function connect(){
+  if(CFG.demo){setLink('var(--warn)','DEMO');return demo();}
+  try{ws=new WebSocket(`ws://${CFG.host||location.host}/signalk/v1/stream?subscribe=none`);}
+  catch(e){return setTimeout(connect,retry);}
+  ws.onopen=()=>{setLink('var(--stbd)','SIGNAL K');retry=1000;
+    ws.send(JSON.stringify({context:'vessels.self',
+      /* 'instant' pushed every path the moment it changed - 17 paths at
+         NMEA rates is a continuous drizzle of small deltas landing at
+         random moments, and each one is a task that can skip an
+         animation frame. 'fixed' batches them onto a predictable 4 Hz
+         beat instead. Slower data, smoother glass - a deliberate trade. */
+      subscribe:PATHS.map(p=>({path:p,period:250,policy:'fixed'}))}));};
+  /* Mid-slide the dial is completely hidden, so parsing a delta right
+     now buys nothing visible and costs a frame: the parse is a discrete
+     task that can land between two rAF callbacks and skip the animation
+     past its deadline. Hold them and drain once the panel has landed -
+     nothing is dropped, it just arrives 400 ms later than it would have. */
+  ws.onmessage=e=>{
+    if(Date.now()<slideUntil){ skQueue.push(e.data); return; }
+    skMessage(e.data);
+  };
+  ws.onclose=()=>{setLink('var(--label)','RECONNECTING');
+    retry=Math.min(retry*1.6,15000);setTimeout(connect,retry);};
+  ws.onerror=()=>ws.close();
+}
+function demo(){
+  // a boat sailing a slow S off Lake Monroe, so the track recorder and
+  // the GPX export can actually be exercised with no GPS attached
+  let t=0, dLat=28.8035, dLon=-81.2980, cog=0.9;
+  setInterval(()=>{
+    t+=.05;
+    const sog=(5.4+Math.sin(t*.7)*.8)/MS_TO_KT;      // m/s
+    cog += Math.sin(t*0.09)*0.004;
+    const dt=0.12;                                    // seconds per tick
+    dLat += (sog*dt*Math.cos(cog))/111320;
+    dLon += (sog*dt*Math.sin(cog))/(111320*Math.cos(dLat*Math.PI/180));
+    put('pos.lat',dLat); put('pos.lon',dLon);
+    put('navigation.speedOverGround',sog);
+    put('navigation.courseOverGroundTrue',cog);
+    put('environment.depth.belowTransducer',(18+Math.sin(t*.3)*6)/M_TO_FT);
+    put('environment.wind.angleApparent',(38+Math.sin(t*.9)*11)/DEG);
+    put('environment.wind.angleTrueWater',(52+Math.sin(t*.6)*9)/DEG);
+    put('environment.wind.speedTrue',(9.5+Math.sin(t*.4)*1.5)/MS_TO_KT);
+    put('environment.wind.directionTrue',(cog*DEG+52+Math.sin(t*.2)*6)/DEG);
+    put('att.roll',(12+Math.sin(t*.8)*5)/DEG);
+  },120);}
+
+/* ==================================================================
+   SUN TIMES  (NOAA approximation, same maths as SunCalc)
+   Position comes from Signal K once there is a fix, so the display
+   follows the boat rather than a hardcoded home port.
+   ================================================================== */
+function sunTimes(date,lat,lon){
+  const rad=Math.PI/180,J1970=2440588,J2000=2451545,
+        toJ=d=>d.valueOf()/864e5-.5+J1970, fromJ=j=>new Date((j+.5-J1970)*864e5),
+        days=d=>toJ(d)-J2000, e=rad*23.4397;
+  const M=d=>rad*(357.5291+.98560028*d);
+  const L=m=>m+rad*(1.9148*Math.sin(m)+.02*Math.sin(2*m)+.0003*Math.sin(3*m))
+             +rad*102.9372+Math.PI;
+  const dec=l=>Math.asin(Math.sin(e)*Math.sin(l));
+  const J0=9e-4, lw=rad*-lon, phi=rad*lat, d=days(date);
+  const n=Math.round(d-J0-lw/(2*Math.PI));
+  const ds=J0+(0+lw)/(2*Math.PI)+n, m=M(ds), l=L(m);
+  const Jnoon=J2000+ds+.0053*Math.sin(m)-.0069*Math.sin(2*l);
+  const dd=dec(l), h=rad*-.833;
+  const w=Math.acos((Math.sin(h)-Math.sin(phi)*Math.sin(dd))/(Math.cos(phi)*Math.cos(dd)));
+  const a=J0+(w+lw)/(2*Math.PI)+n;
+  const Jset=J2000+a+.0053*Math.sin(m)-.0069*Math.sin(2*l);
+  return {sunrise:fromJ(Jnoon-(Jset-Jnoon)), sunset:fromJ(Jset)};
+}
+/* day between sunrise and sunset, dusk for the hour after sunset,
+   night thereafter. Civil twilight is roughly 30 min, an hour is kinder. */
+function autoTheme(){
+  const now=new Date(), t=sunTimes(now,CFG.lat,CFG.lon);
+  if(!t.sunrise||isNaN(t.sunrise))return 'day';
+  const dusk=new Date(t.sunset.getTime()+60*60e3);
+  if(now>=t.sunrise&&now<t.sunset)return 'day';
+  if(now>=t.sunset&&now<dusk)return 'dusk';
+  return 'night';
+}
+
+/* ---------------- theming ---------------- */
+function applyTheme(){
+  const eff = CFG.theme==='auto' ? autoTheme() : CFG.theme;
+  document.body.className = eff==='day' ? '' : eff;
+  $('theme-ico').innerHTML = ICON[CFG.theme];
+  /* On auto the mode and the outcome are different facts and you want
+     both: the label says AUTO, the line under it says what the clock has
+     actually chosen right now. Manual modes have nothing to resolve.  */
+  $('theme-lbl').textContent = CFG.theme.toUpperCase();
+  $('theme-sub').textContent = CFG.theme==='auto' ? eff.toUpperCase() : '';
+  $('theme-btn').classList.toggle('on', CFG.theme!=='auto');
+}
+setInterval(()=>{ if(CFG.theme==='auto') applyTheme(); }, 60000);
+
+/* ---------------- render ---------------- */
+let showSTW=false;
+const fmt=(v,d)=>v===null?'––':v.toFixed(d);
+
+/* Is the dial actually on screen? Every slide-out is a full-bleed opaque
+   layer, so while one is up nothing painted underneath can be seen. The
+   overlays have always been demand-driven - they only draw while open -
+   and the dial was the one view that ignored that and painted regardless. */
+/* ---- write-through cache ----------------------------------------------
+   A good share of the dial's writes set a value that is already there:
+   the race strip's display, the four sensor glyphs, the SOG/STW label.
+   Each no-op write still costs an invalidation, so compare first.
+
+   Deliberately NOT applied to the readouts. Those genuinely change every
+   frame now that the filter emits small continuous steps, so a comparison
+   there would be pure overhead for a guaranteed miss.                  */
+const _w=new Map();
+const wSty =(id,p,v)=>{const k=id+'|s|'+p; if(_w.get(k)===v)return; _w.set(k,v); $(id).style[p]=v;};
+const wAttr=(id,a,v)=>{const k=id+'|a|'+a; if(_w.get(k)===v)return; _w.set(k,v); $(id).setAttribute(a,v);};
+const wText=(id,v)  =>{const k=id+'|t';    if(_w.get(k)===v)return; _w.set(k,v); $(id).textContent=v;};
+const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o); $(id).classList.toggle(c,o);};
+
+const dialVisible=()=>!(panel.classList.contains('open')
+                      || music.classList.contains('open')
+                      || tmap .classList.contains('open')
+                      || ssOn);
+function render(){
+  /* mid-slide: the dial is behind an opaque panel, so none of the work
+     below can be seen. Skip it and let the compositor have the frame. */
+  if(Date.now()<slideUntil){
+    trackSample();
+    return requestAnimationFrame(render);
+  }
+  if(skQueue.length) skDrain();     /* the slide is over - catch up on data */
+
+  /* ================= DATA - always runs =================================
+     Every filter advances on every frame no matter what is on screen. It
+     has to: the music panel's wind bezel reads these same filters, so
+     skipping them while the dial is covered would freeze the wedge in
+     mid-sweep. This block touches no DOM at all - it is a dozen reads and
+     seven exponential steps, which is nothing.                        */
+  tickSmoothing();
+  const sogR=get('navigation.speedOverGround'),stwR=get('navigation.speedThroughWater');
+  const useS=showSTW&&stwR!==null,raw=useS?stwR:sogR;
+  const spd=smooth('spd',raw===null?null:raw*MS_TO_KT);
+
+  let d=get('environment.depth.belowKeel');
+  if(d===null)d=get('environment.depth.belowTransducer');
+  const met=CFG.depthUnit==='m';
+  const dv=smooth('dpt',d===null?null:(met?d:d*M_TO_FT));
+
+  const awaR=get('environment.wind.angleApparent');
+  const awa=awaR===null?null:smoothAngle('awa',awaR*DEG);
+  const twaR=get('environment.wind.angleTrueWater');
+  const twa=twaR===null?null:smoothAngle('twa',twaR*DEG);
+  const tws=smooth('tws',(v=>v===null?null:v*MS_TO_KT)(get('environment.wind.speedTrue')));
+
+  const roll=get('att.roll');
+  const heel=smooth('heel', roll===null?null:Math.abs(roll*DEG));
+
+  let vR=get('performance.velocityMadeGood');
+  if(vR===null&&sogR!==null&&twaR!==null)vR=sogR*Math.cos(twaR);
+  const vmg=smooth('vmg',vR===null?null:vR*MS_TO_KT);
+
+  trackSample();                    /* the log must not care what is on top */
+
+  /* ================= DRAW - only when the dial can be seen ============= */
+  if(dialVisible()){
+  $('spd').textContent=fmt(spd,1);
+  $('spd').classList.toggle('stale',spd===null);
+  wText('spd-label', useS?'STW':'SOG');
+
+  const de=$('dpt');
+  de.textContent=fmt(dv,dv!==null&&dv<100?1:0);
+  de.classList.toggle('stale',dv===null);
+  const alarmV=met?CFG.depthAlarm/M_TO_FT:CFG.depthAlarm;
+  const warnV =met?CFG.depthWarn /M_TO_FT:CFG.depthWarn;
+  de.classList.toggle('alarm',dv!==null&&dv<alarmV);
+  de.classList.toggle('warn', dv!==null&&dv>=alarmV&&dv<warnV);
+
+  const ag=$('awa-mark');
+  if(awa===null)ag.setAttribute('opacity','0');
+  else{ag.setAttribute('opacity','1');
+    ag.setAttribute('transform',`rotate(${awa} ${CX} ${CY})`);
+    $('awa-tri').setAttribute('fill',awa<0?'var(--port)':'var(--stbd)');}
+
+  const tg=$('twa-mark');
+  tg.setAttribute('opacity',twa===null?'0':'.9');
+  if(twa!==null)tg.setAttribute('transform',`rotate(${twa} ${CX} ${CY})`);
+
+  /* ---- performance strip ---- */
+  const racing = CFG.racePro && tState==='countdown';
+  wSty('strip','display', racing?'none':'');
+  wSty('pings','display', racing?'':'none');
+  // with racePro off the strip carries TWS alone, centred
+  wAttr('p-tws','x', CFG.racePro?322:540);
+  wSty('p-tgt','display', CFG.racePro?'':'none');
+  wSty('p-shf','display', CFG.racePro?'':'none');
+  $('p-tws').textContent = 'TWS '+fmt(tws,1)+(CFG.racePro?'':' KT');
+
+  let tgtPct=null;
+  if(CFG.racePro && tws!==null && twa!==null && sogR!==null){
+    const t=targetSpeed(tws,twa);
+    if(t>0.3) tgtPct=(sogR*MS_TO_KT)/t*100;
+  }
+  $('p-tgt').textContent = tgtPct===null?'TGT ––':'TGT '+tgtPct.toFixed(0)+'%';
+  $('p-tgt').classList.toggle('good', tgtPct!==null&&tgtPct>=98);
+  $('p-tgt').classList.toggle('bad',  tgtPct!==null&&tgtPct<90);
+
+  let twdDeg=get('environment.wind.directionTrue');
+  twdDeg = twdDeg===null?null:twdDeg*DEG;
+  const sh = CFG.racePro ? windShift(twdDeg, awa) : null;
+  const shEl=$('p-shf');
+  if(sh===null||sh.deg<2){ shEl.textContent='STEADY'; shEl.className='strip'; }
+  else { shEl.textContent=(sh.lift?'LIFT ':'HEADER ')+sh.deg.toFixed(0)+'°';
+         shEl.className='strip '+(sh.lift?'good':'bad'); }
+
+  /* ---- three cells, contextual on race state ---- */
+  const L = (CFG.racePro && racing) ? lineData() : null;
+  if(L){
+    $('c1-lbl').textContent='TO LINE';
+    $('c2-lbl').textContent='BIAS';
+    $('c3-lbl').textContent='BURN';
+    const dm = met ? L.dist : L.dist*M_TO_FT;
+    de.textContent = Math.abs(dm)>999?'999':Math.round(dm);
+    de.classList.toggle('alarm', L.dist<0);          // over early
+    de.classList.remove('warn','stale');
+    $('dpt-u').textContent = met?'METRES':'FEET';
+    $('c2').textContent  = Math.abs(L.bias).toFixed(0)+'°';
+    $('c2b').textContent = L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT);
+    $('c2').classList.remove('stale'); $('c2b').classList.remove('stale');
+    $('vmg').textContent = L.burn===null?'––':(L.burn>0?'+':'')+L.burn;
+    $('vmg').classList.toggle('alarm', L.burn!==null&&L.burn<0);
+    $('c3-u').textContent='SECONDS';
+  } else {
+    $('c1-lbl').textContent='DEPTH';
+    $('c3-lbl').textContent='VMG';
+    $('c3-u').textContent='KNOTS';
+    $('dpt-u').textContent=CFG.depthUnit==='m'?'METRES':'FEET';
+    if(CFG.showHeel){
+      $('c2-lbl').textContent='HEEL';
+      $('c2').textContent  = heel===null?'––':heel.toFixed(0)+'°';
+      $('c2b').textContent = roll===null?'' : (roll>0?'STBD':'PORT');
+      $('c2').classList.toggle('stale',heel===null);
+      $('c2b').classList.toggle('stale',heel===null);
+    } else {
+      $('c2-lbl').textContent='TWA';
+      $('c2').textContent  = twa===null?'––':Math.abs(twa).toFixed(0)+'°';
+      $('c2b').textContent = twa===null?'' : (twa>0?'STBD':'PORT');
+      $('c2').classList.toggle('stale',twa===null);
+      $('c2b').classList.toggle('stale',twa===null);
+    }
+  }
+
+  if(!L){ $('vmg').textContent=fmt(vmg,1);
+          $('vmg').classList.toggle('stale',vmg===null);
+          $('vmg').classList.remove('alarm'); }
+
+  /* --- sensor glyphs, always on the face --- */
+  const live=(el,ok)=>wCls(el,'live',ok);
+  live('s-gps', get('navigation.position')!==null||sogR!==null);
+  live('s-dpt', d!==null);
+  live('s-wnd', awaR!==null);
+  live('s-hdg', get('navigation.headingMagnetic')!==null);
+
+  }
+  /* ================= end DRAW ========================================= */
+
+  /* The control panel's depth bar lives OUTSIDE the dial gate on purpose:
+     it is drawn exactly when the panel is open, which is exactly when the
+     dial is not visible. Putting it inside would have silently killed it. */
+  if(panel.classList.contains('open')){
+    const mx=BAR_MAX();
+    $('bar-now').style.left = dv===null ? '-20px'
+      : Math.min(100,Math.max(0,dv/mx*100))+'%';
+    $('bar-now').style.opacity = dv===null?'0':'1';
+  }
+  /* the sparkline gains a point about once a second - repainting the
+     whole canvas 60 times a second to redraw the same line is pure heat */
+  if(tmap.classList.contains('open') && Date.now()-lastTrackPaint>250){
+    lastTrackPaint=Date.now(); paintTrack();
+  }
+  /* watch the track draw itself. 1 Hz matches the sample rate, so redrawing
+     faster would only redraw the same line. Slides skip this entirely -
+     the early return above fires long before we get here.              */
+  if(tmap.classList.contains('open') && trackLive() && !VIEWTRK
+     && Date.now()-lastMapDraw>1000){
+    lastMapDraw=Date.now(); drawMap(TRK);
+  }
+  requestAnimationFrame(render);
+}
+
+
+/* ==================================================================
+   POLARS  -  target boat speed as a function of TWS and TWA
+ 
+   THESE NUMBERS ARE ESTIMATES for a Capri 22 (2000 lb, ~230 sq ft).
+   They are NOT measured polars. Treat 100% as "about right" until you
+   have real data. The honest way to build a real table is to sail
+   steady angles in steady breeze, log SOG/TWA/TWS, and take the 90th
+   percentile of what you actually achieved. Then replace this block.
+   Hull speed for 20 ft LWL is about 6.0 kt, which is why the table
+   flattens out up top.
+   ================================================================== */
+const POLAR_TWS=[4,6,8,10,12,14,16,20];
+const POLAR_TWA=[30,35,40,45,52,60,70,80,90,100,110,120,135,150,165,180];
+const POLAR=[
+ [1.0,1.5,2.0,2.4,2.8,3.1,3.3,3.4,3.4,3.3,3.1,2.9,2.5,2.1,1.8,1.6],
+ [1.6,2.3,2.9,3.3,3.7,4.0,4.3,4.4,4.4,4.3,4.1,3.9,3.4,2.9,2.5,2.3],
+ [2.0,2.9,3.6,4.0,4.4,4.7,5.0,5.1,5.1,5.0,4.9,4.7,4.2,3.7,3.2,3.0],
+ [2.3,3.3,4.1,4.5,4.9,5.2,5.4,5.5,5.6,5.6,5.5,5.3,4.9,4.4,3.9,3.6],
+ [2.5,3.6,4.4,4.8,5.2,5.4,5.7,5.8,5.9,6.0,6.0,5.9,5.5,5.0,4.5,4.2],
+ [2.6,3.8,4.6,5.0,5.4,5.6,5.9,6.0,6.2,6.3,6.4,6.3,6.0,5.5,5.0,4.7],
+ [2.7,3.9,4.7,5.1,5.5,5.8,6.0,6.2,6.4,6.6,6.7,6.7,6.4,5.9,5.4,5.1],
+ [2.8,4.0,4.8,5.2,5.6,5.9,6.2,6.4,6.7,6.9,7.1,7.1,6.9,6.4,5.9,5.6]];
+
+function lerpIdx(arr,v){                       // fractional index into a table
+  if(v<=arr[0])return[0,0];
+  if(v>=arr[arr.length-1])return[arr.length-1,0];
+  let i=0; while(arr[i+1]<v)i++;
+  return[i,(v-arr[i])/(arr[i+1]-arr[i])];
+}
+function targetSpeed(tws,twa){                 // bilinear over the table
+  twa=Math.abs(twa); if(twa>180)twa=360-twa;
+  const[i,fi]=lerpIdx(POLAR_TWS,tws), [j,fj]=lerpIdx(POLAR_TWA,twa);
+  const i2=Math.min(i+1,POLAR_TWS.length-1), j2=Math.min(j+1,POLAR_TWA.length-1);
+  const a=POLAR[i][j] +(POLAR[i][j2] -POLAR[i][j] )*fj;
+  const b=POLAR[i2][j]+(POLAR[i2][j2]-POLAR[i2][j])*fj;
+  return a+(b-a)*fi;
+}
+
+/* ==================================================================
+   LIFT / HEADER
+   Compare the wind now against a slow average of where it has been.
+   Which way a shift helps depends on the tack, so the sign flips.
+   ================================================================== */
+let twdAvg=null;
+function windShift(twd, awa){
+  if(twd===null||awa===null) return null;
+  const r=twd*Math.PI/180;
+  if(twdAvg===null) twdAvg={x:Math.cos(r),y:Math.sin(r)};
+  twdAvg.x+=(Math.cos(r)-twdAvg.x)*0.002;      // ~5 min at 4 Hz
+  twdAvg.y+=(Math.sin(r)-twdAvg.y)*0.002;
+  const avg=Math.atan2(twdAvg.y,twdAvg.x)*DEG;
+  let d=twd-avg; while(d>180)d-=360; while(d<-180)d+=360;
+  // starboard tack (wind from starboard, awa>0): a veer is a lift
+  return {deg:Math.abs(d), lift: awa>0 ? d>0 : d<0, raw:d};
+}
+
+/* ==================================================================
+   START LINE
+   Ping each end while sailing past it. Everything after that is
+   plane geometry on a local east/north grid - good to a few cm over
+   a start line, which is far better than GPS itself.
+   ================================================================== */
+let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
+const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
+function pingEnd(which){
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null) return;
+  LINE[which]={lat:la,lon:lo}; saveLine();
+}
+function toXY(lat,lon,lat0,lon0){              // metres east / north
+  return { x:(lon-lon0)*111320*Math.cos(lat0*Math.PI/180),
+           y:(lat-lat0)*111320 };
+}
+function lineData(){
+  if(!LINE.pin||!LINE.boat) return null;
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null) return null;
+  const P=toXY(LINE.pin.lat ,LINE.pin.lon ,LINE.pin.lat,LINE.pin.lon);
+  const B=toXY(LINE.boat.lat,LINE.boat.lon,LINE.pin.lat,LINE.pin.lon);
+  const C=toXY(la,lo,LINE.pin.lat,LINE.pin.lon);
+  const vx=B.x-P.x, vy=B.y-P.y, len=Math.hypot(vx,vy);
+  if(len<1) return null;
+
+  let twd=get('environment.wind.directionTrue');
+  twd = twd===null ? null : twd*DEG;
+  if(twd===null){                              // fall back to heading + TWA
+    const h=get('navigation.courseOverGroundTrue'), t=get('environment.wind.angleTrueWater');
+    if(h!==null&&t!==null) twd=(h+t)*DEG;
+  }
+  if(twd===null) return null;
+
+  // unit normal to the line, pointing upwind
+  const ux=Math.sin(twd*Math.PI/180), uy=Math.cos(twd*Math.PI/180);
+  let nx=-vy/len, ny=vx/len;
+  if(nx*ux+ny*uy < 0){ nx=-nx; ny=-ny; }
+
+  const wx=C.x-P.x, wy=C.y-P.y;
+  const dist = -(wx*nx+wy*ny);                 // + = still to go, - = over early
+
+  // bias: how far the line is off square to the wind
+  let lineBrg=Math.atan2(vx,vy)*DEG;
+  let bias=lineBrg-(twd+90); while(bias>180)bias-=360; while(bias<-180)bias+=360;
+  const gain=Math.abs(len*Math.sin(bias*Math.PI/180));
+  const favoured = bias>0 ? 'PIN' : 'BOAT';
+
+  // burn: countdown remaining minus time to reach the line on this course
+  let burn=null;
+  const sog=get('navigation.speedOverGround'), cog=get('navigation.courseOverGroundTrue');
+  if(sog!==null&&cog!==null&&tState==='countdown'){
+    const c=cog*DEG*Math.PI/180;
+    const closing=sog*(Math.sin(c)*nx+Math.cos(c)*ny)*-1;   // m/s toward the line
+    if(closing>0.05){
+      const tToLine=dist/closing;
+      burn=Math.round((tEnd-Date.now())/1000 - tToLine);
+    }
+  }
+  return {dist, bias, gain, favoured, burn, len};
+}
+
+
+/* ==================================================================
+   TALKING BACK TO SIGNAL K
+   The websocket is bidirectional - a PUT goes out on the same socket
+   the data arrives on, and the server answers with the same requestId.
+   Needs write permission: either Signal K security off, or an
+   approved device token.
+   ================================================================== */
+const puts={};
+function skPut(path, value, done){
+  if(!ws || ws.readyState!==1) return done && done({statusCode:0});
+  const id = (crypto.randomUUID?crypto.randomUUID():String(Math.random()));
+  puts[id]=done;
+  ws.send(JSON.stringify({context:'vessels.self', requestId:id, put:{path, value}}));
+  setTimeout(()=>{ if(puts[id]){ puts[id]({statusCode:408}); delete puts[id]; } },4000);
+}
+/* the plugin announces itself by publishing its own state */
+const serverTrack=()=>get('confluence.track.recording')!==null;
+
+/* ==================================================================
+   RACE TRACK  ->  GPX
+   Records from the moment the countdown starts until you finish, so
+   the approach to the line is in there too, not just the race.
+   1 Hz is plenty - an hour is 3600 points, about 400 kB of GPX.
+   Kept in localStorage as it goes, so a crash or a reload does not
+   cost you the race.
+   ================================================================== */
+let TRK = JSON.parse(localStorage.getItem('racetrack')||'[]');
+let trkLast = 0;
+
+let localArmed=false;              // manual override for the record button
+function trackSample(){
+  if(serverTrack()) return;          // the plugin owns recording
+  const rec = localArmed || tState==='countdown' || tState==='racing';
+  if(!rec) return;
+  const now=Date.now();
+  if(now-trkLast < 1000) return;               // 1 Hz
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null) return;
+  trkLast=now;
+  TRK.push({t:now, la:+la.toFixed(7), lo:+lo.toFixed(7),
+            s:+((get('navigation.speedOverGround')||0)).toFixed(2),
+            c:+((get('navigation.courseOverGroundTrue')||0)).toFixed(3)});
+  if(TRK.length%15===0){                        // persist every 15 s
+    try{ localStorage.setItem('racetrack',JSON.stringify(TRK)); }catch(e){}
+  }
+}
+function trackClear(){
+  TRK=[]; localStorage.removeItem('racetrack');
+  MAPVIEW=null; tileKey='';
+  paintTrack(); drawMap(TRK);
+}
+
+function buildGPX(pts){
+  pts=pts||TRK;
+  const iso=ms=>new Date(ms).toISOString();
+  const head=`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Confluence Helm"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+ <metadata>
+  <name>Confluence race ${iso(pts[0].t)}</name>
+  <time>${iso(pts[0].t)}</time>
+ </metadata>
+ <trk><name>Confluence 45</name><trkseg>
+`;
+  const body=pts.map(p=>
+`  <trkpt lat="${p.la}" lon="${p.lo}"><time>${iso(p.t)}</time>`+
+`<extensions><gpxtpx:TrackPointExtension>`+
+`<gpxtpx:speed>${p.s}</gpxtpx:speed>`+
+`<gpxtpx:course>${(p.c*180/Math.PI).toFixed(1)}</gpxtpx:course>`+
+`</gpxtpx:TrackPointExtension></extensions></trkpt>`).join('\n');
+  return head+body+'\n </trkseg></trk>\n</gpx>\n';
+}
+
+/* Safari on iOS turns a Blob download into the share sheet, which is
+   where "Save to Files -> iCloud Drive" lives. So opening this page
+   on the iPad and tapping export is the whole iCloud story - the Pi
+   never needs credentials for anything. */
+function exportGPX(pts){
+  pts=pts||TRK;
+  if(!pts.length) return;
+  const d=new Date(pts[0].t);
+  const pad=n=>String(n).padStart(2,'0');
+  const name=`Confluence-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+            +`-${pad(d.getHours())}${pad(d.getMinutes())}.gpx`;
+  const blob=new Blob([buildGPX(pts)],{type:'application/gpx+xml'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url); a.remove();},1500);
+}
+
+let lastTrackPaint=0;
+function paintTrack(){
+  const srv=serverTrack();
+  const n = srv ? (get('confluence.track.points')||0) : TRK.length;
+  const rec= srv ? !!get('confluence.track.recording')
+                 : (localArmed||tState==='countdown'||tState==='racing');
+  const fix = get('pos.lat')!==null;
+  let txt;
+  if(n)            txt = `${n} pts · ${Math.round(n/60)} min`;
+  else if(rec&&!fix) txt = 'waiting for GPS';
+  else if(rec)     txt = 'recording…';
+  else             txt = 'no track';
+  $('trk-n').textContent = txt + (srv ? '' : ' · local');
+  $('trk-rec').classList.toggle('on', rec);
+  $('trk-rec').style.opacity = '1';
+  $('trk-exp').style.opacity = n ? '1' : '.35';
+  $('trk-clr').style.opacity = n ? '1' : '.35';
+}
+
+/* record button only means anything when the plugin is there - in
+   local mode recording is tied to the race clock instead */
+$('trk-rec').addEventListener('click',()=>{
+  if(!serverTrack()){ localArmed=!localArmed; paintTrack(); return; }
+  const want = !get('confluence.track.recording');
+  skPut('confluence.track.recording', want, r=>{
+    if(r.statusCode>=400||r.statusCode===0)
+      $('trk-n').textContent = r.statusCode===408?'no reply':'refused '+r.statusCode;
+  });
+});
+
+/* ---------------- race clock ----------------
+   Real club-race order, not a generic stopwatch:
+
+     IDLE       tap ............ start the 5 minute prep countdown
+     COUNTDOWN  tap ............ sync down to the nearest whole minute
+                double tap ..... you crossed - start the race clock
+                reaches 0:00 ... starts the race clock by itself
+     RACING     double tap ..... finished, freeze the elapsed time
+     any state  hold 0.7 s ..... reset back to idle
+
+   The countdown self-starts the race at zero so a missed double tap
+   never costs you the whole race time; crossing early or late is what
+   the manual double tap is for.                                     */
+let tState='idle';                        // idle | countdown | racing | finished
+let tEnd=0;                               // countdown: wall-clock zero
+let tGun=0;                               // racing: wall-clock start
+let tFinal=0;                             // finished: frozen elapsed
+let tLeft=CFG.startMins*60000;            // countdown remaining while idle
+
+const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; };
+const syncMinute =()=>{ if(tState!=='countdown')return;
+    tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
+const startRace  =()=>{ tGun=Date.now(); tState='racing'; };
+const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
+  try{ localStorage.setItem('racetrack',JSON.stringify(TRK)); }catch(e){}
+  paintTrack(); };
+const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000; };
+
+/* +/- only mean anything before the gun */
+function nudge(sec){
+  if(tState==='countdown') tEnd=Math.max(Date.now(), tEnd+sec*1000);
+  else if(tState==='idle') tLeft=Math.max(0, tLeft+sec*1000);
+}
+
+function clock(ms){
+  const s=Math.floor(ms/1000), h=Math.floor(s/3600);
+  const m=Math.floor(s/60)%60, ss=s%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+           : `${Math.floor(s/60)}:${String(ss).padStart(2,'0')}`;
+}
+
+function tick(){
+  const el=$('timer'), lb=$('timer-lbl');
+  let ms, lbl, dim=false, hot=false;
+
+  if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; }
+  else if(tState==='countdown'){
+    ms=tEnd-Date.now();
+    if(ms<=0){ startRace(); ms=0; }        // gun goes, race clock runs
+    lbl='COUNTDOWN'; hot=ms<60000;
+  }
+  else if(tState==='racing'){ ms=Date.now()-tGun; lbl='RACING'; }
+  else { ms=tFinal; lbl='FINISH'; }
+
+  el.textContent=clock(Math.max(0,ms));
+  lb.textContent=lbl;
+  el.classList.toggle('stale',dim);
+  el.classList.toggle('alarm',hot);
+  // a finished time pulses so it is obviously frozen, not still running
+  el.style.opacity=(tState==='finished'&&Math.floor(Date.now()/600)%2)?'.4':'';
+
+  const off = (tState==='racing'||tState==='finished');
+  $('t-plus').style.opacity = $('t-minus').style.opacity = off?'.2':'1';
+  setTimeout(tick,120);
+}
+
+/* ==================================================================
+   GESTURES
+   Swipe up  -> panel.  Swipe down -> dismiss.
+   A tap is only a tap if the finger moved less than 24 px, so
+   scrolling never fires the timer by accident.
+   ================================================================== */
+const panel=$('panel');
+let x0=0,y0=0,t0=0,dragging=false;
+/* ---- slide guard ----------------------------------------------------
+   While a panel slides, the dial underneath is completely covered by an
+   opaque layer - so render()'s 44 SVG writes per frame are invisible
+   work that steals the main thread from the compositor and shows up as
+   a stutter in the slide itself. Freeze them for the length of the
+   transition. GPS sampling keeps running throughout: a 340 ms hole in
+   the track would be a real loss, a 340 ms stale readout that nobody
+   can see is not.                                                     */
+const SLIDE_MS=420;                     /* must match the CSS transition */
+let slideUntil=0, slideClear=null;
+
+/* Promotion is switched on for the length of the slide and off again
+   afterwards. panel, tmap and music are looked up when this RUNS, not
+   when it is defined - two of the three are declared further down the
+   file, and capturing them here would read them before they exist.   */
+const markSlide=(tag)=>{
+  slideUntil=Date.now()+SLIDE_MS;
+  const els=[panel,tmap,music];
+  els.forEach(el=>el.classList.add('sliding'));
+  clearTimeout(slideClear);
+  slideClear=setTimeout(()=>els.forEach(el=>el.classList.remove('sliding')),
+                        SLIDE_MS+80);
+  startProbe(tag);
+};
+
+/* ---- frame probe -----------------------------------------------------
+   Answers the one question worth answering: is a slide dropping frames,
+   or is it a solid 60 that simply is not to taste? Those want opposite
+   fixes - the first wants less main-thread work, the second wants a
+   different curve. Costs nothing while CFG.fpsProbe is false. A kiosk
+   has no devtools to read, so it paints its own verdict on the glass. */
+let probeRaf=null, probeTag='';
+function startProbe(tag){
+  if(!CFG.fpsProbe) return;
+  if(probeRaf) cancelAnimationFrame(probeRaf);
+  probeTag=tag||'?';
+  const gaps=[]; let last=performance.now();
+  const until=last+SLIDE_MS;
+  const step=now=>{
+    gaps.push(now-last); last=now;
+    if(now<until) probeRaf=requestAnimationFrame(step);
+    else { probeRaf=null; showProbe(gaps); }
+  };
+  probeRaf=requestAnimationFrame(step);
+}
+
+/* The log survives a reload: a kiosk gets restarted a lot and losing the
+   samples to an accidental refresh would be maddening. Capped so it can
+   never grow without bound on a display that runs for weeks.          */
+const FPS_KEY='helmFps';
+function fpsLoad(){ try{ return JSON.parse(localStorage.getItem(FPS_KEY))||[]; }
+                    catch(e){ return []; } }
+function fpsSave(l){ try{ localStorage.setItem(FPS_KEY,JSON.stringify(l)); }catch(e){} }
+function showProbe(g){
+  if(!g.length) return;
+  const worst=Math.max.apply(null,g);
+  const tot=g.reduce((a,b)=>a+b,0);
+  const fps=Math.round(1000*g.length/tot);
+  const late=g.filter(x=>x>20.8).length;      /* >20.8 ms missed a 60 Hz beat */
+
+  /* the raw gaps matter as much as the summary - a stall on frame 1 is a
+     layer being promoted, a stall in the middle is someone else's work */
+  const log=fpsLoad();
+  log.push({ t:Date.now(), tag:probeTag, n:g.length, ms:+tot.toFixed(1),
+             fps:fps, worst:+worst.toFixed(1), late:late,
+             gaps:g.map(x=>+x.toFixed(1)) });
+  if(log.length>200) log.splice(0, log.length-200);
+  fpsSave(log);
+
+  const N=CFG.fpsProbeN||20;
+  const el=$('fps');
+  el.textContent=fps+' fps  worst '+worst.toFixed(1)+' ms  '
+                +late+'/'+g.length+' late   ['+log.length+'/'+N+']';
+  el.classList.add('on');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('on'), 2600);
+  console.log('[slide]',probeTag,fps+'fps','worst',worst.toFixed(1)+'ms',
+              'late',late+'/'+g.length);
+
+  if(log.length>=N && log.length%N===0) dumpProbe(log);
+}
+
+/* Downloads land in ~/Downloads, which is the only channel off this box
+   that does not need a server - same trick the GPX export already uses. */
+function dumpProbe(log){
+  const d=new Date(), pad=n=>String(n).padStart(2,'0');
+  const name='helm-fps-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())
+            +'-'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())+'.json';
+  const body={ ua:navigator.userAgent, dpr:devicePixelRatio,
+               screen:[screen.width,screen.height],
+               slideMs:SLIDE_MS, samples:log };
+  const blob=new Blob([JSON.stringify(body,null,1)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url); a.remove();},1500);
+  const el=$('fps');
+  el.textContent='saved '+name;
+  el.classList.add('on');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('on'), 3000);
+}
+
+const openPanel =()=>{ markSlide('panel-open');  panel.classList.add('open');    };
+const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open'); };
+const showMusic =()=>{ markSlide('music-open');  music.classList.add('open');    };
+const hideMusic =()=>{ markSlide('music-close'); music.classList.remove('open'); };
+const hideMap   =()=>{ markSlide('map-close');   tmap .classList.remove('open'); };
+
+$('stage').addEventListener('pointerdown',e=>{
+  x0=e.clientX;y0=e.clientY;t0=Date.now();dragging=true;});
+$('stage').addEventListener('pointerup',e=>{
+  if(!dragging)return; dragging=false;
+  const dx=e.clientX-x0, dy=e.clientY-y0, dt=Date.now()-t0;
+  const moved=Math.hypot(dx,dy), quick=dt<700;
+  const up    = dy<-70 && Math.abs(dy)>Math.abs(dx) && quick;
+  const down  = dy> 70 && Math.abs(dy)>Math.abs(dx) && quick;
+  const left  = dx<-70 && Math.abs(dx)>Math.abs(dy) && quick;
+  const right = dx> 70 && Math.abs(dx)>Math.abs(dy) && quick;
+
+  /* Whichever overlay is showing OWNS the gestures. Only its own dismiss
+     swipe does anything - you cannot skate sideways from the control
+     panel into the map, and a stray drag cannot fire the race timer
+     underneath. Its own buttons still work: they have their own
+     handlers and this one simply declines to act.
+     Each panel is dragged in from the edge it lives on:
+       map   sits off-screen left  -> swipe RIGHT in, LEFT out
+       music sits off-screen right -> swipe LEFT  in, RIGHT out          */
+  if(panel.classList.contains('open')){ if(down)  closePanel();                 return; }
+  if(tmap .classList.contains('open')){
+    if(left){ if($('t-lib').classList.contains('on')) closeLib(); else hideMap(); }
+    return; }
+  if(music.classList.contains('open')){ if(right) hideMusic();                  return; }
+
+  /* ---- from here on we are on the main dial ---- */
+  if(up)    return openPanel();
+  if(right) return openMap();
+  if(left)  return showMusic();
+
+  if(moved>24) return;                       // a drag, not a tap
+  if(dt>700){ clearTimeout(tapTimer); tapTimer=null; lastTap=0;
+              return resetAll(); }           // hold anywhere = reset
+
+  const r=$('stage').getBoundingClientRect();
+  const y=(e.clientY-r.top)/r.height;
+  if(y<0.33)      timerTap();
+  else if(y<0.68) showSTW=!showSTW;
+});
+
+/* A single tap waits out one double-tap window so the first half of a
+   double never fires the single action. 320 ms is about the shortest
+   that still feels deliberate with cold hands. */
+const DBL=320; let tapTimer=null, lastTap=0;
+function timerTap(){
+  const now=Date.now();
+  if(now-lastTap < DBL){                       // -------- double tap
+    clearTimeout(tapTimer); tapTimer=null; lastTap=0;
+    if(tState==='countdown') startRace();      // crossed the line
+    else if(tState==='racing') finishRace();   // done
+    else if(tState==='idle') startCountdown();
+    return;
+  }
+  lastTap=now;
+  tapTimer=setTimeout(()=>{                    // -------- single tap
+    tapTimer=null;
+    if(tState==='idle') startCountdown();
+    else if(tState==='countdown') syncMinute();
+  }, DBL);
+}
+
+/* start line pings - tap while sailing past each end */
+['pin','boat'].forEach(k=>{
+  $('ping-'+k).addEventListener('pointerup',e=>{
+    e.stopPropagation(); pingEnd(k);
+    $('ping-'+k).classList.add('set');
+  });
+  if(LINE[k]) $('ping-'+k).classList.add('set');
+});
+
+$('trk-exp').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(serverTrack() && !VIEWTRK){          // plugin serves it over HTTP, so
+    const h=CFG.host||location.host;      // any device can pull the file
+    window.location='http://'+h+'/plugins/signalk-confluence-track/gpx';
+  } else exportGPX(shownTrack());         // a loaded race exports as itself
+});
+$('trk-clr').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(VIEWTRK) return unloadRace();        // just put the saved race back down
+  if(serverTrack()) skPut('confluence.track.command','clear');
+  else trackClear();
+});
+$('trk-save').addEventListener('click',e=>{ e.stopPropagation(); saveRace(); });
+$('trk-lib') .addEventListener('click',e=>{ e.stopPropagation(); openLib();  });
+$('trk-cache').addEventListener('click',e=>{ e.stopPropagation(); cacheArea(); });
+
+/* one delegated handler for the whole list - rows come and go */
+$('lib-list').addEventListener('click',e=>{
+  e.stopPropagation();
+  const del=e.target.closest('[data-del]'), exp=e.target.closest('[data-exp]');
+  if(del) return void dbDel(del.dataset.del).then(renderLib);
+  if(exp) return void dbGet(exp.dataset.exp).then(r=>{ if(r) exportGPX(r.pts); });
+  const row=e.target.closest('.lib-row');
+  if(row) loadRace(row.dataset.id);
+});
+/* tapping the backdrop, not a row, backs out */
+$('t-lib').addEventListener('click',e=>{ if(e.target===$('t-lib')) closeLib(); });
+
+/* ---------------- panel controls ---------------- */
+const THEMES=['auto','day','dusk','night'];
+const ICON={
+ auto:'<circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="3"/>'
+     +'<path d="M20 12v9l6 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>',
+ day :'<circle cx="20" cy="20" r="8" fill="currentColor"/><g stroke="currentColor" '
+     +'stroke-width="3" stroke-linecap="round"><path d="M20 2v5M20 33v5M2 20h5M33 20h5'
+     +'M7 7l3.5 3.5M29.5 29.5L33 33M33 7l-3.5 3.5M10.5 29.5L7 33"/></g>',
+ dusk:'<path d="M8 26a12 12 0 0 1 24 0" fill="currentColor"/><g stroke="currentColor" '
+     +'stroke-width="3" stroke-linecap="round"><path d="M3 31h34M20 4v5M5 12l3 3M35 12l-3 3"/></g>',
+ night:'<path d="M27 25A13 13 0 0 1 15 6a14 14 0 1 0 12 19z" fill="currentColor"/>'};
+$('theme-btn').addEventListener('click',()=>{
+  CFG.theme=THEMES[(THEMES.indexOf(CFG.theme)+1)%THEMES.length];applyTheme();});
+$('r-units').addEventListener('click',()=>{
+  CFG.depthUnit=CFG.depthUnit==='ft'?'m':'ft';drawDepth();});
+
+$('dim').addEventListener('input',e=>{
+  $('dim-pct').textContent=e.target.value+'%';
+  // software dim only - the backlight itself is not reachable from a
+  // browser. Fine at night, avoid in daylight where you want all of it.
+  $('veil').style.opacity=String((100-e.target.value)/100*0.8);
+});
+
+const BAR_MAX=()=>CFG.depthUnit==='m'?12:40;      // full scale of the bar
+function drawDepth(){
+  const mx=BAR_MAX();
+  $('d-val').textContent=CFG.depthAlarm;
+  $('d-unit').textContent=CFG.depthUnit==='m'?'M':'FT';
+  $('bar-mid').textContent=Math.round(mx/2);
+  $('bar-max').textContent=mx;
+  $('bar-alarm').style.width=(CFG.depthAlarm/mx*100)+'%';
+  $('bar-warn').style.left =(CFG.depthAlarm/mx*100)+'%';
+  $('bar-warn').style.width=((CFG.depthWarn-CFG.depthAlarm)/mx*100)+'%';
+  $('dpt-u').textContent=CFG.depthUnit==='m'?'METRES':'FEET';
+}
+$('d-up').addEventListener('click',()=>{CFG.depthAlarm++;CFG.depthWarn=CFG.depthAlarm*2;drawDepth();});
+$('d-down').addEventListener('click',()=>{
+  if(CFG.depthAlarm>1){CFG.depthAlarm--;CFG.depthWarn=CFG.depthAlarm*2;drawDepth();}});
+
+
+/* timer sync: nudge a whole minute, only while the clock is running */
+$('t-minus').addEventListener('pointerup',e=>{e.stopPropagation();nudge(-60);});
+$('t-plus') .addEventListener('pointerup',e=>{e.stopPropagation();nudge( 60);});
+
+/* ==================================================================
+   NOW PLAYING
+   Poll the JSON that librespot's onevent hook writes. Position only
+   arrives at events, so it is advanced locally against the wall
+   clock in between - the same trick every player uses.
+   ================================================================== */
+const music=$('music');
+let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
+
+async function pollMusic(){
+  try{
+    const r=await fetch('nowplaying.json?_='+Date.now(),{cache:'no-store'});
+    if(r.ok){
+      const j=await r.json();
+      const changed = j.title!==NP.title || j.event!==NP.event;
+      NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
+           pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
+           title:j.title||'', artist:(j.artist||'').split('\n')[0],
+           cover:(j.cover||'').split('\n')[0] };
+      if(changed) paintMusic();
+    }
+  }catch(e){ /* no file yet, or raspotify not running */ }
+  setTimeout(pollMusic, 2000);
+}
+
+function paintMusic(){
+  $('m-title').textContent  = NP.title  || 'Nothing playing';
+  $('m-artist').textContent = NP.artist || '—';
+  $('m-state').textContent  = NP.playing ? 'NOW PLAYING' : 'PAUSED';
+  const art=$('m-art');
+  if(NP.cover){
+    if(!art.querySelector('img')){ art.innerHTML='<img>'; }
+    const im=art.querySelector('img');
+    if(im.src!==NP.cover) im.src=NP.cover;
+  }
+}
+
+/* ---- instruments on the music panel -----------------------------------
+   The bezel carries wind angle, the strip carries the scalars. Cells for
+   sensors that are not fitted are omitted entirely rather than shown as
+   dashes - a row of empty placeholders reads as a fault, whereas fewer
+   cells just reads as fewer instruments.                              */
+function drawBezelTicks(){
+  const g=$('mb-ticks'); if(!g) return;
+  let o='';
+  for(let a=0;a<360;a+=15){
+    const maj=a%90===0, mid=a%45===0;
+    const r1=528, r2=maj?496:(mid?506:515);
+    const rad=(a-90)*Math.PI/180, c=Math.cos(rad), si=Math.sin(rad);
+    o+=`<line class="mb-tick${maj?' maj':''}" stroke-width="${maj?5:3}"`
+      +` x1="${(540+r1*c).toFixed(1)}" y1="${(540+r1*si).toFixed(1)}"`
+      +` x2="${(540+r2*c).toFixed(1)}" y2="${(540+r2*si).toFixed(1)}"/>`;
+  }
+  g.innerHTML=o;
+}
+
+/* Rotating 179 -> -179 the naive way spins almost the whole way round the
+   dial. Track a continuous angle and always add the short way about. */
+const shortWay=(from,to)=>{ let d=(to-from)%360;
+  if(d>180)d-=360; if(d<-180)d+=360; return d; };
+let bezelCont=null;
+
+function paintBezel(){
+  const g=$('mb-wind'); if(!g) return;
+  /* take the dial's already-filtered angle so the bezel is not fed raw
+     4 Hz steps; fall back to raw only if the dial has not seen it yet */
+  let deg=smoothedAngle('awa');
+  if(deg===null) deg=smoothedAngle('twa');
+  if(deg===null){
+    let a=get('environment.wind.angleApparent');
+    if(a===null) a=get('environment.wind.angleTrueWater');
+    deg = a===null ? null : a*DEG;
+  }
+  if(deg===null){ g.classList.remove('on'); bezelCont=null; return; }
+  g.classList.add('on');
+  g.classList.toggle('port', deg<0);
+  g.classList.toggle('stbd', deg>=0);
+  if(bezelCont===null){ bezelCont=deg; g.style.transform=`rotate(${deg.toFixed(1)}deg)`; return; }
+  const d=shortWay(bezelCont,deg);
+  if(Math.abs(d)>0.12){                   /* with a matched linear
+                                             transition there is no restart
+                                             penalty, so this can be tight */
+    bezelCont+=d;
+    g.style.transform=`rotate(${bezelCont.toFixed(1)}deg)`;
+  }
+}
+
+/* ---- demo feed (CFG.windDemo) -----------------------------------------
+   A slow sweep across both tacks so the bezel has something to animate.
+   Deliberately not a straight ramp: real apparent wind wanders, and a
+   linear sweep makes the easing look wrong when it is actually right. */
+let demoT=0;
+function windDemoTick(){
+  if(!CFG.windDemo) return;
+  demoT+=0.25;
+  const awa=Math.sin(demoT/11)*140 + Math.sin(demoT/2.7)*6;
+  put('environment.wind.angleApparent', awa/DEG);
+  put('environment.wind.speedApparent', (11+Math.sin(demoT/5)*3.2)/MS_TO_KT);
+  put('environment.wind.speedTrue',     (9.5+Math.sin(demoT/6)*2.4)/MS_TO_KT);
+  put('environment.depth.belowTransducer', (14+Math.sin(demoT/7)*5)/M_TO_FT);
+  if(get('navigation.speedOverGround')===null)
+    put('navigation.speedOverGround', (5.6+Math.sin(demoT/6)*0.9)/MS_TO_KT);
+}
+/* left running rather than conditionally started, so the flag can be
+   flipped live from a console without a reload. Four no-op calls a
+   second when off is not measurable. */
+setInterval(windDemoTick, 250);
+
+let stripKey='';
+function paintStrip(){
+  const box=$('ms-strip'); if(!box) return;
+  const sog=get('navigation.speedOverGround');
+  const aws=get('environment.wind.speedApparent');
+  let dpt=get('environment.depth.belowKeel');
+  if(dpt===null) dpt=get('environment.depth.belowTransducer');
+  const cells=[];
+  if(sog!==null) cells.push([(sog*MS_TO_KT).toFixed(1),'KT']);
+  if(aws!==null) cells.push([(aws*MS_TO_KT).toFixed(1),'AWS']);
+  if(dpt!==null) cells.push([
+    CFG.depthUnit==='m' ? dpt.toFixed(1) : (dpt*M_TO_FT).toFixed(1),
+    CFG.depthUnit==='m' ? 'M' : 'FT']);
+  const key=cells.map(c=>c.join()).join('|');
+  if(key===stripKey) return;              /* nothing moved - leave the DOM alone */
+  stripKey=key;
+  /* hairline separators between, never trailing */
+  box.innerHTML=cells.map(c=>`<span><b>${c[0]}</b> ${c[1]}</span>`).join('<i></i>');
+  box.style.display = cells.length ? 'flex' : 'none';
+}
+
+const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
+
+function musicTick(){
+  if(music.classList.contains('open')){
+    paintBezel(); paintStrip();
+    let p=NP.pos;
+    if(NP.playing) p+=Date.now()-NP.at;           // advance between events
+    if(NP.dur) p=Math.min(p,NP.dur);
+    $('m-pos').textContent=mmss(p);
+    $('m-dur').textContent=mmss(NP.dur);
+    $('m-fill').style.width=NP.dur?(p/NP.dur*100)+'%':'0';
+  }
+  /* 250 ms matches the SignalK feed and the bezel's transition, so the
+     wedge gets a fresh target exactly as the last one lands */
+  setTimeout(musicTick,250);
+}
+pollMusic(); musicTick();
+
+/* ==================================================================
+   TRACK MAP
+   Equirectangular projection about the track centre - over a few km
+   the distortion is nothing, and it keeps the maths to two lines.
+   Segments are coloured by speed so a slow patch shows up as a dull
+   stretch rather than needing a separate graph.
+   ================================================================== */
+const tmap=$('tmap');
+const MAP_CX=540, MAP_CY=430, MAP_R=250;
+
+async function openMap(){
+  markSlide('map-open');
+  tmap.classList.add('open');
+  paintTrack();                     /* controls live here now */
+  let pts=shownTrack();
+  if(serverTrack()){
+    try{
+      const h=CFG.host||location.host;
+      const r=await fetch(`http://${h}/plugins/signalk-confluence-track/track?max=800`);
+      if(r.ok) pts=(await r.json()).points||[];
+    }catch(e){ /* fall back to whatever is local */ }
+  }
+  /* Building up to 800 path segments in the same task that starts the
+     transition eats the first frames and the slide visibly hitches.
+     Let the panel land, then draw.                                   */
+  setTimeout(()=>drawMap(pts), SLIDE_MS);
+}
+
+/* ---- Web Mercator ----------------------------------------------------
+   Normalised world coordinates, 0..1 across the globe, y growing south.
+   This is the projection every satellite tile server on earth uses, so a
+   track drawn in it lines up with imagery pixel for pixel once a basemap
+   goes in behind. The equirectangular fit this replaces looked perfectly
+   fine on its own and would have drifted visibly against real tiles.   */
+function merc(la,lo){
+  const s=Math.sin(la*Math.PI/180);
+  return { x:(lo+180)/360, y:0.5-Math.log((1+s)/(1-s))/(4*Math.PI) };
+}
+const projX=(v,m)=>MAP_CX+(m.x-v.mx)*v.scale;
+const projY=(v,m)=>MAP_CY+(m.y-v.my)*v.scale;
+
+/* The view is kept between redraws so a live track does not rescale under
+   you every second while you are watching it. It only refits when a point
+   actually sails outside the circle.                                    */
+let MAPVIEW=null, lastMapDraw=0;
+function fitView(P){
+  let x0=1,x1=0,y0=1,y1=0;
+  for(const p of P){ const m=merc(p.la,p.lo);
+    if(m.x<x0)x0=m.x; if(m.x>x1)x1=m.x;
+    if(m.y<y0)y0=m.y; if(m.y>y1)y1=m.y; }
+  const mx=(x0+x1)/2, my=(y0+y1)/2;
+  /* Fit the farthest actual fix, not the bounding box. A diagonal track's
+     bbox corner sits sqrt(2)/2 of a span from centre and pokes out of the
+     circle even when no real point does - which is exactly the bug the
+     first version of this shipped with.                                */
+  let r=1e-6;
+  for(const p of P){ const m=merc(p.la,p.lo);
+    r=Math.max(r, Math.hypot(m.x-mx, m.y-my)); }
+  return { mx, my, scale:(MAP_R*0.90)/r };
+}
+function outOfView(v,P){
+  if(!v) return true;
+  for(const p of P){
+    const m=merc(p.la,p.lo);
+    if(Math.hypot(projX(v,m)-MAP_CX, projY(v,m)-MAP_CY) > MAP_R*0.97) return true;
+  }
+  return false;
+}
+
+/* ---- satellite basemap ------------------------------------------------
+   Tiles are ordinary files on disk, so the chart works with the boat's
+   aerial disconnected. Zoom is picked so one tile lands near 256 screen
+   px. Outside the cached box nothing renders and the track draws over
+   bare background - degraded, never broken.                           */
+let tileKey='';
+function drawTiles(v){
+  const g=$('t-tiles'); if(!g) return;
+  if(!CFG.basemap){ g.innerHTML=''; tileKey=''; return; }
+  let z=Math.round(Math.log2(v.scale/256));
+  z=Math.max(CFG.tileMinZ,Math.min(CFG.tileMaxZ,z));
+  /* redrawing identical <image> tags once a second would reload and flicker */
+  const key=z+'|'+v.mx.toFixed(8)+'|'+v.my.toFixed(8)+'|'+v.scale.toFixed(2);
+  if(key===tileKey) return;
+  tileKey=key;
+  const n=Math.pow(2,z), px=v.scale/n, rad=MAP_R/v.scale;
+  const x0=Math.floor((v.mx-rad)*n), x1=Math.floor((v.mx+rad)*n);
+  const y0=Math.floor((v.my-rad)*n), y1=Math.floor((v.my+rad)*n);
+  let out='';
+  for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
+    if(x<0||y<0||x>=n||y>=n) continue;
+    const sx=MAP_CX+(x/n-v.mx)*v.scale, sy=MAP_CY+(y/n-v.my)*v.scale;
+    out+=`<image href="${CFG.tileBase}/${z}/${x}/${y}.jpg"`
+        +` x="${sx.toFixed(1)}" y="${sy.toFixed(1)}"`
+        +` width="${(px+1).toFixed(1)}" height="${(px+1).toFixed(1)}"`
+        +` preserveAspectRatio="none"`
+        +` onerror="tileMiss(this,${z},${x},${y})"/>`;
+  }
+  g.innerHTML=out;
+}
+
+/* one implementation of the numbers, used by the map and the library */
+function trackStats(pts){
+  if(!pts||pts.length<2) return {nm:0,secs:0,avg:0,max:0};
+  const lat0=pts.reduce((a,p)=>a+p.la,0)/pts.length;
+  const kx=111320*Math.cos(lat0*Math.PI/180), ky=111320;
+  let d=0;
+  for(let i=1;i<pts.length;i++)
+    d+=Math.hypot((pts[i].lo-pts[i-1].lo)*kx,(pts[i].la-pts[i-1].la)*ky);
+  const secs=(pts[pts.length-1].t-pts[0].t)/1000, nm=d/1852;
+  const sp=pts.map(p=>(p.s||0)*MS_TO_KT);
+  return {nm, secs, avg:secs>0?nm/(secs/3600):0, max:Math.max(...sp,0)};
+}
+const durTxt=se=>`${Math.floor(se/60)}:${String(Math.round(se%60)).padStart(2,'0')}`;
+
+/* VIEWTRK holds a race loaded out of the library; null means we are
+   looking at the live track. Everything downstream asks shownTrack(). */
+let VIEWTRK=null;
+const shownTrack=()=>VIEWTRK||TRK;
+
+function drawMap(pts){
+  const g=$('t-path');
+  if(!pts||!pts.length){
+    g.innerHTML=`<text x="540" y="470" text-anchor="middle" fill="var(--label)"
+      font-size="34" font-weight="600" letter-spacing="0.1em">NO TRACK RECORDED</text>`;
+    ['t-dist','t-dur','t-avg','t-max'].forEach(i=>$(i).textContent='–');
+    $('t-tiles').innerHTML=''; tileKey='';
+    MAPVIEW=null; return;
+  }
+  /* thin for drawing - 800 segments is plenty on a 290 px radius */
+  const step=Math.max(1,Math.ceil(pts.length/800));
+  const P=pts.filter((_,i)=>i%step===0);
+  if(P[P.length-1]!==pts[pts.length-1]) P.push(pts[pts.length-1]);  /* keep the head */
+
+  if(outOfView(MAPVIEW,P)) MAPVIEW=fitView(P);
+  const v=MAPVIEW;
+  drawTiles(v);
+  const M=P.map(p=>merc(p.la,p.lo));
+  const X=M.map(m=>projX(v,m)), Y=M.map(m=>projY(v,m));
+
+  const sp=P.map(p=>(p.s||0)*MS_TO_KT);
+  const vmax=Math.max(...sp,0.1);
+  let out='';
+  for(let i=1;i<P.length;i++){
+    const f=Math.min(1,sp[i]/vmax);                 /* 0 slow .. 1 fast */
+    out+=`<line x1="${X[i-1].toFixed(1)}" y1="${Y[i-1].toFixed(1)}"
+           x2="${X[i].toFixed(1)}" y2="${Y[i].toFixed(1)}"
+           stroke="var(--accent)" stroke-opacity="${(0.25+0.75*f).toFixed(2)}"
+           stroke-width="${(3+5*f).toFixed(1)}" stroke-linecap="round"/>`;
+  }
+  /* the individual fixes, thinned to about 60 so they read as beads on the
+     line rather than a solid smear */
+  const dot=Math.max(1,Math.ceil(P.length/60));
+  for(let i=0;i<P.length;i+=dot)
+    out+=`<circle cx="${X[i].toFixed(1)}" cy="${Y[i].toFixed(1)}" r="3.5"
+           fill="var(--ink)" fill-opacity=".35"/>`;
+
+  out+=`<circle cx="${X[0].toFixed(1)}" cy="${Y[0].toFixed(1)}" r="11"
+         fill="var(--stbd)"/>`;
+  const L=P.length-1;
+  out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="13"
+         fill="var(--port)"/>`;
+  if(trackLive())                                   /* pulsing head while live */
+    out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="24"
+           fill="none" stroke="var(--port)" stroke-width="3" stroke-opacity=".55"/>`;
+  g.innerHTML=out;
+
+  /* stats from the full set, not the thinned one */
+  const st=trackStats(pts);
+  $('t-dist').textContent=st.nm.toFixed(2);
+  $('t-dur').textContent =durTxt(st.secs);
+  $('t-avg').textContent =st.secs>0?st.avg.toFixed(1):'–';
+  $('t-max').textContent =st.max.toFixed(1);
+}
+
+/* is the track actively growing right now? */
+function trackLive(){
+  return serverTrack() ? !!get('confluence.track.recording')
+                       : (localArmed||tState==='countdown'||tState==='racing');
+}
+
+/* ---- track library (IndexedDB) ---------------------------------------
+   localStorage tops out near 5 MB - roughly ten races at 1 Hz - and its
+   failure mode is a silent throw part-way through a write, which loses
+   the race you just sailed. IndexedDB is bounded by free disk instead,
+   so the library holds a season.                                      */
+const DB_NAME='confluence', DB_VER=2, DB_STORE='tracks', DB_TILES='tilecache';
+let DB=null;
+function dbOpen(){
+  return new Promise((res,rej)=>{
+    if(DB) return res(DB);
+    const r=indexedDB.open(DB_NAME,DB_VER);
+    r.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(DB_STORE))
+        db.createObjectStore(DB_STORE,{keyPath:'id'}).createIndex('t','t');
+      /* added in v2 - the upgrade leaves existing races untouched */
+      if(!db.objectStoreNames.contains(DB_TILES))
+        db.createObjectStore(DB_TILES,{keyPath:'k'});
+    };
+    r.onsuccess=e=>{ DB=e.target.result; res(DB); };
+    r.onerror =e=>rej(e.target.error);
+  });
+}
+function dbTx(mode,fn){
+  return dbOpen().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(DB_STORE,mode);
+    const rq=fn(tx.objectStore(DB_STORE));
+    tx.oncomplete=()=>res(rq&&rq.result);
+    tx.onerror   =e=>rej(e.target.error);
+  }));
+}
+const dbPut=r =>dbTx('readwrite',st=>st.put(r));
+const dbDel=id=>dbTx('readwrite',st=>st.delete(id));
+const dbGet=id=>dbTx('readonly', st=>st.get(id));
+const dbAll=() =>dbTx('readonly', st=>st.getAll());
+
+/* ---- runtime tile cache ----------------------------------------------
+   Three places a tile can come from, tried in order: the on-disk pack
+   seeded for the home venue, IndexedDB for anywhere you have already
+   been, then the network. A tile fetched once is kept, so sailing new
+   water with a signal at the dock is enough to make it work offline
+   out there later.                                                    */
+function tileTx(mode,fn){
+  return dbOpen().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(DB_TILES,mode);
+    const rq=fn(tx.objectStore(DB_TILES));
+    tx.oncomplete=()=>res(rq&&rq.result);
+    tx.onerror   =e=>rej(e.target.error);
+  }));
+}
+const tileGet  =k    =>tileTx('readonly', st=>st.get(k));
+const tilePut  =(k,b)=>tileTx('readwrite',st=>st.put({k,b,t:Date.now()}));
+const tileCount=()   =>tileTx('readonly', st=>st.count());
+const tileRemoteURL=(z,x,y)=>`${CFG.tileRemote}/${z}/${y}/${x}`;  /* Esri is z/y/x */
+
+/* Object URLs are reused across redraws - minting a fresh one per frame
+   would leak a blob per tile per second while a live track redraws.   */
+const tileURLs=new Map();
+function blobURL(k,b){
+  let u=tileURLs.get(k);
+  if(!u){
+    if(tileURLs.size>400){                       /* bounded, oldest first */
+      const old=tileURLs.keys().next().value;
+      URL.revokeObjectURL(tileURLs.get(old)); tileURLs.delete(old);
+    }
+    u=URL.createObjectURL(b); tileURLs.set(k,u);
+  }
+  return u;
+}
+
+/* when the network is down, stop retrying every tile for a while */
+let netBad=0;
+function fetchTile(z,x,y){
+  if(!CFG.tileFetch || Date.now()<netBad) return Promise.resolve(null);
+  const ac=new AbortController();
+  const to=setTimeout(()=>ac.abort(),8000);
+  return fetch(tileRemoteURL(z,x,y),{mode:'cors',signal:ac.signal})
+    .then(r=>r.ok?r.blob():null)
+    .catch(()=>{ netBad=Date.now()+30000; return null; })
+    .then(b=>{ clearTimeout(to); return b; });
+}
+
+/* called from the <image> onerror - the disk pack did not have it */
+window.tileMiss=function(img,z,x,y){
+  img.onerror=null;                              /* one shot */
+  const k=z+'/'+x+'/'+y;
+  tileGet(k).then(rec=>{
+    if(rec&&rec.b) return img.setAttribute('href',blobURL(k,rec.b));
+    return fetchTile(z,x,y).then(b=>{
+      if(!b) return img.remove();
+      tilePut(k,b).catch(()=>{});
+      img.setAttribute('href',blobURL(k,b));
+    });
+  }).catch(()=>img.remove());
+};
+
+/* Deliberate pre-loading for a venue you are about to sail: grabs every
+   zoom over the area currently on screen while you still have a dock
+   connection. Reports as it goes because it is not instant.           */
+let caching=false;
+async function cacheArea(){
+  if(caching) return;
+  const v=MAPVIEW;
+  if(!v) return flashTrk('open a track first');
+  const rad=(MAP_R/v.scale)*1.25;                /* a margin around the track */
+  const jobs=[];
+  for(let z=CFG.tileMinZ;z<=CFG.tileMaxZ;z++){
+    const nn=Math.pow(2,z);
+    const x0=Math.floor((v.mx-rad)*nn), x1=Math.floor((v.mx+rad)*nn);
+    const y0=Math.floor((v.my-rad)*nn), y1=Math.floor((v.my+rad)*nn);
+    for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
+      if(x<0||y<0||x>=nn||y>=nn) continue;
+      jobs.push([z,x,y]);
+    }
+  }
+  if(jobs.length>CFG.tileCap){
+    flashTrk('area too big ('+jobs.length+' tiles)');
+    return;
+  }
+  caching=true; netBad=0;
+  let done=0, got=0, fail=0;
+  const worker=async()=>{
+    while(jobs.length){
+      const [z,x,y]=jobs.pop();
+      const k=z+'/'+x+'/'+y;
+      try{
+        const have=await tileGet(k);
+        if(!have){
+          const b=await fetchTile(z,x,y);
+          if(b){ await tilePut(k,b); got++; } else fail++;
+        }
+      }catch(e){ fail++; }
+      done++;
+      if(done%10===0) flashTrk('caching '+done+'/'+(done+jobs.length));
+    }
+  };
+  const total=jobs.length;
+  await Promise.all(Array.from({length:6},worker));
+  caching=false; tileKey='';
+  flashTrk(fail? ('cached '+got+'/'+total+' · '+fail+' failed')
+               : ('cached '+got+' new · '+total+' total'));
+  if(MAPVIEW) drawTiles(MAPVIEW);
+}
+
+/* the status line doubles as the toast - there is nowhere else to put one */
+function flashTrk(msg){
+  const el=$('trk-n'); el.textContent=msg;
+  clearTimeout(el._t); el._t=setTimeout(paintTrack,2200);
+}
+
+function saveRace(){
+  const pts=TRK;
+  if(pts.length<2) return flashTrk('nothing to save');
+  const t0=pts[0].t, st=trackStats(pts);
+  const d=new Date(t0), pad=x=>String(x).padStart(2,'0');
+  const rec={ id:'r'+t0, t:t0,
+    name:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+        +` ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    n:pts.length, nm:+st.nm.toFixed(3), secs:Math.round(st.secs),
+    avg:+st.avg.toFixed(2), max:+st.max.toFixed(2), pts:pts.slice() };
+  dbPut(rec).then(()=>flashTrk('saved · '+rec.name))
+            .catch(()=>flashTrk('save failed'));
+}
+
+const closeLib=()=>$('t-lib').classList.remove('on');
+function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
+function renderLib(){
+  const box=$('lib-list');
+  dbAll().then(rows=>{
+    rows.sort((a,b)=>b.t-a.t);
+    if(!rows.length){
+      box.innerHTML='<div class="lib-empty">NO SAVED RACES</div>'; return; }
+    box.innerHTML=rows.map(r=>
+      `<div class="lib-row" data-id="${r.id}">
+         <div class="lib-main">
+           <div class="lib-name">${r.name}</div>
+           <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
+        +` · MAX ${r.max.toFixed(1)} KT</div>
+         </div>
+         <button class="mini" data-exp="${r.id}">⤓</button>
+         <button class="mini" data-del="${r.id}">✕</button>
+       </div>`).join('');
+  }).catch(()=>{ box.innerHTML='<div class="lib-empty">LIBRARY UNAVAILABLE</div>'; });
+}
+
+function loadRace(id){
+  dbGet(id).then(r=>{
+    if(!r) return;
+    VIEWTRK=r.pts; MAPVIEW=null; tileKey='';
+    $('t-title').textContent=r.name;
+    closeLib(); drawMap(VIEWTRK);
+  });
+}
+function unloadRace(){
+  VIEWTRK=null; MAPVIEW=null; tileKey='';
+  $('t-title').textContent='Race track';
+  drawMap(TRK); paintTrack();
+}
+
+/* ==================================================================
+   AMBIENT MODE
+   A canvas, not SVG - 80 moving streaks as DOM nodes would crawl on a
+   Pi 4, whereas a 2D context redrawing them is nothing. Trails come
+   from painting the background back over at low alpha rather than
+   clearing, which is far cheaper than tracking history per particle.
+   ================================================================== */
+const saver=$('saver'), cv=$('ss-cv');
+let ssOn=false, ssRaf=null, lastTouch=Date.now(), ssCycle=0;
+const PT=[]; const NPT=80;
+
+function ssInit(){
+  const r=$('stage').getBoundingClientRect();
+  cv.width=Math.round(r.width); cv.height=Math.round(r.height);
+  PT.length=0;
+  for(let i=0;i<NPT;i++) PT.push({
+    x:Math.random()*cv.width, y:Math.random()*cv.height,
+    len:8+Math.random()*26, a:0.15+Math.random()*0.5 });
+}
+function cssVar(n){ return getComputedStyle(document.body).getPropertyValue(n).trim(); }
+
+function ssFrame(){
+  if(!ssOn) return;
+  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+
+  // wind actually blowing across the boat drives the flow
+  let awa=get('environment.wind.angleApparent');
+  awa = awa===null ? 0 : awa*DEG;
+  let aws=get('environment.wind.speedApparent');
+  aws = aws===null ? 4 : aws*MS_TO_KT;
+  const rad=awa*Math.PI/180;
+  const vx=-Math.sin(rad), vy=Math.cos(rad);      // bow is up, so wind runs aft
+  const v=Math.min(14, 0.9+aws*0.55);             // px per frame
+
+  ctx.fillStyle=cssVar('--bg'); ctx.globalAlpha=0.16;
+  ctx.fillRect(0,0,W,H);
+  ctx.globalAlpha=1;
+  ctx.strokeStyle=cssVar('--accent'); ctx.lineCap='round';
+
+  for(const p of PT){
+    ctx.globalAlpha=p.a*0.5;
+    ctx.lineWidth=1.6;
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+    ctx.lineTo(p.x-vx*p.len, p.y-vy*p.len);
+    ctx.stroke();
+    p.x+=vx*v; p.y+=vy*v;
+    // wrap, with a little jitter so they never form visible ranks
+    if(p.x<-40){p.x=W+40;p.y=Math.random()*H;} if(p.x>W+40){p.x=-40;p.y=Math.random()*H;}
+    if(p.y<-40){p.y=H+40;p.x=Math.random()*W;} if(p.y>H+40){p.y=-40;p.x=Math.random()*W;}
+  }
+  ctx.globalAlpha=1;
+  ssRaf=requestAnimationFrame(ssFrame);
+}
+
+/* the centre value rotates so the screensaver still tells you things */
+function ssTick(){
+  if(ssOn){
+    const now=new Date();
+    $('ss-clock').textContent =
+      String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    const page=Math.floor(Date.now()/8000)%4;
+    if(page!==ssCycle){ ssCycle=page; }
+    let lbl,val,unit;
+    const sog=get('navigation.speedOverGround');
+    let d=get('environment.depth.belowKeel'); if(d===null)d=get('environment.depth.belowTransducer');
+    const aws=get('environment.wind.speedApparent');
+    const awa=get('environment.wind.angleApparent');
+    if(page===0){ lbl='SOG';   val=sog===null?'–':(sog*MS_TO_KT).toFixed(1); unit='KNOTS'; }
+    else if(page===1){ lbl='DEPTH'; val=d===null?'–':Math.round(d*(CFG.depthUnit==='m'?1:M_TO_FT));
+                       unit=CFG.depthUnit==='m'?'METRES':'FEET'; }
+    else if(page===2){ lbl='WIND';  val=aws===null?'–':(aws*MS_TO_KT).toFixed(0); unit='KNOTS APP'; }
+    else { lbl='ANGLE'; val=awa===null?'–':Math.abs(awa*DEG).toFixed(0)+'°';
+           unit=awa===null?'':(awa>0?'STARBOARD':'PORT'); }
+    $('ss-lbl').textContent=lbl; $('ss-val').textContent=val; $('ss-unit').textContent=unit;
+  }
+  // auto-blank after the chosen idle delay, if one is set
+  const d=SS_DELAYS[ssStep];
+  if(d && !ssOn && Date.now()-lastTouch>d) ssStart();
+  setTimeout(ssTick,500);
+}
+
+function ssStart(){ if(ssOn)return; ssOn=true; ssInit(); saver.classList.add('on'); ssFrame(); }
+function ssStop(){ ssOn=false; saver.classList.remove('on');
+  if(ssRaf)cancelAnimationFrame(ssRaf); ssRaf=null; lastTouch=Date.now(); }
+
+/* ---- ambient: one control, four states --------------------------------
+   The old pair - a launch button and an on/off auto toggle - collapse
+   into a single tile. Tap cycles the idle delay, press and hold starts
+   it now. The delay is drawn inside the glyph rather than hidden behind
+   a toggle, so the setting is readable at a glance without opening
+   anything or remembering what "on" meant.                            */
+const SS_DELAYS=[0, 10000, 60000, 300000];
+const SS_TEXT  =['OFF','10s','1m','5m'];
+let ssStep=0;
+function drawAmbient(){
+  const on=ssStep>0;
+  $('ss-ico').innerHTML =
+    '<circle cx="12" cy="12" r="9.4"/>'
+    + (on ? '<text x="12" y="12" text-anchor="middle" dominant-baseline="central"'
+          + ' font-size="9.4" font-weight="700">'+SS_TEXT[ssStep]+'</text>'
+          : '<path d="M6.6 6.6l10.8 10.8"/>');
+  $('ss-sub').textContent = SS_TEXT[ssStep];
+  $('ss-btn').classList.toggle('on', on);
+  $('ss-btn').classList.toggle('off', !on);
+}
+
+/* ---- fullscreen -------------------------------------------------------
+   On the boat this is a no-op: the Pi already launches Chromium with
+   --kiosk. It earns its place everywhere else - a phone or a laptop
+   opening the same file gets browser chrome eating into the circle, and
+   there is no keyboard out there to press F11 with. Note that --kiosk is
+   not the Fullscreen API, so on the Pi this reads OFF even though the
+   display is genuinely full screen; tapping it is still harmless.     */
+const fsOn=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+function drawFs(){
+  const on=fsOn();
+  $('fs-ico').innerHTML = on
+    ? '<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>'   /* arrows inward  */
+    : '<path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>';  /* arrows outward */
+  $('fs-sub').textContent = on ? 'ON' : 'OFF';
+  $('fs-btn').classList.toggle('on', on);
+  $('fs-btn').classList.toggle('off', !on);
+}
+$('fs-btn').addEventListener('click',e=>{
+  e.stopPropagation();
+  const el=document.documentElement;
+  if(fsOn()){
+    const x=document.exitFullscreen||document.webkitExitFullscreen;
+    if(x) Promise.resolve(x.call(document)).catch(()=>{});
+  }else{
+    const q=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(q) Promise.resolve(q.call(el)).catch(()=>{});   /* refused: leave it OFF */
+  }
+});
+/* Circle when we are actually on round glass (a square viewport) or
+   deliberately full screen; square everywhere else. Keyed off the shape
+   of the viewport rather than fullscreen alone, because the Pi runs
+   --kiosk, which is NOT the Fullscreen API - fullscreenElement is null
+   there and a fullscreen-only test would wrongly un-round the panel. */
+function fitStage(){
+  const square = Math.abs(innerWidth/innerHeight - 1) < 0.06;
+  document.documentElement.classList.toggle('win', !(fsOn() || square));
+}
+const drawFsAndFit=()=>{ drawFs(); fitStage(); };
+document.addEventListener('fullscreenchange',drawFsAndFit);
+document.addEventListener('webkitfullscreenchange',drawFsAndFit);
+addEventListener('resize',fitStage);
+/* A resize listener alone is not enough: it does not fire for every way a
+   viewport can change (mobile toolbars sliding, embedded hosts resizing
+   the frame). Watching the element itself catches all of them, and the
+   handler is a single classList toggle, so the cost is nil.          */
+if(window.ResizeObserver) new ResizeObserver(fitStage).observe(document.documentElement);
+drawFsAndFit();
+
+let ssHold=null;
+$('ss-btn').addEventListener('pointerdown',e=>{
+  e.stopPropagation();
+  ssHold=setTimeout(()=>{ ssHold=null;               /* held: start now */
+    closePanel(); setTimeout(ssStart,460); }, 600);
+});
+const ssRelease=e=>{
+  e.stopPropagation();
+  if(ssHold===null) return;                          /* the hold already fired */
+  clearTimeout(ssHold); ssHold=null;
+  ssStep=(ssStep+1)%SS_DELAYS.length;                /* tapped: next delay */
+  drawAmbient(); lastTouch=Date.now();
+};
+$('ss-btn').addEventListener('pointerup',ssRelease);
+$('ss-btn').addEventListener('pointercancel',()=>{ clearTimeout(ssHold); ssHold=null; });
+drawAmbient();
+saver.addEventListener('pointerdown',e=>{ e.stopPropagation(); ssStop(); });
+addEventListener('pointerdown',()=>{ lastTouch=Date.now(); });
+addEventListener('resize',()=>{ if(ssOn) ssInit(); });
+ssTick();
+
+/* keep the panel awake - belt and braces alongside kiosk settings */
+if('wakeLock' in navigator){
+  const hold=()=>navigator.wakeLock.request('screen').catch(()=>{});
+  hold(); document.addEventListener('visibilitychange',hold);
+}
+
+drawBezelTicks();
+drawDepth(); paintTrack(); applyTheme(); connect(); render(); tick();
+</script>
+</body>
+</html>
