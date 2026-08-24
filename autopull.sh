@@ -45,6 +45,14 @@ while true; do
 
   if [ "$before" != "$after" ]; then
     log "updated $(git log --oneline -1 "$after" 2>/dev/null)"
+    # The radio helper runs from the repo, so a pushed change to it would
+    # otherwise sit there until the next session restart. Killing the
+    # python process is enough: netd.sh's loop brings the new one back.
+    # Anchored on python3 so the supervising loop itself survives.
+    if git diff --name-only "$before" "$after" 2>/dev/null | grep -q '^netd\.py$'; then
+      pkill -f '^python3 .*netd\.py' 2>/dev/null && log "radio helper restarting"
+    fi
+
     if bash "$REPO/deploy.sh"; then
       if [ "$RELOAD" = "1" ]; then
         # start-kiosk.sh runs chromium in a restart loop, so killing it is

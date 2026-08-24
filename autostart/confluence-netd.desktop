@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Confluence Radios
+Comment=Local helper the panel's WiFi and Bluetooth tiles talk to. Must run in the desktop session - that is what makes NetworkManager accept the changes.
+Exec=bash /home/pi/helm/netd.sh
+X-GNOME-Autostart-enabled=true

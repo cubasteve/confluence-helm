@@ -191,6 +191,100 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   letter-spacing:.14em;color:var(--label)}
 /* :active handled by the single .mini:active rule above */
 
+/* --- connectivity ------------------------------------------------
+   Two tiles that behave like the iOS control centre: state legible at
+   a glance, one tap to the picker. Outlined rather than filled when
+   on, for the same reason as everything else on this panel - a
+   291 x 132 block of accent is a lamp in the face at night, and the
+   night palette is red precisely so that nothing is.               */
+.conn{display:flex;gap:18px}
+.ctile{flex:1;min-width:0;height:132px;border-radius:26px;background:var(--chip);
+  border:2px solid transparent;padding:0 22px;font-family:var(--font);text-align:left;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:4px;color:var(--label)}
+.ctile svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ctile .ct-k{font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+.ctile .ct-v{font-size:20px;font-weight:600;letter-spacing:.04em;color:var(--label);
+  max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ctile:active{background:var(--hairline)}
+.ctile.on{color:var(--accent);border-color:var(--accent)}
+.ctile.on .ct-v{color:var(--ink)}
+
+/* --- the picker -------------------------------------------------
+   Full-bleed over the panel, exactly as the race library sits over
+   the map. */
+#netsheet{position:absolute;inset:0;background:var(--panel);opacity:0;
+  pointer-events:none;transition:opacity .22s;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;color:var(--ink)}
+#netsheet.on{opacity:1;pointer-events:auto}
+.ns{width:600px;display:flex;flex-direction:column}
+.ns-head{display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:14px;border-bottom:2px solid var(--hairline)}
+.ns-title{font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
+  text-transform:uppercase}
+/* the only switch in the app, so it may as well look like one */
+.sw{width:104px;height:56px;border-radius:28px;background:var(--hairline);
+  position:relative;flex:none;border:none;padding:0;transition:background .18s}
+.sw b{position:absolute;top:5px;left:5px;width:46px;height:46px;border-radius:50%;
+  background:var(--panel);transition:transform .18s}
+.sw.on{background:var(--stbd)}
+.sw.on b{transform:translateX(48px)}
+
+/* Fixed at four rows. A scan that returns a different count every few
+   seconds must not make the sheet breathe in and out under your hand. */
+.ns-list{height:448px;overflow:hidden}
+.ns-row{display:flex;align-items:center;gap:18px;height:112px;
+  border-bottom:2px solid var(--hairline)}
+.ns-row:active{background:var(--chip)}
+.ns-row .bars{width:34px;height:34px;flex:none;color:var(--label)}
+.ns-row.live .bars{color:var(--accent)}
+.ns-main{flex:1;min-width:0}
+.ns-name{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:.03em;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ns-row.live .ns-name{color:var(--accent)}
+.ns-sub{font-size:20px;font-weight:600;color:var(--label);letter-spacing:.1em;
+  margin-top:6px;text-transform:uppercase}
+.ns-empty{height:448px;display:flex;align-items:center;justify-content:center;
+  font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
+
+/* Paged rather than scrolled. html and body carry touch-action:none, so
+   a flick inside an overflow:auto box is not reliably a pan here - and
+   a page you can hit with a wet glove beats a list you have to nudge. */
+.ns-pager{display:flex;align-items:center;gap:14px;margin-top:16px}
+.ns-count{flex:1;text-align:center;font-size:21px;font-weight:600;
+  letter-spacing:.14em;color:var(--label)}
+.mini.dim{opacity:.22}
+.ns-msg{height:32px;margin-top:10px;text-align:center;font-size:21px;
+  font-weight:600;letter-spacing:.12em;color:var(--label)}
+.ns-msg.bad{color:var(--alarm)}
+
+/* --- password entry ---
+   A keyboard of our own. The helm has no keyboard, and Chromium under
+   --kiosk has no on-screen one to offer, so without this a WPA key is
+   untypeable without carrying a USB keyboard aboard.               */
+.pw-for{font-size:25px;font-weight:600;letter-spacing:.1em;color:var(--label);
+  text-align:center;text-transform:uppercase;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis}
+.pw-field{height:80px;margin:14px 0 18px;border-radius:16px;background:var(--chip);
+  display:flex;align-items:center;padding:0 22px;overflow:hidden}
+.pw-txt{flex:1;font-size:32px;font-weight:600;color:var(--ink);letter-spacing:.06em;
+  overflow:hidden;white-space:nowrap}
+.pw-cur{width:3px;height:40px;background:var(--accent);flex:none;
+  animation:pwblink 1.1s steps(2,end) infinite}
+@keyframes pwblink{50%{opacity:0}}
+.kb{display:flex;flex-direction:column;gap:8px}
+.kb-r{display:flex;gap:6px;justify-content:center}
+.kk{height:74px;flex:1;min-width:0;border-radius:12px;background:var(--chip);
+  border:none;font-family:var(--font);font-size:30px;font-weight:600;color:var(--ink);
+  display:flex;align-items:center;justify-content:center}
+.kk:active{background:var(--accent);color:var(--panel)}
+.kk.fn{flex:1.5;font-size:21px;letter-spacing:.08em;color:var(--ink-dim)}
+.kk.fn.on{background:var(--hairline);color:var(--ink)}
+.kk.sp{flex:4}
+.kk.go{flex:2.2;font-size:22px;letter-spacing:.14em;background:var(--accent);
+  color:var(--panel)}
+
 /* --- live sensor pills --- */
 .pills{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .pill{height:70px;border-radius:16px;background:var(--chip);display:flex;
@@ -502,7 +596,61 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       </div>
     </div>
 
+    <!-- Hidden until netd.py answers. On a phone or tablet loading this
+         same page over boat WiFi the helper is not reachable at all, and
+         dead tiles would be worse than no tiles. -->
+    <div id="conn-sec" style="display:none">
+      <div class="slab">Connectivity</div>
+      <div class="conn">
+        <button class="ctile" id="wifi-tile">
+          <svg viewBox="0 0 24 24">
+            <path d="M2.5 8.5a15 15 0 0 1 19 0"/>
+            <path d="M6 12.6a10 10 0 0 1 12 0"/>
+            <path d="M9.4 16.7a5 5 0 0 1 5.2 0"/>
+            <circle cx="12" cy="20.3" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          <span class="ct-k">Wi-Fi</span>
+          <span class="ct-v" id="wifi-sub">—</span>
+        </button>
+        <button class="ctile" id="bt-tile">
+          <svg viewBox="0 0 24 24"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></svg>
+          <span class="ct-k">Bluetooth</span>
+          <span class="ct-v" id="bt-sub">—</span>
+        </button>
+      </div>
+    </div>
+
     <div class="hint">SWIPE DOWN TO CLOSE</div>
+  </div>
+
+  <!-- ---- the picker, over the panel ----
+       One sheet serves both radios: the rows differ, the shape does not. -->
+  <div id="netsheet">
+    <div class="ns" id="ns-list-view">
+      <div class="ns-head">
+        <div class="ns-title" id="ns-title">Wi-Fi</div>
+        <button class="sw" id="ns-sw"><b></b></button>
+      </div>
+      <div class="ns-list" id="ns-list"></div>
+      <div class="ns-pager">
+        <button class="mini" id="ns-up">▲</button>
+        <div class="ns-count" id="ns-count"></div>
+        <button class="mini" id="ns-down">▼</button>
+      </div>
+      <div class="ns-pager">
+        <button class="mini wide" id="ns-scan">SCAN</button>
+        <button class="mini wide" id="ns-done">DONE</button>
+      </div>
+      <div class="ns-msg" id="ns-msg"></div>
+    </div>
+
+    <div class="ns" id="ns-pw-view" style="display:none">
+      <div class="pw-for" id="pw-for">Password</div>
+      <div class="pw-field"><span class="pw-txt" id="pw-txt"></span><span class="pw-cur"></span></div>
+      <div class="kb" id="kb"></div>
+      <div class="ns-msg" id="pw-msg"></div>
+      <div class="ns-pager"><button class="mini wide" id="pw-cancel">CANCEL</button></div>
+    </div>
   </div>
 </div>
 
@@ -637,6 +785,12 @@ const CFG={
      with a signal, and works offline every time after.                */
   tileFetch:true, tileCap:6000,
   tileRemote:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile',
+
+  /* The radio helper - netd.py, started from ~/.config/autostart/.
+     Loopback on purpose: that address is what keeps the connectivity
+     tiles off every phone and tablet that loads this same page over
+     boat WiFi, without the page having to know who is asking.       */
+  netd:'http://127.0.0.1:8091',
 
   depthAlarm:6, depthWarn:12, depthUnit:'ft',
   grooveMin:35, grooveMax:50,
@@ -1444,8 +1598,10 @@ function dumpProbe(log){
   el._t=setTimeout(()=>el.classList.remove('on'), 3000);
 }
 
-const openPanel =()=>{ markSlide('panel-open');  panel.classList.add('open');    };
-const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open'); };
+const openPanel =()=>{ markSlide('panel-open');  panel.classList.add('open');
+                       netPanelOpen();  };
+const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
+                       netPanelClose(); };
 const showMusic =()=>{ markSlide('music-open');  music.classList.add('open');    };
 const hideMusic =()=>{ markSlide('music-close'); music.classList.remove('open'); };
 const hideMap   =()=>{ markSlide('map-close');   tmap .classList.remove('open'); };
@@ -1469,7 +1625,11 @@ $('stage').addEventListener('pointerup',e=>{
      Each panel is dragged in from the edge it lives on:
        map   sits off-screen left  -> swipe RIGHT in, LEFT out
        music sits off-screen right -> swipe LEFT  in, RIGHT out          */
-  if(panel.classList.contains('open')){ if(down)  closePanel();                 return; }
+  /* Same rule as the map and its library: the innermost thing showing
+     is what a dismiss swipe dismisses. */
+  if(panel.classList.contains('open')){
+    if(down){ if(netsheet.classList.contains('on')) closeNet(); else closePanel(); }
+    return; }
   if(tmap .classList.contains('open')){
     if(left){ if($('t-lib').classList.contains('on')) closeLib(); else hideMap(); }
     return; }
@@ -1592,6 +1752,298 @@ $('d-down').addEventListener('click',()=>{
 /* timer sync: nudge a whole minute, only while the clock is running */
 $('t-minus').addEventListener('pointerup',e=>{e.stopPropagation();nudge(-60);});
 $('t-plus') .addEventListener('pointerup',e=>{e.stopPropagation();nudge( 60);});
+
+/* ==================================================================
+   CONNECTIVITY  ·  WiFi and Bluetooth
+   A browser cannot see either radio. There is no web API for WiFi at
+   all, and navigator.bluetooth pairs a device to the *page*, which is
+   a different thing from pairing it to the Pi. So the tiles talk to
+   netd.py over loopback, and it shells out to nmcli and bluetoothctl.
+
+   Being loopback-only does the access control for free: on a phone
+   loading this same page over boat WiFi, CFG.netd resolves to the
+   phone, nothing answers, and the whole section stays hidden. No
+   guest gets to re-point the boat's networking, and you cannot cut
+   your own connection by switching off the AP you are talking over.
+   ================================================================== */
+const netsheet=$('netsheet');
+const NET={ kind:'wifi', page:0, rows:[], powered:false, scanning:false,
+            busy:'', have:{wifi:false,bt:false}, pw:null,
+            poll:null, tick:null };
+const PAGE=4;                      /* rows per page - matches .ns-list height */
+
+/* SSIDs and Bluetooth names come off the air and go into innerHTML.
+   Anyone within range can call their access point <img onerror=...>,
+   so nothing from the helper is trusted as markup. */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function netApi(path, body){
+  const ctl=new AbortController();
+  /* Joining a network legitimately takes half a minute; reading a list
+     never does. One timeout for both would either abandon a connect
+     mid-handshake or leave the panel hanging on a helper that died. */
+  const t=setTimeout(()=>ctl.abort(), body?50000:9000);
+  try{
+    const r=await fetch(CFG.netd+path,{ signal:ctl.signal, cache:'no-store',
+      method: body?'POST':'GET',
+      headers: body?{'Content-Type':'application/json'}:undefined,
+      body: body?JSON.stringify(body):undefined });
+    return r.ok ? await r.json() : null;
+  }catch(e){ return null; }         /* no helper, or it is busy with nmcli */
+  finally{ clearTimeout(t); }
+}
+
+function setMsg(txt,bad){
+  ['ns-msg','pw-msg'].forEach(id=>{
+    $(id).textContent=txt||'';
+    $(id).classList.toggle('bad',!!bad&&!!txt);
+  });
+}
+
+/* ---- tiles ---- */
+async function netStatus(){
+  const j=await netApi('/status');
+  const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{};
+  NET.have={wifi:!!w.available, bt:!!b.available};
+  if(!NET.have.wifi && !NET.have.bt){
+    $('conn-sec').style.display='none'; closeNet(); return false; }
+  $('conn-sec').style.display='';
+  $('wifi-tile').style.display=NET.have.wifi?'':'none';
+  $('bt-tile')  .style.display=NET.have.bt  ?'':'none';
+  $('wifi-tile').classList.toggle('on',!!w.powered);
+  $('bt-tile')  .classList.toggle('on',!!b.powered);
+  $('wifi-sub').textContent = !w.powered ? 'OFF' : (w.ssid || 'NOT JOINED');
+  $('bt-sub').textContent   = !b.powered ? 'OFF'
+    : (b.connected&&b.connected.length ? b.connected.join(', ') : 'NO DEVICE');
+  NET.powered = NET.kind==='wifi' ? !!w.powered : !!b.powered;
+  return true;
+}
+
+/* Polled only while the control panel is open. A display that spends
+   its life on the dial has no business asking about radios all day,
+   and each ask is a handful of subprocesses on the Pi. */
+function netPanelOpen(){
+  netStatus();
+  clearInterval(NET.poll);
+  NET.poll=setInterval(()=>{
+    if(!netsheet.classList.contains('on') && !NET.busy) netStatus(); },5000);
+}
+function netPanelClose(){ clearInterval(NET.poll); NET.poll=null; closeNet(); }
+
+/* ---- the picker ---- */
+function openNet(kind){
+  NET.kind=kind; NET.page=0; NET.rows=[]; NET.busy=''; NET.scanning=false;
+  $('ns-title').textContent = kind==='wifi' ? 'Wi-Fi' : 'Bluetooth';
+  showPw(false); setMsg('');
+  netsheet.classList.add('on');
+  netStatus().then(ok=>{
+    if(!ok) return closeNet();      /* helper died since the panel opened */
+    renderRows(); netRefresh(); netTick(); });
+}
+function closeNet(){
+  netsheet.classList.remove('on');
+  clearTimeout(NET.tick); NET.tick=null; showPw(false);
+}
+/* A self-rescheduling timeout rather than an interval, so a Bluetooth
+   scan can be watched closely for its twelve seconds and then left
+   alone again - and so two refreshes can never overlap. */
+function netTick(){
+  clearTimeout(NET.tick);
+  NET.tick=setTimeout(async()=>{
+    if(netsheet.classList.contains('on')){ await netRefresh(); netTick(); }
+  }, NET.scanning?3000:6000);
+}
+
+async function netRefresh(rescan){
+  if(NET.busy) return;
+  const j = NET.kind==='wifi'
+    ? await netApi('/wifi/list', rescan?{rescan:true}:null)
+    : await netApi('/bt/list');
+  if(!j) return;
+  NET.powered=!!j.powered;
+  NET.scanning=!!j.scanning;
+  NET.rows = NET.kind==='wifi' ? (j.nets||[]) : (j.devices||[]);
+  const pages=Math.max(1,Math.ceil(NET.rows.length/PAGE));
+  if(NET.page>=pages) NET.page=pages-1;
+  renderRows();
+  if(NET.scanning && !NET.busy) setMsg('SCANNING…');
+  else if(!NET.busy && $('ns-msg').textContent==='SCANNING…') setMsg('');
+}
+
+/* four bars, dimmed above the level - the same glyph everyone reads */
+function bars(sig){
+  const lvl = sig>=70?4 : sig>=50?3 : sig>=28?2 : sig>0?1:0;
+  let o='';
+  for(let i=0;i<4;i++){
+    const h=8+i*7;
+    o+='<rect x="'+(i*9)+'" y="'+(32-h)+'" width="6" height="'+h+'" rx="2" '
+      +'fill="currentColor" opacity="'+(i<lvl?1:0.22)+'"/>';
+  }
+  return '<svg class="bars" viewBox="0 0 34 34">'+o+'</svg>';
+}
+const BT_GLYPH='<svg class="bars" viewBox="0 0 24 24" fill="none" '
+  +'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+  +'stroke-linejoin="round"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></svg>';
+
+function renderRows(){
+  const box=$('ns-list'), wifi=NET.kind==='wifi';
+  $('ns-sw').classList.toggle('on',!!NET.powered);
+  $('ns-scan').textContent = wifi ? 'SCAN' : (NET.scanning?'SCANNING':'SCAN');
+  /* A live-looking arrow that does nothing is worse than a dim one. */
+  $('ns-up')  .classList.toggle('dim', NET.page<=0);
+  $('ns-down').classList.toggle('dim', (NET.page+1)*PAGE>=NET.rows.length);
+  if(!NET.powered){
+    box.innerHTML='<div class="ns-empty">'+(wifi?'WI-FI IS OFF':'BLUETOOTH IS OFF')+'</div>';
+    $('ns-count').textContent=''; return; }
+  if(!NET.rows.length){
+    box.innerHTML='<div class="ns-empty">'
+      +(wifi?'NO NETWORKS IN RANGE':'NOTHING FOUND YET<br>TAP SCAN')+'</div>';
+    $('ns-count').textContent=''; return; }
+  const pages=Math.max(1,Math.ceil(NET.rows.length/PAGE));
+  const from=NET.page*PAGE;
+  box.innerHTML=NET.rows.slice(from,from+PAGE)
+    .map((r,i)=>rowHtml(r,from+i,wifi)).join('');
+  $('ns-count').textContent = pages>1 ? (NET.page+1)+' / '+pages
+                                      : NET.rows.length+(wifi?' NETWORKS':' DEVICES');
+}
+
+function rowHtml(r,idx,wifi){
+  const live = wifi ? r.active : r.connected;
+  const sub  = wifi
+    ? (r.active ? 'CONNECTED · '+r.signal+'%'
+                : (r.saved?'SAVED · ':'')+(r.secure?'SECURED':'OPEN')+' · '+r.signal+'%')
+    : (r.connected?'CONNECTED':(r.paired?'PAIRED':'AVAILABLE'));
+  /* ✕ only on things the Pi remembers - forgetting a network it has
+     never joined would be a button that does nothing. */
+  const known = wifi ? r.saved : r.paired;
+  return '<div class="ns-row'+(live?' live':'')+'" data-i="'+idx+'">'
+    +(wifi?bars(r.signal):BT_GLYPH)
+    +'<div class="ns-main"><div class="ns-name">'+esc(wifi?r.ssid:r.name)+'</div>'
+    +'<div class="ns-sub">'+sub+'</div></div>'
+    +(known?'<button class="mini" data-forget="'+idx+'">✕</button>':'')
+    +'</div>';
+}
+
+/* ---- doing things ---- */
+async function netDo(label,path,body){
+  NET.busy=label; setMsg(label+'…');
+  const j=await netApi(path,body||{});
+  NET.busy='';
+  if(!j)         setMsg('HELPER NOT ANSWERING',true);
+  else if(!j.ok) setMsg(j.error||'FAILED',true);
+  else           setMsg('');
+  await netStatus();
+  await netRefresh();
+  return !!(j&&j.ok);
+}
+
+function netTap(i){
+  const r=NET.rows[i]; if(!r||NET.busy) return;
+  if(NET.kind==='wifi'){
+    if(r.active)            return netDo('LEAVING '+r.ssid,'/wifi/disconnect');
+    /* A saved profile already carries its key, and an open network has
+       none to carry - either way there is nothing to type. */
+    if(r.saved||!r.secure)  return netDo('JOINING '+r.ssid,'/wifi/connect',{ssid:r.ssid});
+    return showPw(true,r.ssid);
+  }
+  if(r.connected) return netDo('DISCONNECTING','/bt/disconnect',{mac:r.mac});
+  netDo((r.paired?'CONNECTING TO ':'PAIRING ')+r.name,'/bt/connect',{mac:r.mac});
+}
+
+function netForget(i){
+  const r=NET.rows[i]; if(!r||NET.busy) return;
+  if(NET.kind==='wifi') netDo('FORGETTING '+r.ssid,'/wifi/forget',{ssid:r.ssid});
+  else                  netDo('UNPAIRING '+r.name,'/bt/forget',{mac:r.mac});
+}
+
+$('ns-list').addEventListener('click',e=>{
+  const f=e.target.closest('[data-forget]');
+  if(f) return netForget(+f.dataset.forget);
+  const row=e.target.closest('.ns-row');
+  if(row) netTap(+row.dataset.i);
+});
+$('wifi-tile').addEventListener('click',e=>{ e.stopPropagation(); openNet('wifi'); });
+$('bt-tile')  .addEventListener('click',e=>{ e.stopPropagation(); openNet('bt');   });
+$('ns-done')  .addEventListener('click',closeNet);
+$('ns-up')  .addEventListener('click',()=>{ if(NET.page>0){NET.page--;renderRows();} });
+$('ns-down').addEventListener('click',()=>{
+  if((NET.page+1)*PAGE<NET.rows.length){ NET.page++; renderRows(); } });
+$('ns-scan').addEventListener('click',()=>{
+  if(NET.busy||!NET.powered) return;
+  setMsg('SCANNING…');
+  if(NET.kind==='wifi'){ netRefresh(true); }
+  else netApi('/bt/scan',{}).then(()=>{ NET.scanning=true; renderRows(); netTick(); });
+});
+$('ns-sw').addEventListener('click',()=>{
+  if(NET.busy) return;
+  const on=!NET.powered;
+  NET.powered=on; NET.rows=[]; NET.page=0; renderRows();   /* answer the touch now */
+  netDo(on?'TURNING ON':'TURNING OFF',
+        NET.kind==='wifi'?'/wifi/power':'/bt/power',{on:on});
+});
+
+/* ---- password entry ----
+   Rendered from a table rather than written out as markup: the shift
+   and symbol layers are the same keyboard with different faces, and
+   two hand-written copies of it would drift apart. */
+const KB_ABC=['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'];
+const KB_SYM=['1234567890','-/:;()$&@"','.,?!\'+=#%*','_\\|~<>[]{}'];
+
+function showPw(on,ssid){
+  $('ns-list-view').style.display = on?'none':'';
+  $('ns-pw-view')  .style.display = on?'':'none';
+  if(!on){ NET.pw=null; return; }
+  NET.pw={ssid:ssid,val:'',shift:false,sym:false};
+  $('pw-for').textContent='Password for '+ssid;
+  setMsg(''); paintPw(); drawKb();
+}
+function paintPw(){
+  const v=NET.pw?NET.pw.val:'';
+  /* Shown in the clear deliberately. Typing a 20-character WPA key
+     blind, on a wet 5-inch panel, is how you get three failed joins
+     and no idea which character was wrong. */
+  $('pw-txt').textContent = v.length>24 ? '…'+v.slice(-24) : v;
+}
+function drawKb(){
+  const rows=NET.pw.sym?KB_SYM:KB_ABC, up=NET.pw.shift&&!NET.pw.sym;
+  let o=rows.map(row=>'<div class="kb-r">'+row.split('').map(c=>{
+      const ch=up?c.toUpperCase():c;
+      return '<button class="kk" data-c="'+esc(ch)+'">'+esc(ch)+'</button>';
+    }).join('')+'</div>').join('');
+  o+='<div class="kb-r">'
+    +'<button class="kk fn" data-a="sym">'+(NET.pw.sym?'ABC':'?123')+'</button>'
+    +(NET.pw.sym?'':'<button class="kk fn'+(NET.pw.shift?' on':'')
+                   +'" data-a="shift">⇧</button>')
+    +'<button class="kk sp" data-c=" "></button>'
+    +'<button class="kk fn" data-a="del">⌫</button>'
+    +'<button class="kk go" data-a="join">JOIN</button></div>';
+  $('kb').innerHTML=o;
+}
+$('kb').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||!NET.pw) return;
+  const c=b.dataset.c, a=b.dataset.a;
+  if(c!==undefined){
+    if(NET.pw.val.length<63) NET.pw.val+=c;      /* WPA's own ceiling */
+    paintPw();
+    if(NET.pw.shift){ NET.pw.shift=false; drawKb(); }   /* shift is one key deep */
+    return;
+  }
+  if(a==='shift'){ NET.pw.shift=!NET.pw.shift; return drawKb(); }
+  if(a==='sym')  { NET.pw.sym=!NET.pw.sym; NET.pw.shift=false; return drawKb(); }
+  if(a==='del')  { NET.pw.val=NET.pw.val.slice(0,-1); return paintPw(); }
+  if(a==='join') return pwJoin();
+});
+$('pw-cancel').addEventListener('click',()=>{ showPw(false); setMsg(''); });
+
+async function pwJoin(){
+  const pw=NET.pw; if(!pw||NET.busy) return;
+  if(pw.val.length<8) return setMsg('WPA KEYS ARE 8 CHARACTERS OR MORE',true);
+  const ok=await netDo('JOINING '+pw.ssid,'/wifi/connect',{ssid:pw.ssid,psk:pw.val});
+  /* A refusal keeps the keyboard up with what you typed still in it. It
+     is nearly always one wrong character, not the wrong password. */
+  if(ok) showPw(false);
+}
 
 /* ==================================================================
    NOW PLAYING

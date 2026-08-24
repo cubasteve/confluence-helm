@@ -10,6 +10,10 @@ HTML file, no build step, no dependencies — it runs in Chromium on a
 confluence_helm.html      the whole app: markup, CSS, JS
 start-kiosk.sh            what the desktop session launches at boot
 deploy.sh                 publishes the app to where AvNav serves it
+autopull.sh               pulls the repo and redeploys when it changes
+netd.py                   local helper: WiFi and Bluetooth for the panel
+netd.sh                   keeps netd.py running, and lets a push replace it
+autostart/                the .desktop files that start those two loops
 spotify-now.py            polls the Spotify Web API -> nowplaying.json
 spotify-auth.py           one-time Spotify authorisation
 confluence-helm.svg       desktop shortcut icon
@@ -88,6 +92,86 @@ Manual equivalent, any time:
 cd ~/helm && git pull && bash deploy.sh
 ```
 
+## Connectivity
+
+The control panel carries WiFi and Bluetooth tiles. Tapping one opens a
+picker: scan, join, forget, pair, connect, and a switch for the radio
+itself. It is the one thing on the boat that used to mean finding a
+keyboard.
+
+A browser cannot do any of this. There is no web API for WiFi at all, and
+`navigator.bluetooth` pairs a device to the *page*, which is a different
+thing from pairing it to the Pi. So the tiles talk to `netd.py`, a small
+stdlib-only service that shells out to `nmcli` and `bluetoothctl`.
+
+```
+panel tile  ->  http://127.0.0.1:8091  ->  nmcli / bluetoothctl
+```
+
+Three decisions in that line are load-bearing.
+
+**Loopback.** `netd.py` binds `127.0.0.1`, so only Chromium on the Pi can
+reach it. A phone loading the same page over boat WiFi resolves that
+address to itself, finds nothing, and the app hides the whole section - no
+dead tiles, and nothing to explain. That is the access control: no guest on
+the boat network can re-point the boat's networking, and you cannot cut
+your own connection by switching off the AP you are talking over. There is
+no auth in the service because the socket makes it unnecessary; if you ever
+bind it wider, that stops being true.
+
+**The desktop session, not systemd.** NetworkManager's polkit rules grant a
+local *active session* the right to change networking without a password.
+Started from `~/.config/autostart/` it inherits that. The same script under
+a systemd unit is an inactive session and gets refused - which looks
+exactly like a broken WiFi driver and is not.
+
+**NetworkManager only.** Bookworm and later. `netd.py` probes for it at
+startup and says what it found:
+
+```
+[netd] wifi via nmcli: yes   bluetooth via bluetoothctl: yes
+```
+
+On an older image running `dhcpcd`/`wpa_supplicant` it reports `NO`, the
+tiles stay hidden, and nothing else changes. Half-driving a stack it cannot
+really drive would be worse than declining.
+
+### Installing it
+
+```bash
+cp ~/helm/autostart/confluence-netd.desktop ~/.config/autostart/
+```
+
+Then restart the session - a running desktop never re-reads
+`~/.config/autostart/`. To check it by hand without one:
+
+```bash
+python3 ~/helm/netd.py            # foreground, prints what it detected
+curl -s localhost:8091/status | python3 -m json.tool
+```
+
+`autopull.sh` restarts the helper when a pull changes `netd.py`, so editing
+it from a phone works the same way editing the app does. It kills only the
+python process; `netd.sh`'s loop brings the new one back.
+
+### What it will not do
+
+Pairing runs without an agent, because there is nothing on the helm that
+could answer a PIN prompt. Just-works devices - speakers, headsets, most
+handhelds - pair fine. Anything that wants a number typed has to be paired
+from the desktop once; after that it connects from the panel like the rest.
+
+The on-screen keyboard exists because the helm has none and Chromium under
+`--kiosk` offers none either. It shows the password in the clear on
+purpose: typing a 20-character WPA key blind on a wet 5-inch panel is how
+you get three failed joins and no idea which character was wrong.
+
+The list is paged rather than scrolled. `html`/`body` carry
+`touch-action:none`, so a flick inside an `overflow:auto` box is not
+reliably a pan here - and a page you can hit with a wet glove beats a list
+you have to nudge.
+
+
 ## Data
 
 SignalK on `:3000` over a WebSocket. Subscriptions are `policy:'fixed'`
@@ -138,5 +222,10 @@ The `base` layer fills it.
   or `0600` has to be set on the Pi.
 - The Spotify config at `~/.config/confluence-spotify.json` holds a client
   secret and refresh token. It should be `0600`.
+- WiFi passwords typed at the panel go to NetworkManager and are stored by
+  it, under `/etc/NetworkManager/system-connections/`. `netd.py` keeps
+  none of its own, and a key NetworkManager rejects takes its half-written
+  profile with it - otherwise that profile comes back as "saved" and fails
+  for ever.
 - Chart tiles and the track library live in **browser storage**, which is
   per-origin. Moving between `file://` and `http://` starts both empty.
