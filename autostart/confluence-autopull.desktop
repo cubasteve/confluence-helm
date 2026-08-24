@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Confluence Autopull
+Comment=Pulls the helm repo and redeploys when it changes, so a push from anywhere reaches the panel.
+Exec=bash /home/pi/helm/autopull.sh 300
+X-GNOME-Autostart-enabled=true

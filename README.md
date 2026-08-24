@@ -52,6 +52,42 @@ a slow boot degrades rather than leaving a blank helm.
 **Autostart changes need a session restart.** A running Chromium never
 re-reads `~/.config/autostart/`.
 
+## Editing from anywhere
+
+The repo is the source of truth; the Pi is a deployment target.
+
+```
+phone / laptop  ->  edit  ->  git push
+                                 |
+Pi (every 5 min):  git pull  ->  deploy.sh  ->  kiosk restarts
+```
+
+`autopull.sh` runs from `~/.config/autostart/` and does that loop. It only
+acts when the commit actually changed, so an unchanged poll costs nothing
+and the display is never restarted for no reason.
+
+It pulls `--ff-only` deliberately: if the Pi's copy has diverged it stops
+and logs rather than inventing a merge commit on a machine nobody is
+watching. Being offline is treated as normal, not an error — that is the
+usual state out on the water.
+
+The kiosk restart works by killing Chromium and letting `start-kiosk.sh`'s
+existing restart loop bring it back, which needs no window-manager tooling.
+It matches the kiosk instance only, so a desktop-shortcut window is left
+alone.
+
+To deploy without the display restarting under you:
+
+```bash
+AUTOPULL_RELOAD=0 bash ~/helm/autopull.sh
+```
+
+Manual equivalent, any time:
+
+```bash
+cd ~/helm && git pull && bash deploy.sh
+```
+
 ## Data
 
 SignalK on `:3000` over a WebSocket. Subscriptions are `policy:'fixed'`
