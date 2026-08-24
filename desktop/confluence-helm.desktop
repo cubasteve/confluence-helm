@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Confluence Helm
+GenericName=Boat instrument display
+Comment=Opens the helm dial in its own window, sharing the kiosk's browser profile so saved races and cached tiles are the same ones.
+Exec=bash /home/pi/helm/open-window.sh
+Icon=/home/pi/helm/confluence-helm.svg
+Terminal=false
+Categories=Utility;Science;
+StartupNotify=true

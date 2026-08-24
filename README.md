@@ -13,7 +13,9 @@ deploy.sh                 publishes the app to where AvNav serves it
 autopull.sh               pulls the repo and redeploys when it changes
 netd.py                   local helper: WiFi and Bluetooth for the panel
 netd.sh                   keeps netd.py running, and lets a push replace it
+open-window.sh            opens the app in its own window (desktop shortcut)
 autostart/                the .desktop files that start those two loops
+desktop/                  the desktop shortcut itself
 spotify-now.py            polls the Spotify Web API -> nowplaying.json
 spotify-auth.py           one-time Spotify authorisation
 confluence-helm.svg       desktop shortcut icon
@@ -55,6 +57,32 @@ a slow boot degrades rather than leaving a blank helm.
 
 **Autostart changes need a session restart.** A running Chromium never
 re-reads `~/.config/autostart/`.
+
+### The desktop shortcut
+
+`desktop/confluence-helm.desktop` opens the app in its own 1080x1080
+window, sharing the kiosk's browser profile so saved races and cached
+chart tiles are the same ones. Install it over whatever is on the desktop
+already, so there is only ever one:
+
+```bash
+cp ~/helm/desktop/confluence-helm.desktop ~/Desktop/
+chmod +x ~/Desktop/confluence-helm.desktop      # on the Pi - sshfs cannot
+```
+
+It runs `open-window.sh` rather than calling Chromium directly, and that
+indirection is the whole point: `Exec=` is not parsed by a shell, so there
+is no way to spell `$(date +%s)` in a `.desktop` file - and without a
+fresh `?v=` Chromium renders the copy it already has. Same URL, same
+origin, older bytes. That is why this window used to sit a version behind
+the kiosk while both were pointed at exactly the same file.
+
+The window is deliberately neither `--kiosk` nor `--start-maximized`.
+Those are the two flags `netd.py` matches on, so switching the kiosk
+between modes from the panel leaves this window alone.
+
+`--window-size=1080,1080` is load-bearing: a square viewport is what keeps
+the dial round. Any other shape and `fitStage()` squares it off.
 
 ### The KIOSK tile
 
