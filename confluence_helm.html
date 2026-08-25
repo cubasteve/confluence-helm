@@ -286,6 +286,35 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .ns-empty{height:448px;display:flex;align-items:center;justify-content:center;
   font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
 
+/* --- power: two tiers ---
+   Three actions that give the panel back in seconds, then a rule, then
+   the two that take the instruments off a boat which may be moving. The
+   split is the information: you read it before you read the words,
+   which is the moment it matters.
+
+   Tiles rather than rows because five 112 px rows do not fit a 448 px
+   window - the fifth used to fall off the bottom, behind a pager that
+   was never wired to this list. */
+/* The list window is 448px because that is four rows. The tiers are
+   shorter than that, and a fixed height left DONE stranded 108px below
+   them - so on this sheet the window takes its height from what is in
+   it and the whole block centres properly. */
+.ns-list.tiers{height:auto}
+.pw-tier{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pw-tier.low{grid-template-columns:repeat(2,1fr);
+  margin-top:20px;padding-top:20px;border-top:2px solid var(--hairline)}
+.pw-tile{border:2px solid var(--hairline);border-radius:26px;
+  padding:26px 10px 22px;display:flex;flex-direction:column;
+  align-items:center;gap:14px;color:var(--ink);background:none}
+.pw-tile:active{background:var(--chip)}
+.pw-tile svg{width:52px;height:52px;flex:none;color:var(--label);fill:none;
+  stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pw-tile b{font-size:26px;font-weight:600;letter-spacing:.06em}
+/* Night is a single red hue, so danger cannot rest on colour alone -
+   the rule above these two and their position under it carry it. */
+.pw-tile.danger{border-color:var(--alarm)}
+.pw-tile.danger svg, .pw-tile.danger b{color:var(--alarm)}
+
 /* Paged rather than scrolled. html and body carry touch-action:none, so
    a flick inside an overflow:auto box is not reliably a pan here - and
    a page you can hit with a wet glove beats a list you have to nudge. */
@@ -2472,12 +2501,11 @@ function openNet(kind,dev){
   const pw_=kind==='power';
   $('ns-sw').style.display   = pw_?'none':'';
   $('ns-scan').style.display = pw_?'none':'';
-  /* Hidden only while everything fits. Hiding it outright is what buried
-     Shut down on an unreachable second page the moment the list grew to
-     five - a menu that silently drops its last item is worse than a
-     pager nobody needs. */
-  $('ns-up').parentElement.style.display =
-    (pw_ && powerActions().length<=PAGE) ? 'none' : '';
+  /* No pager on this sheet at all now: the tiers show everything at
+     once, and this pager never worked here anyway - it pages NET.rows,
+     which is empty for power actions, so both arrows looked live and
+     did nothing. */
+  $('ns-up').parentElement.style.display = pw_ ? 'none' : '';
   showAsk(false);
   showPw(false); setMsg('');
   netsheet.classList.add('on');
@@ -2535,11 +2563,14 @@ const POWER_ACTIONS=[
     that is alive, and a live page needs nothing heavier - whereas killing
     Chromium here would hand the screen to whatever else owns the browser
     profile and leave the kiosk waiting for it to close. */
- {a:'reload', name:'Reload the app', sub:'THIS PAGE ONLY · INSTANT',
-  ico:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/>',
+ {a:'reload', name:'Reload the app', short:'Reload', sub:'THIS PAGE ONLY · INSTANT',
+  /* Two arcs, not one: Desktop is the monitor and Reboot is the single
+     loop, and at 52px on a tile all three sit in the same eyeline. */
+  ico:'<path d="M20.5 11A8.5 8.5 0 0 0 6.3 6.3L3.5 9"/><path d="M3.5 4.5V9h4.5"/>'
+     +'<path d="M3.5 13a8.5 8.5 0 0 0 14.2 4.7l2.8-2.7"/><path d="M20.5 19.5V15H16"/>',
   ask:'Reloads the helm app where it stands. The kiosk is left exactly as '
      +'it is and nothing else on the Pi is touched.'},
- {a:'helper',  name:'Restart helper',  sub:'RADIO CONTROLS · COMES BACK ITSELF',
+ {a:'helper',  name:'Restart helper',  short:'Helper', sub:'RADIO CONTROLS · COMES BACK ITSELF',
   ico:'<rect x="5" y="5" width="14" height="14" rx="3"/>'
      +'<circle class="f" cx="12" cy="12" r="2.2"/>',
   ask:'The WiFi, Bluetooth and power controls disappear for a few seconds '
@@ -2547,16 +2578,16 @@ const POWER_ACTIONS=[
  /* Only in cage mode, where there is no desktop running and this is the
     only way to ask for one. netd hides it otherwise - on a normal
     desktop session it would just throw you at the login screen. */
- {a:'desktop', name:'Desktop',         sub:'LEAVE THE KIOSK · REBOOT TO COME BACK',
+ {a:'desktop', name:'Desktop',         short:'Desktop', sub:'LEAVE THE KIOSK · REBOOT TO COME BACK',
   need:'desktop',
   ico:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
   ask:'Starts the desktop and switches the screen to it. The helm app '
      +'keeps running behind it; a reboot brings the panel back.'},
- {a:'reboot',  name:'Reboot',          sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
+ {a:'reboot',  name:'Reboot',          short:'Reboot', sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
   ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
   ask:'Instruments, charts and the hotspot all go down for about a minute. '
      +'Anything joined to the boat WiFi drops with it.'},
- {a:'poweroff',name:'Shut down',       sub:'THEN WAIT FOR THE LED', danger:1,
+ {a:'poweroff',name:'Shut down',       short:'Shut down', sub:'THEN WAIT FOR THE LED', danger:1,
   ico:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>',
   ask:'Everything goes down. Wait for the green LED to stop blinking '
      +'before cutting power - pulling it early is how the card gets '
@@ -2593,15 +2624,23 @@ const powerActions=()=>POWER_ACTIONS.filter(p=>
 function renderRows(){
   const box=$('ns-list'), wifi=NET.kind==='wifi';
   if(NET.kind==='power'){
-    box.innerHTML=powerActions().map((p,i)=>
-      '<div class="ns-row'+(p.danger?' danger':'')+'" data-i="'+i+'">'
-      +'<svg class="bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-      +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p.ico+'</svg>'
-      +'<div class="ns-main"><div class="ns-name">'+p.name+'</div>'
-      +'<div class="ns-sub">'+p.sub+'</div></div></div>').join('');
+    /* The index is into powerActions(), not into either tier, because
+       that is what netTap() reads back. Splitting the render without
+       splitting the numbering is how the wrong action gets fired. */
+    const acts=powerActions();
+    const tile=(p,i)=>
+      '<button class="pw-tile'+(p.danger?' danger':'')+'" data-i="'+i+'">'
+      +'<svg viewBox="0 0 24 24">'+p.ico+'</svg><b>'
+      +(p.short||p.name)+'</b></button>';
+    const safe=[], risk=[];
+    acts.forEach((p,i)=>(p.danger?risk:safe).push(tile(p,i)));
+    box.classList.add('tiers');
+    box.innerHTML='<div class="pw-tier">'+safe.join('')+'</div>'
+      +(risk.length?'<div class="pw-tier low">'+risk.join('')+'</div>':'');
     $('ns-count').textContent='';
     return;
   }
+  box.classList.remove('tiers');          /* radios use the fixed window */
   $('ns-sw').classList.toggle('on',!!NET.powered);
   $('ns-scan').textContent = wifi ? 'SCAN' : (NET.scanning?'SCANNING':'SCAN');
   /* A live-looking arrow that does nothing is worse than a dim one. */
@@ -2702,8 +2741,8 @@ $('conn-sec').addEventListener('click',e=>{
 $('ns-list').addEventListener('click',e=>{
   const f=e.target.closest('[data-forget]');
   if(f) return netForget(+f.dataset.forget);
-  const row=e.target.closest('.ns-row');
-  if(row) netTap(+row.dataset.i);
+  const hit=e.target.closest('.ns-row,.pw-tile');
+  if(hit) netTap(+hit.dataset.i);
 });
 $('ns-done')  .addEventListener('click',closeNet);
 $('ns-up')  .addEventListener('click',()=>{ if(NET.page>0){NET.page--;renderRows();} });

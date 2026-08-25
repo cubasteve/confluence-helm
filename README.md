@@ -576,6 +576,36 @@ meaning.
 
 ## Power
 
+Two tiers, not a list. Three actions that give the panel back in seconds
+across the top; a rule; then the two that take the instruments off a
+boat which may be moving, in the alarm colour.
+
+**The split is the information.** A list treats all five as equals and
+they are not, and the structure is read before the words - which is the
+moment it matters. Night mode is a single red hue, so that distinction
+cannot rest on colour: the rule and the position under it carry it.
+
+It also fixes what was there before. Five 112 px rows do not fit a 448 px
+window, so **Shut down had fallen off the bottom** - behind a pager that
+never worked on this sheet, because `▲`/`▼` page `NET.rows`, which is
+empty for power actions. Both arrows looked live and did nothing. The
+pager is now hidden here outright, and `SCAN` with it: that belongs to
+the Wi-Fi and Bluetooth pickers this sheet shares markup with and has
+never done anything on this one.
+
+Names are one word (`short`), because the confirm screen every action
+already passes through is where the full sentence belongs. The sub line
+under each row is gone.
+
+Two things to know if you touch this:
+
+- **The index is into `powerActions()`, not into either tier.** The
+  tiles carry it and `netTap()` reads it back, so splitting the render
+  without splitting the numbering is exactly how the wrong action fires.
+- `#ns-list` takes the `tiers` class here, which drops its fixed 448 px
+  height. Without that, `DONE` sits stranded 108 px below the tiles.
+
+
 A fourth button sits right of Bluetooth, and it is deliberately never
 lit: the radios show a state, this one is a door.
 
