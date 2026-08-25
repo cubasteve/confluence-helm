@@ -617,7 +617,14 @@ Two things to know if you touch this:
   tiles carry it and `netTap()` reads it back, so splitting the render
   without splitting the numbering is exactly how the wrong action fires.
 - `#ns-list` takes the `tiers` class here, which drops its fixed 448 px
-  height. Without that, `DONE` sits stranded 108 px below the tiles.
+  height and adds the 26 px of air under the head rule that stops the
+  first row of tiles touching it. Without the height change `DONE` sits
+  stranded 108 px below the tiles.
+
+The uptime line reads **`DEVICE RUNTIME: 3D 4H`**. It used to say
+`UP 3D 4H`, which is `uptime(1)` shorthand on a sheet read by someone
+who has never met that command. Both places that draw it go through
+`runtimeTxt()`, so they cannot drift apart.
 
 
 A fourth button sits right of Bluetooth, and it is deliberately never

@@ -299,7 +299,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    shorter than that, and a fixed height left DONE stranded 108px below
    them - so on this sheet the window takes its height from what is in
    it and the whole block centres properly. */
-.ns-list.tiers{height:auto}
+.ns-list.tiers{height:auto;padding-top:26px}
 .pw-tier{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 .pw-tier.low{grid-template-columns:repeat(2,1fr);
   margin-top:20px;padding-top:20px;border-top:2px solid var(--hairline)}
@@ -2496,7 +2496,7 @@ function openNet(kind,dev){
     kind==='wifi' ? 'Wi-Fi' : kind==='bt' ? 'Bluetooth' : 'Power';
   $('ns-for').textContent = (kind==='wifi'&&NET.dev)
     ? (NET.dev.bus==='usb'?'USB ADAPTER · ':'BUILT-IN · ')+NET.dev.dev
-    : kind==='power' ? 'UP '+(((NET.st.power)||{}).uptime||'?') : '';
+    : kind==='power' ? runtimeTxt() : '';
   /* Power has no radio to switch and nothing to scan for. */
   const pw_=kind==='power';
   $('ns-sw').style.display   = pw_?'none':'';
@@ -2533,7 +2533,7 @@ async function netRefresh(rescan){
   if(NET.busy) return;
   if(NET.kind==='power'){          /* nothing to poll but the clock */
     await netStatus();
-    $('ns-for').textContent='UP '+(((NET.st.power)||{}).uptime||'?');
+    $('ns-for').textContent=runtimeTxt();
     renderRows(); return;
   }
   const j = NET.kind==='wifi'
@@ -2593,6 +2593,10 @@ const POWER_ACTIONS=[
      +'before cutting power - pulling it early is how the card gets '
      +'corrupted.'},
 ];
+
+/* How long the Pi has been up. "UP 3D 4H" is uptime(1) shorthand and
+   this sheet is read by someone who has never met that command. */
+const runtimeTxt=()=>'DEVICE RUNTIME: '+(((NET.st&&NET.st.power)||{}).uptime||'?').toUpperCase();
 
 /* four bars, dimmed above the level - the same glyph everyone reads */
 function bars(sig){
