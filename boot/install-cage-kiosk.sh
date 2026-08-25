@@ -47,13 +47,13 @@ die(){ printf '\n   %s\n' "$*" >&2; exit 1; }
 
 mkdir -p "$STATE"
 
-say "1/6  cage"
+say "1/7  cage"
 command -v cage >/dev/null 2>&1 || die "cage is not installed.  sudo apt install cage"
 ok "$(command -v cage)"
 [ -x "$HERE/cage-session.sh" ] || chmod +x "$HERE/cage-session.sh"
 ok "session script: $HERE/cage-session.sh"
 
-say "2/6  the Desktop tile's one privilege"
+say "2/7  the Desktop tile's one privilege"
 # logind hands a local active session reboot and poweroff for free, but
 # not starting an arbitrary unit - so the tile needs exactly this and
 # nothing more. Written to a temp file and checked by visudo BEFORE it
@@ -88,7 +88,7 @@ EOT
   ok "checked by visudo and installed: $OWNER may run it with no arguments"
 fi
 
-say "3/6  tty1 owns the session"
+say "3/7  tty1 owns the session"
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf <<EOT
 # Confluence kiosk: log $OWNER in on tty1 so the helm session is a real,
@@ -118,14 +118,27 @@ else
   ok "launch hook already in $PROFILE"
 fi
 
-say "4/6  stop the desktop starting by itself"
+say "4/7  what Desktop means"
+# The Desktop tile stops the kiosk and starts a desktop session. What you
+# want on the other side is the helm app still in front of you - as a
+# window this time, since that is what a desktop is for. The desktop's
+# own autostart is the right hook: in cage mode a desktop only ever
+# starts because the tile asked for one.
+AUTOSTART="$OWNER_HOME/.config/autostart"
+mkdir -p "$AUTOSTART"
+sed "s|/home/pi/helm|$OWNER_HOME/helm|" "$HERE/../autostart/confluence-window.desktop" \
+  > "$AUTOSTART/confluence-window.desktop"
+chown -R "$OWNER:$OWNER" "$AUTOSTART"
+ok "tapping Desktop will open the helm app windowed on it"
+
+say "5/7  stop the desktop starting by itself"
 systemctl get-default > "$STATE/default-target" 2>/dev/null || echo graphical.target > "$STATE/default-target"
 ok "was: $(cat "$STATE/default-target")"
 systemctl set-default multi-user.target >/dev/null 2>&1 && ok "now: multi-user.target" \
   || ok "could not change the default target"
 systemctl daemon-reload || true
 
-say "5/6  the login banner"
+say "6/7  the login banner"
 # What lands on tty1 between Plymouth and cage is not kernel output, it
 # is the login banner: the uname line and the Debian warranty text come
 # from the MOTD, "Last login" from login(1), and /etc/issue from agetty.
@@ -163,7 +176,7 @@ os.replace(tmp, path)
 print('   console moved to tty3' if moved else '   no console=tty1 to move')
 CMDEDIT
 
-say "6/6  done"
+say "7/7  done"
 cat <<EOT
    sudo reboot
 

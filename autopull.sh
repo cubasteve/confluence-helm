@@ -20,6 +20,16 @@ RELOAD="${AUTOPULL_RELOAD:-1}"      # export AUTOPULL_RELOAD=0 to deploy without
 
 log(){ echo "[autopull] $(date '+%H:%M:%S') $*"; }
 
+# Same two-places problem as netd.sh: cage-session.sh starts one, and the
+# desktop's autostart starts another when you tap Desktop. Two of these
+# racing on the same clone is a torn checkout waiting to happen, so the
+# second one exits rather than joining in.
+exec 9>"/tmp/confluence-autopull.lock"
+if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
+  log "another autopull already has the repo - leaving it to that one"
+  exit 0
+fi
+
 cd "$REPO" 2>/dev/null || { log "no repo at $REPO"; exit 1; }
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { log "$REPO is not a git clone"; exit 1; }
 

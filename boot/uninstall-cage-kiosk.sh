@@ -12,6 +12,9 @@ MARK_B='# <<< confluence kiosk <<<'
 rm -f /etc/sudoers.d/confluence-desktop /usr/local/sbin/confluence-to-desktop
 echo "   removed the Desktop tile's sudoers rule and helper"
 
+rm -f "$OWNER_HOME/.config/autostart/confluence-window.desktop"
+echo "   removed the windowed-app autostart entry"
+
 rm -f /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf
 rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
 echo "   removed the tty1 autologin"

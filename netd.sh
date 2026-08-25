@@ -9,7 +9,15 @@
 #
 # Started from ~/.config/autostart/confluence-netd.desktop.
 
+# In cage mode this loop is started by cage-session.sh, and the desktop's
+# autostart entry starts another one the moment you tap Desktop. Two
+# pythons cannot both hold 127.0.0.1:8091, and the loser would respawn
+# every five seconds for ever. So don't launch while someone is already
+# answering - and keep looping, so this copy takes over the moment the
+# other one stops.
 while true; do
-  python3 "$HOME/helm/netd.py" "$@"
+  if ! curl -sf -o /dev/null --max-time 2 http://127.0.0.1:8091/status; then
+    python3 "$HOME/helm/netd.py" "$@"
+  fi
   sleep 5
 done
