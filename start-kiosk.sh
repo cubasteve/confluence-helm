@@ -13,7 +13,23 @@
 # screen with no way in.
 
 URL="http://localhost:8080/user/helm/confluence_helm.html"
-FALLBACK="file:///home/pi/helm/confluence_helm.html"
+FALLBACK="file://$HOME/helm/confluence_helm.html"
+
+# Debian ships the browser as `chromium`; Raspberry Pi OS ships it as
+# `chromium-browser`. This script used to name only the second, so on an
+# image with the first it looped forever at the 30 s cap writing "command
+# not found" to a log nobody reads, and the desktop shortcut was dead for
+# the same reason. netd.py has always resolved it both ways - this is the
+# same lookup.
+CHROME=""
+for c in chromium-browser chromium; do
+  command -v "$c" >/dev/null 2>&1 && { CHROME="$c"; break; }
+done
+if [ -z "$CHROME" ]; then
+  echo "helm: neither chromium-browser nor chromium is installed" >&2
+  echo "      sudo apt install chromium-browser" >&2
+  exit 1
+fi
 
 n=0
 until curl -sf -o /dev/null --max-time 3 "$URL"; do
@@ -61,7 +77,7 @@ while true; do
   # boot chain deliberately kept dark is the one frame you notice. The
   # value is ARGB and matches the dusk palette's --bg (#0B0C0E), the
   # same colour Plymouth and the desktop are set to.
-  chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  "$CHROME" --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
     --default-background-color=FF0B0C0E \
     "$URL?v=$(date +%s)"

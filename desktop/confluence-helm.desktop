@@ -1,11 +1,21 @@
+# Exec= does NO variable expansion - the spec says so, and a literal
+# $HOME here would be passed through to the shell as four characters.
+# Hence `bash -c`, which does expand it: these entries then work under
+# any account without an install step rewriting them, which is what
+# the hardcoded /home/pi used to require and nothing did for two of
+# the three. On a non-pi account netd simply never started, so every
+# WiFi, Bluetooth, brightness and power tile was dead at every boot
+# with nothing on screen to explain it.
 [Desktop Entry]
 Type=Application
 Version=1.0
 Name=Confluence Helm
 GenericName=Boat instrument display
 Comment=Opens the helm dial in its own window, sharing the kiosk's browser profile so saved races and cached tiles are the same ones.
-Exec=bash /home/pi/helm/open-window.sh
-Icon=/home/pi/helm/confluence-helm.svg
+Exec=bash -c 'exec bash "$HOME/helm/open-window.sh"'
+# Looked up in the icon theme, so this file needs no rewriting
+# either. See the README for the one-line install of the SVG.
+Icon=confluence-helm
 Terminal=false
 Categories=Utility;Science;
 StartupNotify=true

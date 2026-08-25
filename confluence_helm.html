@@ -134,20 +134,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .sheet{width:600px;display:flex;flex-direction:column;align-items:stretch}
 .grab{width:120px;height:8px;border-radius:4px;background:var(--label);
   opacity:.45;position:absolute;top:70px;left:50%;margin-left:-60px}
-.p-title{font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
-  text-transform:uppercase;text-align:center;margin-bottom:26px}
-
-.row{height:112px;display:flex;align-items:center;justify-content:space-between;
-  border-bottom:2px solid var(--hairline);transition:background .1s}
-.row:active{background:var(--chip)}
-.row .k{font-size:27px;font-weight:600;letter-spacing:.16em;color:var(--label);
-  text-transform:uppercase}
-.row .v{font-size:38px;font-weight:600;color:var(--accent);
-  display:flex;align-items:center;gap:16px}
-.row .v .sub{font-size:22px;font-weight:500;letter-spacing:.14em;
-  color:var(--label)}
-.chev{font-size:26px;color:var(--label);opacity:.7}
-
+/* .p-title, the .row family and .chev used to live here: the panel was a
+   list of label/value rows with a heading and a chevron. It is tiles and
+   .slab sections now, and none of those class names appears anywhere in
+   the markup or the script - checked, not assumed. */
 /* Outlined, never filled - the panel now speaks the same language as the
    rail. Round for the steppers, pill for anything wearing words.      */
 .mini{width:86px;height:86px;border-radius:50%;background:none;
@@ -190,8 +180,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    left of the 600 px sheet after three tiles - about 234 px - which is
    short for a drag control, so the thumb stays large to compensate.   */
 .dimrow{display:flex;align-items:center;gap:18px;padding-top:10px}
-.dimico{width:34px;height:34px;color:var(--label);flex:none}
-.dimico.sm{width:24px;height:24px}
+/* .dimico/.dimico.sm retired with the sun icons that used to flank the
+   brightness slider - the tiles carry their own glyphs now. */
 #dim-pct{float:right;color:var(--accent);letter-spacing:.06em}
 
 /* --- depth widget: threshold and live reading on one scale --- */
@@ -368,15 +358,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .kk.go{flex:2.2;font-size:22px;letter-spacing:.14em;background:var(--accent);
   color:var(--panel)}
 
-/* --- live sensor pills --- */
-.pills{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.pill{height:70px;border-radius:16px;background:var(--chip);display:flex;
-  align-items:center;justify-content:center;gap:10px;font-size:19px;
-  font-weight:600;letter-spacing:.12em;color:var(--label)}
-.pill i{width:14px;height:14px;border-radius:50%;background:var(--label);
-  opacity:.4;transition:background .2s,opacity .2s}
-.pill.live{color:var(--ink)}
-.pill.live i{background:var(--stbd);opacity:1}
+/* The .pills grid was the first form of the sensor liveness row. It is
+   the four .sen glyphs at the top of the panel now, lit by wCls(el,
+   'live', ok) from render()'s DATA block - see .sen.live above. */
 
 /* record state is carried by .rbtn.rec.on */
 /* (the panel's ambient rail was folded into .dimrow - rule retired) */
@@ -971,9 +955,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 </div>
 
 <!-- ============== NOW PLAYING ==============
-     Slides in from the right. Metadata comes from librespot's
-     onevent hook writing nowplaying.json - the Pi is the Spotify
-     Connect device, so there is no account polling and no OAuth. -->
+     Slides in from the right. Metadata comes from spotify-now.py, which
+     polls the Spotify Web API and writes nowplaying.json. The Pi is NOT
+     a Connect device and never streams audio - it only asks what the
+     account is doing, which is why it costs tens of megabytes rather
+     than librespot's hundred-plus. (This comment used to describe a
+     librespot onevent hook; that source was replaced.) -->
 <div id="music">
   <svg class="m-bezel" viewBox="0 0 1080 1080" aria-hidden="true">
     <g id="mb-ticks"></g>
@@ -1117,22 +1104,37 @@ const CFG={
   fpsProbe:false,
   fpsProbeN:20,
 
-  /* Satellite basemap. Tiles are cached on disk under ~/helm/tiles/{z}/{x}/{y}.jpg
-     so the chart works with no network at all - which on the water is
-     precisely when you want it. Outside the cached box the map simply
-     shows no imagery; the track still draws.                           */
-  /* windDemo makes up wind and depth so the bezel animation can be
-     judged before the vane and transducer are fitted. It writes into the
-     same store the real sensors use, so switching it off leaves nothing
-     behind. Turn it OFF once the hardware is in - it would otherwise
-     sit on top of your real instruments.                             */
+  /* Satellite basemap. tileBase is a RELATIVE url, so it resolves
+     against wherever the page was served from - on the Pi that is
+     ~/avnav/data/user/helm/tiles/{z}/{x}/{y}.jpg, NOT ~/helm/tiles/,
+     which is only where the pack lives in the repo. deploy.sh does not
+     copy it; put the pack where AvNav can serve it.
+
+     The point of a disk pack is that the chart works with no network at
+     all, which on the water is precisely when you want it. Outside the
+     cached box the map simply shows no imagery; the track still draws,
+     and anything fetched at runtime lands in IndexedDB instead.      */
+  /* windDemo makes up wind and depth so the bezel animation and the
+     shallow alarm can be judged before the vane and transducer are
+     fitted. It writes into the same store the real sensors use.
+
+     There is a SENSORS row on the control panel for this now, it is in
+     PREF_DEFS so the choice survives a reload, and demoSet() switches it
+     off by itself the moment a real wind or depth reading arrives - so
+     this default only ever applies to a boat with no instruments. It
+     used to be a source constant with no control at all, which meant
+     the shallow alarm spent its life firing on invented numbers.     */
   windDemo:true,
 
   basemap:true, tileBase:'tiles', tileMinZ:13, tileMaxZ:17,
   /* Anything not in the on-disk pack is fetched once and kept in
      IndexedDB, so new water caches itself the first time you look at it
      with a signal, and works offline every time after.                */
-  tileFetch:true, tileCap:6000,
+  /* tileCap bounds ONE cacheArea press; tileStoreCap bounds the store
+     itself, which nothing bounded before. 8000 Esri JPEGs is roughly
+     150-200 MB - several venues' worth - and past that the oldest go.
+     Set it to 0 to keep everything, and watch the disk yourself. */
+  tileFetch:true, tileCap:6000, tileStoreCap:8000,
   tileRemote:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile',
 
   /* The radio helper - netd.py, started from ~/.config/autostart/.
@@ -1253,10 +1255,35 @@ function smooth(k,v){if(v===null)return null;
 function smoothAngle(k,deg){if(deg===null)return null;
   const r=deg*Math.PI/180,s=smA[k]||(smA[k]={x:Math.cos(r),y:Math.sin(r)});
   s.x+=(Math.cos(r)-s.x)*smAlpha;s.y+=(Math.sin(r)-s.y)*smAlpha;
+  s.t=Date.now();                    /* when this filter last SAW something */
   return Math.atan2(s.y,s.x)*DEG;}
-/* read the already-smoothed angle without advancing the filter - the
-   music bezel runs on its own timer and must not disturb the dial's */
-const smoothedAngle=k=>smA[k]?Math.atan2(smA[k].y,smA[k].x)*DEG:null;
+/* Read the already-smoothed angle without advancing the filter - the
+   music bezel runs on its own timer and must not disturb the dial's.
+
+   A staleness test has to be HERE and not only on the raw path. The dial
+   calls smoothAngle only when the raw reading is non-null, so losing the
+   vane does not decay this filter, it FREEZES it - and without a check
+   the music page's wedge sat fully opaque on a dead bearing for as long
+   as the page was up, with the two fallbacks below and the branch that
+   hides the wedge all unreachable once an angle had arrived even once.
+   The likely cause is not a chafed cable but any Signal K restart or
+   WiFi drop, during which every other readout on that page empties.
+
+   The budget is its own constant rather than CFG.staleAfter, because the
+   two windows STACK: the raw reading stays valid for staleAfter, and
+   only once get() starts returning null does this filter stop being
+   advanced. A second staleAfter on top would hold the wedge for sixteen
+   seconds. Something much tighter is right, because the DATA block
+   advances this filter on every frame while a reading is live, on every
+   page - the only legitimate gap is a page slide, and that is 420 ms.
+   Past a couple of seconds the raw path has gone quiet, and its own
+   staleAfter has already had its say. */
+const SMA_HOLD=2500;
+const smoothedAngle=k=>{
+  const s=smA[k];
+  if(!s || Date.now()-(s.t||0)>SMA_HOLD) return null;
+  return Math.atan2(s.y,s.x)*DEG;
+};
 
 /* ---------------- Signal K ---------------- */
 const PATHS=['navigation.speedOverGround','navigation.speedThroughWater',
@@ -1693,13 +1720,33 @@ function targetSpeed(tws,twa){                 // bilinear over the table
    Compare the wind now against a slow average of where it has been.
    Which way a shift helps depends on the tack, so the sign flips.
    ================================================================== */
-let twdAvg=null;
+/* The running mean the shift is measured against. Five minutes is long
+   enough that a persistent shift shows and a puff does not. */
+const TWD_TAU=300000;
+let twdAvg=null, twdAt=0;
 function windShift(twd, awa){
   if(twd===null||awa===null) return null;
-  const r=twd*Math.PI/180;
-  if(twdAvg===null) twdAvg={x:Math.cos(r),y:Math.sin(r)};
-  twdAvg.x+=(Math.cos(r)-twdAvg.x)*0.002;      // ~5 min at 4 Hz
-  twdAvg.y+=(Math.sin(r)-twdAvg.y)*0.002;
+  const r=twd*Math.PI/180, now=Date.now();
+  if(twdAvg===null){ twdAvg={x:Math.cos(r),y:Math.sin(r)}; twdAt=now; }
+  /* Elapsed time, not per call - the same correction tickSmoothing
+     already carries. The constant here was 0.002 per CALL reasoned as
+     "~5 min at 4 Hz", but the only call site is inside render()'s DRAW
+     block: at 60 fps that made tau 8.3 s, about fifteen times too fast.
+     An 8 degree lift over two minutes settled to a 0.56 degree residual,
+     which is under the sh.deg<2 STEADY cutoff below - so the strip read
+     STEADY through the entire lift, which is the one thing it exists to
+     not do. And now that DRAW is rate limited, a per-call constant would
+     additionally depend on which page you happened to be looking at.
+
+     The dt cap matters: DRAW does not run while the panel, the map or
+     the screensaver is up, so coming back after ten minutes would
+     otherwise snap the mean straight onto the current reading and
+     report no shift at all. */
+  const dt=Math.min(now-twdAt, 4000);
+  twdAt=now;
+  const a=1-Math.exp(-dt/TWD_TAU);
+  twdAvg.x+=(Math.cos(r)-twdAvg.x)*a;
+  twdAvg.y+=(Math.sin(r)-twdAvg.y)*a;
   const avg=Math.atan2(twdAvg.y,twdAvg.x)*DEG;
   let d=twd-avg; while(d>180)d-=360; while(d<-180)d+=360;
   // starboard tack (wind from starboard, awa>0): a veer is a lift
@@ -1802,7 +1849,7 @@ let trkLast = 0;
 let localArmed=false;              // manual override for the record button
 function trackSample(){
   if(serverTrack()) return;          // the plugin owns recording
-  const rec = localArmed || tState==='countdown' || tState==='racing';
+  const rec = localRec();          /* the one definition - see localRec */
   if(!rec) return;
   const now=Date.now();
   if(now-trkLast < 1000) return;               // 1 Hz
@@ -1924,15 +1971,23 @@ async function publishGPX(pts,label){
   const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
   if(!j||!j.ok) return trkFlash((j&&j.error)||'send failed');
   trkFlash('on the boat · also in RACES',7000);
-  showQR(j.name.replace(/\.gpx$/,''), j.url);   /* point the phone at it */
+  showQR(j.name.replace(/\.gpx$/,''), j.url);   /* point the phone at it,
+     if the map is still what is showing - see showQR */
 }
 
 let lastTrackPaint=0;
 function paintTrack(){
   const srv=serverTrack();
-  const n = srv ? (get('confluence.track.points')||0) : TRK.length;
-  const rec= srv ? !!get('confluence.track.recording')
-                 : (localArmed||tState==='countdown'||tState==='racing');
+  /* shownTrack(), not TRK. With a race loaded out of the library and TRK
+     empty - SAVE then CLEAR - the map showed the loaded race's distance
+     and max speed while the line under it read "no track" and dimmed
+     GPX and CLEAR to .35. Nothing sets disabled, so both still worked:
+     the dimming was pure misinformation about what was on screen. */
+  const n = VIEWTRK ? VIEWTRK.length
+                    : (srv ? (get('confluence.track.points')||0) : TRK.length);
+  /* A loaded race is never growing, whoever is recording. Otherwise this
+     is exactly trackLive(), so ask it rather than restate it. */
+  const rec = VIEWTRK ? false : trackLive();
   const fix = get('pos.lat')!==null;
   let txt;
   if(n)            txt = `${n} pts · ${Math.round(n/60)} min`;
@@ -1942,9 +1997,9 @@ function paintTrack(){
   /* A failed save has to say so. The whole point of the buffer is that a
      crash does not cost you the race, and silently not having one is
      worse than not having one at all. */
-  if(trkSaveBad && !srv) txt += ' · NOT SAVED';
+  if(trkSaveBad && !srv && !VIEWTRK) txt += ' · NOT SAVED';
   if(Date.now()>trkFlashUntil)            // a flash holds the slot
-    $('trk-n').textContent = txt + (srv ? '' : ' · local');
+    $('trk-n').textContent = txt + (VIEWTRK ? ' · saved' : (srv ? '' : ' · local'));
   $('trk-rec').classList.toggle('on', rec);
   $('trk-rec').style.opacity = '1';
   $('trk-exp').style.opacity = n ? '1' : '.35';
@@ -2155,6 +2210,12 @@ function layoutPages(){
 function goPage(i){
   i=Math.max(0,Math.min(PAGE_EL.length-1,i));
   if(i===PAGE_I) return;
+  /* Both of these live inside #tmap, which is translated fully
+     off-screen the moment PAGE_I leaves 0. Left up they would be raised
+     where nobody can see or tap them, and judgeGesture hands whichever
+     is showing ownership of every gesture - so a sheet stranded off the
+     map silently ate the dial's taps and swipes. */
+  if(PAGE_I===0){ hideQR(); $('t-lib').classList.remove('on'); }
   PAGE_I=i; markSlide('page-'+i); layoutPages();
   if(i===0) mapEntered();          /* the map has work to do on arrival */
 }
@@ -3185,9 +3246,10 @@ setInterval(alertPaint,5000);
 
 /* ==================================================================
    NOW PLAYING
-   Poll the JSON that librespot's onevent hook writes. Position only
-   arrives at events, so it is advanced locally against the wall
-   clock in between - the same trick every player uses.
+   Poll the JSON that spotify-now.py writes from the Spotify Web API.
+   Position only arrives when the file is rewritten, so it is advanced
+   locally against the wall clock in between - the same trick every
+   player uses.
    ================================================================== */
 const music=$('music');
 let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
@@ -3200,11 +3262,13 @@ async function pollMusic(){
       const changed = j.title!==NP.title || j.event!==NP.event;
       NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
            pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
-           title:j.title||'', artist:(j.artist||'').split('\n')[0],
-           cover:(j.cover||'').split('\n')[0] };
+           /* plain strings: spotify-now.py joins the artist list with
+              ", " and the cover is a URL. The .split('\\n')[0] that used
+              to be here was for librespot's multi-line values. */
+           title:j.title||'', artist:j.artist||'', cover:j.cover||'' };
       if(changed) paintMusic();
     }
-  }catch(e){ /* no file yet, or raspotify not running */ }
+  }catch(e){ /* no file yet, or spotify-now.py is not running */ }
   setTimeout(pollMusic, 2000);
 }
 
@@ -3558,10 +3622,18 @@ function drawMap(pts){
   $('t-max').textContent =st.max.toFixed(1);
 }
 
+/* Is LOCAL recording armed? A function declaration rather than a const,
+   because the two callers above it are a long way above it.
+
+   This test was written out three times - here, in trackSample() and in
+   paintTrack() - and three copies of a predicate is three chances for a
+   future edit to change two of them. */
+function localRec(){
+  return localArmed||tState==='countdown'||tState==='racing';
+}
 /* is the track actively growing right now? */
 function trackLive(){
-  return serverTrack() ? !!get('confluence.track.recording')
-                       : (localArmed||tState==='countdown'||tState==='racing');
+  return serverTrack() ? !!get('confluence.track.recording') : localRec();
 }
 
 /* ---- track library (IndexedDB) ---------------------------------------
@@ -3569,24 +3641,39 @@ function trackLive(){
    failure mode is a silent throw part-way through a write, which loses
    the race you just sailed. IndexedDB is bounded by free disk instead,
    so the library holds a season.                                      */
-const DB_NAME='confluence', DB_VER=2, DB_STORE='tracks', DB_TILES='tilecache';
+const DB_NAME='confluence', DB_VER=3, DB_STORE='tracks', DB_TILES='tilecache';
 let DB=null;
 function dbOpen(){
   return new Promise((res,rej)=>{
     if(DB) return res(DB);
     const r=indexedDB.open(DB_NAME,DB_VER);
     r.onupgradeneeded=e=>{
-      const db=e.target.result;
+      const db=e.target.result, tx=e.target.transaction;
       if(!db.objectStoreNames.contains(DB_STORE))
         db.createObjectStore(DB_STORE,{keyPath:'id'}).createIndex('t','t');
       /* added in v2 - the upgrade leaves existing races untouched */
       if(!db.objectStoreNames.contains(DB_TILES))
         db.createObjectStore(DB_TILES,{keyPath:'k'});
+      /* v3: an index on the timestamp tilePut has always written and
+         nothing ever read. Without it the store could only be trimmed by
+         reading every record, so in practice it was never trimmed at all
+         - see tileTrim. Added to the existing store on upgrade, so a Pi
+         that already has a season of tiles keeps them. */
+      const ts=tx.objectStore(DB_TILES);
+      if(!ts.indexNames.contains('t')) ts.createIndex('t','t');
     };
     r.onsuccess=e=>{ DB=e.target.result; res(DB); };
     r.onerror =e=>rej(e.target.error);
   });
 }
+
+/* Tiles and races share this database, so an origin evicted under quota
+   pressure loses the season along with the imagery. Asking to be
+   persistent is the only lever a page has over that. It may well say no
+   - it is a request, not a setting - which is exactly why tileTrim
+   exists as well rather than instead. */
+if(navigator.storage&&navigator.storage.persist)
+  navigator.storage.persist().catch(()=>{});
 function dbTx(mode,fn){
   return dbOpen().then(db=>new Promise((res,rej)=>{
     const tx=db.transaction(DB_STORE,mode);
@@ -3617,6 +3704,43 @@ function tileTx(mode,fn){
 const tileGet  =k    =>tileTx('readonly', st=>st.get(k));
 const tilePut  =(k,b)=>tileTx('readwrite',st=>st.put({k,b,t:Date.now()}));
 const tileCount=()   =>tileTx('readonly', st=>st.count());
+
+/* Oldest-first eviction, the same discipline the in-memory blobURL map
+   two functions down has always had. Nothing evicted this store at all
+   before: no record was ever deleted, the `t` every tilePut wrote was
+   never read, and tileCount had no callers. cacheArea accepts 6000 tiles
+   PER PRESS, so a couple of new venues was a few hundred megabytes - and
+   because the races live in the same database, the eviction that
+   eventually came was Chromium's, taking the season with it.
+
+   The count is checked first and is cheap, so the common case - a store
+   under the cap - costs one readonly transaction and stops. */
+let tileTrimming=false;
+async function tileTrim(){
+  if(tileTrimming) return 0;
+  tileTrimming=true;
+  try{
+    const cap=CFG.tileStoreCap|0;
+    if(cap<=0) return 0;
+    const n=await tileCount();
+    if(n<=cap) return 0;
+    const drop=n-cap;
+    return await tileTx('readwrite',st=>{
+      let killed=0;
+      const cur=st.index('t').openCursor();       /* ascending: oldest first */
+      cur.onsuccess=e=>{
+        const c=e.target.result;
+        if(!c||killed>=drop) return;
+        /* the blob URL minted for this key, if any, goes too */
+        const u=tileURLs.get(c.value.k);
+        if(u){ URL.revokeObjectURL(u); tileURLs.delete(c.value.k); }
+        c.delete(); killed++; c.continue();
+      };
+      return cur;
+    }).then(()=>drop);
+  }catch(e){ return 0; }
+  finally{ tileTrimming=false; }
+}
 const tileRemoteURL=(z,x,y)=>`${CFG.tileRemote}/${z}/${y}/${x}`;  /* Esri is z/y/x */
 
 /* Object URLs are reused across redraws - minting a fresh one per frame
@@ -3703,10 +3827,16 @@ async function cacheArea(){
   const total=jobs.length;
   await Promise.all(Array.from({length:6},worker));
   caching=false; tileKey='';
+  const evicted=await tileTrim();          /* the one press that could overflow */
   flashTrk(fail? ('cached '+got+'/'+total+' · '+fail+' failed')
-               : ('cached '+got+' new · '+total+' total'));
+               : ('cached '+got+' new · '+total+' total'
+                  +(evicted?' · '+evicted+' old dropped':'')));
   if(MAPVIEW) drawTiles(MAPVIEW);
 }
+/* Once, after the boot has settled. A store already over the cap from a
+   version that could not trim wants bringing down without waiting for
+   somebody to press CACHE. */
+setTimeout(()=>{ tileTrim(); }, 30000);
 
 /* the status line doubles as the toast - there is nowhere else to put one */
 function flashTrk(msg){
@@ -3961,9 +4091,17 @@ function paintQR(){
     ? 'TAP THE CODE FOR '+QR.hosts[(QR.i+1)%QR.hosts.length].split(':')[0] : '';
 }
 function showQR(name,rel){
+  /* The sheet is a child of #tmap. Raising it from anywhere else puts it
+     off-screen where its own tap-to-dismiss cannot be reached, and every
+     gesture on the page you ARE looking at goes to it instead. The one
+     caller that can get here from another page is publishGPX, which
+     awaits a round trip to netd - long enough to swipe away. The file is
+     on the boat either way, and the flash says so; RACES has it. */
+  if(PAGE_I!==0) return false;
   QR.name=name; QR.rel=rel; QR.hosts=boatHosts(); QR.i=0;
   paintQR();
   $('qr-sheet').classList.add('on');
+  return true;
 }
 /* The code itself cycles the address; anywhere else puts the sheet away. */
 $('qr-box').addEventListener('click',e=>{

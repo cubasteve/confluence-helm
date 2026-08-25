@@ -152,7 +152,16 @@ def capabilities():
     # itself is not running, which is exactly the wpa_supplicant case we
     # want to detect rather than half-support.
     _cap['nm'] = bool(shutil.which('nmcli')) and run(['nmcli', '-t', '-f', 'STATE', 'general'], 6)[0] == 0
-    _cap['bt'] = bool(shutil.which('bluetoothctl')) and 'No default controller' not in run(['bluetoothctl', 'show'], 6)[1]
+    # The rc matters as much as the text, for the same reason it does for
+    # nmcli one line up. This used to read stdout alone, and run() returns
+    # (124, '', ...) on timeout - so a bluetoothd that is stopped or wedged
+    # on D-Bus blocked the full 6 s and then reported bt AVAILABLE, because
+    # 'No default controller' is not in ''. The tile then rendered in the
+    # 'off' class, which reads as "switched off" rather than "broken", and
+    # tapping it took _lock for up to 15 s - the same lock a WiFi join
+    # needs, so the join queued behind a dead Bluetooth call.
+    bt_rc, bt_out, _ = run(['bluetoothctl', 'show'], 6) if shutil.which('bluetoothctl') else (127, '', '')
+    _cap['bt'] = bt_rc == 0 and 'No default controller' not in bt_out
     return _cap
 
 

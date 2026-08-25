@@ -174,16 +174,45 @@ mkdir -p "$CURSOR_THEME"
 cp -r "$HERE/cursor/." "$CURSOR_THEME/"
 ok "installed $CURSOR_THEME"
 
-# /usr/share/icons/default is what both stacks consult first.
-mkdir -p /usr/share/icons/default
-backup /usr/share/icons/default/index.theme
-cat > /usr/share/icons/default/index.theme <<'EOT'
+# /usr/share/icons/default/index.theme is what both stacks consult
+# first, and on Debian it is NOT an ordinary file: it is the tail of the
+# x-cursor-theme update-alternatives chain, so writing to that path
+# writes THROUGH the symlinks into a package-owned file. backup() could
+# not save us from that either - `cp -a` implies -d, so it copied the
+# symlink and not the file about to be clobbered, and the uninstaller
+# then restored a link pointing at a theme it had just deleted. The
+# packaged theme was left inheriting something that no longer existed,
+# and only reinstalling the cursor package put it right.
+#
+# update-alternatives is the supported way to say "prefer mine": it adds
+# a candidate at a high priority and can be withdrawn cleanly, leaving
+# whatever the system had before to win again on its own.
+CURSOR_ALT=/usr/share/icons/Confluence-blank/index.theme
+cat > "$CURSOR_ALT" <<'EOT'
+[Icon Theme]
+Name=Confluence-blank
+Comment=Transparent pointer for the helm kiosk
+Inherits=Confluence-blank
+EOT
+if command -v update-alternatives >/dev/null 2>&1; then
+  update-alternatives --install /usr/share/icons/default/index.theme \
+    x-cursor-theme "$CURSOR_ALT" 155 >/dev/null 2>&1 &&
+    update-alternatives --set x-cursor-theme "$CURSOR_ALT" >/dev/null 2>&1 &&
+    ok "registered as the x-cursor-theme alternative (priority 155)" ||
+    ok "update-alternatives would not take it - pointer theme unchanged"
+else
+  # No update-alternatives: then it really is a plain file, and the
+  # ordinary backup/restore pair is correct after all.
+  mkdir -p /usr/share/icons/default
+  backup /usr/share/icons/default/index.theme
+  cat > /usr/share/icons/default/index.theme <<'EOT'
 [Icon Theme]
 Name=Default
 Comment=Default cursor theme
 Inherits=Confluence-blank
 EOT
-ok "made it the system default cursor theme"
+  ok "made it the system default cursor theme"
+fi
 
 # Every one of these is allowed to fail. set -e is on, and a missing or
 # unhappy loginctl must not abort an installer that edits boot files.

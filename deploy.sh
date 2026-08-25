@@ -11,7 +11,7 @@
 # is the only thing that should ever write the served copy.
 #
 # The served copy is stamped with the commit it came from, and the panel
-# prints it under SWIPE DOWN TO CLOSE. Without that there is no way to
+# prints it at the foot of the control panel. Without that there is no way to
 # tell which of the copies on this Pi you are looking at - and they do
 # drift, because a `git pull` by hand moves the repo without deploying.
 #

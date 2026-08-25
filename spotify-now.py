@@ -28,9 +28,14 @@ import urllib.parse
 import urllib.request
 
 CONFIG = os.path.expanduser("~/.config/confluence-spotify.json")
+# Same rule as everything else in this repo: resolve the home directory,
+# do not assume the account is called pi. Hardcoded, these two paths meant
+# the poller wrote where nothing was reading on any other account, and the
+# music page simply stayed on "Nothing playing" with no clue why.
+_HOME = os.path.expanduser("~")
 TARGETS = [
-    "/home/pi/avnav/data/user/helm/nowplaying.json",   # served over http by AvNav
-    "/home/pi/helm/nowplaying.json",                   # the file:// copy
+    os.path.join(_HOME, "avnav/data/user/helm/nowplaying.json"),  # served by AvNav
+    os.path.join(_HOME, "helm/nowplaying.json"),                  # the file:// copy
 ]
 
 POLL_PLAYING = 5        # seconds between polls while something is playing

@@ -96,6 +96,10 @@ already, so there is only ever one:
 ```bash
 cp ~/helm/desktop/confluence-helm.desktop ~/Desktop/
 chmod +x ~/Desktop/confluence-helm.desktop      # on the Pi - sshfs cannot
+
+# the icon, which the entry names by theme rather than by path
+install -Dm644 ~/helm/confluence-helm.svg \
+  ~/.local/share/icons/hicolor/scalable/apps/confluence-helm.svg
 ```
 
 It runs `open-window.sh` rather than calling Chromium directly, and that
@@ -235,11 +239,14 @@ also the thing you reach for most, and it was the most annoying to need
 a whole hand for.
 
 `FINGERS` clamps `CFG.swipeFingers` - now the **paging** count only - to
-what the touchscreen can actually report. A panel that tracks fewer
-touches would otherwise have no paging at all; one finger still reaches
-the control panel, which is where the setting that would fix it lives. A
-mouse reports zero touch points, so a desktop browser and the windowed
-copy fall back to one finger for everything.
+what the touchscreen can actually report, so a panel that tracks fewer
+touches still has paging rather than none. A mouse reports zero touch
+points, so a desktop browser and the windowed copy fall back to one
+finger for everything.
+
+`swipeFingers` is a source constant, not a panel control - there is no
+tile for it, and the clamp means no setting could rescue a one-point
+panel anyway. Change it in `CFG` and deploy.
 
 The overlay branches in `judgeGesture()` deliberately use the
 finger-count-free `swipeL`/`swipeR` rather than `left`/`right`: an
@@ -331,10 +338,11 @@ cd ~/helm && git pull && bash deploy.sh
 ### Which version am I looking at
 
 `deploy.sh` stamps the served copy with the commit it published, and the
-panel prints it under SWIPE DOWN TO CLOSE:
+panel prints it at the very bottom of the control panel, under the
+shallow-alarm section:
 
 ```
-SWIPE DOWN TO CLOSE   87b205f
+87b205f
 ```
 
 A `+` means the repo had uncommitted changes when it was deployed. The
@@ -446,8 +454,18 @@ really drive would be worse than declining.
 ### Installing it
 
 ```bash
-cp ~/helm/autostart/confluence-netd.desktop ~/.config/autostart/
+cp ~/helm/autostart/*.desktop ~/.config/autostart/
 ```
+
+All of them, not just this one. Each entry resolves `$HOME` for itself
+through `bash -c`, so a plain copy is the whole install under any
+account - they used to carry a literal `/home/pi`, and on any other
+account netd simply never started, which looks from the helm like every
+radio, brightness and power tile being dead for no stated reason.
+
+`confluence-spotify.desktop` is safe to copy even with no Spotify set
+up: `spotify-now.py` exits at once with a log line when
+`~/.config/confluence-spotify.json` is missing.
 
 Then restart the session - a running desktop never re-reads
 `~/.config/autostart/`. To check it by hand without one:
@@ -650,11 +668,16 @@ lit: the radios show a state, this one is a door.
 Least destructive first, because the top of a list is where a hurried
 finger lands and that should not be the shutdown.
 
-The sheet shows four rows at a time and its pager is hidden while they all
-fit. That is only safe while they do: a fifth action once pushed **Shut
-down** onto a second page with no way to reach it. The pager now appears
-the moment the list outgrows the page, because a menu that silently drops
-its last item is worse than a pager nobody needs.
+The power sheet has no pager at all. It used to share the radios' fixed
+four-row window, which meant a fifth action pushed **Shut down** onto a
+second page - and for a while onto a second page with no way to reach
+it. Rather than fix the pager, the sheet was rebuilt as two tiers that
+size to their contents: the safe actions above, the destructive ones
+below a rule, everything visible at once. `renderRows()` hides the
+radios' pager whenever it is drawing this sheet.
+
+The radios still use the four-row window and still page, because a scan
+can turn up thirty networks and no layout shows those at once.
 
 The first one is a page reload rather than a browser restart, and that is
 deliberate twice over. It can only be tapped on a page that is alive, and

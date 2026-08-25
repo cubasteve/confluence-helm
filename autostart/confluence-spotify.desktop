@@ -8,7 +8,7 @@
 # with nothing on screen to explain it.
 [Desktop Entry]
 Type=Application
-Name=Confluence Autopull
-Comment=Pulls the helm repo and redeploys when it changes, so a push from anywhere reaches the panel.
-Exec=bash -c 'exec bash "$HOME/helm/autopull.sh" 300'
+Name=Confluence Now Playing
+Comment=Polls the Spotify Web API and writes nowplaying.json for the music page. Exits at once with a log line if ~/.config/confluence-spotify.json does not exist, so it is harmless on a Pi with no Spotify set up.
+Exec=bash -c 'exec python3 "$HOME/helm/spotify-now.py"'
 X-GNOME-Autostart-enabled=true

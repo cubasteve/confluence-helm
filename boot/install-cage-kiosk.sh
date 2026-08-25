@@ -100,8 +100,29 @@ ExecStart=-/sbin/agetty --autologin $OWNER --noclear --noissue %I \$TERM
 EOT
 ok "autologin for $OWNER on tty1"
 
-PROFILE="$OWNER_HOME/.bash_profile"
-touch "$PROFILE"; chown "$OWNER:$OWNER" "$PROFILE"
+# WHICH file matters. bash reads ~/.bash_profile for a login shell and
+# falls back to ~/.profile only when that does not exist - so creating an
+# empty .bash_profile on a stock image (which ships .profile and no
+# .bash_profile) permanently shadows it. Every login shell afterwards
+# skips the `. ~/.bashrc` source and the ~/.local/bin PATH prepend, and
+# the uninstaller rewrites the file rather than unlinking it, so a
+# one-byte .bash_profile goes on shadowing long after the kiosk is gone.
+# That outlives its cause and bites a human at a keyboard, not the panel.
+#
+# So: append to whichever login file already exists, and only create one
+# when there is nothing to shadow. The state note is what lets the
+# uninstaller remove a file we created without touching one we did not.
+if [ -f "$OWNER_HOME/.bash_profile" ]; then
+  PROFILE="$OWNER_HOME/.bash_profile"
+elif [ -f "$OWNER_HOME/.profile" ]; then
+  PROFILE="$OWNER_HOME/.profile"
+else
+  PROFILE="$OWNER_HOME/.bash_profile"
+  touch "$PROFILE"; chown "$OWNER:$OWNER" "$PROFILE"
+  touch "$STATE/made-bash-profile"
+fi
+echo "$PROFILE" > "$STATE/profile-path"
+ok "login hook goes in $(basename "$PROFILE")"
 if ! grep -qF "$MARK_A" "$PROFILE"; then
   cat >> "$PROFILE" <<EOT
 
@@ -126,8 +147,12 @@ say "4/7  what Desktop means"
 # starts because the tile asked for one.
 AUTOSTART="$OWNER_HOME/.config/autostart"
 mkdir -p "$AUTOSTART"
-sed "s|/home/pi/helm|$OWNER_HOME/helm|" "$HERE/../autostart/confluence-window.desktop" \
-  > "$AUTOSTART/confluence-window.desktop"
+# A plain copy now: the entry resolves $HOME itself through `bash -c`,
+# so there is nothing left to rewrite. It used to be sed'd, and only
+# this one of the three was - which is why netd and autopull never
+# started under any account but pi.
+install -m 0644 "$HERE/../autostart/confluence-window.desktop" \
+  "$AUTOSTART/confluence-window.desktop"
 chown -R "$OWNER:$OWNER" "$AUTOSTART"
 ok "tapping Desktop will open the helm app windowed on it"
 

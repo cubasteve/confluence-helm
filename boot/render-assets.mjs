@@ -59,6 +59,18 @@ await p.setContent(`<style>html,body{margin:0;background:transparent}
     <text class="m" x="540" y="392">CONFLUENCE</text>
     <text class="s" x="540" y="462">HELM</text></svg>`);
 await p.waitForTimeout(300);
-await p.screenshot({path:`${OUT}/wordmark.png`, omitBackground:true});
-console.log('  wordmark.png 1080x1080 (transparent, app coordinates)');
+/* CROPPED to the band the type occupies, and that is not cosmetic.
+   confluence.script does `Scale(1080*scale, 126*scale)` on this file, and
+   Plymouth's Image.Scale is a NON-UNIFORM stretch - so a full-height
+   1080x1080 export gets squashed 8.57x into an illegible sliver. The
+   three wave PNGs regenerate correctly, so the failure reads as "only
+   the wordmark broke" and sends you looking at the fonts.
+
+   These two numbers are also hardcoded in confluence.script, which is
+   what makes the crop necessary; change one and change the other. */
+const MARK_TOP=349, MARK_H=126;
+await p.screenshot({path:`${OUT}/wordmark.png`, omitBackground:true,
+                    clip:{x:0, y:MARK_TOP, width:1080, height:MARK_H}});
+console.log(`  wordmark.png 1080x${MARK_H} (transparent, cropped at y=${MARK_TOP}`
+           +` to match confluence.script's Scale)`);
 await b.close();

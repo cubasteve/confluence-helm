@@ -19,7 +19,9 @@ rm -f /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf
 rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
 echo "   removed the tty1 autologin"
 
-PROFILE="$OWNER_HOME/.bash_profile"
+# Whichever file the installer actually appended to - it prefers an
+# existing .profile over creating a .bash_profile that would shadow it.
+PROFILE="$(cat "$STATE/profile-path" 2>/dev/null || echo "$OWNER_HOME/.bash_profile")"
 if [ -f "$PROFILE" ] && grep -qF "$MARK_A" "$PROFILE"; then
   python3 - "$PROFILE" "$MARK_A" "$MARK_B" <<'PY'
 import sys
@@ -33,6 +35,14 @@ for ln in lines:
 open(path, 'w').write('\n'.join(out).rstrip('\n') + '\n')
 PY
   echo "   removed the launch hook from $PROFILE"
+  # If WE created the file and nothing but whitespace is left in it, take
+  # it away too. Rewriting it to a single newline - which is what this
+  # used to do - leaves a one-byte .bash_profile shadowing ~/.profile for
+  # good, long after the kiosk it was created for is gone.
+  if [ -f "$STATE/made-bash-profile" ] && [ -z "$(tr -d "[:space:]" < "$PROFILE")" ]; then
+    rm -f "$PROFILE" "$STATE/made-bash-profile"
+    echo "   removed the .bash_profile we created - ~/.profile is live again"
+  fi
 fi
 
 if [ -f "$STATE/made-hushlogin" ]; then

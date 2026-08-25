@@ -1,6 +1,14 @@
+# Exec= does NO variable expansion - the spec says so, and a literal
+# $HOME here would be passed through to the shell as four characters.
+# Hence `bash -c`, which does expand it: these entries then work under
+# any account without an install step rewriting them, which is what
+# the hardcoded /home/pi used to require and nothing did for two of
+# the three. On a non-pi account netd simply never started, so every
+# WiFi, Bluetooth, brightness and power tile was dead at every boot
+# with nothing on screen to explain it.
 [Desktop Entry]
 Type=Application
 Name=Confluence Radios
 Comment=Local helper the panel's WiFi and Bluetooth tiles talk to. Must run in the desktop session - that is what makes NetworkManager accept the changes.
-Exec=bash /home/pi/helm/netd.sh
+Exec=bash -c 'exec bash "$HOME/helm/netd.sh"'
 X-GNOME-Autostart-enabled=true
