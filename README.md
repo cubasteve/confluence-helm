@@ -651,6 +651,33 @@ it. A splash above the veil ignores the brightness setting, so a panel
 left at 25% would come up at full brightness at night and cost you your
 night vision. Dimming the splash with everything else is the point.
 
+**Nothing under it may paint, not for one frame.** `#stage` carries a
+`booting` class and the stylesheet hides every child but the splash and
+the veil:
+
+```css
+#stage.booting > :not(#boot):not(#veil){visibility:hidden}
+```
+
+`z-index` alone is not enough. It settles what is on top *once both
+exist*; it says nothing about a frame composited while the parser is
+still in the middle of this file, and the dial's markup comes first. The
+stylesheet is applied before any body content renders, so the rule holds
+from the very first frame regardless of paint timing.
+
+`visibility`, not `display`: the pages still have to lay out and measure
+during init — `layoutPages()` reads their widths, and
+`getComputedTextLength()` needs real boxes. `#veil` is exempt so the
+brightness setting still dims the splash. The class comes off as the
+splash begins to fade, so the dial is revealed already drawn.
+
+`#boot` is also the first child of `#stage` rather than the last. That
+is belt to the rule's braces, and **only** belt: a flash of the dial
+before the splash was reported from the boat, and it could not be
+reproduced here even with a screencast of every composited frame and the
+document deliberately stalled for 1.2 s mid-parse. Moving it made no
+measurable difference in that test. Do not rely on document order.
+
 **It clears on real data, not on a clock.** `bootReady()` is called from
 `skMessage()`, bounded both ways:
 

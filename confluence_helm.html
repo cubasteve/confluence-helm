@@ -532,6 +532,20 @@ a.lib-row{text-decoration:none;color:inherit}
    JavaScript has run. */
 #boot{position:absolute;inset:0;background:var(--bg);z-index:85;
   pointer-events:none;transition:opacity .45s ease}
+
+/* Nothing under the splash may paint, not for one frame. z-index alone
+   only settles what is on top ONCE both exist - it says nothing about a
+   frame composited while the parser is still somewhere in the middle of
+   this file, and the dial's markup comes first. This does not depend on
+   paint timing at all: the stylesheet is applied before any body
+   content renders, so from the very first frame everything but the
+   splash is simply not visible.
+
+   visibility, not display: the pages must still lay out and measure
+   during init - layoutPages() reads their widths, drawBezelTicks() and
+   getComputedTextLength() need real boxes. #veil is exempt so the
+   brightness setting still dims the splash. */
+#stage.booting > :not(#boot):not(#veil){visibility:hidden}
 #boot.gone{opacity:0}
 #boot.off{display:none}
 #boot svg{display:block;width:100%;height:100%}
@@ -661,7 +675,42 @@ if(['day','dusk','night'].indexOf(THEME_EFF)<0) THEME_EFF='dusk';
 document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 </script>
 
-<div id="stage">
+<div id="stage" class="booting">
+<!-- ============== BOOT ==============
+     Three currents under the name, drifting until Signal K answers -
+     then they collapse into one line and the panel is yours. The dial
+     underneath spends that time with every reading empty, which is the
+     gap this exists to cover.
+
+     First child of #stage so it is parsed before anything it covers.
+     That is belt; the braces are the .booting rule in the stylesheet,
+     which is what actually guarantees nothing underneath can paint.
+     Document order alone could not be shown to matter - see the README
+     - so do not rely on it. -->
+<div id="boot">
+  <svg viewBox="0 0 1080 1080" aria-hidden="true">
+    <g class="bt-mark-g"><text class="bt-mark" x="540" y="392">CONFLUENCE</text></g>
+    <g class="bt-sub-g"><text class="bt-sub" x="540" y="462">HELM</text></g>
+    <g clip-path="url(#bt-clip)">
+      <!-- non-scaling-stroke: the settle squashes these to 4% height and
+           a scaled stroke would vanish along with them. -->
+      <g class="bt-wave bt-w1" style="--to:118px">
+        <g class="bt-drift" style="--dur:7.5s"><path id="bt-p1" fill="none"
+          stroke="var(--label)" stroke-width="7" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+      <g class="bt-wave bt-w3" style="--to:-118px">
+        <g class="bt-drift" style="--dur:9.4s"><path id="bt-p3" fill="none"
+          stroke="var(--ink-dim)" stroke-width="7" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+      <g class="bt-wave bt-w2" style="--to:0px">
+        <g class="bt-drift" style="--dur:5.2s"><path id="bt-p2" fill="none"
+          stroke="var(--accent)" stroke-width="9" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+    </g>
+    <clipPath id="bt-clip"><circle cx="540" cy="540" r="540"/></clipPath>
+  </svg>
+</div>
+
 
 <svg id="svg" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
   <circle cx="540" cy="540" r="540" fill="var(--bg)"/>
@@ -992,35 +1041,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      panels and the screensaver so an alarm is visible wherever you are. -->
 <div id="alert"><div class="al-t" id="al-t"></div><div class="al-s" id="al-s"></div></div>
 
-<!-- ============== BOOT ==============
-     Three currents under the name, drifting until Signal K answers -
-     then they collapse into one line and the panel is yours. The dial
-     underneath spends that time with every reading empty, which is the
-     gap this exists to cover. -->
-<div id="boot">
-  <svg viewBox="0 0 1080 1080" aria-hidden="true">
-    <g class="bt-mark-g"><text class="bt-mark" x="540" y="392">CONFLUENCE</text></g>
-    <g class="bt-sub-g"><text class="bt-sub" x="540" y="462">HELM</text></g>
-    <g clip-path="url(#bt-clip)">
-      <!-- non-scaling-stroke: the settle squashes these to 4% height and
-           a scaled stroke would vanish along with them. -->
-      <g class="bt-wave bt-w1" style="--to:118px">
-        <g class="bt-drift" style="--dur:7.5s"><path id="bt-p1" fill="none"
-          stroke="var(--label)" stroke-width="7" stroke-linecap="round"
-          vector-effect="non-scaling-stroke"/></g></g>
-      <g class="bt-wave bt-w3" style="--to:-118px">
-        <g class="bt-drift" style="--dur:9.4s"><path id="bt-p3" fill="none"
-          stroke="var(--ink-dim)" stroke-width="7" stroke-linecap="round"
-          vector-effect="non-scaling-stroke"/></g></g>
-      <g class="bt-wave bt-w2" style="--to:0px">
-        <g class="bt-drift" style="--dur:5.2s"><path id="bt-p2" fill="none"
-          stroke="var(--accent)" stroke-width="9" stroke-linecap="round"
-          vector-effect="non-scaling-stroke"/></g></g>
-    </g>
-    <clipPath id="bt-clip"><circle cx="540" cy="540" r="540"/></clipPath>
-  </svg>
-</div>
-
 <div id="veil"></div>
 <div id="fps"></div>
 
@@ -1159,7 +1179,8 @@ function bootSettle(){
   BOOT.up=false; clearTimeout(BOOT.timer);
   const el=$('boot'); if(!el) return;
   el.classList.add('settle');
-  setTimeout(()=>el.classList.add('gone'), 1000);
+  setTimeout(()=>{ $('stage').classList.remove('booting');   /* reveal beneath */
+                   el.classList.add('gone'); }, 1000);
   /* display:none at the end, so a layer that is finished with costs the
      compositor nothing for the rest of the session. */
   setTimeout(()=>el.classList.add('off'), 1480);
