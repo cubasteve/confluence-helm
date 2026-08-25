@@ -1,0 +1,104 @@
+# =====================================================================
+# CONFLUENCE - Plymouth boot splash
+#
+# The same three currents the helm app comes up on, so the handoff from
+# the kernel to Chromium to the app is one continuous picture instead of
+# four unrelated screens.
+#
+# Geometry is identical to #boot in confluence_helm.html: the waves are
+# drawn 2160 wide across a 1080 panel with wavelengths that divide 1080
+# exactly (360, 540, 270), so sliding one full 1080 to the left lands on
+# a frame identical to the start and the loop is seamless with a single
+# sprite. Their periods - 7.5 s, 5.2 s, 9.4 s - do not divide into each
+# other, so the three are never in phase.
+#
+# The dusk palette, because Plymouth cannot know what the app will
+# resolve to and a dark splash is the one that never blinds anyone at
+# two in the morning.
+# =====================================================================
+
+# #0B0C0E
+Window.SetBackgroundTopColor(0.043, 0.047, 0.055);
+Window.SetBackgroundBottomColor(0.043, 0.047, 0.055);
+
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+
+# The panel is square and 1080 across, but do not assume it: a smaller
+# or non-square framebuffer should still get a centred, whole splash.
+side = screen_w;
+if (screen_h < screen_w) { side = screen_h; }
+scale = side / 1080;
+ox = (screen_w - 1080 * scale) / 2;
+oy = (screen_h - 1080 * scale) / 2;
+
+# Plymouth calls the refresh function at 50 Hz. Everything below is in
+# 1080-space pixels per frame; scale is applied only when placing.
+REFRESH = 50;
+WRAP = 1080;
+
+# ---- the wordmark -------------------------------------------------
+# Full panel width, cropped to the band the type actually occupies - a
+# 1080x1080 transparent PNG costs 4.7 MB of RAM at boot to hold mostly
+# nothing. 349 is where that band starts on the panel.
+mark_image = Image("wordmark.png");
+mark_image = mark_image.Scale(Math.Int(1080 * scale), Math.Int(126 * scale));
+mark = Sprite(mark_image);
+mark.SetPosition(ox, oy + 349 * scale, 10);
+
+# ---- the currents -------------------------------------------------
+# Each strip is 2160 wide; top is its centre line minus half its height.
+
+w1_image = Image("wave1.png");
+w1_image = w1_image.Scale(Math.Int(2160 * scale), Math.Int(71 * scale));
+w1 = Sprite(w1_image);
+w1_y = oy + 506.5 * scale;
+w1_x = 0;
+w1_step = WRAP / (7.5 * REFRESH);
+w1.SetPosition(ox, w1_y, 4);
+
+w2_image = Image("wave2.png");
+w2_image = w2_image.Scale(Math.Int(2160 * scale), Math.Int(89 * scale));
+w2 = Sprite(w2_image);
+w2_y = oy + 615.5 * scale;
+w2_x = 0;
+w2_step = WRAP / (5.2 * REFRESH);
+w2.SetPosition(ox, w2_y, 5);
+
+w3_image = Image("wave3.png");
+w3_image = w3_image.Scale(Math.Int(2160 * scale), Math.Int(59 * scale));
+w3 = Sprite(w3_image);
+w3_y = oy + 748.5 * scale;
+w3_x = 0;
+w3_step = WRAP / (9.4 * REFRESH);
+w3.SetPosition(ox, w3_y, 4);
+
+fun refresh_callback() {
+  w1_x = w1_x - w1_step;
+  if (w1_x <= 0 - WRAP) { w1_x = w1_x + WRAP; }
+  w1.SetX(ox + w1_x * scale);
+
+  w2_x = w2_x - w2_step;
+  if (w2_x <= 0 - WRAP) { w2_x = w2_x + WRAP; }
+  w2.SetX(ox + w2_x * scale);
+
+  w3_x = w3_x - w3_step;
+  if (w3_x <= 0 - WRAP) { w3_x = w3_x + WRAP; }
+  w3.SetX(ox + w3_x * scale);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# ---- stubs --------------------------------------------------------
+# Deliberately silent. This boat has no encrypted root and nothing to
+# type at boot, and a splash that starts printing systemd chatter over
+# the currents is worse than one that says nothing. If a prompt ever IS
+# needed, the theme falls back to the text plugin rather than hanging.
+
+fun message_callback(text) { }
+Plymouth.SetMessageFunction(message_callback);
+
+fun display_normal_callback() { }
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+fun quit_callback() { }
+Plymouth.SetQuitFunction(quit_callback);

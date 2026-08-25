@@ -56,8 +56,14 @@ owned_by_another(){
 quick=0
 while true; do
   started=$(date +%s)
+  # --default-background-color is what the browser paints before the page
+  # has anything to show. Left alone it is white, which after a whole
+  # boot chain deliberately kept dark is the one frame you notice. The
+  # value is ARGB and matches the dusk palette's --bg (#0B0C0E), the
+  # same colour Plymouth and the desktop are set to.
   chromium-browser --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
+    --default-background-color=FF0B0C0E \
     "$URL?v=$(date +%s)"
 
   if [ $(( $(date +%s) - started )) -ge 5 ]; then

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Confluence
+Description=Three currents under the boat's name - matches the helm app's own boot sequence
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/confluence
+ScriptFile=/usr/share/plymouth/themes/confluence/confluence.script

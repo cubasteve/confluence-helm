@@ -638,6 +638,29 @@ a.lib-row{text-decoration:none;color:inherit}
 </style>
 </head>
 <body>
+<script>
+/* ------------------------------------------------------------------
+   Palette, before the first paint.
+
+   Everything else in this file runs from the bottom of <body>, which is
+   after Chromium has had a chance to paint - so the panel came up in the
+   DAY palette and snapped to dusk or night a moment later. At the end of
+   a deliberately dark boot chain that white frame is the one thing you
+   actually notice.
+
+   The resolved theme is stored on every applyTheme(), so this is a
+   restore rather than a calculation - no sun tables, no GPS, nothing
+   that could be slow or throw. First boot ever has nothing stored and
+   assumes dusk: of the two possible wrong guesses, a dark panel that
+   brightens is the forgivable one.
+   ------------------------------------------------------------------ */
+const THEME_KEY='helmTheme';
+let THEME_EFF='';
+try{ THEME_EFF=localStorage.getItem(THEME_KEY)||''; }catch(e){}
+if(['day','dusk','night'].indexOf(THEME_EFF)<0) THEME_EFF='dusk';
+document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
+</script>
+
 <div id="stage">
 
 <svg id="svg" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
@@ -1299,6 +1322,11 @@ function autoTheme(){
 function applyTheme(){
   const eff = CFG.theme==='auto' ? autoTheme() : CFG.theme;
   document.body.className = eff==='day' ? '' : eff;
+  /* Stored so the next boot can paint the right palette before any of
+     this file has run - see the pre-paint stamp at the top of <body>.
+     Only on change: applyTheme runs every minute on auto. */
+  if(eff!==THEME_EFF){ THEME_EFF=eff;
+    try{ localStorage.setItem(THEME_KEY, eff); }catch(e){} }
   $('theme-ico').innerHTML = ICON[CFG.theme];
   /* On auto the mode and the outcome are different facts and you want
      both: the label says AUTO, the line under it says what the clock has

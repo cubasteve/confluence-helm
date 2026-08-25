@@ -654,24 +654,99 @@ not something to keep by hand, and the three differ by four numbers.
 They are drawn across 2160 so a −1080 drift loops seamlessly, which
 needs every wavelength to divide 1080 exactly: 360, 540, 270.
 
-### What this is not
+### Palette before the first paint
 
-This is the **last** screen of the boot chain, not the Raspberry Pi
-splash. In order, a cold start shows:
+Everything else in this file runs from the bottom of `<body>`, so the
+panel used to come up in the **day** palette and snap to dusk or night a
+moment later. At the end of a deliberately dark boot chain, that white
+frame is the one thing you actually notice.
 
-| Stage | What you see | Who owns it |
+A short script at the top of `<body>` restores the palette before
+anything renders. It reads `helmTheme` — the *resolved* theme, written
+by `applyTheme()` on every change — so it is a restore, not a
+calculation: no sun tables, no GPS, nothing that could be slow or throw.
+Stored separately from `helmPrefs` on purpose, so the pre-paint read is
+one `getItem` with no JSON parse.
+
+First boot ever has nothing stored and assumes dusk. Of the two possible
+wrong guesses, a dark panel that brightens is the forgivable one.
+
+## The rest of the boot chain
+
+`#boot` is the **last** screen of seven. `boot/` claims the other six:
+
+| Stage | What you saw | Now |
 |---|---|---|
-| Firmware | the rainbow square | `disable_splash=1` in `/boot/firmware/config.txt` |
-| Kernel | four raspberries, console text | `logo.nologo quiet` in `/boot/firmware/cmdline.txt` |
-| Plymouth | the raspberry logo and dots | a theme in `/usr/share/plymouth/themes/` |
-| Session | desktop wallpaper | the desktop's own background setting |
-| `start-kiosk.sh` | whatever was behind it, while it waits for AvNav | this repo |
-| Chromium | a white flash | launch flags |
-| **The app** | **`#boot`** | **this repo** |
+| Firmware | the rainbow square | `disable_splash=1` |
+| Kernel | four raspberries, console text | `logo.nologo quiet loglevel=3` |
+| Plymouth | the raspberry logo and dots | the Confluence theme |
+| Session | desktop wallpaper | painted `#0B0C0E` |
+| `start-kiosk.sh` | whatever was behind it, waiting for AvNav | same colour behind it |
+| Chromium | a white flash | `--default-background-color=FF0B0C0E` |
+| **The app** | — | **`#boot`** |
 
-Nothing above has been touched. Doing so is a separate job, and one that
-cannot be tested from anywhere but the Pi — a bad `cmdline.txt` boots to
-a black screen, and the only way back is the SD card in another machine.
+```bash
+sudo bash ~/helm/boot/install-boot-chain.sh    # then reboot
+sudo bash ~/helm/boot/uninstall-boot-chain.sh  # puts it all back
+```
+
+Everything it touches is backed up alongside the original with a
+`.confluence-bak` suffix.
+
+**If it boots black, nothing is bricked.** Power off, put the card in
+another machine, and on the small FAT partition rename
+`cmdline.txt.confluence-bak` back over `cmdline.txt`. That is the whole
+recovery — the file is one line of plain text.
+
+### Poppins
+
+The app has always asked for Poppins and the Pi has never had it, so
+every reading on that panel has been rendering in DejaVu. The installer
+fixes that, which also means the splash and the app are in one face.
+
+The three TTFs in `boot/fonts/` are Google's static files with one
+change: they ship with the family name **"Poppins Light"**, which
+nothing matches against `font-family:'Poppins'` — installing them
+untouched changes nothing at all. The typographic family (name ID 16)
+and subfamily (17) have been set so the three group into one weighted
+family. `fc-match "Poppins:weight=light"` returning a Poppins file is
+the test that it worked.
+
+### The Plymouth theme
+
+`boot/theme/` is a `script`-plugin theme. Three wave strips and a
+wordmark, drifting on the same periods as `#boot` — no frame sequence,
+because a 12-second loop at 1080² would be hundreds of megabytes and the
+sprite translate is what the CSS is doing anyway.
+
+Same trick as the app: the strips are 2160 wide with wavelengths that
+divide 1080 exactly, so sliding one full 1080 to the left lands on an
+identical frame and a single sprite loops seamlessly.
+
+Two things the assets have to match or the handoff shows a jump:
+
+- **`dominant-baseline:middle`.** The app sets it on every `<text>`
+  globally, so `y=392` is the type's *middle*, not its baseline. Missing
+  it put the splash wordmark 22 px above the app's.
+- **The wordmark crop.** `render-assets.mjs` writes a full-panel
+  transparent PNG and then crops it to the band the type occupies — a
+  1080×1080 transparent image costs 4.7 MB of RAM at boot to hold mostly
+  nothing. The crop's top offset and height are hard-coded in
+  `confluence.script`; regenerating the assets means updating both.
+
+Verified by reimplementing Plymouth's sprite model in a browser from the
+script's own numbers and diffing the composed frame against the app's:
+the wordmark comes out pixel-identical and the waves agree to within
+antialiasing. That proves the arithmetic, **not the script's syntax** —
+Plymouth itself cannot be run anywhere but the Pi.
+
+### What is still not seamless
+
+Plymouth cannot know what the app will resolve to, so the splash is
+always the **dusk** palette. Boot into day and there is one dark-to-light
+step at the app. Fixing it properly means teaching the installer to
+render a day variant and something to choose between them at boot, which
+is a lot of machinery for one frame.
 
 ## Getting a track onto a phone
 
