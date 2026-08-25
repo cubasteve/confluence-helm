@@ -11,6 +11,12 @@ nowplaying.json
 confluence_helm.backup-*.html
 *.bak-*
 
+# Python bytecode. netd.py is run, never imported as a library, so these
+# turn up only when a tool imports it - a test harness or a linter - and
+# are regenerated on demand.
+__pycache__/
+*.pyc
+
 # Editor/OS noise
 *.swp
 *~
