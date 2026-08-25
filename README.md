@@ -214,8 +214,13 @@ once already:
 
 ```
 1 pages   2 dots   20 control panel   30 screensaver
-55 alerts   70 lock   80 hold ring   99 fps readout
+55 alerts   70 lock   80 hold ring   90 veil   99 fps readout
 ```
+
+The veil is the brightness control on a panel with no backlight to
+drive, so it sits above everything and dims the lot. It was on `auto`
+until the pages and the panel were given levels, at which point it ended
+up underneath both and the slider silently stopped doing anything.
 
 `#panel` sits *before* the music and track pages in the document, so with
 everything on `auto` those pages painted over it: the control panel

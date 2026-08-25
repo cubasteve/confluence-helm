@@ -490,8 +490,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .ms-head b{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:0}
 .ms-head i{width:2px;height:24px;background:var(--hairline);display:block;flex:none}
 
+/* Above everything. This is the brightness control on hardware with no
+   backlight to drive, so it has to behave like one and dim the whole
+   screen - panel, alerts, lock and all. It sat on auto until the pages
+   and the panel were given z-indexes, at which point it silently ended
+   up underneath both and the slider stopped doing anything at all. */
 #veil{position:absolute;inset:0;background:#000;opacity:0;
-  pointer-events:none;transition:opacity .2s}
+  pointer-events:none;transition:opacity .2s;z-index:90}
 
 /* --- alerts ---
    600 px wide to match the sheets, and high enough that the circle is
