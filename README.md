@@ -158,6 +158,42 @@ supported path.
 
 The repo is the source of truth; the Pi is a deployment target.
 
+## Pages
+
+Three places rather than three overlays: the track map, the dial and the
+music panel sit side by side, and swiping left or right moves along the
+row. Three dots at the foot of the screen say where you are. The dial is
+the middle one, because it is the one you come back to.
+
+```
+   track map   <->   DIAL   <->   music
+                 * . .   . * .   . . *
+```
+
+The control panel is still an overlay, pulled up from the bottom over
+whatever page you are on - and now reachable from any of them, the way
+control centre is on a phone. It is a layer over a place, not a place.
+
+Nothing new is resident. All three layers were always in the DOM, parked
+off-screen with a transform; only the transform is now computed from one
+index rather than toggled by a class. Layer promotion stays scoped to the
+gesture, so the compositor holds no more than it did.
+
+The dots replaced the SWIPE LEFT/RIGHT/DOWN TO CLOSE captions. Those
+existed because nothing indicated the relationship between the views; the
+dots make it structural, so there is nothing left to spell out.
+
+Two things to know if you touch this:
+
+- `.open` on `#tmap` and `#music` is now **derived state**, kept in step
+  with the index by `layoutPages()`. Everything that already asked
+  whether the map or the music panel was showing keeps working; do not
+  set it by hand.
+- `dialVisible()` is now a question about place - `PAGE_I===1` - not
+  about what is covering the dial. During a page change the dial can be
+  both on screen and moving, which is the expensive combination, so the
+  render freeze over `SLIDE_MS` matters more than it used to.
+
 ```
 phone / laptop  ->  edit  ->  git push
                                  |
