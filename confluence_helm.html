@@ -1093,7 +1093,7 @@ const CFG={
      navigate the boat's instruments; one finger still taps, holds and
      works every button. Clamped at runtime by what the touchscreen can
      actually report - see FINGERS. */
-  swipeFingers:3,
+  swipeFingers:3,                    /* PAGING only - see judgeGesture */
 
   depthAlarm:6, depthWarn:12, depthUnit:'ft',
   dim:100,                           /* brightness, 25-100 - see applyDim */
@@ -2027,11 +2027,22 @@ const hideMap   =()=>goPage(1);
 const openMap   =()=>goPage(0);
 
 /* ---- how many fingers ----
+   Two answers, because the two gestures are not the same risk.
+
+   PAGING between the three dials takes the full hand. Changing which
+   instrument you are looking at mid-race because a wave put a wrist on
+   the glass is the failure worth designing against.
+
+   RAISING AND DISMISSING things - the control panel, the picker, the
+   library - takes one. Those are all visibly reversible: whatever
+   appeared is on screen and a swipe puts it away, so a stray touch
+   costs a second rather than your instruments.
+
    Clamped by what the hardware can actually report. A panel that tracks
    fewer touches than CFG.swipeFingers asks for would otherwise have no
-   navigation at all - and no way to reach the setting that would fix
-   that, since the control panel is itself behind a swipe. A mouse
-   reports zero touch points, so a desktop browser falls back to one. */
+   paging at all - and one finger still reaches the control panel, which
+   is where the setting that would fix that lives. A mouse reports zero
+   touch points, so a desktop browser falls back to one. */
 const FINGERS=Math.max(1,Math.min(CFG.swipeFingers|0||1,
                                   navigator.maxTouchPoints||1));
 
@@ -2068,11 +2079,14 @@ function judgeGesture(g){
   dx/=g.p.size; dy/=g.p.size;
   const dt=Date.now()-g.t0, n=g.max;
   const moved=Math.hypot(dx,dy), quick=dt<700;
-  const sw    = n>=FINGERS && quick;
-  const up    = sw && dy<-70 && Math.abs(dy)>Math.abs(dx);
-  const down  = sw && dy> 70 && Math.abs(dy)>Math.abs(dx);
-  const left  = sw && dx<-70 && Math.abs(dx)>Math.abs(dy);
-  const right = sw && dx> 70 && Math.abs(dx)>Math.abs(dy);
+  /* One finger is enough to raise or dismiss something; only paging
+     between the dials asks for the whole hand. See FINGERS above. */
+  const up    = quick && dy<-70 && Math.abs(dy)>Math.abs(dx);
+  const down  = quick && dy> 70 && Math.abs(dy)>Math.abs(dx);
+  const swipeL= quick && dx<-70 && Math.abs(dx)>Math.abs(dy);
+  const swipeR= quick && dx> 70 && Math.abs(dx)>Math.abs(dy);
+  const left  = swipeL && n>=FINGERS;
+  const right = swipeR && n>=FINGERS;
 
   /* Whichever overlay is showing OWNS the gestures. The innermost thing
      up is what a dismiss swipe dismisses, and nothing else acts: you
@@ -2083,12 +2097,14 @@ function judgeGesture(g){
     return; }
   /* The race library is a sheet over the map page and owns the gesture
      while it is up - paging out from underneath it would strand it. */
-  if($('qr-sheet').classList.contains('on')){ if(left||right) hideQR(); return; }
-  if($('t-lib').classList.contains('on')){ if(left||right) closeLib(); return; }
+  if($('qr-sheet').classList.contains('on')){ if(swipeL||swipeR) hideQR(); return; }
+  if($('t-lib').classList.contains('on')){ if(swipeL||swipeR) closeLib(); return; }
 
-  /* Control centre is reachable from any page, the way it is on a phone.
-     Left and right move through the pages rather than opening and
-     closing things: swipe left to go right along the row. */
+  /* Control centre is reachable from any page, the way it is on a phone,
+     and with one finger - it is the thing you reach for most and the
+     cheapest to undo. Left and right move through the pages rather than
+     opening and closing things: swipe left to go right along the row.
+     Those are the gestures that still want three fingers. */
   if(up)    return openPanel();
   if(left)  return goPage(PAGE_I+1);
   if(right) return goPage(PAGE_I-1);

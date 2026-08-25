@@ -188,19 +188,39 @@ control centre is on a phone. It is a layer over a place, not a place.
 While it is up it owns the gestures: left and right do nothing until you
 swipe it away.
 
-### Three fingers
+### How many fingers
 
-Swipes want three fingers - paging and the control panel both. One finger
-still taps, holds, and works every button on every page; only navigation
-asks for a deliberate hand, because one finger is what rain, spray and a
-sleeve produce.
+Two answers, because the two gestures are not the same risk.
 
-`FINGERS` clamps `CFG.swipeFingers` to what the touchscreen can actually
-report. A panel that tracks fewer touches would otherwise have no
-navigation at all - and no way to reach the setting that would fix it,
-since the control panel is itself behind a swipe. A mouse reports zero
-touch points, so a desktop browser and the windowed copy fall back to
-one finger.
+| Gesture | Fingers |
+|---|---|
+| Page left/right between the three dials | **three** |
+| Control panel up / down | **one** |
+| Dismiss the picker, the library, the QR sheet | **one** |
+| Taps, holds, every button on every page | one, as always |
+
+**Paging takes the whole hand.** Changing which instrument you are
+looking at mid-race because a wave put a wrist on the glass is the
+failure worth designing against, and one finger is what rain, spray and
+a sleeve produce.
+
+**Raising and dismissing takes one.** Those are all visibly reversible:
+whatever appeared is on screen and a swipe puts it away, so a stray
+touch costs a second rather than your instruments. The control panel is
+also the thing you reach for most, and it was the most annoying to need
+a whole hand for.
+
+`FINGERS` clamps `CFG.swipeFingers` - now the **paging** count only - to
+what the touchscreen can actually report. A panel that tracks fewer
+touches would otherwise have no paging at all; one finger still reaches
+the control panel, which is where the setting that would fix it lives. A
+mouse reports zero touch points, so a desktop browser and the windowed
+copy fall back to one finger for everything.
+
+The overlay branches in `judgeGesture()` deliberately use the
+finger-count-free `swipeL`/`swipeR` rather than `left`/`right`: an
+overlay that took three fingers to close while one finger opened the
+panel would be the odd one out.
 
 A gesture is every finger down between the first touch and the last
 lift, and the direction is the average of their travel: one finger that
