@@ -759,6 +759,42 @@ and subfamily (17) have been set so the three group into one weighted
 family. `fc-match "Poppins:weight=light"` returning a Poppins file is
 the test that it worked.
 
+### The mouse pointer
+
+`boot/cursor/` is a cursor theme whose pointer is a single transparent
+pixel, installed as `/usr/share/icons/Confluence-blank` and inherited by
+`/usr/share/icons/default`.
+
+A theme rather than `X -nocursor` because **X11 and Wayland both resolve
+pointers through Xcursor themes**, and Raspberry Pi OS could be running
+either. `-nocursor` is more absolute but exists only under X, so the
+installer adds it as a LightDM drop-in *as well* when it detects an X
+session, and says which it found.
+
+`make-blank-cursor.py` writes the Xcursor binary directly rather than
+depending on `xcursorgen` being installed - it is a 16-byte header, a
+table of contents, and one 1x1 ARGB pixel per nominal size. Verified by
+loading it back through **libXcursor itself**, the same library the
+compositor uses, not just by re-reading it with the code that wrote it.
+
+### What is still visible, and why
+
+`start-kiosk.sh` waits for AvNav to answer before it launches Chromium,
+and the desktop is what is on screen during that wait. The wait is the
+gap, and nothing in this repo shortens it.
+
+What the boot chain does is make that gap unremarkable: the desktop is
+painted the same `#0B0C0E` as the splash and there is no pointer, so it
+should read as a pause rather than as a different screen. Anything in
+`~/Desktop` still shows through - move those to
+`~/.local/share/applications` to keep them in the menu without putting
+them on the desktop.
+
+Removing the gap outright means not having a desktop session at all -
+a compositor-only kiosk like `cage`, with Chromium as the session. That
+is a bigger change than this, and it costs you the windowed copy and the
+desktop shortcut.
+
 ### The Plymouth theme
 
 `boot/theme/` is a `script`-plugin theme. Three wave strips and a

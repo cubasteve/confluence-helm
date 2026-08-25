@@ -27,6 +27,10 @@ restore(){
 restore "$BOOTDIR/config.txt"
 restore "$BOOTDIR/cmdline.txt"
 restore "$OWNER_HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf"
+restore /usr/share/icons/default/index.theme
+rm -rf /usr/share/icons/Confluence-blank
+rm -f /etc/lightdm/lightdm.conf.d/10-confluence-nocursor.conf
+echo "   pointer back to normal (log out and in, or reboot)"
 
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   # pix is the Raspberry Pi OS stock theme; fall back to whatever else

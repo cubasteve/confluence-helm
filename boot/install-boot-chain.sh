@@ -9,6 +9,7 @@
 #   kernel     four raspberries, console -> logo.nologo quiet loglevel=3
 #   plymouth   raspberry logo and dots   -> the Confluence theme
 #   session    desktop wallpaper         -> painted #0B0C0E
+#   session    a mouse pointer           -> a transparent cursor theme
 #   kiosk      waiting for AvNav         -> same colour behind it
 #   chromium   a white flash             -> --default-background-color
 #
@@ -55,7 +56,7 @@ backup(){
   fi
 }
 
-say "1/6  Poppins"
+say "1/8  Poppins"
 # The app has always asked for Poppins and the Pi has never had it, so
 # every reading you have ever seen has been DejaVu. The splash images
 # are rendered in Poppins, so without this the boot chain and the app
@@ -75,7 +76,7 @@ else
   echo "   WARNING: fontconfig still does not match Poppins" >&2
 fi
 
-say "2/6  Plymouth theme"
+say "2/8  Plymouth theme"
 if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then
   echo "   plymouth is not installed - skipping the theme." >&2
   echo "   sudo apt install plymouth plymouth-themes, then re-run." >&2
@@ -99,7 +100,7 @@ else
   ok "now default: $(plymouth-set-default-theme 2>/dev/null || echo '?')"
 fi
 
-say "3/6  firmware splash"
+say "3/8  firmware splash"
 backup "$CONFIG"
 if grep -qE '^\s*disable_splash=' "$CONFIG"; then
   sed -i 's/^\s*disable_splash=.*/disable_splash=1/' "$CONFIG"
@@ -108,7 +109,7 @@ else
 fi
 ok "disable_splash=1"
 
-say "4/6  kernel messages"
+say "4/8  kernel messages"
 backup "$CMDLINE"
 # cmdline.txt MUST stay a single line. sed on a file with no trailing
 # newline is the classic way to break that, so this goes through python
@@ -136,7 +137,7 @@ os.replace(tmp, path)
 print('   ' + line)
 PY
 
-say "5/6  desktop background"
+say "5/8  desktop background"
 # Only when there is a desktop config to edit. On a Wayland session
 # (labwc or wayfire) this file is not what paints the screen, so say so
 # rather than writing something that does nothing.
@@ -162,7 +163,59 @@ else
   ok "set the background to $BG by hand in Appearance Settings."
 fi
 
-say "6/6  Chromium"
+say "6/8  the mouse pointer"
+# X11 and Wayland both resolve pointers through Xcursor themes, so one
+# transparent theme covers whichever this Pi is running. `X -nocursor`
+# is more absolute but exists only under X, so it goes on as well when
+# the session is X - belt and braces.
+CURSOR_THEME=/usr/share/icons/Confluence-blank
+rm -rf "$CURSOR_THEME"
+mkdir -p "$CURSOR_THEME"
+cp -r "$HERE/cursor/." "$CURSOR_THEME/"
+ok "installed $CURSOR_THEME"
+
+# /usr/share/icons/default is what both stacks consult first.
+mkdir -p /usr/share/icons/default
+backup /usr/share/icons/default/index.theme
+cat > /usr/share/icons/default/index.theme <<'EOT'
+[Icon Theme]
+Name=Default
+Comment=Default cursor theme
+Inherits=Confluence-blank
+EOT
+ok "made it the system default cursor theme"
+
+# Every one of these is allowed to fail. set -e is on, and a missing or
+# unhappy loginctl must not abort an installer that edits boot files.
+SID="$(loginctl 2>/dev/null | awk -v u="$OWNER" '$3==u{print $1; exit}' || true)"
+SESSION=""
+[ -n "$SID" ] && SESSION="$(loginctl show-session "$SID" -p Type --value 2>/dev/null || true)"
+[ -n "$SESSION" ] || SESSION="${XDG_SESSION_TYPE:-unknown}"
+ok "desktop session looks like: $SESSION"
+if [ "$SESSION" = "x11" ] && [ -d /etc/lightdm ]; then
+  mkdir -p /etc/lightdm/lightdm.conf.d
+  cat > /etc/lightdm/lightdm.conf.d/10-confluence-nocursor.conf <<'EOT'
+# Confluence boot chain: no pointer between the splash and the kiosk.
+[Seat:*]
+xserver-command=X -nocursor
+EOT
+  ok "and told the X server to draw no cursor at all"
+elif [ "$SESSION" = "wayland" ]; then
+  ok "Wayland: the transparent theme is the whole fix - there is no"
+  ok "-nocursor equivalent. It takes effect on the next login."
+else
+  ok "could not identify the session; the theme applies either way."
+fi
+
+say "7/8  the gap before Chromium"
+ok "start-kiosk.sh waits for AvNav to answer before it launches, and the"
+ok "desktop is what is on screen during that wait. It is now the same"
+ok "colour as the splash with no pointer, so it should read as a pause"
+ok "rather than as a different screen. Anything in ~/Desktop still shows"
+ok "through - move those to ~/.local/share/applications to keep them in"
+ok "the menu without putting them on the desktop."
+
+say "8/8  Chromium"
 ok "start-kiosk.sh already passes --default-background-color, so the"
 ok "browser paints $BG instead of white while the page loads."
 
