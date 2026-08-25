@@ -536,6 +536,12 @@ transparent, so all three page buttons stay in plain sight while the helm
 is locked, and a shackle still hanging open under a locked screen would
 simply be wrong. They close and take the accent colour when locked.
 
+**There is no badge.** A `HOLD TO UNLOCK` card used to appear on every
+touch of a locked screen. It was one more thing between you and the
+instruments, and it was saying what the shut padlock at the foot of the
+page already says. Locked reads as an instrument panel now, not as a
+padlock you have to look past.
+
 Everything that binds the hold stops propagation as well as preventing
 default. These sit on top of the gesture handler, and without it a hold
 that wanders a few pixels reads as a swipe - and a locked screen happily
@@ -835,19 +841,32 @@ netd offers it when a display manager exists *and* nothing graphical is
 already running, so on an ordinary desktop it stays hidden rather than
 being a button that throws you at a login screen.
 
+**The kiosk has to stop first.** Starting a display manager alongside a
+running cage session leaves two things wanting the same seat, and what
+you get is a display server with no session on it: **a black screen with
+a pointer and no panel**. And the supervisor has to go before the
+compositor, or it simply launches another one. `to-desktop.sh` does it
+in that order, and checks the display manager unit exists *before*
+tearing anything down - killing the kiosk and then failing to start a
+desktop would leave the panel on a bare console.
+
 logind hands a local active session `reboot` and `poweroff` for free but
-not starting an arbitrary unit, so the tile needs one sudoers line and
-nothing more:
+not starting an arbitrary unit, so the tile needs one sudoers line:
 
 ```
-pi ALL=(root) NOPASSWD: /usr/bin/systemctl start lightdm
+pi ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-desktop ""
 ```
 
-Written to a temp file and **checked with `visudo -cf` before it is
-installed** - a malformed sudoers file locks you out of sudo. `sudo -n`
-at the call site, so a missing rule fails at once instead of hanging on
-a password prompt nobody can answer at the helm; the panel then says
-`NOT PERMITTED FROM HERE`.
+Three things about that line. The script is installed **root-owned
+outside `$HOME`** - a NOPASSWD grant on a script in the user's own home
+is a way to become root by editing it. The trailing `""` restricts the
+grant to that command **with no arguments**. And it is written to a temp
+file and **checked with `visudo -cf` before installing** - a malformed
+sudoers file locks you out of sudo.
+
+`sudo -n` at the call site, so a missing rule fails at once instead of
+hanging on a password prompt nobody can answer at the helm; the panel
+then says `NOT PERMITTED FROM HERE`.
 
 ### If it will not come up
 

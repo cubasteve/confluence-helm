@@ -61,17 +61,25 @@ done
 if [ -z "$DM" ]; then
   ok "no display manager found - skipping. The Desktop tile will stay hidden."
 else
-  SCTL="$(command -v systemctl)"
+  # Root-owned copy, with the display manager baked in. A NOPASSWD
+  # grant on a script inside the user's own home would be a way to
+  # become root by editing it.
+  sed "s|__DM__|$DM|" "$HERE/to-desktop.sh" > /usr/local/sbin/confluence-to-desktop
+  chown root:root /usr/local/sbin/confluence-to-desktop
+  chmod 0755 /usr/local/sbin/confluence-to-desktop
+  ok "installed /usr/local/sbin/confluence-to-desktop (for $DM)"
+
   TMP="$(mktemp)"
-  cat > "$TMP" <<EOT
+  # The trailing "" restricts the grant to the command with NO arguments.
+  cat > "$TMP" <<'EOT'
 # Confluence kiosk: the panel's Desktop tile, and nothing else.
-$OWNER ALL=(root) NOPASSWD: $SCTL start $DM
 EOT
+  printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-desktop ""\n' "$OWNER" >> "$TMP"
   chmod 0440 "$TMP"
   visudo -cf "$TMP" >/dev/null || { rm -f "$TMP"; die "refusing to install a sudoers file visudo rejects"; }
   install -m 0440 "$TMP" /etc/sudoers.d/confluence-desktop
   rm -f "$TMP"
-  ok "checked by visudo and installed: $OWNER may run '$SCTL start $DM'"
+  ok "checked by visudo and installed: $OWNER may run it with no arguments"
 fi
 
 say "3/5  tty1 owns the session"

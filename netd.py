@@ -759,18 +759,23 @@ def power_do(action):
     if action == 'display':
         return later(display_restart)
     if action == 'desktop':
-        # Needs root, and logind's free pass covers only reboot and
-        # poweroff - not starting an arbitrary unit. install-cage-kiosk.sh
-        # writes a sudoers line for exactly this one command; -n so a
-        # missing rule fails immediately instead of hanging on a prompt
-        # nobody can answer at the helm.
+        # Not `systemctl start <dm>` directly: the kiosk has to stop
+        # first, or the display manager and cage both want the seat and
+        # you get a display server with no session on it - a black
+        # screen with a pointer and no panel. confluence-to-desktop does
+        # that in the right order, and is root-owned outside $HOME so
+        # the NOPASSWD grant is not a way to become root by editing it.
+        #
+        # -n so a missing sudoers rule fails at once instead of hanging
+        # on a prompt nobody can answer at the helm.
         if not DM:
             return {'ok': False, 'error': 'NO DISPLAY MANAGER'}
-        rc, out, err = run(['sudo', '-n', 'systemctl', 'start', DM], 25)
+        rc, out, err = run(['sudo', '-n', '/usr/local/sbin/confluence-to-desktop'], 30)
         if rc == 0:
             return {'ok': True}
         e = (err or out).lower()
-        if 'password' in e or 'no tty' in e or 'not allowed' in e:
+        if ('password' in e or 'no tty' in e or 'not allowed' in e
+                or 'not permitted' in e or 'sorry' in e):
             return {'ok': False, 'error': 'NOT PERMITTED FROM HERE'}
         return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
     if action == 'helper':

@@ -601,18 +601,6 @@ a.lib-row{text-decoration:none;color:inherit}
    pointer events; the badge is a hint, not a screen. */
 #lock{position:absolute;inset:0;z-index:70;display:none}
 #lock.on{display:block}
-/* Backed, because it floats over live instruments and the dial is busy
-   wherever you put it. It is only up for a couple of seconds after a
-   touch, so the patch it covers costs nothing. */
-.lk-badge{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);
-  display:flex;flex-direction:column;align-items:center;gap:12px;
-  padding:22px 38px 18px;border-radius:76px;
-  background:var(--bg);border:2px solid var(--hairline);
-  opacity:0;transition:opacity .45s}
-.lk-badge.show{opacity:1}
-.lk-pad{width:54px;height:54px;fill:none;stroke:var(--ink);stroke-width:1.8;
-  stroke-linejoin:round;stroke-linecap:round}
-.lk-txt{font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label)}
 
 /* The hold indicator: a ring round the whole bezel, over everything
    including the lock overlay. 2 x pi x 524 = 3292.4, which is where the
@@ -1047,15 +1035,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <!-- Touch lock. Deliberately transparent: spray must not be able to change
      anything, but you must still be able to read the instruments through
      it. Locked means read-only, not blank. -->
-<div id="lock">
-  <div class="lk-badge" id="lk-badge">
-    <svg class="lk-pad" viewBox="0 0 24 24">
-      <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
-      <rect x="6" y="11" width="12" height="9" rx="2"/>
-    </svg>
-    <div class="lk-txt">HOLD TO UNLOCK</div>
-  </div>
-</div>
+<div id="lock"></div>
 
 <!-- The hold, drawn round the whole bezel. Both directions use it, so
      locking and unlocking are visibly the same deliberate act - and at
@@ -2858,7 +2838,7 @@ async function pwJoin(){
    being locked out by a crash would be worse than the problem.
    ================================================================== */
 const HOLD_MS=2000, RING_C=3292.4;
-let holdRaf=null, holdAt=0, holdFn=null, lkFade=null;
+let holdRaf=null, holdAt=0, holdFn=null;
 const locked=()=>$('lock').classList.contains('on');
 
 /* One hold, both directions. Locking and unlocking are the same
@@ -2891,14 +2871,13 @@ function holdBind(el,fn){
     el.addEventListener(ev,e=>{ e.stopPropagation(); holdCancel(); }));
 }
 
-/* The badge shows on touch and fades again, so a locked helm reads as an
-   instrument panel rather than a padlock you have to look past. */
-function lkFlash(){
-  $('lk-badge').classList.add('show');
-  clearTimeout(lkFade);
-  lkFade=setTimeout(()=>$('lk-badge').classList.remove('show'),2600);
-}
-function lockOn(){ $('lock').classList.add('on'); paintLocks(); lkFlash(); }
+/* No badge. A HOLD TO UNLOCK card that appeared on every touch was one
+   more thing between you and the instruments, and it was telling you
+   something the padlock glyph at the foot of each page already says.
+   The overlay is transparent on purpose: locked means read-only, not
+   blank, so the readings stay legible and the shut padlock is the whole
+   explanation. */
+function lockOn(){ $('lock').classList.add('on'); paintLocks(); }
 function lockOff(){
   $('lock').classList.remove('on'); paintLocks();
   ssStop();                    /* the hold was a touch; do not leave the saver up */
@@ -2930,7 +2909,6 @@ holdBind($('dial-lock'),lockOn);
 holdBind($('m-lock'),lockOn);
 holdBind($('t-lock'),lockOn);
 holdBind($('lock'),lockOff);
-$('lock').addEventListener('pointerdown',lkFlash);
 paintLocks();
 
 /* ==================================================================
