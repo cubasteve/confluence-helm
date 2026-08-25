@@ -615,6 +615,64 @@ rather than showing dashes. `CFG.windDemo` fabricates wind and depth so
 the bezel animation can be judged before the hardware lands — **turn it
 off once the sensors are real**, as it writes into their live paths.
 
+## Boot
+
+The kiosk used to come up on a bare dial: every reading empty until
+Signal K connects, which looks identical to a broken panel. `#boot`
+covers that with the boat's own name over three currents, which collapse
+into a single accent line when the boat starts talking.
+
+It is **in the document, not built by script** — it has to be on the
+glass at first paint, which is before any of this file's JavaScript has
+run.
+
+**It sits under the veil** (`z-index:85`, veil is 90) rather than above
+it. A splash above the veil ignores the brightness setting, so a panel
+left at 25% would come up at full brightness at night and cost you your
+night vision. Dimming the splash with everything else is the point.
+
+**It clears on real data, not on a clock.** `bootReady()` is called from
+`skMessage()`, bounded both ways:
+
+- `MIN` 1.9 s — the intro needs that long to arrive, and on a warm
+  restart data can beat it. Clearing early would be a flash, not a
+  sequence.
+- `CEIL` 6 s — Signal K might never answer. A splash that waits forever
+  for it is a bricked panel.
+
+**Do not hook it to `put()`**, which is the obvious place and the wrong
+one: `windDemoTick()` calls `put()` four times a second whether or not
+anything is connected, so a splash keyed off `put()` clears itself on a
+Pi with no Signal K at all and reports a boat that is not there.
+
+`.bt-wave` needs `transform-box:fill-box`. Without it every `scaleY`
+happens about the SVG origin rather than each wave's own centre, and the
+three collapse onto the *top* of the panel instead of onto each other.
+
+The waves are generated, not hand-authored — 361 points of path data is
+not something to keep by hand, and the three differ by four numbers.
+They are drawn across 2160 so a −1080 drift loops seamlessly, which
+needs every wavelength to divide 1080 exactly: 360, 540, 270.
+
+### What this is not
+
+This is the **last** screen of the boot chain, not the Raspberry Pi
+splash. In order, a cold start shows:
+
+| Stage | What you see | Who owns it |
+|---|---|---|
+| Firmware | the rainbow square | `disable_splash=1` in `/boot/firmware/config.txt` |
+| Kernel | four raspberries, console text | `logo.nologo quiet` in `/boot/firmware/cmdline.txt` |
+| Plymouth | the raspberry logo and dots | a theme in `/usr/share/plymouth/themes/` |
+| Session | desktop wallpaper | the desktop's own background setting |
+| `start-kiosk.sh` | whatever was behind it, while it waits for AvNav | this repo |
+| Chromium | a white flash | launch flags |
+| **The app** | **`#boot`** | **this repo** |
+
+Nothing above has been touched. Doing so is a separate job, and one that
+cannot be tested from anywhere but the Pi — a bad `cmdline.txt` boots to
+a black screen, and the only way back is the SD card in another machine.
+
 ## Getting a track onto a phone
 
 The race library is IndexedDB, which is **per origin and per device**. A

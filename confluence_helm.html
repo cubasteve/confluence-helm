@@ -521,6 +521,53 @@ a.lib-row{text-decoration:none;color:inherit}
 #veil{position:absolute;inset:0;background:#000;opacity:0;
   pointer-events:none;transition:opacity .2s;z-index:90}
 
+/* --- boot ---
+   Sits UNDER the veil on purpose, so a panel set to 25% at night does
+   not come up at full brightness and cost you your night vision. Above
+   everything else, because until this clears there is nothing behind it
+   worth seeing.
+
+   It is in the document rather than built by script: it has to be on
+   the glass on the first paint, which is before any of this file's
+   JavaScript has run. */
+#boot{position:absolute;inset:0;background:var(--bg);z-index:85;
+  pointer-events:none;transition:opacity .45s ease}
+#boot.gone{opacity:0}
+#boot.off{display:none}
+#boot svg{display:block;width:100%;height:100%}
+.bt-mark{font-size:82px;font-weight:var(--w-huge);fill:var(--ink);
+  text-anchor:middle;letter-spacing:.2em}
+.bt-sub{font-size:26px;font-weight:500;fill:var(--label);
+  text-anchor:middle;letter-spacing:.44em}
+
+/* Each current drifts on its own clock, so the three are never in phase
+   and the water never resolves into a repeating loop. */
+/* fill-box, or every scaleY here happens about the SVG origin instead of
+   the wave's own centre - which collapses all three onto the top of the
+   panel rather than onto each other. */
+.bt-wave{transform-box:fill-box;transform-origin:center}
+@keyframes bt-drift{ from{transform:translateX(0)} to{transform:translateX(-1080px)} }
+.bt-drift{animation:bt-drift var(--dur) linear infinite}
+.bt-w1{animation:bt-in .7s .10s both}
+.bt-w2{animation:bt-in .7s .22s both}
+.bt-w3{animation:bt-in .7s .34s both}
+@keyframes bt-in{ from{opacity:0;transform:translateY(26px) scaleY(.4)}
+                  to  {opacity:1;transform:translateY(0)    scaleY(1)} }
+@keyframes bt-rise{ from{opacity:0;transform:translateY(20px)}
+                    to  {opacity:1;transform:translateY(0)} }
+.bt-mark-g{animation:bt-rise .8s .30s both}
+.bt-sub-g {animation:bt-rise .8s .52s both}
+
+/* The settle: all three collapse onto one line and the outer two
+   retire, leaving a single accent rule. That is the word, animated -
+   and it only runs once the boat is actually talking. */
+#boot.settle .bt-wave{animation:bt-flat .95s cubic-bezier(.4,0,.2,1) forwards}
+#boot.settle :is(.bt-w1,.bt-w3){animation:bt-flat .95s cubic-bezier(.4,0,.2,1) forwards,
+                                          bt-go .95s forwards}
+@keyframes bt-flat{ from{transform:translateY(0) scaleY(1)}
+                    to  {transform:translateY(var(--to)) scaleY(.045)} }
+@keyframes bt-go{ from{opacity:1} 55%{opacity:1} to{opacity:0} }
+
 /* --- alerts ---
    600 px wide to match the sheets, and high enough that the circle is
    still wide there. Bordered rather than filled: an alarm should catch
@@ -922,6 +969,35 @@ a.lib-row{text-decoration:none;color:inherit}
      panels and the screensaver so an alarm is visible wherever you are. -->
 <div id="alert"><div class="al-t" id="al-t"></div><div class="al-s" id="al-s"></div></div>
 
+<!-- ============== BOOT ==============
+     Three currents under the name, drifting until Signal K answers -
+     then they collapse into one line and the panel is yours. The dial
+     underneath spends that time with every reading empty, which is the
+     gap this exists to cover. -->
+<div id="boot">
+  <svg viewBox="0 0 1080 1080" aria-hidden="true">
+    <g class="bt-mark-g"><text class="bt-mark" x="540" y="392">CONFLUENCE</text></g>
+    <g class="bt-sub-g"><text class="bt-sub" x="540" y="462">HELM</text></g>
+    <g clip-path="url(#bt-clip)">
+      <!-- non-scaling-stroke: the settle squashes these to 4% height and
+           a scaled stroke would vanish along with them. -->
+      <g class="bt-wave bt-w1" style="--to:118px">
+        <g class="bt-drift" style="--dur:7.5s"><path id="bt-p1" fill="none"
+          stroke="var(--label)" stroke-width="7" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+      <g class="bt-wave bt-w3" style="--to:-118px">
+        <g class="bt-drift" style="--dur:9.4s"><path id="bt-p3" fill="none"
+          stroke="var(--ink-dim)" stroke-width="7" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+      <g class="bt-wave bt-w2" style="--to:0px">
+        <g class="bt-drift" style="--dur:5.2s"><path id="bt-p2" fill="none"
+          stroke="var(--accent)" stroke-width="9" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"/></g></g>
+    </g>
+    <clipPath id="bt-clip"><circle cx="540" cy="540" r="540"/></clipPath>
+  </svg>
+</div>
+
 <div id="veil"></div>
 <div id="fps"></div>
 
@@ -1038,6 +1114,41 @@ function arcPath(r0,r1,d0,d1){
 
 /* ---------------- state ---------------- */
 const S={},sm={},smA={};
+/* ---------------- boot ----------------
+   The currents drift for as long as the boat takes to answer, rather
+   than for a fixed three seconds - so the panel never clears itself
+   before there is anything behind it. Two bounds on that:
+
+     MIN   the intro needs this long to finish arriving, and data on a
+           warm restart can beat it. Clearing early would be a flash,
+           not a sequence.
+     CEIL  Signal K might never answer - a dead server, a pulled cable.
+           A splash that waits forever for it is a bricked panel.
+
+   Hooked to skMessage() and not to put(), which is the obvious place
+   and the wrong one: windDemoTick() calls put() four times a second
+   whether or not anything is connected, so a splash keyed off put()
+   clears itself on a Pi with no Signal K at all and reports a boat
+   that is not there.                                                  */
+const BOOT={up:true, t0:Date.now(), MIN:1900, CEIL:6000, timer:0};
+function bootSettle(){
+  if(!BOOT.up) return;
+  BOOT.up=false; clearTimeout(BOOT.timer);
+  const el=$('boot'); if(!el) return;
+  el.classList.add('settle');
+  setTimeout(()=>el.classList.add('gone'), 1000);
+  /* display:none at the end, so a layer that is finished with costs the
+     compositor nothing for the rest of the session. */
+  setTimeout(()=>el.classList.add('off'), 1480);
+}
+function bootReady(){
+  if(!BOOT.up) return;
+  const waited=Date.now()-BOOT.t0;
+  if(waited>=BOOT.MIN) return bootSettle();
+  clearTimeout(BOOT.timer);
+  BOOT.timer=setTimeout(bootSettle, BOOT.MIN-waited);
+}
+
 const put=(p,v)=>S[p]={v,t:Date.now()};
 function get(p){const e=S[p];if(!e)return null;
   return Date.now()-e.t>CFG.staleAfter?null:e.v;}
@@ -1087,6 +1198,7 @@ const setLink=(c,t)=>{ document.getElementById('sensors').style.opacity =
 let skQueue=[];
 function skDrain(){ const q=skQueue; skQueue=[]; q.forEach(skMessage); }
 function skMessage(data){
+  bootReady();                    /* the boat is talking - see BOOT above */
   let m; try{m=JSON.parse(data)}catch(x){return}
   if(m.requestId && puts[m.requestId]){          // answer to one of our PUTs
     puts[m.requestId](m); delete puts[m.requestId]; }
@@ -1131,6 +1243,7 @@ function demo(){
   // the GPX export can actually be exercised with no GPS attached
   let t=0, dLat=28.8035, dLon=-81.2980, cog=0.9;
   setInterval(()=>{
+    bootReady();                  /* demo mode is a boat, for these purposes */
     t+=.05;
     const sog=(5.4+Math.sin(t*.7)*.8)/MS_TO_KT;      // m/s
     cog += Math.sin(t*0.09)*0.004;
@@ -3856,7 +3969,34 @@ prefsLoad(); applyDim(CFG.dim,false); layoutPages();
    has long finished by the time anyone swipes up - instead of the panel
    drawing its empty state and filling in while you watch. */
 netStatus();
+/* ---- the boot currents ----
+   Drawn across 2160 so a -1080 drift loops seamlessly, which needs
+   every wavelength to divide 1080 exactly. Generated rather than
+   hand-authored: 361 points of path data is not something to keep by
+   hand, and the three only differ by four numbers.
+
+   All three settle onto y=660, so the collapse lands them on top of
+   each other and the accent is the one left standing. */
+(function bootWaves(){
+  const path=(amp,wl,phase,y)=>{
+    let d='';
+    for(let x=0;x<=2160;x+=6)
+      d+=(x?'L':'M')+x+' '+(y+amp*Math.sin((x/wl)*Math.PI*2+phase)).toFixed(1);
+    return d;
+  };
+  const p1=$('bt-p1'), p2=$('bt-p2'), p3=$('bt-p3');
+  if(!p1) return;
+  p1.setAttribute('d', path(30,360,0.0,542));
+  p2.setAttribute('d', path(38,540,1.9,660));
+  p3.setAttribute('d', path(24,270,3.4,778));
+  /* The ceiling. Signal K answering is what normally clears this; the
+     timer is only here for when it never does. Guarded, so that a delta
+     that beat us here keeps its own shorter timer. */
+  if(BOOT.up && !BOOT.timer) BOOT.timer=setTimeout(bootSettle, BOOT.CEIL);
+})();
+
 drawDepth(); paintTrack(); applyTheme(); connect(); render(); tick();
+
 </script>
 </body>
 </html>
