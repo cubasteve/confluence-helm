@@ -158,6 +158,18 @@ supported path.
 
 The repo is the source of truth; the Pi is a deployment target.
 
+## The sensor row
+
+Four glyphs - GPS, depth, wind, heading - green when that source is
+feeding, dim when it is not. They live at the top of the **control
+panel** rather than on the dial: the face's foot was the one place the
+lock and the page dots both needed, and "is anything actually feeding
+me" is a question you ask when you are already in the settings.
+
+Their liveness is evaluated in DATA rather than DRAW. Left where it was,
+inside the dial's draw gate, the glyphs would freeze whenever the control
+panel was open - which is now the only time you can see them.
+
 ## Pages
 
 Three places rather than three overlays: the track map, the dial and the
@@ -431,9 +443,11 @@ a helm where you cannot find the slider to turn it back up.
 
 ## Touch lock
 
-A small padlock at the foot of every page - under the heel reading and
-just above the sensor glyphs on the dial, under SWIPE RIGHT TO CLOSE on
-the music panel, under SWIPE LEFT TO CLOSE on the track map. **Hold it for two seconds** and the helm locks.
+A small padlock in the same place on every page - just above the page
+dots, at the foot of the screen. The dial's copy is drawn in the SVG at
+the matching y rather than as an HTML button: the face is a 1080 viewBox
+over a 1080 stage, so the coordinates line up exactly and it scales with
+the dial in windowed mode. **Hold it for two seconds** and the helm locks.
 Hold anywhere for two seconds and it unlocks.
 
 Both directions are the same deliberate act, so there is nothing to learn

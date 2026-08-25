@@ -54,8 +54,12 @@ body{display:flex;align-items:center;justify-content:center}
    are, not a place you go. */
 #svg{position:absolute;inset:0;width:100%;height:100%;
   transition:transform .42s cubic-bezier(.16,1,.3,1)}
-#dots{position:absolute;left:0;right:0;bottom:32px;display:flex;
-  justify-content:center;gap:18px;pointer-events:none;z-index:5}
+/* No z-index: the dots come after the three pages in the DOM so they
+   already paint above them, and a stacking level would have put them
+   over the control panel - which is an overlay covering the page they
+   belong to. */
+#dots{position:absolute;left:0;right:0;bottom:64px;display:flex;
+  justify-content:center;gap:18px;pointer-events:none}
 #dots i{width:12px;height:12px;border-radius:50%;background:var(--label);
   opacity:.3;transition:opacity .25s,transform .25s,background .25s}
 #dots i.on{opacity:1;background:var(--accent);transform:scale(1.2)}
@@ -207,6 +211,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mini.wide{width:auto;flex:1;border-radius:43px;font-size:22px;font-weight:600;
   letter-spacing:.14em;color:var(--label)}
 /* :active handled by the single .mini:active rule above */
+
+#sen-svg{display:block;width:340px;height:60px;margin:0 auto 26px}
 
 /* --- connectivity ------------------------------------------------
    A row of radios at the top of the panel. No words on them, because
@@ -363,7 +369,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .t-title{position:absolute;top:112px;left:0;right:0;text-align:center;
   font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
   text-transform:uppercase}
-.t-stats{position:absolute;bottom:306px;left:50%;margin-left:-300px;width:600px;
+.t-stats{position:absolute;bottom:348px;left:50%;margin-left:-300px;width:600px;
   display:grid;grid-template-columns:repeat(4,1fr);text-align:center}
 /* Two rows now. Row one sits at y~802-888 (chord 826) and row two at
    y~898-984 (chord 614), so the narrower second row clears the curve.  */
@@ -387,12 +393,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .rbtn.on{color:var(--accent)}
 .rbtn.rec.on{color:var(--port)}
 
-.t-status{position:absolute;bottom:258px;left:0;right:0;text-align:center;
+.t-status{position:absolute;bottom:306px;left:0;right:0;text-align:center;
   font-size:24px;font-weight:600;letter-spacing:.1em;color:var(--label)}
 /* Lifted clear of the curve: at bottom:112 the rail's bottom corners sat
    at 97.9% of the radius, ~11 px from the glass edge. Here they sit near
    94%, which is a margin rather than a coincidence.                   */
-.t-rail{position:absolute;bottom:134px;left:50%;margin-left:-310px;width:620px}
+.t-rail{position:absolute;bottom:183px;left:50%;margin-left:-310px;width:620px}
 .t-attr{position:absolute;top:150px;left:0;right:0;text-align:center;
   font-size:17px;letter-spacing:.1em;color:var(--label);opacity:.55}
 
@@ -533,12 +539,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .lockbtn:active{color:var(--ink)}
 .lockbtn.on{color:var(--accent)}
-#m-lock{margin:4px auto 0}
-/* Smaller than the others: this page's foot is already full, and moving
-   the rail up to make room pushed it into the status line. */
-#t-lock{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
-  width:62px;height:62px}
-#t-lock svg{width:30px;height:30px}
+/* The same place on every page, just above the dots. The dial's copy is
+   drawn in the SVG at the matching y - the face is a 1080 viewBox over a
+   1080 stage, so the coordinates line up exactly. */
+#m-lock,#t-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
 /* the dial's lives in the SVG, so it scales with the face */
 #dial-lock{color:var(--label)}
 #dial-lock .lg{fill:none;stroke:var(--label);stroke-width:2;
@@ -630,7 +634,31 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
   <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
 
-  <!-- sensor status: one glyph per source, colour = live -->
+
+  <!-- Centred in the gap between the heel reading and the sensor glyphs.
+       Outside #sensors on purpose: that group's opacity is driven by the
+       SignalK link state, and the lock must not fade with the data. -->
+  <g id="dial-lock" transform="translate(540 950)">
+    <circle r="36" fill="transparent"/>
+    <g transform="scale(1.5) translate(-12 -12)">
+      <path class="lg" d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+      <rect class="lg" x="6" y="11" width="12" height="9" rx="2"/>
+    </g>
+  </g>
+</svg>
+
+<div id="dots"><i></i><i></i><i></i></div>
+
+<!-- ============== CONTROL PANEL ============== -->
+<div id="panel">
+  <div class="grab"></div>
+  <div class="sheet">
+
+    <!-- The sensor row lives here now rather than on the face. It answers
+         "is anything actually feeding me", which is a question you ask
+         when you are already in the settings - and the dial's foot was
+         the one place the lock and the page dots both needed. -->
+    <svg id="sen-svg" viewBox="370 928 340 60">
   <g id="sensors" transform="translate(540 958)">
     <g class="sen" id="s-gps" transform="translate(-141 0)">
       <circle r="15" fill="none" stroke-width="3"/>
@@ -653,25 +681,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       <path d="M0 -11 L6 4 L0 0 L-6 4 Z"/>
     </g>
   </g>
-
-  <!-- Centred in the gap between the heel reading and the sensor glyphs.
-       Outside #sensors on purpose: that group's opacity is driven by the
-       SignalK link state, and the lock must not fade with the data. -->
-  <g id="dial-lock" transform="translate(540 918)">
-    <circle r="32" fill="transparent"/>
-    <g transform="scale(1.4) translate(-12 -12)">
-      <path class="lg" d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
-      <rect class="lg" x="6" y="11" width="12" height="9" rx="2"/>
-    </g>
-  </g>
-</svg>
-
-<div id="dots"><i></i><i></i><i></i></div>
-
-<!-- ============== CONTROL PANEL ============== -->
-<div id="panel">
-  <div class="grab"></div>
-  <div class="sheet">
+    </svg>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
          does not: on a phone loading this same page over boat WiFi the
@@ -809,7 +819,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 <div id="tmap">
   <div class="t-title" id="t-title">Race track</div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
-    <defs><clipPath id="t-clip"><circle cx="540" cy="430" r="250"/></clipPath></defs>
+    <defs><clipPath id="t-clip"><circle cx="540" cy="430" r="235"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <g id="t-tiles"></g>       <!-- satellite basemap slots in here -->
       <g id="t-path"></g>
@@ -1196,6 +1206,16 @@ function render(){
 
   trackSample();                    /* the log must not care what is on top */
 
+  /* Sensor liveness lives in DATA now that the glyphs are on the control
+     panel. Left in DRAW it would freeze whenever the panel was open -
+     which is precisely when someone is looking at them. The writes are
+     cached, so a frame where nothing changed costs nothing. */
+  const live=(el,ok)=>wCls(el,'live',ok);
+  live('s-gps', get('navigation.position')!==null||sogR!==null);
+  live('s-dpt', d!==null);
+  live('s-wnd', awaR!==null);
+  live('s-hdg', get('navigation.headingMagnetic')!==null);
+
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
      gate, which meant it did not run at all while the map or the music
@@ -1304,13 +1324,6 @@ function render(){
   if(!L){ $('vmg').textContent=fmt(vmg,1);
           $('vmg').classList.toggle('stale',vmg===null);
           $('vmg').classList.remove('alarm'); }
-
-  /* --- sensor glyphs, always on the face --- */
-  const live=(el,ok)=>wCls(el,'live',ok);
-  live('s-gps', get('navigation.position')!==null||sogR!==null);
-  live('s-dpt', d!==null);
-  live('s-wnd', awaR!==null);
-  live('s-hdg', get('navigation.headingMagnetic')!==null);
 
   }
   /* ================= end DRAW ========================================= */
