@@ -391,23 +391,34 @@ a helm where you cannot find the slider to turn it back up.
 
 ## Touch lock
 
-Power sheet → **Lock the screen**. Spray and rain generate touches on
-capacitive glass, and a wave should not be able to change the shallow
-alarm or drop the hotspot.
+A small padlock at the foot of every page - beside the sensor glyphs on
+the dial, under SWIPE RIGHT TO CLOSE on the music panel, under SWIPE LEFT
+TO CLOSE on the track map. **Hold it for two seconds** and the helm locks.
+Hold anywhere for two seconds and it unlocks.
+
+Both directions are the same deliberate act, so there is nothing to learn
+twice, and both draw the same indicator: a ring sweeping round the whole
+bezel. At 1080 across it is unmistakable from the other side of the
+cockpit, and it makes an accidental brush obviously not a lock.
+
+Why it exists: spray and rain generate touches on capacitive glass, and a
+wave should not be able to change the shallow alarm or drop the hotspot.
+Two seconds is the one gesture weather cannot produce.
 
 The overlay swallows every pointer event and paints nothing over the
 instruments. **Locked is read-only, not blank** - you still need depth and
-speed while the boat is being rained on.
+speed while the boat is being rained on. It does not survive a reload,
+deliberately: being locked out by a crash would be worse than the problem
+it solves.
 
-Unlocking is a two-second hold anywhere, with a ring that fills as you
-hold. A hold is the one gesture weather cannot produce. It does not
-survive a reload, deliberately: being locked out by a crash would be worse
-than the problem it solves.
+The icons are stateful rather than instructional. An open shackle on a
+page means the helm is unlocked; the closed one on the overlay means it is
+not.
 
-The overlay stops propagation as well as preventing default. It is a child
-of `#stage`, so without that every touch still reaches the gesture handler
-and a locked screen happily opens panels behind itself - which is exactly
-what the first version did.
+Everything that binds the hold stops propagation as well as preventing
+default. These sit on top of the gesture handler, and without it a hold
+that wanders a few pixels reads as a swipe - and a locked screen happily
+opens panels behind itself, which is what the first version did.
 
 ## Alerts
 
@@ -450,6 +461,12 @@ lit: the radios show a state, this one is a door.
 
 Least destructive first, because the top of a list is where a hurried
 finger lands and that should not be the shutdown.
+
+The sheet shows four rows at a time and its pager is hidden while they all
+fit. That is only safe while they do: a fifth action once pushed **Shut
+down** onto a second page with no way to reach it. The pager now appears
+the moment the list outgrows the page, because a menu that silently drops
+its last item is worse than a pager nobody needs.
 
 The first one is a page reload rather than a browser restart, and that is
 deliberate twice over. It can only be tapped on a page that is alive, and

@@ -401,7 +401,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #lib-hint{bottom:88px;font-size:19px;letter-spacing:.12em}
 .t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
 .t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
-.t-hint{position:absolute;bottom:44px;left:0;right:0;text-align:center;
+.t-hint{position:absolute;bottom:104px;left:0;right:0;text-align:center;
   font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7}
 
 /* --- now playing --- */
@@ -494,16 +494,34 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   background:var(--bg);border:2px solid var(--hairline);
   opacity:0;transition:opacity .45s}
 .lk-badge.show{opacity:1}
-.lk-wrap{position:relative;width:104px;height:104px}
-.lk-ring{position:absolute;inset:0;width:104px;height:104px;transform:rotate(-90deg)}
-.lk-ring circle{fill:none;stroke-width:5}
-.lk-bg{stroke:var(--hairline)}
-.lk-fg{stroke:var(--accent);stroke-linecap:round;
-  stroke-dasharray:276.5;stroke-dashoffset:276.5}
-.lk-pad{position:absolute;left:50%;top:50%;width:42px;height:42px;
-  margin:-21px 0 0 -21px;fill:none;stroke:var(--label);stroke-width:2;
+.lk-pad{width:54px;height:54px;fill:none;stroke:var(--ink);stroke-width:1.8;
   stroke-linejoin:round;stroke-linecap:round}
 .lk-txt{font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label)}
+
+/* The hold indicator: a ring round the whole bezel, over everything
+   including the lock overlay. 2 x pi x 524 = 3292.4, which is where the
+   dasharray comes from. */
+#ring{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  z-index:80;opacity:0;transition:opacity .18s}
+#ring.on{opacity:1}
+#ring-c{fill:none;stroke:var(--accent);stroke-width:14;stroke-linecap:round;
+  transform:rotate(-90deg);transform-origin:540px 540px;
+  stroke-dasharray:3292.4;stroke-dashoffset:3292.4}
+
+/* A lock button at the foot of every page. Round, quiet, and the same
+   size everywhere so it is muscle memory rather than a hunt. */
+.lockbtn{display:flex;align-items:center;justify-content:center;
+  width:78px;height:78px;border-radius:50%;background:none;border:none;
+  padding:0;color:var(--label);font-family:var(--font)}
+.lockbtn svg{width:36px;height:36px;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.lockbtn:active{color:var(--ink)}
+#m-lock{margin:4px auto 0}
+#t-lock{position:absolute;bottom:22px;left:50%;transform:translateX(-50%)}
+/* the dial's lives in the SVG, so it scales with the face */
+#dial-lock{color:var(--label)}
+#dial-lock .lg{fill:none;stroke:var(--label);stroke-width:2;
+  stroke-linejoin:round;stroke-linecap:round}
 
 /* --- frame probe readout (CFG.fpsProbe) --- */
 #fps{position:absolute;left:50%;top:118px;transform:translateX(-50%);
@@ -611,6 +629,16 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
     <g class="sen" id="s-hdg" transform="translate(141 0)">
       <circle r="18" fill="none" stroke-width="3"/>
       <path d="M0 -11 L6 4 L0 0 L-6 4 Z"/>
+    </g>
+  </g>
+
+  <!-- Outside #sensors on purpose: that group's opacity is driven by the
+       SignalK link state, and the lock must not fade with the data. -->
+  <g id="dial-lock" transform="translate(775 958)">
+    <circle r="36" fill="transparent"/>
+    <g transform="scale(1.6) translate(-12 -12)">
+      <path class="lg" d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+      <rect class="lg" x="6" y="11" width="12" height="9" rx="2"/>
     </g>
   </g>
 </svg>
@@ -743,6 +771,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
     <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
     <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
     <div class="hint">SWIPE RIGHT TO CLOSE</div>
+    <button class="lockbtn" id="m-lock">
+      <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+        <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+    </button>
   </div>
 </div>
 
@@ -782,6 +814,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
       <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
   </div>
   <div class="t-hint" id="t-hint">SWIPE LEFT TO CLOSE</div>
+  <button class="lockbtn" id="t-lock">
+    <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+      <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+  </button>
 
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -817,19 +853,20 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
      it. Locked means read-only, not blank. -->
 <div id="lock">
   <div class="lk-badge" id="lk-badge">
-    <div class="lk-wrap">
-      <svg class="lk-ring" viewBox="0 0 100 100">
-        <circle class="lk-bg" cx="50" cy="50" r="44"/>
-        <circle class="lk-fg" id="lk-fg" cx="50" cy="50" r="44"/>
-      </svg>
-      <svg class="lk-pad" viewBox="0 0 24 24">
-        <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
-        <rect x="6" y="11" width="12" height="9" rx="2"/>
-      </svg>
-    </div>
+    <svg class="lk-pad" viewBox="0 0 24 24">
+      <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+      <rect x="6" y="11" width="12" height="9" rx="2"/>
+    </svg>
     <div class="lk-txt">HOLD TO UNLOCK</div>
   </div>
 </div>
+
+<!-- The hold, drawn round the whole bezel. Both directions use it, so
+     locking and unlocking are visibly the same deliberate act - and at
+     1080 across it is unmistakable from the far side of the cockpit. -->
+<svg id="ring" viewBox="0 0 1080 1080" aria-hidden="true">
+  <circle id="ring-c" cx="540" cy="540" r="524"/>
+</svg>
 </div>
 
 <script>
@@ -2084,7 +2121,12 @@ function openNet(kind,dev){
   const pw_=kind==='power';
   $('ns-sw').style.display   = pw_?'none':'';
   $('ns-scan').style.display = pw_?'none':'';
-  $('ns-up').parentElement.style.display = pw_?'none':'';
+  /* Hidden only while everything fits. Hiding it outright is what buried
+     Shut down on an unreachable second page the moment the list grew to
+     five - a menu that silently drops its last item is worse than a
+     pager nobody needs. */
+  $('ns-up').parentElement.style.display =
+    (pw_ && POWER_ACTIONS.length<=PAGE) ? 'none' : '';
   showAsk(false);
   showPw(false); setMsg('');
   netsheet.classList.add('on');
@@ -2138,10 +2180,6 @@ async function netRefresh(rescan){
 /* Least destructive first. On a touch panel the top of a list is where
    a hurried finger lands, and that should not be the shutdown. */
 const POWER_ACTIONS=[
- {a:'lock', name:'Lock the screen', sub:'READ ONLY · HOLD 2s TO UNLOCK',
-  ico:'<path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
-     +'<rect x="6" y="11" width="12" height="9" rx="2"/>',
-  ask:''},
  /* A reload, not a browser restart. This can only be tapped on a page
     that is alive, and a live page needs nothing heavier - whereas killing
     Chromium here would hand the screen to whatever else owns the browser
@@ -2265,13 +2303,7 @@ function needsConfirm(key,words){
 }
 
 function netTap(i){
-  if(NET.kind==='power'){
-    const p=POWER_ACTIONS[i];
-    /* Locking is instant and reversible; a confirm screen for it would be
-       ceremony. Everything else on this sheet earns one. */
-    if(p.a==='lock'){ closeNet(); closePanel(); return lockOn(); }
-    return showAsk(true,p);
-  }
+  if(NET.kind==='power'){ return showAsk(true,POWER_ACTIONS[i]); }
   const r=NET.rows[i]; if(!r||NET.busy) return;
   const dev=NET.dev?NET.dev.dev:'';
   if(NET.kind==='wifi'){
@@ -2439,9 +2471,39 @@ async function pwJoin(){
    the one gesture weather cannot produce. It does not survive a reload:
    being locked out by a crash would be worse than the problem.
    ================================================================== */
-const LOCK_MS=2000, LK_CIRC=276.5;
-let lkHold=null, lkRaf=null, lkFade=null;
+const HOLD_MS=2000, RING_C=3292.4;
+let holdRaf=null, holdAt=0, holdFn=null, lkFade=null;
 const locked=()=>$('lock').classList.contains('on');
+
+/* One hold, both directions. Locking and unlocking are the same
+   deliberate two seconds, drawn as the same ring round the same bezel,
+   so there is nothing to learn twice. */
+function holdCancel(){
+  cancelAnimationFrame(holdRaf); holdRaf=null; holdFn=null;
+  $('ring').classList.remove('on');
+  $('ring-c').style.strokeDashoffset=String(RING_C);
+}
+function holdStart(fn){
+  holdCancel();
+  holdFn=fn; holdAt=Date.now();
+  $('ring').classList.add('on');
+  const step=()=>{
+    if(!holdFn) return;
+    const p=Math.min(1,(Date.now()-holdAt)/HOLD_MS);
+    $('ring-c').style.strokeDashoffset=String(RING_C*(1-p));
+    if(p>=1){ const f=holdFn; holdCancel(); return f(); }
+    holdRaf=requestAnimationFrame(step);
+  };
+  holdRaf=requestAnimationFrame(step);
+}
+/* stopPropagation everywhere: these sit on top of the gesture handler,
+   and without it a hold that wanders a few pixels reads as a swipe. */
+function holdBind(el,fn){
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault(); e.stopPropagation(); holdStart(fn); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>
+    el.addEventListener(ev,e=>{ e.stopPropagation(); holdCancel(); }));
+}
 
 /* The badge shows on touch and fades again, so a locked helm reads as an
    instrument panel rather than a padlock you have to look past. */
@@ -2450,37 +2512,21 @@ function lkFlash(){
   clearTimeout(lkFade);
   lkFade=setTimeout(()=>$('lk-badge').classList.remove('show'),2600);
 }
-function lkReset(){
-  cancelAnimationFrame(lkRaf); lkRaf=null; lkHold=null;
-  $('lk-fg').style.strokeDashoffset=String(LK_CIRC);
-}
-function lockOn(){ $('lock').classList.add('on'); lkReset(); lkFlash(); }
+function lockOn(){ $('lock').classList.add('on'); lkFlash(); }
 function lockOff(){
-  $('lock').classList.remove('on'); lkReset();
+  $('lock').classList.remove('on');
   ssStop();                    /* the hold was a touch; do not leave the saver up */
   lastTouch=Date.now();
 }
-/* stopPropagation, not just preventDefault: the overlay is a child of
-   #stage, so without it every touch still bubbles up to the gesture
-   handler and a locked screen happily opens panels behind itself. */
-$('lock').addEventListener('pointerdown',e=>{
-  e.preventDefault(); e.stopPropagation();
-  lkFlash();
-  lkHold=Date.now();
-  const step=()=>{
-    if(lkHold===null) return;
-    const p=Math.min(1,(Date.now()-lkHold)/LOCK_MS);
-    $('lk-fg').style.strokeDashoffset=String(LK_CIRC*(1-p));
-    if(p>=1) return lockOff();
-    lkRaf=requestAnimationFrame(step);
-  };
-  lkRaf=requestAnimationFrame(step);
-});
-['pointerup','pointercancel','pointerleave'].forEach(ev=>
-  $('lock').addEventListener(ev,e=>{
-    e.stopPropagation();            /* the swipe decision happens on up */
-    if(lkHold!==null){ lkReset(); lkFlash(); }
-  }));
+
+/* One button per page, always at the foot of it. The icons are stateful,
+   not instructional: an open shackle means the helm is unlocked, and the
+   closed one on the overlay means it is not. */
+holdBind($('dial-lock'),lockOn);
+holdBind($('m-lock'),lockOn);
+holdBind($('t-lock'),lockOn);
+holdBind($('lock'),lockOff);
+$('lock').addEventListener('pointerdown',lkFlash);
 
 /* ==================================================================
    ALERTS
