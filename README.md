@@ -340,6 +340,102 @@ The list is paged rather than scrolled. `html`/`body` carry
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
 
+## Preferences
+
+Theme, depth units, the shallow alarm and brightness persist in
+`localStorage` under `helmPrefs`. They did not before: every kiosk
+restart - which is every deploy, every autopull and every crash - put them
+silently back to AUTO, feet and 6 ft. An instrument that forgets how you
+set it is not one you can trust to be set.
+
+Values are validated on the way in, not trusted. That storage outlives
+every version of this app that has ever run on the Pi, and something
+merely old must not be able to break the boot: an unknown theme, a depth
+of 99999 or a string where a number belongs all fall back to the default.
+
+## Brightness
+
+Two mechanisms, and only one of them is real.
+
+The slider used to paint a black veil over the picture. The backlight
+stayed at full behind it, so at night it still lit the cockpit, still drew
+the same power, and only made the instruments harder to read. A browser
+cannot reach the backlight - but `netd.py` can, where the kernel exposes
+one and udev has made it writable.
+
+When it can, the slider drives the real backlight and the veil stays at
+zero. When it cannot, the veil comes back and the readout says so:
+
+```
+Display   45% · SOFT
+```
+
+`SOFT` means you are dimming the picture, not the lamp. If your panel has
+a backlight the kernel knows about but the file is root-only:
+
+```
+echo 'SUBSYSTEM=="backlight",RUN+="/bin/chmod 666 /sys/class/backlight/%k/brightness"' \
+  | sudo tee /etc/udev/rules.d/99-backlight.rules
+```
+
+then reboot. `netd.py` says which it found at startup:
+
+```
+[netd] backlight: rpi_backlight at 100%
+[netd] backlight: NO - present but not writable
+[netd] backlight: NO - none exposed
+```
+
+The helper floors it at 5% and never writes zero. A helm you cannot see is
+a helm where you cannot find the slider to turn it back up.
+
+## Touch lock
+
+Power sheet → **Lock the screen**. Spray and rain generate touches on
+capacitive glass, and a wave should not be able to change the shallow
+alarm or drop the hotspot.
+
+The overlay swallows every pointer event and paints nothing over the
+instruments. **Locked is read-only, not blank** - you still need depth and
+speed while the boat is being rained on.
+
+Unlocking is a two-second hold anywhere, with a ring that fills as you
+hold. A hold is the one gesture weather cannot produce. It does not
+survive a reload, deliberately: being locked out by a crash would be worse
+than the problem it solves.
+
+The overlay stops propagation as well as preventing default. It is a child
+of `#stage`, so without that every touch still reaches the gesture handler
+and a locked screen happily opens panels behind itself - which is exactly
+what the first version did.
+
+## Alerts
+
+One surface for anything that needs attention, so the next thing to raise
+one - anchor drag, low battery, an adapter that vanished - does not have
+to invent its own way of saying so.
+
+```js
+alertRaise('depth','alarm','SHALLOW · 15 FT','ALARM SET AT 40 FT');
+alertClear('depth');
+```
+
+Two levels. `alarm` wakes the screensaver, `warn` does not. The banner
+shows the worst unacknowledged alert; tapping snoozes it for ten minutes
+while the condition stays live underneath and says so again when the
+snooze expires.
+
+The shallow alarm is its first customer, and moving it exposed a real bug:
+it used to be a class toggle inside the dial's DRAW gate, so it **did not
+run at all while the map or the music panel was open** - precisely when
+nobody is watching the number. Alerts are evaluated in DATA, which always
+runs, and the banner sits above the panels and the screensaver so it is
+visible wherever you are.
+
+Alert text carries whole units rather than tenths on purpose: to a tenth
+the banner would rewrite itself several times a second for no added
+meaning.
+
 ## Power
 
 A fourth button sits right of Bluetooth, and it is deliberately never

@@ -466,6 +466,45 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #veil{position:absolute;inset:0;background:#000;opacity:0;
   pointer-events:none;transition:opacity .2s}
 
+/* --- alerts ---
+   600 px wide to match the sheets, and high enough that the circle is
+   still wide there. Bordered rather than filled: an alarm should catch
+   the eye without becoming the brightest thing on a night helm. */
+#alert{position:absolute;left:50%;top:120px;transform:translateX(-50%);
+  width:600px;border-radius:22px;padding:18px 26px;background:var(--chip);
+  border:2px solid var(--warn);color:var(--ink);text-align:center;
+  display:none;z-index:55}
+#alert.on{display:block}
+#alert.alarm{border-color:var(--alarm)}
+.al-t{font-size:30px;font-weight:600;letter-spacing:.04em}
+.al-s{font-size:19px;font-weight:600;letter-spacing:.14em;color:var(--label);
+  margin-top:6px;text-transform:uppercase}
+
+/* --- touch lock ---
+   Paints nothing over the instruments. Its whole job is to swallow
+   pointer events; the badge is a hint, not a screen. */
+#lock{position:absolute;inset:0;z-index:70;display:none}
+#lock.on{display:block}
+/* Backed, because it floats over live instruments and the dial is busy
+   wherever you put it. It is only up for a couple of seconds after a
+   touch, so the patch it covers costs nothing. */
+.lk-badge{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  padding:22px 38px 18px;border-radius:76px;
+  background:var(--bg);border:2px solid var(--hairline);
+  opacity:0;transition:opacity .45s}
+.lk-badge.show{opacity:1}
+.lk-wrap{position:relative;width:104px;height:104px}
+.lk-ring{position:absolute;inset:0;width:104px;height:104px;transform:rotate(-90deg)}
+.lk-ring circle{fill:none;stroke-width:5}
+.lk-bg{stroke:var(--hairline)}
+.lk-fg{stroke:var(--accent);stroke-linecap:round;
+  stroke-dasharray:276.5;stroke-dashoffset:276.5}
+.lk-pad{position:absolute;left:50%;top:50%;width:42px;height:42px;
+  margin:-21px 0 0 -21px;fill:none;stroke:var(--label);stroke-width:2;
+  stroke-linejoin:round;stroke-linecap:round}
+.lk-txt{font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label)}
+
 /* --- frame probe readout (CFG.fpsProbe) --- */
 #fps{position:absolute;left:50%;top:118px;transform:translateX(-50%);
   background:#000;color:#3BE07A;font:600 26px/1 ui-monospace,monospace;
@@ -766,8 +805,31 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   <div class="ss-foot" id="ss-clock">--:--</div>
 </div>
 
+<!-- One surface for anything that needs attention. Sits above the
+     panels and the screensaver so an alarm is visible wherever you are. -->
+<div id="alert"><div class="al-t" id="al-t"></div><div class="al-s" id="al-s"></div></div>
+
 <div id="veil"></div>
 <div id="fps"></div>
+
+<!-- Touch lock. Deliberately transparent: spray must not be able to change
+     anything, but you must still be able to read the instruments through
+     it. Locked means read-only, not blank. -->
+<div id="lock">
+  <div class="lk-badge" id="lk-badge">
+    <div class="lk-wrap">
+      <svg class="lk-ring" viewBox="0 0 100 100">
+        <circle class="lk-bg" cx="50" cy="50" r="44"/>
+        <circle class="lk-fg" id="lk-fg" cx="50" cy="50" r="44"/>
+      </svg>
+      <svg class="lk-pad" viewBox="0 0 24 24">
+        <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+        <rect x="6" y="11" width="12" height="9" rx="2"/>
+      </svg>
+    </div>
+    <div class="lk-txt">HOLD TO UNLOCK</div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -815,6 +877,7 @@ const CFG={
   netd:'http://127.0.0.1:8091',
 
   depthAlarm:6, depthWarn:12, depthUnit:'ft',
+  dim:100,                           /* brightness, 25-100 - see applyDim */
   grooveMin:35, grooveMax:50,
   staleAfter:8000, startMins:5,
   /* smoothing time constant in ms. Longer = calmer but laggier. Must stay
@@ -1073,6 +1136,23 @@ function render(){
   const vmg=smooth('vmg',vR===null?null:vR*MS_TO_KT);
 
   trackSample();                    /* the log must not care what is on top */
+
+  /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
+     The shallow alarm used to be a class toggle inside the dial's draw
+     gate, which meant it did not run at all while the map or the music
+     panel was open - precisely when nobody is watching the number. */
+  if(dv===null) alertClear('depth');
+  else{
+    const aV=met?CFG.depthAlarm/M_TO_FT:CFG.depthAlarm;
+    const wV=met?CFG.depthWarn /M_TO_FT:CFG.depthWarn;
+    const u=met?'M':'FT';
+    /* Whole units in the text on purpose: to a tenth it would rewrite
+       the banner several times a second for no added meaning. */
+    if(dv<aV)      alertRaise('depth','alarm','SHALLOW · '+Math.round(dv)+' '+u,
+                              'ALARM SET AT '+CFG.depthAlarm+' '+u);
+    else if(dv<wV) alertRaise('depth','warn','SHOALING · '+Math.round(dv)+' '+u,'');
+    else           alertClear('depth');
+  }
 
   /* ================= DRAW - only when the dial can be seen ============= */
   if(dialVisible()){
@@ -1731,6 +1811,40 @@ $('lib-list').addEventListener('click',e=>{
 /* tapping the backdrop, not a row, backs out */
 $('t-lib').addEventListener('click',e=>{ if(e.target===$('t-lib')) closeLib(); });
 
+/* ---------------- preferences ----------------
+   Everything this panel lets you change used to live only in memory. A
+   kiosk restart - which happens on every deploy, every autopull and every
+   crash - silently put the theme, the units, the shallow alarm and the
+   brightness back to their defaults. An instrument that forgets how you
+   set it is not one you can trust to be set.
+
+   Validated on the way in rather than trusted. This storage outlives every
+   version of the app that has ever run on this Pi, and a value that is
+   merely old must not be able to break the boot.                      */
+const PREFS_KEY='helmPrefs';
+const PREF_DEFS={
+  theme:      v=>THEMES.indexOf(v)>=0 ? v : null,
+  depthUnit:  v=>(v==='ft'||v==='m') ? v : null,
+  depthAlarm: v=>(typeof v==='number'&&v>=1&&v<=60)  ? Math.round(v) : null,
+  dim:        v=>(typeof v==='number'&&v>=25&&v<=100)? Math.round(v) : null
+};
+function prefsLoad(){
+  let raw={};
+  try{ raw=JSON.parse(localStorage.getItem(PREFS_KEY)||'{}')||{}; }catch(e){ return; }
+  Object.keys(PREF_DEFS).forEach(k=>{
+    const v=PREF_DEFS[k](raw[k]);
+    if(v!==null&&v!==undefined) CFG[k]=v;
+  });
+  CFG.depthWarn=CFG.depthAlarm*2;      /* derived, never stored */
+}
+function prefsSave(){
+  try{
+    const out={};
+    Object.keys(PREF_DEFS).forEach(k=>{ out[k]=CFG[k]; });
+    localStorage.setItem(PREFS_KEY,JSON.stringify(out));
+  }catch(e){}                          /* full or disabled: not worth a fuss */
+}
+
 /* ---------------- panel controls ---------------- */
 const THEMES=['auto','day','dusk','night'];
 const ICON={
@@ -1743,16 +1857,47 @@ const ICON={
      +'stroke-width="3" stroke-linecap="round"><path d="M3 31h34M20 4v5M5 12l3 3M35 12l-3 3"/></g>',
  night:'<path d="M27 25A13 13 0 0 1 15 6a14 14 0 1 0 12 19z" fill="currentColor"/>'};
 $('theme-btn').addEventListener('click',()=>{
-  CFG.theme=THEMES[(THEMES.indexOf(CFG.theme)+1)%THEMES.length];applyTheme();});
+  CFG.theme=THEMES[(THEMES.indexOf(CFG.theme)+1)%THEMES.length];
+  applyTheme(); prefsSave();});
 $('r-units').addEventListener('click',()=>{
-  CFG.depthUnit=CFG.depthUnit==='ft'?'m':'ft';drawDepth();});
+  CFG.depthUnit=CFG.depthUnit==='ft'?'m':'ft'; drawDepth(); prefsSave();});
 
-$('dim').addEventListener('input',e=>{
-  $('dim-pct').textContent=e.target.value+'%';
-  // software dim only - the backlight itself is not reachable from a
-  // browser. Fine at night, avoid in daylight where you want all of it.
-  $('veil').style.opacity=String((100-e.target.value)/100*0.8);
-});
+/* ---- brightness ----
+   Two mechanisms, and only one of them is real dimming. The veil is a
+   black layer painted over the picture: the backlight stays at full
+   behind it, so at night it still lights the cockpit and it saves no
+   power at all. netd can drive the actual backlight where the kernel
+   exposes one and udev has made it writable - so use that when it is
+   there, and say SOFT when it is not, rather than quietly doing less
+   than the slider implies. */
+let BL={available:false};
+let dimAt=0, dimPend=null, dimT=null;
+function dimSend(pct){
+  /* Coalesced: a drag fires input continuously, and each send is a write
+     to a sysfs file. Eight a second is smooth and costs nothing. */
+  const now=Date.now();
+  clearTimeout(dimT);
+  if(now-dimAt>=120){ dimAt=now; dimPend=null; netApi('/backlight',{pct:pct}); }
+  else { dimPend=pct; dimT=setTimeout(()=>{ if(dimPend!==null) dimSend(dimPend); },130); }
+}
+function applyDim(pct,push){
+  CFG.dim=pct;
+  if($('dim').value!=String(pct)) $('dim').value=pct;
+  /* Until the helper has answered we do not know which mechanism is real,
+     and guessing the veil would flash the panel dark for the second it
+     takes to find out - most visible at exactly the low settings someone
+     chose for night. So show the number, and wait to act on it. */
+  const known = (typeof NET!=='undefined') && NET.probed;
+  $('dim-pct').textContent = pct+'%'+((known&&!BL.available)?' · SOFT':'');
+  if(BL.available){
+    $('veil').style.opacity='0';
+    if(push!==false) dimSend(pct);
+  }else if(known){
+    $('veil').style.opacity=String((100-pct)/100*0.8);
+  }
+}
+$('dim').addEventListener('input',e=>applyDim(+e.target.value));
+$('dim').addEventListener('change',()=>prefsSave());
 
 const BAR_MAX=()=>CFG.depthUnit==='m'?12:40;      // full scale of the bar
 function drawDepth(){
@@ -1766,9 +1911,11 @@ function drawDepth(){
   $('bar-warn').style.width=((CFG.depthWarn-CFG.depthAlarm)/mx*100)+'%';
   $('dpt-u').textContent=CFG.depthUnit==='m'?'METRES':'FEET';
 }
-$('d-up').addEventListener('click',()=>{CFG.depthAlarm++;CFG.depthWarn=CFG.depthAlarm*2;drawDepth();});
+$('d-up').addEventListener('click',()=>{
+  CFG.depthAlarm++; CFG.depthWarn=CFG.depthAlarm*2; drawDepth(); prefsSave();});
 $('d-down').addEventListener('click',()=>{
-  if(CFG.depthAlarm>1){CFG.depthAlarm--;CFG.depthWarn=CFG.depthAlarm*2;drawDepth();}});
+  if(CFG.depthAlarm>1){ CFG.depthAlarm--; CFG.depthWarn=CFG.depthAlarm*2;
+                        drawDepth(); prefsSave(); }});
 
 
 /* timer sync: nudge a whole minute, only while the clock is running */
@@ -1890,7 +2037,12 @@ async function netStatus(){
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
         pwr=(j&&j.power)||{};
   NET.st={wifi:w,bt:b,display:dsp,power:pwr};
-  NET.probed=true;               /* answered, even if the answer was nothing */
+  const hadBL=BL.available, first=!NET.probed;
+  BL=(j&&j.backlight)||{available:false};
+  NET.probed=true;
+  /* First word from the helper, or the mechanism changed under us: repaint
+     the slider and push the saved brightness at the hardware. */
+  if(first || BL.available!==hadBL) applyDim(CFG.dim);
   drawFs();                      /* the FULL/KIOSK tile reads this too */
   if(!w.available && !b.available && !pwr.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
@@ -1986,6 +2138,10 @@ async function netRefresh(rescan){
 /* Least destructive first. On a touch panel the top of a list is where
    a hurried finger lands, and that should not be the shutdown. */
 const POWER_ACTIONS=[
+ {a:'lock', name:'Lock the screen', sub:'READ ONLY · HOLD 2s TO UNLOCK',
+  ico:'<path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
+     +'<rect x="6" y="11" width="12" height="9" rx="2"/>',
+  ask:''},
  /* A reload, not a browser restart. This can only be tapped on a page
     that is alive, and a live page needs nothing heavier - whereas killing
     Chromium here would hand the screen to whatever else owns the browser
@@ -2109,7 +2265,13 @@ function needsConfirm(key,words){
 }
 
 function netTap(i){
-  if(NET.kind==='power'){ return showAsk(true,POWER_ACTIONS[i]); }
+  if(NET.kind==='power'){
+    const p=POWER_ACTIONS[i];
+    /* Locking is instant and reversible; a confirm screen for it would be
+       ceremony. Everything else on this sheet earns one. */
+    if(p.a==='lock'){ closeNet(); closePanel(); return lockOn(); }
+    return showAsk(true,p);
+  }
   const r=NET.rows[i]; if(!r||NET.busy) return;
   const dev=NET.dev?NET.dev.dev:'';
   if(NET.kind==='wifi'){
@@ -2264,6 +2426,115 @@ async function pwJoin(){
      is nearly always one wrong character, not the wrong password. */
   if(ok) showPw(false);
 }
+
+/* ==================================================================
+   TOUCH LOCK
+   Spray and rain generate touches on capacitive glass, and a wave
+   should not be able to change the shallow alarm or drop the hotspot.
+   The overlay swallows every pointer event and paints nothing over the
+   instruments: locked is read-only, not blank - you still need to see
+   depth and speed while the boat is being rained on.
+
+   Unlocking is a two-second hold rather than a tap, because a hold is
+   the one gesture weather cannot produce. It does not survive a reload:
+   being locked out by a crash would be worse than the problem.
+   ================================================================== */
+const LOCK_MS=2000, LK_CIRC=276.5;
+let lkHold=null, lkRaf=null, lkFade=null;
+const locked=()=>$('lock').classList.contains('on');
+
+/* The badge shows on touch and fades again, so a locked helm reads as an
+   instrument panel rather than a padlock you have to look past. */
+function lkFlash(){
+  $('lk-badge').classList.add('show');
+  clearTimeout(lkFade);
+  lkFade=setTimeout(()=>$('lk-badge').classList.remove('show'),2600);
+}
+function lkReset(){
+  cancelAnimationFrame(lkRaf); lkRaf=null; lkHold=null;
+  $('lk-fg').style.strokeDashoffset=String(LK_CIRC);
+}
+function lockOn(){ $('lock').classList.add('on'); lkReset(); lkFlash(); }
+function lockOff(){
+  $('lock').classList.remove('on'); lkReset();
+  ssStop();                    /* the hold was a touch; do not leave the saver up */
+  lastTouch=Date.now();
+}
+/* stopPropagation, not just preventDefault: the overlay is a child of
+   #stage, so without it every touch still bubbles up to the gesture
+   handler and a locked screen happily opens panels behind itself. */
+$('lock').addEventListener('pointerdown',e=>{
+  e.preventDefault(); e.stopPropagation();
+  lkFlash();
+  lkHold=Date.now();
+  const step=()=>{
+    if(lkHold===null) return;
+    const p=Math.min(1,(Date.now()-lkHold)/LOCK_MS);
+    $('lk-fg').style.strokeDashoffset=String(LK_CIRC*(1-p));
+    if(p>=1) return lockOff();
+    lkRaf=requestAnimationFrame(step);
+  };
+  lkRaf=requestAnimationFrame(step);
+});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>
+  $('lock').addEventListener(ev,e=>{
+    e.stopPropagation();            /* the swipe decision happens on up */
+    if(lkHold!==null){ lkReset(); lkFlash(); }
+  }));
+
+/* ==================================================================
+   ALERTS
+   One surface for anything that needs attention, so the next thing to
+   raise one - anchor drag, low battery, an adapter that vanished - does
+   not have to invent its own way of saying so.
+
+   Levels are warn and alarm. Tapping snoozes for ten minutes; the
+   condition stays live underneath and says so again when it expires.
+   ================================================================== */
+const ALERTS={}, ALERT_SNOOZE=10*60e3;
+
+function alertRaise(id,level,text,sub){
+  const a=ALERTS[id];
+  if(a && a.level===level && a.text===text && a.sub===(sub||'')) return;
+  const fresh = !a || a.level!==level;
+  ALERTS[id]={ level:level, text:text, sub:sub||'',
+               since: fresh?Date.now():a.since,
+               ackUntil: fresh?0:a.ackUntil };
+  /* An alarm is a reason to wake the screen. A warning is not. */
+  if(fresh && level==='alarm') ssStop();
+  alertPaint();
+}
+function alertClear(id){ if(ALERTS[id]){ delete ALERTS[id]; alertPaint(); } }
+
+function alertTop(){
+  const now=Date.now(); let best=null;
+  Object.keys(ALERTS).forEach(id=>{
+    const a=ALERTS[id];
+    if(a.ackUntil>now) return;                       /* snoozed */
+    if(!best) { best={id:id,a:a}; return; }
+    const better = (a.level==='alarm' && best.a.level!=='alarm') ||
+                   (a.level===best.a.level && a.since<best.a.since);
+    if(better) best={id:id,a:a};
+  });
+  return best;
+}
+function alertPaint(){
+  const top=alertTop(), el=$('alert');
+  el.classList.toggle('on',!!top);
+  if(!top) return;
+  el.classList.toggle('alarm',top.a.level==='alarm');
+  $('al-t').textContent=top.a.text;
+  $('al-s').textContent=top.a.sub||'TAP TO SNOOZE';
+}
+$('alert').addEventListener('click',e=>{
+  e.stopPropagation();
+  const top=alertTop(); if(!top) return;
+  ALERTS[top.id].ackUntil=Date.now()+ALERT_SNOOZE;
+  alertPaint();
+});
+/* A snooze has to be able to expire, and nothing else would repaint. Five
+   seconds is far below the ten-minute grain and costs two DOM writes. */
+setInterval(alertPaint,5000);
 
 /* ==================================================================
    NOW PLAYING
@@ -3040,6 +3311,9 @@ if('wakeLock' in navigator){
 }
 
 drawBezelTicks();
+/* Preferences first: applyTheme, drawDepth and applyDim below all read
+   CFG, so restoring it has to happen before any of them run. */
+prefsLoad(); applyDim(CFG.dim,false);
 /* Warm the radio state at boot rather than on first panel open. The call
    costs a handful of subprocesses on the Pi, and doing it here means it
    has long finished by the time anyone swipes up - instead of the panel

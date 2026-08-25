@@ -617,6 +617,77 @@ def later(fn):
     return {'ok': True}
 
 
+# ------------------------------------------------------------ backlight
+#
+# The panel's brightness slider was a black veil painted over the pixels.
+# The backlight stayed at full behind it, so at night it still lit the
+# cockpit, still cost the same power, and still wrecked night vision - it
+# only made the picture darker. A browser cannot reach the backlight. This
+# can, when the kernel exposes one and the udev rules make it writable.
+
+_bl = {'at': 0, 'dev': None}
+
+
+def backlight_dev():
+    """First /sys/class/backlight device with the two files we need."""
+    if time.time() - _bl['at'] < 60:
+        return _bl['dev']
+    _bl['at'] = time.time()
+    _bl['dev'] = None
+    base = SYSFS + '/class/backlight'   # SYSFS is real except in the test rig
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        names = []
+    for n in names:
+        d = os.path.join(base, n)
+        if os.path.exists(os.path.join(d, 'brightness')) and \
+           os.path.exists(os.path.join(d, 'max_brightness')):
+            _bl['dev'] = d
+            break
+    return _bl['dev']
+
+
+def _bl_read(path):
+    with open(path) as f:
+        return int(f.read().strip())
+
+
+def backlight_status():
+    d = backlight_dev()
+    if not d:
+        return {'available': False}
+    try:
+        mx = _bl_read(d + '/max_brightness')
+        cur = _bl_read(d + '/brightness')
+    except Exception:
+        return {'available': False}
+    # Readable but not writable is a real and confusing state - the panel
+    # needs to know it cannot actually dim, so it can fall back to the
+    # veil and say so rather than appearing to do nothing.
+    return {'available': os.access(d + '/brightness', os.W_OK),
+            'pct': int(round(cur * 100.0 / mx)) if mx else 0,
+            'dev': os.path.basename(d)}
+
+
+def backlight_set(pct):
+    d = backlight_dev()
+    if not d:
+        return {'ok': False, 'error': 'NO BACKLIGHT'}
+    try:
+        mx = _bl_read(d + '/max_brightness')
+        # Floored at 5%, never 0. A helm you cannot see is a helm where you
+        # cannot find the slider to turn it back up.
+        pct = max(5, min(100, int(pct)))
+        with open(d + '/brightness', 'w') as f:
+            f.write(str(max(1, int(round(mx * pct / 100.0)))))
+        return {'ok': True, 'pct': pct}
+    except PermissionError:
+        return {'ok': False, 'error': 'NOT WRITABLE'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)[:80]}
+
+
 # ---------------------------------------------------------------- power
 #
 # Shutting down properly matters more on a boat than on a desk. Cutting
@@ -683,7 +754,8 @@ def power_do(action):
 def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
-                'display': display_status(), 'power': power_status()}
+                'display': display_status(), 'power': power_status(),
+                'backlight': backlight_status()}
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
@@ -691,6 +763,10 @@ def route(path, body):
         if not CHROME:
             return {'ok': False, 'error': 'NO BROWSER'}
         return later(go_kiosk if body.get('mode') == 'kiosk' else go_windowed)
+    if path == '/backlight':
+        if 'pct' in body:
+            return dict(backlight_set(body['pct']), **backlight_status())
+        return dict(backlight_status(), ok=True)
     if path == '/power/do':
         return power_do(str(body.get('action', '')))
     if path == '/display/restart':
@@ -810,6 +886,11 @@ if __name__ == '__main__':
     if not (cap['nm'] or cap['bt']):
         print('[netd] neither stack is usable - the panel will hide its tiles', flush=True)
     print('[netd] browser control: %s' % (CHROME or 'NO - chromium not found'), flush=True)
+    _b = backlight_status()
+    print('[netd] backlight: %s' % ('%s at %d%%' % (_b.get('dev'), _b.get('pct', 0))
+          if _b.get('available') else
+          'NO - ' + ('present but not writable' if backlight_dev() else 'none exposed')),
+          flush=True)
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     # Fill the caches before anyone asks. The kiosk often comes up at the
     # same moment this does, and the first /status is the one that decides
