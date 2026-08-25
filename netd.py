@@ -749,13 +749,102 @@ def power_do(action):
     return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
 
 
+# ------------------------------------------------------------------ gpx
+#
+# Getting a track off this boat used to mean the kiosk downloading a file
+# into ~/Downloads on the Pi, where nothing can reach it. The race library
+# itself is browser storage, which is per origin and per device - so a
+# phone loading the same page gets its own empty library and none of the
+# races that were actually sailed.
+#
+# So the panel hands the XML here and this writes it into the folder AvNav
+# already serves. From then on any phone on the boat WiFi can fetch it at
+#   http://<pi>:8080/user/helm/gpx/<name>.gpx
+# which on iOS lands in Files, and from there the share sheet reaches
+# SailTies, HealthFit and anything else that takes a GPX.
+#
+# index.json sits beside the files so the app can list them without
+# needing a directory listing - and without needing to reach this service,
+# which a phone cannot: it is loopback-only. The phone reads the index
+# from AvNav, same origin as the app itself.
+
+GPX_DIR = os.path.expanduser('~/avnav/data/user/helm/gpx')
+GPX_SAFE = re.compile(r'[^A-Za-z0-9._-]')
+GPX_MAX = 8 * 1024 * 1024
+
+
+def gpx_dir():
+    try:
+        os.makedirs(GPX_DIR, exist_ok=True)
+        return GPX_DIR
+    except OSError:
+        return None                       # no AvNav, or no room
+
+
+def gpx_list():
+    d = gpx_dir()
+    out = []
+    if not d:
+        return out
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return out
+    for n in names:
+        if not n.endswith('.gpx'):
+            continue                      # index.json is not a track
+        try:
+            st = os.stat(os.path.join(d, n))
+        except OSError:
+            continue
+        out.append({'name': n, 'size': st.st_size, 'at': int(st.st_mtime)})
+    out.sort(key=lambda f: -f['at'])       # newest first, like the library
+    return out
+
+
+def gpx_write_index():
+    d = gpx_dir()
+    if not d:
+        return
+    try:
+        with open(os.path.join(d, 'index.json'), 'w') as f:
+            json.dump(gpx_list(), f)
+    except OSError:
+        pass
+
+
+def gpx_save(name, xml):
+    d = gpx_dir()
+    if not d:
+        return {'ok': False, 'error': 'NO GPX FOLDER'}
+    if not xml or len(xml) > GPX_MAX:
+        return {'ok': False, 'error': 'EMPTY OR TOO BIG'}
+    # The name comes from a race title someone typed at the helm; it ends
+    # up as a path, so it is rebuilt from safe characters rather than
+    # trusted. No slashes survive this, so it cannot leave the folder.
+    name = GPX_SAFE.sub('-', (name or 'track').strip())[:64].lstrip('.-') or 'track'
+    if not name.endswith('.gpx'):
+        name += '.gpx'
+    try:
+        with open(os.path.join(d, name), 'w') as f:
+            f.write(xml)
+    except OSError as e:
+        return {'ok': False, 'error': str(e)[:80]}
+    gpx_write_index()
+    return {'ok': True, 'name': name, 'url': 'gpx/' + name}
+
+
+def gpx_status():
+    return {'available': gpx_dir() is not None, 'count': len(gpx_list())}
+
+
 # --------------------------------------------------------------- http
 
 def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
                 'display': display_status(), 'power': power_status(),
-                'backlight': backlight_status()}
+                'backlight': backlight_status(), 'gpx': gpx_status()}
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
@@ -763,6 +852,10 @@ def route(path, body):
         if not CHROME:
             return {'ok': False, 'error': 'NO BROWSER'}
         return later(go_kiosk if body.get('mode') == 'kiosk' else go_windowed)
+    if path == '/gpx/list':
+        return {'ok': True, 'files': gpx_list()}
+    if path == '/gpx/save':
+        return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
     if path == '/backlight':
         if 'pct' in body:
             return dict(backlight_set(body['pct']), **backlight_status())
@@ -870,7 +963,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            n = min(int(self.headers.get('Content-Length') or 0), 4096)
+            # Bodies used to be WiFi passwords, so 4 kB was generous. A
+            # published GPX is a couple of hours of trackpoints, so the
+            # cap now follows GPX_MAX - short of that a track arrived
+            # truncated, failed to parse, and reported itself as empty.
+            n = min(int(self.headers.get('Content-Length') or 0), GPX_MAX + 4096)
             body = json.loads(self.rfile.read(n) or b'{}') if n else {}
             if not isinstance(body, dict):
                 body = {}

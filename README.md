@@ -217,6 +217,10 @@ once already:
 55 alerts   70 lock   80 hold ring   90 veil   99 fps readout
 ```
 
+`#qr-sheet` is the exception: `z-index:10` **within the track page**, so
+it covers the race library — its sibling, which has no level of its own —
+without leaving the page it belongs to.
+
 The veil is the brightness control on a panel with no backlight to
 drive, so it sits above everything and dims the lot. It was on `auto`
 until the pages and the panel were given levels, at which point it ended
@@ -610,6 +614,67 @@ attitude sensor are not installed, so those readouts hide themselves
 rather than showing dashes. `CFG.windDemo` fabricates wind and depth so
 the bezel animation can be judged before the hardware lands — **turn it
 off once the sensors are real**, as it writes into their live paths.
+
+## Getting a track onto a phone
+
+The race library is IndexedDB, which is **per origin and per device**. A
+phone opening the same page gets its own empty library — none of the
+races the kiosk recorded are in it. So exporting on the helm used to
+mean a `.gpx` in the Pi's `~/Downloads`, where nothing can reach it.
+
+The track now goes the other way. `⤓` on the track page POSTs the XML to
+`netd`, which writes it into `~/avnav/data/user/helm/gpx/` — a folder
+**AvNav already serves**, at `/user/helm/gpx/<name>.gpx`. Any device on
+the boat WiFi can fetch it; on iOS it lands in Files, and the share sheet
+from there reaches SailTies, HealthFit and anything else that eats GPX.
+
+Publishing raises a **QR code** of that URL, because the remaining
+problem was never the file — it was getting the phone to the address.
+Point the camera at the helm and Safari does the rest.
+
+- `index.json` is rewritten beside the files on every save, so the app
+  can list them without a directory listing.
+- The library reads that index **from AvNav, not from netd** — netd is
+  loopback-only and a phone cannot reach it. Same origin as the app, so
+  the same code works in a pocket and at the helm.
+- The library shows two sections. *On the boat* rows are plain links: on
+  a phone a tap downloads, on the helm a tap raises the QR instead
+  (a download there would just land in the Pi's own Downloads).
+- With no helper — i.e. on a phone — `⤓` falls back to the old Blob
+  download, which is what that device wanted anyway.
+- Names are rebuilt from `[A-Za-z0-9._-]` on the way in. A race title is
+  typed at the helm and ends up as a path, so no slash survives it.
+
+### Two networks, one code
+
+The Pi usually has two addresses: the hotspot it runs for the boat and
+whatever marina network the dongle joined. The code leads with the
+**hotspot**, since a phone at the helm is on it — but a phone on the
+shore network cannot reach `10.42.0.1` at all, so **tapping the code**
+cycles to the other address. Tapping anywhere else puts the sheet away.
+
+### The QR encoder
+
+Written into the file rather than pulled in, because this file has no
+dependencies and gets none. Byte mode, error correction **M**, versions
+1–10; a URL with a long race name is about 75 bytes, which is version 5.
+Past version 10 it returns `null` and the sheet shows the plain URL to
+type instead.
+
+Verified by decoding, not by inspection: every version boundary 1–10
+plus multibyte UTF-8 round-trips through OpenCV's detector, and the
+rendered sheet still decodes shrunk to 190 px, blurred, rotated 45°,
+under perspective, and with a specular highlight across one corner.
+
+**`netd`'s POST body cap used to be 4 kB.** Bodies were WiFi passwords
+when that number was chosen; a track is a hundred times that, so it
+arrived truncated, failed to parse, and reported itself as empty. The
+cap now follows `GPX_MAX`.
+
+**A flash in the track page's status line has to hold the slot.**
+`paintTrack()` rewrites that text four times a second, so `trkFlash()`
+sets a deadline that `paintTrack()` checks rather than just writing into
+it.
 
 ## Render architecture
 

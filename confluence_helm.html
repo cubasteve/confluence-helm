@@ -421,6 +421,29 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .lib-sub{font-size:22px;font-weight:500;color:var(--label);letter-spacing:.08em;
   margin-top:6px}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
+.lib-head{font-size:20px;font-weight:600;letter-spacing:.18em;color:var(--label);
+  text-transform:uppercase;padding:18px 0 8px}
+a.lib-row{text-decoration:none;color:inherit}
+
+/* --- the QR sheet ---
+   Always black on white regardless of the theme: a camera wants
+   contrast and the right polarity, not the night palette. It sits
+   above the library, which is itself above the track page.        */
+#qr-sheet{position:absolute;inset:0;background:var(--panel);opacity:0;z-index:10;
+  /* above #t-lib, which is a sibling with no z-index of its own */
+  pointer-events:none;transition:opacity .18s;display:flex;
+  flex-direction:column;align-items:center;justify-content:center}
+#qr-sheet.on{opacity:1;pointer-events:auto}
+#qr-box{background:#fff;padding:22px;border-radius:18px;line-height:0}
+#qr-box svg{display:block;width:512px;height:512px;shape-rendering:crispEdges}
+#qr-name{font-size:27px;font-weight:600;color:var(--ink);letter-spacing:.03em;
+  margin-bottom:18px;max-width:640px;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#qr-url{font-size:19px;color:var(--label);letter-spacing:.04em;margin-top:14px;
+  max-width:700px;text-align:center;word-break:break-all}
+#qr-why{font-size:20px;color:var(--label);letter-spacing:.1em;margin-top:14px}
+#qr-alt{font-size:19px;color:var(--label);letter-spacing:.1em;margin-top:8px;
+  opacity:.7}
 /* The library's hint says more than the map's, and bottom:44px is the
    narrowest part of the circle - 637 px of text into a 491 px chord, so
    73 px fell off each end. Lift it to where the chord is 629 px and set
@@ -866,6 +889,17 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
     <div class="t-title">Library</div>
     <div class="lib-list" id="lib-list"></div>
     <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · TAP OUTSIDE TO CLOSE</div>
+  </div>
+
+  <!-- Outside the library on purpose: publishing a track raises this
+       straight from the track page, and the library raises the same
+       sheet when you tap a file already on the boat. -->
+  <div id="qr-sheet">
+    <div id="qr-name"></div>
+    <div id="qr-box"></div>
+    <div id="qr-why">POINT YOUR PHONE CAMERA AT THIS</div>
+    <div id="qr-url"></div>
+    <div id="qr-alt"></div>
   </div>
 </div>
 
@@ -1586,6 +1620,34 @@ function exportGPX(pts){
   setTimeout(()=>{URL.revokeObjectURL(url); a.remove();},1500);
 }
 
+/* A transient line in the track page's status slot. paintTrack() owns
+   that text and the render loop repaints it four times a second, so a
+   flash has to hold the slot rather than just write into it - hence the
+   deadline paintTrack() checks below. */
+let trkFlashUntil=0;
+function trkFlash(msg,ms){
+  $('trk-n').textContent=msg;
+  trkFlashUntil=Date.now()+(ms||4500);
+}
+
+/* Send the track to the boat rather than to this browser's downloads.
+   netd writes it into the folder AvNav serves, so a phone on the boat
+   WiFi can then fetch it - which is the whole point. The file never
+   goes near the phone from here; the phone comes and gets it. */
+async function publishGPX(pts,label){
+  pts=pts||TRK;
+  if(!pts.length) return trkFlash('no track to send');
+  const d=new Date(pts[0].t), pad=n=>String(n).padStart(2,'0');
+  const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+             +`-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const nice=(label&&label!=='Race track')?label+'-'+stamp:'Confluence-'+stamp;
+  trkFlash('sending…',30000);
+  const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
+  if(!j||!j.ok) return trkFlash((j&&j.error)||'send failed');
+  trkFlash('on the boat · also in RACES',7000);
+  showQR(j.name.replace(/\.gpx$/,''), j.url);   /* point the phone at it */
+}
+
 let lastTrackPaint=0;
 function paintTrack(){
   const srv=serverTrack();
@@ -1598,7 +1660,8 @@ function paintTrack(){
   else if(rec&&!fix) txt = 'waiting for GPS';
   else if(rec)     txt = 'recording…';
   else             txt = 'no track';
-  $('trk-n').textContent = txt + (srv ? '' : ' · local');
+  if(Date.now()>trkFlashUntil)            // a flash holds the slot
+    $('trk-n').textContent = txt + (srv ? '' : ' · local');
   $('trk-rec').classList.toggle('on', rec);
   $('trk-rec').style.opacity = '1';
   $('trk-exp').style.opacity = n ? '1' : '.35';
@@ -1879,6 +1942,7 @@ function judgeGesture(g){
     return; }
   /* The race library is a sheet over the map page and owns the gesture
      while it is up - paging out from underneath it would strand it. */
+  if($('qr-sheet').classList.contains('on')){ if(left||right) hideQR(); return; }
   if($('t-lib').classList.contains('on')){ if(left||right) closeLib(); return; }
 
   /* Control centre is reachable from any page, the way it is on a phone.
@@ -1937,7 +2001,14 @@ $('trk-exp').addEventListener('click',e=>{
   if(serverTrack() && !VIEWTRK){          // plugin serves it over HTTP, so
     const h=CFG.host||location.host;      // any device can pull the file
     window.location='http://'+h+'/plugins/signalk-confluence-track/gpx';
-  } else exportGPX(shownTrack());         // a loaded race exports as itself
+    return;
+  }
+  /* On the Pi, publish to the boat so a phone can come and get it. On a
+     phone there is no helper to publish with - and a plain download is
+     what that device wanted anyway. */
+  const gpx=(NET.st&&NET.st.gpx)||{};
+  if(gpx.available) publishGPX(shownTrack(), $('t-title').textContent);
+  else              exportGPX(shownTrack());
 });
 $('trk-clr').addEventListener('click',e=>{
   e.stopPropagation();
@@ -1951,12 +2022,21 @@ $('trk-cache').addEventListener('click',e=>{ e.stopPropagation(); cacheArea(); }
 
 /* one delegated handler for the whole list - rows come and go */
 $('lib-list').addEventListener('click',e=>{
+  /* A boat row is a real link, which is exactly right on a phone - tap
+     and the file downloads. On the helm that same tap would drop it in
+     the Pi's own downloads folder, where nothing can reach it, so here
+     it becomes a QR code for the phone to shoot instead. */
+  const link=e.target.closest('a.lib-row');
+  if(link && ((NET.st&&NET.st.gpx)||{}).available){
+    e.preventDefault();
+    return void showQR(link.dataset.title, link.getAttribute('href'));
+  }
   e.stopPropagation();
   const del=e.target.closest('[data-del]'), exp=e.target.closest('[data-exp]');
   if(del) return void dbDel(del.dataset.del).then(renderLib);
   if(exp) return void dbGet(exp.dataset.exp).then(r=>{ if(r) exportGPX(r.pts); });
   const row=e.target.closest('.lib-row');
-  if(row) loadRace(row.dataset.id);
+  if(row && row.dataset.id) loadRace(row.dataset.id);   /* links are not races */
 });
 /* tapping the backdrop, not a row, backs out */
 $('t-lib').addEventListener('click',e=>{ if(e.target===$('t-lib')) closeLib(); });
@@ -2185,8 +2265,8 @@ function paintTiles(){
 async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
-        pwr=(j&&j.power)||{};
-  NET.st={wifi:w,bt:b,display:dsp,power:pwr};
+        pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{};
+  NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx};
   const hadBL=BL.available, first=!NET.probed;
   BL=(j&&j.backlight)||{available:false};
   NET.probed=true;
@@ -3204,25 +3284,306 @@ function saveRace(){
             .catch(()=>flashTrk('save failed'));
 }
 
-const closeLib=()=>$('t-lib').classList.remove('on');
+/* ------------------------------------------------------------------
+   Getting the file onto the phone
+
+   The track is now a URL on the boat's own WiFi, which means the phone
+   only has to be pointed at it - so the helm draws that URL as a QR
+   code and the camera does the rest. iOS opens it in Safari, the GPX
+   lands in Files, and the share sheet from there reaches SailTies and
+   HealthFit.
+
+   No library for the QR: this file has no dependencies and gets none.
+   Byte mode, error correction M, versions 1 to 10 - a URL with a long
+   race name is about 75 bytes, which is version 5. Anything longer than
+   version 10 holds returns null and the caller falls back to showing
+   the plain URL to type.
+   ------------------------------------------------------------------ */
+function qrMatrix(str){
+  const bytes=[...new TextEncoder().encode(str)];
+  /* [ total codewords, ec per block, blocks in group 1, blocks in group 2 ] */
+  const V=[[26,10,1,0],[44,16,1,0],[70,26,1,0],[100,18,2,0],[134,24,2,0],
+           [172,16,4,0],[196,18,4,0],[242,22,2,2],[292,22,3,2],[346,26,4,1]];
+  let v=0;
+  for(;v<10;v++){
+    const [tot,ec,b1,b2]=V[v], data=tot-ec*(b1+b2);
+    const hdr=4+((v+1)<10?8:16);
+    if(bytes.length<=Math.floor((data*8-hdr)/8)) break;
+  }
+  if(v===10) return null;                       // no room; caller shows text
+  const ver=v+1, [tot,ecw,b1,b2]=V[v], nData=tot-ecw*(b1+b2);
+
+  /* ---- bit stream ---- */
+  const bits=[];
+  const put=(val,len)=>{ for(let i=len-1;i>=0;i--) bits.push((val>>i)&1); };
+  put(4,4); put(bytes.length, ver<10?8:16);
+  bytes.forEach(b=>put(b,8));
+  for(let i=0;i<4&&bits.length<nData*8;i++) bits.push(0);
+  while(bits.length%8) bits.push(0);
+  const dc=[];
+  for(let i=0;i<bits.length;i+=8){ let b=0; for(let j=0;j<8;j++) b=(b<<1)|bits[i+j]; dc.push(b); }
+  for(let i=0;dc.length<nData;i++) dc.push(i%2?0x11:0xEC);
+
+  /* ---- GF(256) and Reed-Solomon ---- */
+  const EXP=new Uint8Array(512), LOG=new Uint8Array(256);
+  for(let i=0,x=1;i<255;i++){ EXP[i]=x; LOG[x]=i; x<<=1; if(x&0x100) x^=0x11D; }
+  for(let i=255;i<512;i++) EXP[i]=EXP[i-255];
+  const mul=(a,b)=>a&&b?EXP[LOG[a]+LOG[b]]:0;
+  let gen=[1];
+  for(let i=0;i<ecw;i++){
+    const nx=new Array(gen.length+1).fill(0);
+    for(let j=0;j<gen.length;j++){ nx[j]^=gen[j]; nx[j+1]^=mul(gen[j],EXP[i]); }
+    gen=nx;
+  }
+  const rs=blk=>{
+    const r=blk.concat(new Array(ecw).fill(0));
+    for(let i=0;i<blk.length;i++){
+      const f=r[i]; if(!f) continue;
+      for(let j=0;j<gen.length;j++) r[i+j]^=mul(gen[j],f);
+    }
+    return r.slice(blk.length);
+  };
+
+  /* ---- split into blocks, then interleave ---- */
+  const nBlk=b1+b2, short=Math.floor(nData/nBlk);
+  const dBlk=[], eBlk=[];
+  for(let i=0,at=0;i<nBlk;i++){
+    const len=short+(i<b1?0:1);
+    const blk=dc.slice(at,at+len); at+=len;
+    dBlk.push(blk); eBlk.push(rs(blk));
+  }
+  const out=[];
+  for(let i=0;i<short+1;i++) dBlk.forEach(b=>{ if(i<b.length) out.push(b[i]); });
+  for(let i=0;i<ecw;i++) eBlk.forEach(b=>out.push(b[i]));
+
+  /* ---- the grid ---- */
+  const n=17+ver*4;
+  const m=[...Array(n)].map(()=>new Int8Array(n).fill(-1));   // -1 = free
+  const set=(r,c,val)=>{ if(r>=0&&r<n&&c>=0&&c<n) m[r][c]=val; };
+  const finder=(r,c)=>{
+    for(let i=-1;i<8;i++) for(let j=-1;j<8;j++){
+      const on = i>=0&&i<7&&j>=0&&j<7 &&
+                 (i===0||i===6||j===0||j===6||(i>=2&&i<=4&&j>=2&&j<=4));
+      set(r+i,c+j,on?1:0);
+    }
+  };
+  finder(0,0); finder(0,n-7); finder(n-7,0);
+  const AL=[[],[6,18],[6,22],[6,26],[6,30],[6,34],
+            [6,22,38],[6,24,42],[6,26,46],[6,28,50]][ver-1];
+  AL.forEach(r=>AL.forEach(c=>{
+    if((r<9&&c<9)||(r<9&&c>n-10)||(r>n-10&&c<9)) return;      // under a finder
+    for(let i=-2;i<=2;i++) for(let j=-2;j<=2;j++)
+      set(r+i,c+j, (Math.abs(i)===2||Math.abs(j)===2||(!i&&!j))?1:0);
+  }));
+  for(let i=8;i<n-8;i++){ set(6,i,i%2?0:1); set(i,6,i%2?0:1); }
+  set(n-8,8,1);                                               // the dark module
+  const RES=[...Array(n)].map(()=>new Int8Array(n));          // reserved = function
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) RES[r][c]=m[r][c]>=0?1:0;
+  for(let i=0;i<9;i++){ RES[8][i]=1; RES[i][8]=1; }           // format areas
+  for(let i=0;i<8;i++){ RES[8][n-1-i]=1; RES[n-1-i][8]=1; }
+  if(ver>=7) for(let i=0;i<6;i++) for(let j=0;j<3;j++){ RES[i][n-11+j]=1; RES[n-11+j][i]=1; }
+
+  /* ---- data, zigzagging up and down the free columns ---- */
+  let bi=0, up=true;
+  for(let c=n-1;c>0;c-=2){
+    if(c===6) c--;                                            // the timing column
+    for(let k=0;k<n;k++){
+      const r=up?n-1-k:k;
+      for(const cc of [c,c-1]){
+        if(RES[r][cc]) continue;
+        const bit = bi<out.length*8 ? (out[bi>>3]>>(7-(bi&7)))&1 : 0;
+        m[r][cc]=bit; bi++;
+      }
+    }
+    up=!up;
+  }
+
+  /* ---- masks, scored by the four penalty rules ---- */
+  const COND=[(r,c)=>(r+c)%2===0, (r,c)=>r%2===0, (r,c)=>c%3===0,
+              (r,c)=>(r+c)%3===0, (r,c)=>(((r/2)|0)+((c/3)|0))%2===0,
+              (r,c)=>(r*c)%2+(r*c)%3===0, (r,c)=>((r*c)%2+(r*c)%3)%2===0,
+              (r,c)=>((r+c)%2+(r*c)%3)%2===0];
+  const FMT=[0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0];  // ECC M
+  const VER=[0x07C94,0x085BC,0x09A99,0x0A4D3];
+  const RUN=[1,0,1,1,1,0,1];
+  const score=g=>{
+    let p=0;
+    const line=get=>{
+      for(let a=0;a<n;a++){
+        let run=1;
+        for(let b=1;b<n;b++){
+          if(get(a,b)===get(a,b-1)) run++;
+          else { if(run>=5) p+=3+run-5; run=1; }
+        }
+        if(run>=5) p+=3+run-5;
+        for(let b=0;b<=n-7;b++){
+          let hit=true;
+          for(let k=0;k<7;k++) if(get(a,b+k)!==RUN[k]) { hit=false; break; }
+          if(!hit) continue;
+          /* Off the edge is the quiet zone, which is light - so a
+             finder-alike hard against the border is the real hazard
+             and has to be penalised, not excused. */
+          let left=true, right=true;
+          for(let k=1;k<=4;k++){
+            if(b-k>=0   && get(a,b-k))   left=false;
+            if(b+6+k<n  && get(a,b+6+k)) right=false;
+          }
+          if(left||right) p+=40;
+        }
+      }
+    };
+    line((a,b)=>g[a][b]); line((a,b)=>g[b][a]);
+    for(let r=0;r<n-1;r++) for(let c=0;c<n-1;c++)
+      if(g[r][c]===g[r][c+1]&&g[r][c]===g[r+1][c]&&g[r][c]===g[r+1][c+1]) p+=3;
+    let dark=0; g.forEach(row=>row.forEach(x=>dark+=x));
+    p+=Math.floor(Math.abs(dark*100/(n*n)-50)/5)*10;
+    return p;
+  };
+  let best=null, bestP=Infinity;
+  for(let k=0;k<8;k++){
+    const g=m.map((row,r)=>Int8Array.from(row,(x,c)=>RES[r][c]?x:(x^(COND[k](r,c)?1:0))));
+    const f=FMT[k];
+    for(let i=0;i<15;i++){
+      const bit=(f>>i)&1;
+      g[i<6?i:i<8?i+1:n-15+i][8]=bit;                         // vertical strip
+      g[8][i<8?n-1-i:i===8?7:14-i]=bit;                       // horizontal strip
+    }
+    if(ver>=7){
+      const w=VER[ver-7];
+      for(let i=0;i<18;i++){
+        const bit=(w>>i)&1;
+        g[(i/3)|0][n-11+i%3]=bit; g[n-11+i%3][(i/3)|0]=bit;
+      }
+    }
+    const p=score(g);
+    if(p<bestP){ bestP=p; best=g; }
+  }
+  return best.map(r=>[...r]);
+}
+
+/* Black on white, one rect per dark module, with the four-module quiet
+   zone the standard asks for - without it a scanner sitting against
+   the sheet's edge has nothing to lock onto. */
+function qrSvg(m){
+  const n=m.length, q=4, w=n+q*2;
+  let d='';
+  for(let r=0;r<n;r++){
+    let c=0;
+    while(c<n){                            /* runs, not squares - a
+      quarter of the rects for the same picture */
+      if(!m[r][c]){ c++; continue; }
+      let e=c; while(e<n&&m[r][e]) e++;
+      d+=`M${c+q} ${r+q}h${e-c}v1h${-(e-c)}z`;
+      c=e;
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${w}" xmlns="http://www.w3.org/2000/svg">`
+    +`<rect width="${w}" height="${w}" fill="#fff"/>`
+    +`<path d="${d}" fill="#000"/></svg>`;
+}
+
+/* Which of the boat's addresses to hand the phone.
+
+   The Pi usually has two: the hotspot it runs for the boat, and
+   whatever marina network the dongle joined. A phone standing at the
+   helm is nearly always on the hotspot, so that address leads - but a
+   phone on the shore network cannot reach 10.42.0.1 at all, so the
+   others stay available behind a tap on the code. The kiosk's own
+   location is no use here: it says localhost, which on a phone means
+   the phone. */
+function boatHosts(){
+  const devs=((NET.st&&NET.st.wifi)||{}).devices||[];
+  const port=location.port?':'+location.port:'', out=[];
+  devs.filter(d=>d.ip).sort((a,b)=>(b.ap?1:0)-(a.ap?1:0)).forEach(d=>{
+    const h=d.ip+port; if(out.indexOf(h)<0) out.push(h); });
+  if(!out.length) out.push(location.host);   /* no helper: whatever served us */
+  return out;
+}
+
+const QR={name:'',rel:'',hosts:[],i:0};
+const hideQR=()=>$('qr-sheet').classList.remove('on');
+function paintQR(){
+  const host=QR.hosts[QR.i]||location.host;
+  const url=location.protocol+'//'+host
+           +location.pathname.replace(/[^/]*$/,'')+QR.rel;
+  const m=qrMatrix(url);
+  $('qr-name').textContent=QR.name;
+  $('qr-url').textContent=url;
+  $('qr-box').innerHTML=m?qrSvg(m):'';
+  $('qr-box').style.display=m?'':'none';
+  $('qr-why').textContent=m?'POINT YOUR PHONE CAMERA AT THIS'
+                           :'TYPE THIS INTO YOUR PHONE';
+  $('qr-alt').textContent = QR.hosts.length>1
+    ? 'TAP THE CODE FOR '+QR.hosts[(QR.i+1)%QR.hosts.length].split(':')[0] : '';
+}
+function showQR(name,rel){
+  QR.name=name; QR.rel=rel; QR.hosts=boatHosts(); QR.i=0;
+  paintQR();
+  $('qr-sheet').classList.add('on');
+}
+/* The code itself cycles the address; anywhere else puts the sheet away. */
+$('qr-box').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(QR.hosts.length<2) return void hideQR();
+  QR.i=(QR.i+1)%QR.hosts.length; paintQR();
+});
+$('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
+
+const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); };
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
+/* Two lists, and the difference matters.
+
+   SAVED HERE is IndexedDB: per origin and per device, so what the kiosk
+   has recorded is invisible to a phone loading the same page. ON THE
+   BOAT is the gpx folder AvNav serves, which every device on the boat
+   WiFi can see - so those rows are plain links, and tapping one on a
+   phone downloads the file into iOS Files. From there the share sheet
+   reaches SailTies, HealthFit and anything else that eats GPX.
+
+   The index is fetched from AvNav rather than from netd, deliberately:
+   netd is loopback-only and a phone cannot reach it. Same origin as the
+   app, so this works identically on the helm and in a pocket. */
 function renderLib(){
   const box=$('lib-list');
-  dbAll().then(rows=>{
-    rows.sort((a,b)=>b.t-a.t);
-    if(!rows.length){
-      box.innerHTML='<div class="lib-empty">NO SAVED RACES</div>'; return; }
-    box.innerHTML=rows.map(r=>
-      `<div class="lib-row" data-id="${r.id}">
-         <div class="lib-main">
-           <div class="lib-name">${r.name}</div>
-           <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
-        +` · MAX ${r.max.toFixed(1)} KT</div>
-         </div>
-         <button class="mini" data-exp="${r.id}">⤓</button>
-         <button class="mini" data-del="${r.id}">✕</button>
-       </div>`).join('');
-  }).catch(()=>{ box.innerHTML='<div class="lib-empty">LIBRARY UNAVAILABLE</div>'; });
+  const kb=n=>n<1024?n+' B':(n/1024).toFixed(n<102400?1:0)+' kB';
+  Promise.all([
+    dbAll().catch(()=>null),
+    fetch('gpx/index.json?_='+Date.now(),{cache:'no-store'})
+      .then(r=>r.ok?r.json():[]).catch(()=>[])
+  ]).then(([rows,files])=>{
+    let o='';
+    if(files&&files.length){
+      o+='<div class="lib-head">On the boat</div>';
+      o+=files.map(f=>{
+        const d=new Date((f.at||0)*1000);
+        const nice=esc(f.name.replace(/\.gpx$/,''));
+        return `<a class="lib-row" href="gpx/${encodeURIComponent(f.name)}"
+                   data-title="${nice}" download>
+           <div class="lib-main">
+             <div class="lib-name">${nice}</div>
+             <div class="lib-sub">${kb(f.size||0)} · `
+          +`${d.toLocaleDateString()} ${String(d.getHours()).padStart(2,'0')}:`
+          +`${String(d.getMinutes()).padStart(2,'0')}</div>
+           </div><span class="mini">⤓</span></a>`;
+      }).join('');
+    }
+    if(rows===null) o+='<div class="lib-empty">LIBRARY UNAVAILABLE</div>';
+    else if(rows.length){
+      rows.sort((a,b)=>b.t-a.t);
+      o+='<div class="lib-head">Saved here</div>';
+      o+=rows.map(r=>
+        `<div class="lib-row" data-id="${r.id}">
+           <div class="lib-main">
+             <div class="lib-name">${esc(r.name)}</div>
+             <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
+          +` · MAX ${r.max.toFixed(1)} KT</div>
+           </div>
+           <button class="mini" data-exp="${r.id}">⤓</button>
+           <button class="mini" data-del="${r.id}">✕</button>
+         </div>`).join('');
+    }
+    box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
+  });
 }
 
 function loadRace(id){
