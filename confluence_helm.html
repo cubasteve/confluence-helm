@@ -981,7 +981,12 @@ function arcPath(r0,r1,d0,d1){
 
 (function(){let o='';
   for(let d=-180;d<180;d+=5){const m=d%30===0;
-    const[a,b]=polar(m?R_MAJ:R_MIN,d),[c,e]=polar(R_OUT,d);
+    /* The tick at the foot is cut to the music bezel's major length (32,
+       not the rose's 42) so the two faces read the same at the bottom -
+       which is where you see them against each other as the pages slide,
+       and where the page dots sit on both. */
+    const rIn = d===-180 ? R_OUT-32 : (m?R_MAJ:R_MIN);
+    const[a,b]=polar(rIn,d),[c,e]=polar(R_OUT,d);
     o+=`<line x1="${a}" y1="${b}" x2="${c}" y2="${e}"
         stroke="${m?'var(--label)':'var(--hairline)'}"
         stroke-width="${m?4:2}" stroke-linecap="round"/>`;}
