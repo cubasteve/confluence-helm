@@ -3934,10 +3934,20 @@ const fsOn=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
    real here. */
 const kioskLive=()=>{
   const d=(typeof NET!=='undefined'&&NET.st&&NET.st.display)||{};
+  if(d.cage) return false;            /* nothing to switch to - see below */
   return !!(d.available&&(d.kiosk||d.windowed));
 };
 function drawFs(){
   const d=(typeof NET!=='undefined'&&NET.st&&NET.st.display)||{};
+  /* Under cage the tile is not merely useless, it is harmful. cage runs
+     one maximized application; switching to "windowed" means killing
+     its client, which makes cage itself exit, which cage-session.sh
+     reads as a crash and restarts. You would get a black panel for a
+     second, land exactly where you started, and spend one of the five
+     quick-exit strikes that trigger the fall back to a desktop.
+     So it goes, and the brightness slider takes the room. */
+  $('fs-btn').style.display = d.cage ? 'none' : '';
+  if(d.cage) return;
   const kiosk=kioskLive();
   const on = kiosk ? !!d.kiosk : fsOn();
   /* Before the helper has answered, this tile knows nothing - and a tile

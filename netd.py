@@ -549,9 +549,17 @@ def display_status():
     panel polls, so it is not the place for three subprocesses."""
     if not CHROME:
         return {'available': False}
-    rc, out, _ = run(['pgrep', '-af', 'chromium|start-kiosk'], 8)
-    kiosk = win = loop = other = False
+    rc, out, _ = run(['pgrep', '-af', 'chromium|start-kiosk|cage'], 8)
+    kiosk = win = loop = other = cage = False
     for line in out.splitlines():
+        cmd = line.split(None, 1)[1] if ' ' in line else ''
+        # cage runs one maximized application and there is no windowing
+        # to switch to, so this is the fact that retires the FULL/KIOSK
+        # tile. cage-session.sh counts as well as cage itself: between
+        # relaunches the compositor is briefly gone but the mode is not.
+        if 'cage-session.sh' in cmd or re.match(r'(\S*/)?cage(\s|$)', cmd):
+            cage = True
+            continue          # the launcher, not a browser launch
         if 'start-kiosk.sh' in line:
             loop = True
         elif '--type=' in line:
@@ -566,7 +574,8 @@ def display_status():
             # this is true, no other launch can take the screen.
             other = True
     return {'available': bool(kiosk or win or other or os.environ.get('DISPLAY')),
-            'kiosk': kiosk, 'windowed': win, 'loop': loop, 'other': other}
+            'kiosk': kiosk, 'windowed': win, 'loop': loop, 'other': other,
+            'cage': cage}
 
 
 def go_windowed():

@@ -125,8 +125,22 @@ is real there:
 
 | where | label | tap | hold |
 |---|---|---|---|
-| the Pi | `KIOSK` | kiosk ⇄ windowed browser | reload the app in place |
+| the Pi, `start-kiosk.sh` | `KIOSK` | kiosk ⇄ windowed browser | reload the app in place |
 | phone, laptop | `FULL` | the Fullscreen API, as before | reload the app in place |
+| **cage mode** | — | **the tile is not shown** | — |
+
+**In cage mode it is not merely useless, it is harmful.** cage runs one
+maximized application, so "windowed" means killing its client - which
+makes cage itself exit, which `cage-session.sh` reads as a crash and
+restarts. You would get a black panel for a second, land exactly where
+you started, and spend one of the five quick-exit strikes that trigger
+the fall back to a desktop. So `display_status()` reports `cage` and the
+tile hides; the brightness slider takes the room.
+
+`cage-session.sh` counts as cage as well as `cage` itself, because
+between relaunches the compositor is briefly gone but the mode is not.
+The match is anchored (`(\S*/)?cage(\s|$)`) so a Chromium command line
+that merely contains the word - a file path, say - does not trigger it.
 
 Hold is a reload rather than a browser restart on purpose. A gesture can
 only be made when the page is alive, and a live page needs nothing heavier
