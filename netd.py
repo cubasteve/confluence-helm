@@ -704,6 +704,24 @@ def backlight_set(pct):
 HAS_SYSTEMCTL = bool(shutil.which('systemctl'))
 
 
+def find_dm():
+    """Which display manager this image has, if any.
+
+    Only meaningful in cage mode, where there is no desktop running and
+    the panel is the only way to ask for one. Probed once: the answer
+    cannot change without a reinstall."""
+    if not HAS_SYSTEMCTL:
+        return ''
+    for dm in ('lightdm', 'gdm3', 'sddm'):
+        rc, out, err = run(['systemctl', 'list-unit-files', dm + '.service'], 8)
+        if rc == 0 and dm in out:
+            return dm
+    return ''
+
+
+DM = find_dm()
+
+
 def uptime_txt():
     """Straight from /proc - a subprocess for this would be silly, and it
     rides along on every /status."""
@@ -722,12 +740,39 @@ def uptime_txt():
 
 
 def power_status():
-    return {'available': HAS_SYSTEMCTL, 'uptime': uptime_txt()}
+    # 'desktop' is offered only when there is a display manager to start
+    # AND nothing graphical is already running - on a normal desktop
+    # session the tile would be a no-op that switches you to the login
+    # screen, which is not what anyone means by it.
+    return {'available': HAS_SYSTEMCTL, 'uptime': uptime_txt(),
+            'desktop': bool(DM) and not desktop_running()}
+
+
+def desktop_running():
+    if not DM:
+        return False
+    rc, out, err = run(['systemctl', 'is-active', DM + '.service'], 8)
+    return out.strip() == 'active'
 
 
 def power_do(action):
     if action == 'display':
         return later(display_restart)
+    if action == 'desktop':
+        # Needs root, and logind's free pass covers only reboot and
+        # poweroff - not starting an arbitrary unit. install-cage-kiosk.sh
+        # writes a sudoers line for exactly this one command; -n so a
+        # missing rule fails immediately instead of hanging on a prompt
+        # nobody can answer at the helm.
+        if not DM:
+            return {'ok': False, 'error': 'NO DISPLAY MANAGER'}
+        rc, out, err = run(['sudo', '-n', 'systemctl', 'start', DM], 25)
+        if rc == 0:
+            return {'ok': True}
+        e = (err or out).lower()
+        if 'password' in e or 'no tty' in e or 'not allowed' in e:
+            return {'ok': False, 'error': 'NOT PERMITTED FROM HERE'}
+        return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
     if action == 'helper':
         # netd.sh's loop brings it straight back with whatever is on disk.
         # Deferred, because this one kills the process answering.

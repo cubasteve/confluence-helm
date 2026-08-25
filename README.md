@@ -790,10 +790,78 @@ should read as a pause rather than as a different screen. Anything in
 `~/.local/share/applications` to keep them in the menu without putting
 them on the desktop.
 
-Removing the gap outright means not having a desktop session at all -
-a compositor-only kiosk like `cage`, with Chromium as the session. That
-is a bigger change than this, and it costs you the windowed copy and the
-desktop shortcut.
+Removing the gap outright means not having a desktop session at all.
+That is what `boot/install-cage-kiosk.sh` does - see below.
+
+## Cage mode
+
+`boot/install-cage-kiosk.sh` replaces the desktop with a
+[cage](https://github.com/cage-kiosk/cage) session, so the Pi goes from
+the Plymouth splash straight to the helm app with nothing in between.
+
+```bash
+sudo apt install cage
+sudo bash ~/helm/boot/install-cage-kiosk.sh     # then reboot
+sudo bash ~/helm/boot/uninstall-cage-kiosk.sh   # puts the desktop back
+```
+
+**What it gives up.** cage runs one maximized application, so the
+windowed copy, the FULL/KIOSK tile and the desktop shortcut all stop
+meaning anything.
+
+**What it has to arrange, because cage does not.** Cage reads no
+`~/.config/autostart`, so the two things that lived there - `netd.sh`
+and `autopull.sh` - would simply never start. `cage-session.sh` starts
+them itself.
+
+**Why it is a tty1 login and not a systemd unit.** This is the one that
+would be invisible until a new marina. NetworkManager's polkit rules
+grant a local *active* session the right to change networking without a
+password. A login on tty1 is a real logind session on seat0, and it is
+the foreground one, so netd inherits that. Under a system-level unit
+there is no session at all, and every join would come back
+`Interactive authentication required` - indistinguishable from a dead
+dongle. So the installer sets up autologin on tty1 and hooks
+`~/.bash_profile`; the hook fires only on tty1 and only when no display
+is already running, so ssh and a running desktop are unaffected.
+
+**`cage -s`.** VT switching has to be allowed or the Desktop tile cannot
+work - starting a display manager needs another VT to switch to.
+
+### Getting back to a desktop
+
+A **Desktop** tile appears in the power sheet, and only in cage mode:
+netd offers it when a display manager exists *and* nothing graphical is
+already running, so on an ordinary desktop it stays hidden rather than
+being a button that throws you at a login screen.
+
+logind hands a local active session `reboot` and `poweroff` for free but
+not starting an arbitrary unit, so the tile needs one sudoers line and
+nothing more:
+
+```
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start lightdm
+```
+
+Written to a temp file and **checked with `visudo -cf` before it is
+installed** - a malformed sudoers file locks you out of sudo. `sudo -n`
+at the call site, so a missing rule fails at once instead of hanging on
+a password prompt nobody can answer at the helm; the panel then says
+`NOT PERMITTED FROM HERE`.
+
+### If it will not come up
+
+`cage-session.sh` starts the desktop by itself after five failed
+launches, so a Pi that cannot run the kiosk lands on a desktop rather
+than on nothing. It also tries Chromium **twice**: with
+`--ozone-platform=wayland` and, if that exits immediately twice,
+without. Being wrong about that flag would otherwise be a black panel
+on a boat.
+
+The AvNav wait is bounded (60 s) unlike the desktop version's, because
+in cage mode there is nothing behind it to look at - waiting forever
+would mean a black screen forever. After the timeout it starts anyway
+and the app's own splash covers the retry.
 
 ### The Plymouth theme
 
