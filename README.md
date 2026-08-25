@@ -395,9 +395,9 @@ a helm where you cannot find the slider to turn it back up.
 
 ## Touch lock
 
-A small padlock at the foot of every page - beside the sensor glyphs on
-the dial, under SWIPE RIGHT TO CLOSE on the music panel, under SWIPE LEFT
-TO CLOSE on the track map. **Hold it for two seconds** and the helm locks.
+A small padlock at the foot of every page - under the heel reading and
+just above the sensor glyphs on the dial, under SWIPE RIGHT TO CLOSE on
+the music panel, under SWIPE LEFT TO CLOSE on the track map. **Hold it for two seconds** and the helm locks.
 Hold anywhere for two seconds and it unlocks.
 
 Both directions are the same deliberate act, so there is nothing to learn
