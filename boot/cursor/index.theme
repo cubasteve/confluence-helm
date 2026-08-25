@@ -1,3 +1,4 @@
 [Icon Theme]
 Name=Confluence-blank
 Comment=A pointer that is one transparent pixel
+Inherits=Confluence-blank

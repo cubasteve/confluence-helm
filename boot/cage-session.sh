@@ -28,10 +28,20 @@ WAIT_AVNAV="${WAIT_AVNAV:-60}"        # seconds before starting anyway
 
 log(){ printf '[cage] %s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$LOG"; }
 
-# The blank pointer theme, so cage draws no cursor either. cage reads
-# XCURSOR_THEME - it is in its man page's ENVIRONMENT section.
+# The blank pointer theme, so cage draws no cursor either.
+#
+# XCURSOR_THEME is what cage's man page tells you to set, and it is set
+# here - but it is NOT sufficient on its own and must not be relied on:
+# cage hands wlroots a NULL theme name, and wlroots resolves NULL to the
+# theme literally called "default" rather than consulting this variable.
+# That is why install-boot-chain.sh also makes "default" resolve to the
+# blank theme, and why it verifies that it did.
+#
+# XCURSOR_PATH is set explicitly so resolution cannot depend on which
+# default libxcursor happened to be compiled with.
 export XCURSOR_THEME="${XCURSOR_THEME:-Confluence-blank}"
 export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
+export XCURSOR_PATH="${XCURSOR_PATH:-$HOME/.local/share/icons:$HOME/.icons:/usr/share/icons:/usr/share/pixmaps}"
 
 # The installer's ONLY sudoers grant is the helper below - it is written
 # with the display manager already baked in, and it is root-owned so that
@@ -107,6 +117,18 @@ main(){
   local on; on="$(tty 2>/dev/null || true)"
   case "$on" in /dev/*) ;; *) on='no tty';; esac
   log "session starting on $on"
+  # Whether the pointer will be visible, answered in the log rather than
+  # on the glass. It has silently come back twice; three separate things
+  # have to line up and none of them announces itself when it is wrong.
+  if [ -r "$REPO/boot/check-cursor.py" ]; then
+    if python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" >/dev/null 2>&1; then
+      log "pointer: hidden (themes 'default' and '$XCURSOR_THEME' both blank)"
+    else
+      log "pointer: WILL BE DRAWN - run: sudo bash $REPO/boot/install-boot-chain.sh"
+      python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" 2>&1 |
+        while IFS= read -r l; do log "  $l"; done
+    fi
+  fi
   command -v "$CAGE" >/dev/null 2>&1 || {
     fall_back_to_desktop "cage is not installed"; return 1; }
 

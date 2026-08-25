@@ -852,8 +852,7 @@ the test that it worked.
 ### The mouse pointer
 
 `boot/cursor/` is a cursor theme whose pointer is a single transparent
-pixel, installed as `/usr/share/icons/Confluence-blank` and inherited by
-`/usr/share/icons/default`.
+pixel, installed as `/usr/share/icons/Confluence-blank`.
 
 A theme rather than `X -nocursor` because **X11 and Wayland both resolve
 pointers through Xcursor themes**, and Raspberry Pi OS could be running
@@ -861,11 +860,47 @@ either. `-nocursor` is more absolute but exists only under X, so the
 installer adds it as a LightDM drop-in *as well* when it detects an X
 session, and says which it found.
 
+**Setting `XCURSOR_THEME` is not enough on its own**, and this is the
+part that kept the pointer coming back. cage hands wlroots a NULL theme
+name, and wlroots resolves NULL to the theme literally called `default`
+— it does not consult `XCURSOR_THEME` for that. If no theme called
+`default` resolves to something blank, wlroots draws the arrow compiled
+into itself, and you get a pointer for the whole gap between Plymouth
+quitting and Chromium's first paint. So both routes are set up:
+`cage-session.sh` exports `XCURSOR_THEME` (and `XCURSOR_PATH`), and the
+installer makes `default` resolve to the blank theme too.
+
+That second half goes through `update-alternatives --set x-cursor-theme`,
+because `/usr/share/icons/default/index.theme` is the tail of that chain
+on Debian and writing to the path writes *through* the symlinks into a
+package-owned file. If the alternative cannot be set — most likely on a
+Pi where an earlier version of this script already replaced the link
+with a plain file — the installer falls back to writing the file itself
+and says so. It used to swallow that refusal and report success.
+
+The theme's `index.theme` carries `Inherits=Confluence-blank`, naming
+itself. That looks like a mistake and is not: read through the
+alternatives symlink at `/usr/share/icons/default/index.theme` there is
+no `cursors/` directory alongside the file, so the `Inherits` line is
+the only thing that sends the lookup back to the real theme. Debian's
+own DMZ-White does exactly the same.
+
+**To find out whether the pointer will be drawn:**
+
+```bash
+python3 ~/helm/boot/check-cursor.py -v
+```
+
+It resolves a theme name the way libxcursor does — same search path,
+same `Inherits` chain, same sanity checks on the binary — and reports
+whether the cursor it lands on is fully transparent. Exit status 0 means
+no pointer. `cage-session.sh` runs it at every start and writes the
+answer to `/tmp/cage-session.log`, so a boot that shows a pointer says
+why in the log rather than leaving you to guess.
+
 `make-blank-cursor.py` writes the Xcursor binary directly rather than
 depending on `xcursorgen` being installed - it is a 16-byte header, a
-table of contents, and one 1x1 ARGB pixel per nominal size. Verified by
-loading it back through **libXcursor itself**, the same library the
-compositor uses, not just by re-reading it with the code that wrote it.
+table of contents, and one 1x1 ARGB pixel per nominal size.
 
 ### What is still visible, and why
 

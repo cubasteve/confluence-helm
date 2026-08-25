@@ -56,11 +56,20 @@ for name in ('default', 'arrow', 'top_left_arrow', 'pointer', 'hand1',
         os.remove(link)
     os.symlink('left_ptr', link)
 
+# Inherits= naming this very theme looks like a mistake and is not: it is
+# what makes the theme usable through the x-cursor-theme alternatives
+# chain, where /usr/share/icons/default/index.theme is a SYMLINK to this
+# file. Read from that path there is no cursors/ directory beside it, so
+# without the Inherits line the lookup finds nothing and the compositor
+# draws its own arrow. Debian's own DMZ-White does exactly this. Read
+# from inside the theme the line is harmless - libxcursor checks the
+# theme's own cursors/ directory before it follows any inheritance.
 for f in ('index.theme', 'cursor.theme'):
     open(os.path.join(OUT, f), 'w').write(
         '[Icon Theme]\n'
         'Name=Confluence-blank\n'
-        'Comment=A pointer that is one transparent pixel\n')
+        'Comment=A pointer that is one transparent pixel\n'
+        'Inherits=Confluence-blank\n')
 
 print('wrote %s (%d bytes) and %d aliases'
       % (path, len(out), len(os.listdir(CURSORS)) - 1))
