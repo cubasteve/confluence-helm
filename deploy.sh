@@ -40,12 +40,23 @@ if [ "${1:-}" = "--check" ]; then
   stamp | cmp -s - "$DST" && exit 0 || exit 1
 fi
 
-stamp > "$DST"
+# Write beside the target and rename, never straight over it. `> "$DST"`
+# truncates the served copy before sed writes a byte, so a failure part
+# way through - a full SD card, a bad block - destroys the good copy and
+# THEN reports a problem. And 71% of the app is one <script>, so a
+# truncated copy is not a stale panel, it is a dead one: the boot splash
+# holds every other layer at visibility:hidden and nothing clears it.
+#
+# $DST.new is in $DST_DIR, so this is a same-filesystem rename: atomic,
+# and AvNav never sees a partial file.
+trap 'rm -f "$DST.new"' EXIT
+stamp > "$DST.new"
 
-if stamp | cmp -s - "$DST"; then
+if stamp | cmp -s - "$DST.new"; then
+  mv -f "$DST.new" "$DST"
   echo "deployed  $(build_id)  $(wc -c < "$DST") bytes  ->  $DST"
 else
-  echo "COPY VERIFY FAILED - served copy does not match source" >&2
+  echo "COPY VERIFY FAILED - served copy left untouched" >&2
   exit 1
 fi
 

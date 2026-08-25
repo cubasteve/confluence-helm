@@ -14,6 +14,15 @@
 # burns battery and GitHub requests for no benefit.
 
 set -u
+
+# git will open /dev/tty directly for a credential prompt - stdin being
+# /dev/null does not stop it. Under cage the controlling terminal is
+# tty1, which is in graphics mode: the prompt reaches nobody, the pull
+# blocks forever, the loop never reaches its sleep, and the lock below
+# stays held so nothing else takes over. A remote that needs auth should
+# fail fast and be visible in the log instead.
+export GIT_TERMINAL_PROMPT=0
+
 REPO="$HOME/helm"
 INTERVAL="${1:-300}"
 RELOAD="${AUTOPULL_RELOAD:-1}"      # export AUTOPULL_RELOAD=0 to deploy without restarting
@@ -24,10 +33,27 @@ log(){ echo "[autopull] $(date '+%H:%M:%S') $*"; }
 # desktop's autostart starts another when you tap Desktop. Two of these
 # racing on the same clone is a torn checkout waiting to happen, so the
 # second one exits rather than joining in.
-exec 9>"/tmp/confluence-autopull.lock"
-if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
-  log "another autopull already has the repo - leaving it to that one"
-  exit 0
+#
+# Per-uid path, because a fixed name in world-writable /tmp is a foot-gun:
+# one `sudo bash ~/helm/autopull.sh` while debugging leaves a root-owned
+# file the pi user can neither open for write nor unlink, and autopull is
+# then dead every boot after.
+#
+# The two failures have to be told apart. bash does NOT abort on a failed
+# `exec` redirection here - it carries on with fd 9 unopened, and flock
+# then fails with "Bad file descriptor", which looks exactly like losing
+# the race. Reporting a duplicate that does not exist sends you hunting
+# the wrong thing for an hour. So: check that the fd opened, and if it
+# did not, carry on WITHOUT the lock. Two copies racing the clone is
+# recoverable; an update path that is dead and lying about why is not.
+LOCK="/tmp/confluence-autopull.$(id -u).lock"
+if exec 9>"$LOCK"; then
+  if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
+    log "another autopull already has the repo - leaving it to that one"
+    exit 0
+  fi
+else
+  log "cannot open $LOCK - carrying on unlocked"
 fi
 
 cd "$REPO" 2>/dev/null || { log "no repo at $REPO"; exit 1; }
@@ -78,11 +104,27 @@ while true; do
 
   if bash "$REPO/deploy.sh"; then
     if [ "$RELOAD" = "1" ]; then
-      # start-kiosk.sh runs chromium in a restart loop, so killing it is
-      # all it takes - no window-manager tooling, no xdotool. Matches the
-      # kiosk instance only, leaving the desktop-shortcut window alone.
-      if pkill -f 'chromium-browser --kiosk' 2>/dev/null; then
+      # Both supervisors run chromium in a restart loop, so killing it is
+      # all it takes - no window-manager tooling, no xdotool. Under cage,
+      # chromium dying takes cage with it and cage-session.sh relaunches
+      # with a fresh ?v=, which is the same self-heal.
+      #
+      # The pattern is netd.py's KIOSK_PAT, and it has to be. The old one
+      # was 'chromium-browser --kiosk', which requires the two to be
+      # adjacent - true for start-kiosk.sh, false for cage-session.sh's
+      # FLAGS_A ('chromium-browser --ozone-platform=wayland --kiosk'),
+      # which is the set that wins on a healthy Pi. So in cage mode every
+      # push deployed and none of them ever reached the glass. The ^ also
+      # keeps it off `cage -s -- chromium...`, which must not be killed
+      # directly - the supervisor is what restarts it.
+      #
+      # The log line is deliberately OUTSIDE the condition: with it
+      # inside, a miss printed nothing at all, and the loop reported
+      # "updated <sha>" and then went quiet.
+      if pkill -f '^[^ ]*chromium[^ ]* .*--kiosk' 2>/dev/null; then
         log "kiosk restarting with the new version"
+      else
+        log "deployed, but no kiosk process matched - panel still on the old version"
       fi
     else
       log "deployed; reload suppressed (AUTOPULL_RELOAD=0)"

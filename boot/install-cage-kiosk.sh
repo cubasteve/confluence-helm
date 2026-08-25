@@ -132,8 +132,24 @@ chown -R "$OWNER:$OWNER" "$AUTOSTART"
 ok "tapping Desktop will open the helm app windowed on it"
 
 say "5/7  stop the desktop starting by itself"
-systemctl get-default > "$STATE/default-target" 2>/dev/null || echo graphical.target > "$STATE/default-target"
-ok "was: $(cat "$STATE/default-target")"
+# Write-once, the same rule backup() applies at :41. Unconditional, this
+# was a trap: a SECOND installer run - which is the only way to pick up a
+# later commit - reads back the multi-user.target the FIRST run set and
+# records it as "what it was before". The uninstaller then restores that,
+# removes the tty1 autologin and the profile hook, and the Pi comes up on
+# a text console with nothing to start a GUI. The escape hatch produced
+# the outcome it exists to prevent.
+#
+# Deliberately no coercion of a captured multi-user.target to graphical:
+# on a genuinely headless Pi that is the correct value to restore, and
+# the write-once guard is the only thing that tells the two cases apart.
+if [ ! -f "$STATE/default-target" ]; then
+  systemctl get-default > "$STATE/default-target" 2>/dev/null \
+    || echo graphical.target > "$STATE/default-target"
+  ok "was: $(cat "$STATE/default-target")"
+else
+  ok "already recorded: $(cat "$STATE/default-target") - not overwriting"
+fi
 systemctl set-default multi-user.target >/dev/null 2>&1 && ok "now: multi-user.target" \
   || ok "could not change the default target"
 systemctl daemon-reload || true

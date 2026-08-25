@@ -33,12 +33,24 @@ log(){ printf '[cage] %s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$LOG"; }
 export XCURSOR_THEME="${XCURSOR_THEME:-Confluence-blank}"
 export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 
+# The installer's ONLY sudoers grant is the helper below - it is written
+# with the display manager already baked in, and it is root-owned so that
+# a NOPASSWD grant is not also a way to become root by editing a file in
+# $HOME. So try that first. `sudo -n systemctl start lightdm` was never
+# covered by any grant the installer writes and worked, when it worked at
+# all, only by accident of a stock image's blanket nopasswd rule - and it
+# hardcodes lightdm, while the installer probes gdm3 and sddm precisely
+# because it may not be.
+TO_DESKTOP="${TO_DESKTOP:-/usr/local/sbin/confluence-to-desktop}"
 fall_back_to_desktop(){
   log "falling back to the desktop: $*"
-  if sudo -n "$SYSTEMCTL" start "$DM" 2>>"$LOG"; then
+  if [ -x "$TO_DESKTOP" ] && sudo -n "$TO_DESKTOP" 2>>"$LOG"; then
+    log "handed the screen to the desktop"
+  elif sudo -n "$SYSTEMCTL" start "$DM" 2>>"$LOG"; then
     log "started $DM"
   else
-    log "could NOT start $DM - you have a shell on tty1"
+    log "could NOT reach a desktop - you have a shell on tty1"
+    log "  from here: sudo systemctl start $DM"
   fi
 }
 

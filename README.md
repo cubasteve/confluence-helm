@@ -159,9 +159,19 @@ By hand, if you would rather:
 
 ```bash
 pkill -f start-kiosk.sh                  # the loop first, or it relaunches
-pkill -f 'chromium-browser --kiosk'
+pkill -f '^[^ ]*chromium[^ ]* .*--kiosk' # anchored: see below
 curl -s -X POST -d '{"mode":"kiosk"}' localhost:8091/display/mode   # and back
 ```
+
+That pattern is the one rule, and `netd.py`'s `KIOSK_PAT` and
+`autopull.sh` both use it verbatim. It has to be anchored and it has to
+allow flags before `--kiosk`: under cage the command line is
+`chromium-browser --ozone-platform=wayland --kiosk …`, so the older
+`'chromium-browser --kiosk'` matched nothing at all — every push
+deployed and none of them ever reached the glass. The `^` is what keeps
+it off `cage -s -- chromium…`, which must never be killed directly:
+that is the supervisor, and killing the browser alone is what makes it
+relaunch.
 
 The display actions need `DISPLAY` and `XAUTHORITY`, which the helper
 inherits from the autostart session. Started by hand over SSH it defaults

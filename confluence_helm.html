@@ -155,8 +155,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   border:2px solid var(--hairline);font-family:var(--font);
   display:flex;align-items:center;justify-content:center}
 .mini:active{background:var(--chip)}
-.numv{min-width:120px;text-align:center;font-size:40px;font-weight:600;
-  color:var(--accent)}
+/* .numv is defined further down, next to .steprow that uses it. A second
+   copy lived here and lost on cascade order, so edits made to it did
+   nothing at all - the same trap .mini fell into two lines below the
+   real one. One definition, no drift. */
 
 .slab{font-size:27px;font-weight:600;letter-spacing:.16em;color:var(--label);
   text-transform:uppercase;margin:30px 0 14px;padding-bottom:12px;
@@ -203,6 +205,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bar-scale{display:flex;justify-content:space-between;font-size:19px;
   font-weight:600;color:var(--label);letter-spacing:.1em}
 .steprow{display:flex;align-items:center;gap:14px;margin-top:6px}
+/* Reads as a warning while it is on, because that is what it is: the
+   sensor glyphs are lit by numbers nobody measured. Plain label off. */
+/* fixed width, or the button beside it resizes between ON and OFF */
+.demo-state{font-size:26px;font-weight:600;letter-spacing:.14em;
+  color:var(--label);min-width:72px;text-align:right}
+.demo-state.on{color:var(--warn)}
 .numv{min-width:118px;text-align:center;font-size:40px;font-weight:600;color:var(--accent)}
 .numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
   letter-spacing:.12em}
@@ -857,6 +865,21 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          helper is unreachable, and dead radios would be worse than none. -->
     <div class="conn" id="conn-sec" style="display:none"></div>
 
+    <!-- The demo feed fabricates wind and depth so the bezel and the
+         shallow alarm can be judged before the vane and transducer are
+         fitted. It writes into the same store the real sensors use, so
+         while it is on the four glyphs above are lit by data that is not
+         coming off the boat - and the shallow alarm is firing on it. It
+         needed to be switchable from here rather than only by editing
+         CFG: the one moment you want it off is standing at the panel
+         with the vane just bolted on. It also switches itself off the
+         moment a real reading turns up. -->
+    <div class="slab">Sensors</div>
+    <div class="steprow">
+      <button class="mini wide" id="demo-btn">DEMO DATA</button>
+      <div class="demo-state" id="demo-state">OFF</div>
+    </div>
+
     <div class="slab">Display <span id="dim-pct">100%</span></div>
     <div class="dimrow">
       <button class="tile" id="theme-btn">
@@ -1256,6 +1279,13 @@ function skMessage(data){
   if(m.requestId && puts[m.requestId]){          // answer to one of our PUTs
     puts[m.requestId](m); delete puts[m.requestId]; }
   (m.updates||[]).forEach(u=>(u.values||[]).forEach(v=>{
+    /* A real instrument has turned up, so the made-up one stands down.
+       This is the half of the switch that cannot be forgotten: the demo
+       feed writes into the same store the sensors do, and left on it
+       would sit on top of a genuine vane at 4 Hz - and go on firing the
+       shallow alarm on numbers nobody measured. */
+    if(CFG.windDemo && typeof v.value==='number' && DEMO_REAL.indexOf(v.path)>=0)
+      demoSet(false, v.path);
     if(typeof v.value==='number'||typeof v.value==='boolean')put(v.path,v.value);
     else if(v.path==='navigation.position'&&v.value&&v.value.latitude!==undefined){
       put('pos.lat',v.value.latitude); put('pos.lon',v.value.longitude);
@@ -1392,6 +1422,10 @@ const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o);
 const dialVisible=()=>PAGE_I===1
                    && !panel.classList.contains('open')
                    && !ssOn;
+
+/* DRAW rate. See the gate in render() for why this is not 60 Hz. */
+const DRAW_MS=50;
+let lastDraw=0;
 function render(){
   /* mid-slide: the dial is behind an opaque panel, so none of the work
      below can be seen. Skip it and let the compositor have the frame. */
@@ -1448,8 +1482,17 @@ function render(){
      panel was open - precisely when nobody is watching the number. */
   if(dv===null) alertClear('depth');
   else{
-    const aV=met?CFG.depthAlarm/M_TO_FT:CFG.depthAlarm;
-    const wV=met?CFG.depthWarn /M_TO_FT:CFG.depthWarn;
+    /* NO conversion here. dv was already put into the display unit at
+       the top (met ? d : d*M_TO_FT), and CFG.depthAlarm is in display
+       units too - the FT/M toggle changes the unit without touching the
+       number, the +/- steppers move it by 1 in whatever is showing, and
+       drawDepth scales it against BAR_MAX(). Converting a second time
+       divided a 6 M alarm down to 1.83 m: the bar marker sat inside the
+       red zone while nothing fired, and depthWarn was wrong by the same
+       factor so there was no SHOALING either. Nothing at all until
+       1.83 m - and since 'alarm' is what wakes the screensaver, a slept
+       panel stayed asleep through it. */
+    const aV=CFG.depthAlarm, wV=CFG.depthWarn;
     const u=met?'M':'FT';
     /* Whole units in the text on purpose: to a tenth it would rewrite
        the banner several times a second for no added meaning. */
@@ -1460,7 +1503,25 @@ function render(){
   }
 
   /* ================= DRAW - only when the dial can be seen ============= */
-  if(dialVisible()){
+  /* ...and only 20 times a second, not 60.
+
+     DATA above stays at frame rate - the filters have to, or the music
+     page's bezel would freeze in mid-sweep while the dial is covered.
+     DRAW does not. It is ~44 writes into a 128-element SVG, fifteen of
+     them middle-anchored <text> replacements that re-measure glyph
+     advance, and two transform ATTRIBUTE rotations that go through SVG
+     layout rather than the compositor. Running that 60 times a second
+     was 34% of the main thread, against 24% for the music page, which
+     does no DOM work in render() at all and hands its 60 fps motion to
+     a CSS transition instead.
+
+     Measured on the panel: 20 Hz cuts main-thread time 37-47% and the
+     needles are indistinguishable - the filters smooth over 420 ms, so
+     three frames is well inside one time constant. DRAW_MS is a
+     constant rather than a literal so 33 (30 Hz) is a one-token change
+     if the marks ever look stepped. */
+  if(dialVisible() && Date.now()-lastDraw>=DRAW_MS){
+  lastDraw=Date.now();
   $('spd').textContent=fmt(spd,1);
   $('spd').classList.toggle('stale',spd===null);
   wText('spd-label', useS?'STW':'SOG');
@@ -1468,8 +1529,7 @@ function render(){
   const de=$('dpt');
   de.textContent=fmt(dv,dv!==null&&dv<100?1:0);
   de.classList.toggle('stale',dv===null);
-  const alarmV=met?CFG.depthAlarm/M_TO_FT:CFG.depthAlarm;
-  const warnV =met?CFG.depthWarn /M_TO_FT:CFG.depthWarn;
+  const alarmV=CFG.depthAlarm, warnV=CFG.depthWarn;   /* display units both - see above */
   de.classList.toggle('alarm',dv!==null&&dv<alarmV);
   de.classList.toggle('warn', dv!==null&&dv>=alarmV&&dv<warnV);
 
@@ -1513,33 +1573,33 @@ function render(){
   /* ---- three cells, contextual on race state ---- */
   const L = (CFG.racePro && racing) ? lineData() : null;
   if(L){
-    $('c1-lbl').textContent='TO LINE';
-    $('c2-lbl').textContent='BIAS';
-    $('c3-lbl').textContent='BURN';
+    wText('c1-lbl','TO LINE');
+    wText('c2-lbl','BIAS');
+    wText('c3-lbl','BURN');
     const dm = met ? L.dist : L.dist*M_TO_FT;
     de.textContent = Math.abs(dm)>999?'999':Math.round(dm);
     de.classList.toggle('alarm', L.dist<0);          // over early
     de.classList.remove('warn','stale');
-    $('dpt-u').textContent = met?'METRES':'FEET';
+    wText('dpt-u', met?'METRES':'FEET');
     $('c2').textContent  = Math.abs(L.bias).toFixed(0)+'°';
     $('c2b').textContent = L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT);
     $('c2').classList.remove('stale'); $('c2b').classList.remove('stale');
     $('vmg').textContent = L.burn===null?'––':(L.burn>0?'+':'')+L.burn;
     $('vmg').classList.toggle('alarm', L.burn!==null&&L.burn<0);
-    $('c3-u').textContent='SECONDS';
+    wText('c3-u','SECONDS');
   } else {
-    $('c1-lbl').textContent='DEPTH';
-    $('c3-lbl').textContent='VMG';
-    $('c3-u').textContent='KNOTS';
-    $('dpt-u').textContent=CFG.depthUnit==='m'?'METRES':'FEET';
+    wText('c1-lbl','DEPTH');
+    wText('c3-lbl','VMG');
+    wText('c3-u','KNOTS');
+    wText('dpt-u', CFG.depthUnit==='m'?'METRES':'FEET');
     if(CFG.showHeel){
-      $('c2-lbl').textContent='HEEL';
+      wText('c2-lbl','HEEL');
       $('c2').textContent  = heel===null?'––':heel.toFixed(0)+'°';
       $('c2b').textContent = roll===null?'' : (roll>0?'STBD':'PORT');
       $('c2').classList.toggle('stale',heel===null);
       $('c2b').classList.toggle('stale',heel===null);
     } else {
-      $('c2-lbl').textContent='TWA';
+      wText('c2-lbl','TWA');
       $('c2').textContent  = twa===null?'––':Math.abs(twa).toFixed(0)+'°';
       $('c2b').textContent = twa===null?'' : (twa>0?'STBD':'PORT');
       $('c2').classList.toggle('stale',twa===null);
@@ -1565,15 +1625,26 @@ function render(){
   }
   /* the sparkline gains a point about once a second - repainting the
      whole canvas 60 times a second to redraw the same line is pure heat */
-  if(tmap.classList.contains('open') && Date.now()-lastTrackPaint>250){
+  /* !ssOn on both of these, the same test dialVisible() makes. Without
+     it the map page kept repainting behind a fully opaque screensaver -
+     and drawMap is an 800-node innerHTML rebuild, running once a second
+     against a 60 fps canvas on the same thread, on a panel that stays
+     powered for weeks. */
+  if(tmap.classList.contains('open') && !ssOn && Date.now()-lastTrackPaint>250){
     lastTrackPaint=Date.now(); paintTrack();
   }
   /* watch the track draw itself. 1 Hz matches the sample rate, so redrawing
      faster would only redraw the same line. Slides skip this entirely -
      the early return above fires long before we get here.              */
-  if(tmap.classList.contains('open') && trackLive() && !VIEWTRK
+  if(tmap.classList.contains('open') && !ssOn && trackLive() && !VIEWTRK
      && Date.now()-lastMapDraw>1000){
-    lastMapDraw=Date.now(); drawMap(TRK);
+    lastMapDraw=Date.now();
+    /* Local recording redraws from TRK, which grew a point since the
+       last pass. Plugin recording has to go and ask, so it does that at
+       5 s and draws the answer - never TRK, which is not its track. */
+    if(serverTrack()){
+      if(Date.now()-srvAt>5000) fetchServerTrack().then(p=>{ if(p) drawMap(p); });
+    } else drawMap(TRK);
   }
   requestAnimationFrame(render);
 }
@@ -1741,12 +1812,49 @@ function trackSample(){
   TRK.push({t:now, la:+la.toFixed(7), lo:+lo.toFixed(7),
             s:+((get('navigation.speedOverGround')||0)).toFixed(2),
             c:+((get('navigation.courseOverGroundTrue')||0)).toFixed(3)});
-  if(TRK.length%15===0){                        // persist every 15 s
-    try{ localStorage.setItem('racetrack',JSON.stringify(TRK)); }catch(e){}
+  if(TRK.length>TRK_MAX) TRK.splice(0, TRK.length-TRK_MAX);
+  trkDirty=true;                     /* the write itself is on a timer */
+}
+
+/* ---- persisting the track ----
+   This used to run inline, right here, every fifteenth point: a full
+   JSON.stringify of TRK plus a synchronous localStorage write, on the
+   animation frame that was drawing the dial. Four hours of points is
+   ~1 MB of string, which is 35-60 ms on the Pi's A72 - and the very
+   worst place it landed was inside the slide guard, the one branch
+   whose whole purpose is to hand the compositor a clean 420 ms.
+
+   So: a timer, skipped while anything is sliding, and a cap. TRK was
+   unbounded before - nothing trimmed it, and saveRace() copies rather
+   than clears, so a season accumulated into one key until the ~5 MiB
+   quota threw and the empty catch swallowed it. 20k points is over five
+   hours at 1 Hz, far past any race, and about 1.4 MB.
+
+   And a failure is now visible. `catch(e){}` meant the buffer that
+   exists so a crash does not cost you the race stopped working with no
+   sign at all - at exactly the moment, finishRace(), when you most
+   believe it is safe. */
+const TRK_MAX=20000;
+let trkDirty=false, trkSaveBad=false;
+function trkSave(){
+  try{
+    localStorage.setItem('racetrack',JSON.stringify(TRK));
+    trkDirty=false;
+    if(trkSaveBad){ trkSaveBad=false; paintTrack(); }
+    return true;
+  }catch(e){
+    if(!trkSaveBad){ trkSaveBad=true; paintTrack(); }
+    return false;
   }
 }
+setInterval(()=>{
+  if(!trkDirty) return;
+  if(Date.now()<slideUntil) return;   /* never during a page transition */
+  trkSave();
+}, 15000);
 function trackClear(){
   TRK=[]; localStorage.removeItem('racetrack');
+  trkDirty=false; trkSaveBad=false;      /* the space is back */
   MAPVIEW=null; tileKey='';
   paintTrack(); drawMap(TRK);
 }
@@ -1831,6 +1939,10 @@ function paintTrack(){
   else if(rec&&!fix) txt = 'waiting for GPS';
   else if(rec)     txt = 'recording…';
   else             txt = 'no track';
+  /* A failed save has to say so. The whole point of the buffer is that a
+     crash does not cost you the race, and silently not having one is
+     worse than not having one at all. */
+  if(trkSaveBad && !srv) txt += ' · NOT SAVED';
   if(Date.now()>trkFlashUntil)            // a flash holds the slot
     $('trk-n').textContent = txt + (srv ? '' : ' · local');
   $('trk-rec').classList.toggle('on', rec);
@@ -1874,7 +1986,7 @@ const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
 const startRace  =()=>{ tGun=Date.now(); tState='racing'; };
 const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
-  try{ localStorage.setItem('racetrack',JSON.stringify(TRK)); }catch(e){}
+  trkSave();                     /* reports its own failure - see trkSave */
   paintTrack(); };
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000; };
 
@@ -2081,8 +2193,27 @@ const FINGERS=Math.max(1,Math.min(CFG.swipeFingers|0||1,
    what lets three-finger swipes exist at all, and it keeps the tap and
    hold behaviour exactly as it was: those still want one finger. */
 let G=null;
+
+/* "this touch belongs to a button, do not also read it as a gesture."
+   The way to say that used to be stopPropagation() on pointerup, and it
+   was a trap: the pointerdown had ALREADY bubbled to #stage and bumped
+   the counter, so swallowing the release left G.live stuck above zero
+   with nothing able to bring it back down. One tap on the countdown +
+   and the panel, paging, the race clock and hold-to-reset were dead for
+   the rest of the session, recoverable only by a power cycle - and
+   because tick() dims those buttons while racing without disabling
+   them, a stray mid-race tap did it with no feedback at all.
+
+   Claiming says the same thing without touching event flow, so the
+   counter can never go out of step. Written to work whichever order the
+   listeners run in: at the target this fires BEFORE #stage's handler
+   creates G, so it creates it. */
+const gClaim=()=>{
+  if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
+  G.claimed=true;
+};
 $('stage').addEventListener('pointerdown',e=>{
-  if(!G) G={p:new Map(), live:0, max:0, t0:Date.now()};
+  if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
   G.p.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
   G.live++; G.max=Math.max(G.max,G.live);
 });
@@ -2093,13 +2224,18 @@ $('stage').addEventListener('pointermove',e=>{
 const endGesture=e=>{
   if(!G) return;
   const q=G.p.get(e.pointerId);
-  if(!q) return;                       /* not one of ours */
+  if(!q || q.up) return;               /* not ours, or already counted out */
   q.x=e.clientX; q.y=e.clientY;
+  q.up=true;                           /* idempotent: up AND cancel can both fire */
   if(--G.live>0) return;               /* other fingers still down */
-  const g=G; G=null; judgeGesture(g);
+  const g=G; G=null;
+  if(!g.claimed) judgeGesture(g);
 };
-$('stage').addEventListener('pointerup',endGesture);
-$('stage').addEventListener('pointercancel',endGesture);
+/* On window, in the CAPTURE phase, so that a release is counted before
+   anything downstream gets the chance to swallow it. A finger that went
+   into G always comes back out. */
+addEventListener('pointerup',endGesture,true);
+addEventListener('pointercancel',endGesture,true);
 
 function judgeGesture(g){
   /* The average of every finger's travel. One finger that slips while
@@ -2176,8 +2312,9 @@ function timerTap(){
 
 /* start line pings - tap while sailing past each end */
 ['pin','boat'].forEach(k=>{
-  $('ping-'+k).addEventListener('pointerup',e=>{
-    e.stopPropagation(); pingEnd(k);
+  $('ping-'+k).addEventListener('pointerdown',gClaim);
+  $('ping-'+k).addEventListener('pointerup',()=>{
+    pingEnd(k);
     $('ping-'+k).classList.add('set');
   });
   if(LINE[k]) $('ping-'+k).classList.add('set');
@@ -2243,7 +2380,12 @@ const PREF_DEFS={
   theme:      v=>THEMES.indexOf(v)>=0 ? v : null,
   depthUnit:  v=>(v==='ft'||v==='m') ? v : null,
   depthAlarm: v=>(typeof v==='number'&&v>=1&&v<=60)  ? Math.round(v) : null,
-  dim:        v=>(typeof v==='number'&&v>=25&&v<=100)? Math.round(v) : null
+  dim:        v=>(typeof v==='number'&&v>=25&&v<=100)? Math.round(v) : null,
+  /* Persisted so that turning it off is permanent. Before, it was a
+     source-code default with no panel control at all: the only way off
+     was to edit the file, and until someone did, the shallow alarm was
+     firing on invented depth. */
+  windDemo:   v=>typeof v==='boolean' ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -2276,8 +2418,17 @@ const ICON={
 $('theme-btn').addEventListener('click',()=>{
   CFG.theme=THEMES[(THEMES.indexOf(CFG.theme)+1)%THEMES.length];
   applyTheme(); prefsSave();});
+/* Flipping the unit converts the threshold with it. Carrying the raw
+   number across silently redefined the alarm by 3.28x, and in the
+   dangerous direction one way round: a 6 M alarm became a 6 FT one -
+   under two metres - with the panel still showing the figure you set. */
 $('r-units').addEventListener('click',()=>{
-  CFG.depthUnit=CFG.depthUnit==='ft'?'m':'ft'; drawDepth(); prefsSave();});
+  const toM = CFG.depthUnit==='ft';
+  CFG.depthUnit = toM?'m':'ft';
+  CFG.depthAlarm = Math.max(1, Math.min(60,
+    Math.round(toM ? CFG.depthAlarm/M_TO_FT : CFG.depthAlarm*M_TO_FT)));
+  CFG.depthWarn = CFG.depthAlarm*2;
+  drawDepth(); prefsSave();});
 
 /* ---- brightness ----
    Two mechanisms, and only one of them is real dimming. The veil is a
@@ -2326,7 +2477,9 @@ function drawDepth(){
   $('bar-alarm').style.width=(CFG.depthAlarm/mx*100)+'%';
   $('bar-warn').style.left =(CFG.depthAlarm/mx*100)+'%';
   $('bar-warn').style.width=((CFG.depthWarn-CFG.depthAlarm)/mx*100)+'%';
-  $('dpt-u').textContent=CFG.depthUnit==='m'?'METRES':'FEET';
+  /* through the cache, so the dial's DRAW block and this cannot end up
+     disagreeing about what the label already says */
+  wText('dpt-u', CFG.depthUnit==='m'?'METRES':'FEET');
 }
 $('d-up').addEventListener('click',()=>{
   CFG.depthAlarm++; CFG.depthWarn=CFG.depthAlarm*2; drawDepth(); prefsSave();});
@@ -2336,8 +2489,14 @@ $('d-down').addEventListener('click',()=>{
 
 
 /* timer sync: nudge a whole minute, only while the clock is running */
-$('t-minus').addEventListener('pointerup',e=>{e.stopPropagation();nudge(-60);});
-$('t-plus') .addEventListener('pointerup',e=>{e.stopPropagation();nudge( 60);});
+/* gClaim rather than stopPropagation - see the comment on it. These two
+   sit in the top third of the dial, which is timerTap()'s zone, so the
+   gesture reader must be told to ignore the tap; it must not be stopped
+   from SEEING it. */
+$('t-minus').addEventListener('pointerdown',gClaim);
+$('t-plus') .addEventListener('pointerdown',gClaim);
+$('t-minus').addEventListener('pointerup',()=>nudge(-60));
+$('t-plus') .addEventListener('pointerup',()=>nudge( 60));
 
 /* ==================================================================
    CONNECTIVITY  ·  WiFi adapters and Bluetooth
@@ -2367,6 +2526,22 @@ const PAGE=4;                      /* rows per page - matches .ns-list height */
    so nothing from the helper is trusted as markup. */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* A fetch that is guaranteed to settle. Every plain fetch() in this file
+   talks to something on the boat - Signal K, the track plugin, AvNav -
+   and a box that is powered but wedged accepts the connection and then
+   says nothing, so the promise never rejects and never resolves. The
+   three callers that had no deadline each failed differently and none of
+   them failed visibly: the map never drew, the race library withheld
+   rows already on the device, and pollMusic - which reschedules AFTER
+   its await - stopped for the rest of the session on one stalled reply.
+   Rejects on timeout, so a caller's existing catch is what handles it. */
+function fetchT(url, ms){
+  const ac=new AbortController();
+  const t=setTimeout(()=>ac.abort(), ms||8000);
+  return fetch(url,{signal:ac.signal,cache:'no-store'})
+    .finally(()=>clearTimeout(t));
+}
 
 async function netApi(path, body){
   const ctl=new AbortController();
@@ -3019,7 +3194,7 @@ let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
 
 async function pollMusic(){
   try{
-    const r=await fetch('nowplaying.json?_='+Date.now(),{cache:'no-store'});
+    const r=await fetchT('nowplaying.json?_='+Date.now(), 5000);
     if(r.ok){
       const j=await r.json();
       const changed = j.title!==NP.title || j.event!==NP.event;
@@ -3100,6 +3275,44 @@ function paintBezel(){
    Deliberately not a straight ramp: real apparent wind wanders, and a
    linear sweep makes the easing look wrong when it is actually right. */
 let demoT=0;
+
+/* Everything the feed fabricates, in one list, so the switch below can
+   clear exactly what it wrote. */
+const DEMO_PATHS=['environment.wind.angleApparent',
+                  'environment.wind.speedApparent',
+                  'environment.wind.speedTrue',
+                  'environment.depth.belowTransducer',
+                  'navigation.speedOverGround'];
+/* The subset that means a real instrument has appeared. SOG is not on it
+   - the feed already defers to a real SOG, so a GPS fix alone is no
+   evidence the vane is fitted. */
+const DEMO_REAL=['environment.wind.angleApparent',
+                 'environment.wind.speedApparent',
+                 'environment.wind.speedTrue',
+                 'environment.depth.belowKeel',
+                 'environment.depth.belowTransducer'];
+
+function demoSet(on, why){
+  if(!!CFG.windDemo===!!on) return;
+  CFG.windDemo=!!on;
+  if(!on){
+    /* Drop what it wrote rather than waiting out staleAfter, and drop the
+       filter state with it - a filter fed null does not decay, it FREEZES
+       on its last value, so leaving it would hold the bezel on a
+       fabricated bearing until a real reading happened to arrive. */
+    DEMO_PATHS.forEach(p=>{ delete S[p]; });
+    ['awa','twa','tws','dpt','vmg'].forEach(k=>{ delete sm[k]; delete smA[k]; });
+    bezelCont=null;
+  }
+  drawDemo(); prefsSave();
+  if(why) console.log('[helm] demo data off:', why);
+}
+function drawDemo(){
+  const on=!!CFG.windDemo;
+  wText('demo-state', on?'ON':'OFF');
+  wCls('demo-state','on',on);
+}
+
 function windDemoTick(){
   if(!CFG.windDemo) return;
   demoT+=0.25;
@@ -3115,6 +3328,8 @@ function windDemoTick(){
    flipped live from a console without a reload. Four no-op calls a
    second when off is not measurable. */
 setInterval(windDemoTick, 250);
+$('demo-btn').addEventListener('click',()=>demoSet(!CFG.windDemo));
+drawDemo();
 
 let stripKey='';
 function paintStrip(){
@@ -3166,16 +3381,31 @@ pollMusic(); musicTick();
 const tmap=$('tmap');
 const MAP_CX=540, MAP_CY=430, MAP_R=250;
 
+/* When the plugin owns recording, the points live on the boat and TRK
+   stays empty here - trackSample() returns immediately in that mode. So
+   the fetched set is kept, and it is what every redraw draws. It used to
+   be fetched once on entry and then overwritten a second later by the
+   live redraw handing drawMap(TRK): on a clean Pi the race arrived and
+   vanished, and on one that had recorded locally before the plugin went
+   in, LAST SEASON'S race was drawn over the live one and the view
+   refitted to it. */
+let SRVTRK=null, srvAt=0, srvBusy=false;
+async function fetchServerTrack(){
+  if(srvBusy) return null;
+  srvBusy=true;
+  try{
+    const h=CFG.host||location.host;
+    const r=await fetchT(`http://${h}/plugins/signalk-confluence-track/track?max=800`, 8000);
+    if(r.ok){ SRVTRK=(await r.json()).points||[]; srvAt=Date.now(); return SRVTRK; }
+  }catch(e){ /* boat quiet - keep whatever we last had */ }
+  finally{ srvBusy=false; }
+  return null;
+}
+
 async function mapEntered(){
   paintTrack();                     /* controls live here now */
   let pts=shownTrack();
-  if(serverTrack()){
-    try{
-      const h=CFG.host||location.host;
-      const r=await fetch(`http://${h}/plugins/signalk-confluence-track/track?max=800`);
-      if(r.ok) pts=(await r.json()).points||[];
-    }catch(e){ /* fall back to whatever is local */ }
-  }
+  if(serverTrack() && !VIEWTRK) pts=(await fetchServerTrack())||SRVTRK||[];
   /* Building up to 800 path segments in the same task that starts the
      transition eats the first frames and the slide visibly hitches.
      Let the panel land, then draw.                                   */
@@ -3762,7 +3992,7 @@ function renderLib(){
   const kb=n=>n<1024?n+' B':(n/1024).toFixed(n<102400?1:0)+' kB';
   Promise.all([
     dbAll().catch(()=>null),
-    fetch('gpx/index.json?_='+Date.now(),{cache:'no-store'})
+    fetchT('gpx/index.json?_='+Date.now(), 6000)
       .then(r=>r.ok?r.json():[]).catch(()=>[])
   ]).then(([rows,files])=>{
     let o='';
@@ -4044,16 +4274,26 @@ addEventListener('resize',fitStage);
 if(window.ResizeObserver) new ResizeObserver(fitStage).observe(document.documentElement);
 drawFsAndFit();
 
-let ssHold=null;
+/* Deliberately NOT stopping propagation, and gated on distance - the
+   same rule as fs-btn beside it, which this tile's comment always
+   claimed to follow and did not. SAVER sits near the middle of the open
+   panel, which is where a dismiss swipe starts: swallowing the events
+   meant the swipe failed to close the panel AND walked the blank delay
+   one step, so one bad swipe took it to 10 s and the helm started
+   blanking ten seconds after every touch, mid-race, with nothing on
+   screen to say why. judgeGesture returns early whenever the panel is
+   open, so letting the events through costs nothing underneath. */
+let ssHold=null, ssPt=null;
+const ssFar=e=>!ssPt||Math.hypot(e.clientX-ssPt.x,e.clientY-ssPt.y)>24;
 $('ss-btn').addEventListener('pointerdown',e=>{
-  e.stopPropagation();
+  ssPt={x:e.clientX,y:e.clientY};
   ssHold=setTimeout(()=>{ ssHold=null;               /* held: start now */
     closePanel(); setTimeout(ssStart,460); }, 600);
 });
 const ssRelease=e=>{
-  e.stopPropagation();
   if(ssHold===null) return;                          /* the hold already fired */
   clearTimeout(ssHold); ssHold=null;
+  if(ssFar(e)) return;                               /* a swipe, not a tap */
   ssStep=(ssStep+1)%SS_DELAYS.length;                /* tapped: next delay */
   drawAmbient(); lastTouch=Date.now();
 };
