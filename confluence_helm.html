@@ -516,12 +516,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .lockbtn svg{width:36px;height:36px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .lockbtn:active{color:var(--ink)}
+.lockbtn.on{color:var(--accent)}
 #m-lock{margin:4px auto 0}
 #t-lock{position:absolute;bottom:22px;left:50%;transform:translateX(-50%)}
 /* the dial's lives in the SVG, so it scales with the face */
 #dial-lock{color:var(--label)}
 #dial-lock .lg{fill:none;stroke:var(--label);stroke-width:2;
   stroke-linejoin:round;stroke-linecap:round}
+#dial-lock.on .lg{stroke:var(--accent)}
 
 /* --- frame probe readout (CFG.fpsProbe) --- */
 #fps{position:absolute;left:50%;top:118px;transform:translateX(-50%);
@@ -1925,7 +1927,7 @@ function applyDim(pct,push){
      takes to find out - most visible at exactly the low settings someone
      chose for night. So show the number, and wait to act on it. */
   const known = (typeof NET!=='undefined') && NET.probed;
-  $('dim-pct').textContent = pct+'%'+((known&&!BL.available)?' · SOFT':'');
+  $('dim-pct').textContent = pct+'%';
   if(BL.available){
     $('veil').style.opacity='0';
     if(push!==false) dimSend(pct);
@@ -2512,21 +2514,40 @@ function lkFlash(){
   clearTimeout(lkFade);
   lkFade=setTimeout(()=>$('lk-badge').classList.remove('show'),2600);
 }
-function lockOn(){ $('lock').classList.add('on'); lkFlash(); }
+function lockOn(){ $('lock').classList.add('on'); paintLocks(); lkFlash(); }
 function lockOff(){
-  $('lock').classList.remove('on');
+  $('lock').classList.remove('on'); paintLocks();
   ssStop();                    /* the hold was a touch; do not leave the saver up */
   lastTouch=Date.now();
 }
 
-/* One button per page, always at the foot of it. The icons are stateful,
-   not instructional: an open shackle means the helm is unlocked, and the
-   closed one on the overlay means it is not. */
+/* The glyphs are state, not instruction - and the lock overlay is
+   transparent, so all three stay in plain sight while the helm is
+   locked. A shackle still hanging open under a locked screen is simply
+   wrong, so they are repainted on every change. */
+const PAD_OPEN='<path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>'
+              +'<rect x="6" y="11" width="12" height="9" rx="2"/>';
+const PAD_SHUT='<path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
+              +'<rect x="6" y="11" width="12" height="9" rx="2"/>';
+function paintLocks(){
+  const on=locked(), g=on?PAD_SHUT:PAD_OPEN;
+  ['m-lock','t-lock'].forEach(id=>{
+    $(id).querySelector('svg').innerHTML=g;
+    $(id).classList.toggle('on',on);
+  });
+  /* the dial's copy is SVG, and its strokes are painted by class */
+  $('dial-lock').querySelector('g').innerHTML=
+    g.replace(/<path /g,'<path class="lg" ').replace(/<rect /g,'<rect class="lg" ');
+  $('dial-lock').classList.toggle('on',on);
+}
+
+/* One button per page, always at the foot of it. */
 holdBind($('dial-lock'),lockOn);
 holdBind($('m-lock'),lockOn);
 holdBind($('t-lock'),lockOn);
 holdBind($('lock'),lockOff);
 $('lock').addEventListener('pointerdown',lkFlash);
+paintLocks();
 
 /* ==================================================================
    ALERTS

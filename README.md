@@ -364,14 +364,18 @@ cannot reach the backlight - but `netd.py` can, where the kernel exposes
 one and udev has made it writable.
 
 When it can, the slider drives the real backlight and the veil stays at
-zero. When it cannot, the veil comes back and the readout says so:
+zero. When it cannot - which is the case on this boat's panel, where the
+kernel exposes no backlight at all and the display has no DDC either -
+the veil is all there is.
 
-```
-Display   45% · SOFT
-```
+Worth knowing what that means: compositing black over the image does
+reduce emitted light, because the LCD pixels block more of it, so it
+genuinely helps at night. What it cannot do is turn the lamp down. Blacks
+stay grey, contrast falls as you dim, and the power draw does not change -
+so dimming the screen overnight at anchor saves nothing on the battery.
 
-`SOFT` means you are dimming the picture, not the lamp. If your panel has
-a backlight the kernel knows about but the file is root-only:
+If your panel has a backlight the kernel knows about but the file is
+root-only:
 
 ```
 echo 'SUBSYSTEM=="backlight",RUN+="/bin/chmod 666 /sys/class/backlight/%k/brightness"' \
@@ -411,9 +415,10 @@ speed while the boat is being rained on. It does not survive a reload,
 deliberately: being locked out by a crash would be worse than the problem
 it solves.
 
-The icons are stateful rather than instructional. An open shackle on a
-page means the helm is unlocked; the closed one on the overlay means it is
-not.
+The icons are state, not instruction, and they follow it: the overlay is
+transparent, so all three page buttons stay in plain sight while the helm
+is locked, and a shackle still hanging open under a locked screen would
+simply be wrong. They close and take the accent colour when locked.
 
 Everything that binds the hold stops propagation as well as preventing
 default. These sit on top of the gesture handler, and without it a hold
