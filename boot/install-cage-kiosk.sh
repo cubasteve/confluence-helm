@@ -32,22 +32,28 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OWNER="${SUDO_USER:-pi}"
 OWNER_HOME="$(getent passwd "$OWNER" | cut -d: -f6)"
 STATE=/var/lib/confluence-cage
+if [ -d /boot/firmware ]; then BOOTDIR=/boot/firmware; else BOOTDIR=/boot; fi
+CMDLINE="$BOOTDIR/cmdline.txt"
 MARK_A='# >>> confluence kiosk >>>'
 MARK_B='# <<< confluence kiosk <<<'
 
 say(){ printf '\n\033[1m== %s\033[0m\n' "$*"; }
+backup(){ [ -f "$1" ] || return 0
+  if [ ! -f "$1.confluence-bak" ]; then cp -a "$1" "$1.confluence-bak"
+    printf '   backed up %s\n' "$1"
+  fi; }
 ok(){  printf '   %s\n' "$*"; }
 die(){ printf '\n   %s\n' "$*" >&2; exit 1; }
 
 mkdir -p "$STATE"
 
-say "1/5  cage"
+say "1/6  cage"
 command -v cage >/dev/null 2>&1 || die "cage is not installed.  sudo apt install cage"
 ok "$(command -v cage)"
 [ -x "$HERE/cage-session.sh" ] || chmod +x "$HERE/cage-session.sh"
 ok "session script: $HERE/cage-session.sh"
 
-say "2/5  the Desktop tile's one privilege"
+say "2/6  the Desktop tile's one privilege"
 # logind hands a local active session reboot and poweroff for free, but
 # not starting an arbitrary unit - so the tile needs exactly this and
 # nothing more. Written to a temp file and checked by visudo BEFORE it
@@ -82,7 +88,7 @@ EOT
   ok "checked by visudo and installed: $OWNER may run it with no arguments"
 fi
 
-say "3/5  tty1 owns the session"
+say "3/6  tty1 owns the session"
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf <<EOT
 # Confluence kiosk: log $OWNER in on tty1 so the helm session is a real,
@@ -90,7 +96,7 @@ cat > /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf <<EOT
 # NetworkManager without a password.
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin $OWNER --noclear %I \$TERM
+ExecStart=-/sbin/agetty --autologin $OWNER --noclear --noissue %I \$TERM
 EOT
 ok "autologin for $OWNER on tty1"
 
@@ -112,14 +118,52 @@ else
   ok "launch hook already in $PROFILE"
 fi
 
-say "4/5  stop the desktop starting by itself"
+say "4/6  stop the desktop starting by itself"
 systemctl get-default > "$STATE/default-target" 2>/dev/null || echo graphical.target > "$STATE/default-target"
 ok "was: $(cat "$STATE/default-target")"
 systemctl set-default multi-user.target >/dev/null 2>&1 && ok "now: multi-user.target" \
   || ok "could not change the default target"
 systemctl daemon-reload || true
 
-say "5/5  done"
+say "5/6  the login banner"
+# What lands on tty1 between Plymouth and cage is not kernel output, it
+# is the login banner: the uname line and the Debian warranty text come
+# from the MOTD, "Last login" from login(1), and /etc/issue from agetty.
+#
+# .hushlogin is the switch for the first two - login(1) checks for it by
+# name (HUSHLOGIN_FILE in /etc/login.defs) and prints neither. agetty
+# got --noissue above for the third.
+HUSH="$OWNER_HOME/.hushlogin"
+if [ ! -e "$HUSH" ]; then
+  touch "$HUSH"; chown "$OWNER:$OWNER" "$HUSH"
+  touch "$STATE/made-hushlogin"          # so uninstall only removes ours
+  ok "created $HUSH - no MOTD, no last-login line"
+else
+  ok "$HUSH already exists"
+fi
+
+# And send whatever the kernel and systemd still say to a tty nobody is
+# looking at. quiet and loglevel=3 already suppress most of it; this
+# takes the rest off the panel's own console.
+backup "$CMDLINE"
+python3 - "$CMDLINE" <<'CMDEDIT'
+import sys, os
+path = sys.argv[1]
+words = open(path).read().split()
+moved = False
+for i, w in enumerate(words):
+    if w == 'console=tty1':
+        words[i] = 'console=tty3'; moved = True
+line = ' '.join(words)
+assert '\n' not in line, 'refusing to write a multi-line cmdline.txt'
+assert 'root=' in line, 'refusing to write a cmdline.txt with no root='
+tmp = path + '.confluence-new'
+open(tmp, 'w').write(line + '\n')
+os.replace(tmp, path)
+print('   console moved to tty3' if moved else '   no console=tty1 to move')
+CMDEDIT
+
+say "6/6  done"
 cat <<EOT
    sudo reboot
 

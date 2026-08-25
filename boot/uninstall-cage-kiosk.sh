@@ -32,6 +32,26 @@ PY
   echo "   removed the launch hook from $PROFILE"
 fi
 
+if [ -f "$STATE/made-hushlogin" ]; then
+  rm -f "$OWNER_HOME/.hushlogin"
+  echo "   removed the .hushlogin we created"
+fi
+
+if [ -d /boot/firmware ]; then BOOTDIR=/boot/firmware; else BOOTDIR=/boot; fi
+if [ -f "$BOOTDIR/cmdline.txt" ] && grep -q console=tty3 "$BOOTDIR/cmdline.txt"; then
+  python3 - "$BOOTDIR/cmdline.txt" <<'CMDEDIT'
+import sys, os
+path = sys.argv[1]
+words = [('console=tty1' if w == 'console=tty3' else w) for w in open(path).read().split()]
+line = ' '.join(words)
+assert '\n' not in line and 'root=' in line
+tmp = path + '.confluence-new'
+open(tmp, 'w').write(line + '\n')
+os.replace(tmp, path)
+CMDEDIT
+  echo "   console back to tty1"
+fi
+
 TARGET="$(cat "$STATE/default-target" 2>/dev/null || echo graphical.target)"
 systemctl set-default "$TARGET" >/dev/null 2>&1 && echo "   default target back to $TARGET" \
   || echo "   could not restore the default target - set it with: systemctl set-default graphical.target"

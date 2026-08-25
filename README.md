@@ -868,6 +868,39 @@ sudoers file locks you out of sudo.
 hanging on a password prompt nobody can answer at the helm; the panel
 then says `NOT PERMITTED FROM HERE`.
 
+### The login banner
+
+Between Plymouth and cage, tty1 used to print this:
+
+```
+Linux openplotter 6.6.31+rpt-rpi-v8 ... aarch64
+The programs included with the Debian GNU/Linux system are free software;
+...
+Last login: Tue Aug 25 10:42:48 2026
+```
+
+**None of that is kernel output**, which is why `quiet` and `loglevel=3`
+never touched it. It is the login banner, and it has three separate
+sources:
+
+| Line | From | Switch |
+|---|---|---|
+| the `uname` line, the warranty text | the MOTD | `~/.hushlogin` |
+| `Last login:` | `login(1)` | `~/.hushlogin` |
+| whatever is in `/etc/issue` | `agetty` | `--noissue` |
+
+`login(1)` checks for `.hushlogin` by name - `HUSHLOGIN_FILE` in
+`/etc/login.defs` - and prints neither the MOTD nor the last-login line
+when it is there. The installer creates it, and records that it did, so
+the uninstaller removes only a file it created and leaves one you wrote
+yourself alone.
+
+The installer also moves `console=tty1` to `console=tty3` in
+`cmdline.txt`, so whatever the kernel and systemd still have to say goes
+to a tty nobody is looking at rather than onto the panel. Reversed by
+the uninstaller, and the edit goes through the same guarded python as
+the rest: single line, `root=` still present, or it refuses to write.
+
 ### If it will not come up
 
 `cage-session.sh` starts the desktop by itself after five failed
