@@ -185,6 +185,43 @@ the middle one, because it is the one you come back to.
 The control panel is still an overlay, pulled up from the bottom over
 whatever page you are on - and now reachable from any of them, the way
 control centre is on a phone. It is a layer over a place, not a place.
+While it is up it owns the gestures: left and right do nothing until you
+swipe it away.
+
+### Three fingers
+
+Swipes want three fingers - paging and the control panel both. One finger
+still taps, holds, and works every button on every page; only navigation
+asks for a deliberate hand, because one finger is what rain, spray and a
+sleeve produce.
+
+`FINGERS` clamps `CFG.swipeFingers` to what the touchscreen can actually
+report. A panel that tracks fewer touches would otherwise have no
+navigation at all - and no way to reach the setting that would fix it,
+since the control panel is itself behind a swipe. A mouse reports zero
+touch points, so a desktop browser and the windowed copy fall back to
+one finger.
+
+A gesture is every finger down between the first touch and the last
+lift, and the direction is the average of their travel: one finger that
+slips while the other two hold still is not a swipe, and averaging says
+so.
+
+### Stacking
+
+Written down in the CSS rather than left to DOM order, because it bit
+once already:
+
+```
+1 pages   2 dots   20 control panel   30 screensaver
+55 alerts   70 lock   80 hold ring   99 fps readout
+```
+
+`#panel` sits *before* the music and track pages in the document, so with
+everything on `auto` those pages painted over it: the control panel
+opened behind whichever page you were on - invisible, and holding the
+gestures hostage. That could not happen while the panel was reachable
+only from the dial. Making it reachable everywhere is what exposed it.
 
 Nothing new is resident. All three layers were always in the DOM, parked
 off-screen with a transform; only the transform is now computed from one

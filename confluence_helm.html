@@ -54,12 +54,17 @@ body{display:flex;align-items:center;justify-content:center}
    are, not a place you go. */
 #svg{position:absolute;inset:0;width:100%;height:100%;
   transition:transform .42s cubic-bezier(.16,1,.3,1)}
-/* No z-index: the dots come after the three pages in the DOM so they
-   already paint above them, and a stacking level would have put them
-   over the control panel - which is an overlay covering the page they
-   belong to. */
+/* Stacking, written down rather than left to DOM order. #panel sits
+   BEFORE the music and track pages in the document, so with everything
+   on auto they painted over it and the control panel opened behind
+   whichever page you were on - invisible, and holding the gestures
+   hostage. That could not happen while the panel was reachable only
+   from the dial; making it reachable everywhere is what exposed it.
+     1  pages      2  dots      20 control panel   30 screensaver
+     55 alerts     70 lock      80 hold ring       99 fps readout   */
+#svg,#music,#tmap{z-index:1}
 #dots{position:absolute;left:0;right:0;bottom:64px;display:flex;
-  justify-content:center;gap:18px;pointer-events:none}
+  justify-content:center;gap:18px;pointer-events:none;z-index:2}
 #dots i{width:12px;height:12px;border-radius:50%;background:var(--label);
   opacity:.3;transition:opacity .25s,transform .25s,background .25s}
 #dots i.on{opacity:1;background:var(--accent);transform:scale(1.2)}
@@ -113,7 +118,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    Rows are hairline-separated rather than chunky chips: discreet, and
    the whole row is the touch target (600 x 112 = 99 x 18 mm).        */
 #panel{
-  position:absolute;inset:0;background:var(--panel);
+  position:absolute;inset:0;background:var(--panel);z-index:20;
   transform:translateY(100%);
   transition:transform .42s cubic-bezier(.16,1,.3,1);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -345,7 +350,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    three copies of this file apart at a glance. */
 .build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
 /* --- ambient screensaver --- */
-#saver{position:absolute;inset:0;background:var(--bg);opacity:0;
+#saver{position:absolute;inset:0;background:var(--bg);opacity:0;z-index:30;
   pointer-events:none;transition:opacity .5s}
 #saver.on{opacity:1;pointer-events:auto}
 #ss-cv{position:absolute;inset:0;width:100%;height:100%}
@@ -945,6 +950,12 @@ const CFG={
      tiles off every phone and tablet that loads this same page over
      boat WiFi, without the page having to know who is asking.       */
   netd:'http://127.0.0.1:8091',
+
+  /* Fingers a swipe wants. Three so that rain, spray and a sleeve cannot
+     navigate the boat's instruments; one finger still taps, holds and
+     works every button. Clamped at runtime by what the touchscreen can
+     actually report - see FINGERS. */
+  swipeFingers:3,
 
   depthAlarm:6, depthWarn:12, depthUnit:'ft',
   dim:100,                           /* brightness, 25-100 - see applyDim */
@@ -1668,7 +1679,6 @@ function tick(){
    scrolling never fires the timer by accident.
    ================================================================== */
 const panel=$('panel');
-let x0=0,y0=0,t0=0,dragging=false;
 /* ---- slide guard ----------------------------------------------------
    While a panel slides, the dial underneath is completely covered by an
    opaque layer - so render()'s 44 SVG writes per frame are invisible
@@ -1802,27 +1812,58 @@ const hideMusic =()=>goPage(1);
 const hideMap   =()=>goPage(1);
 const openMap   =()=>goPage(0);
 
-$('stage').addEventListener('pointerdown',e=>{
-  x0=e.clientX;y0=e.clientY;t0=Date.now();dragging=true;});
-$('stage').addEventListener('pointerup',e=>{
-  if(!dragging)return; dragging=false;
-  const dx=e.clientX-x0, dy=e.clientY-y0, dt=Date.now()-t0;
-  const moved=Math.hypot(dx,dy), quick=dt<700;
-  const up    = dy<-70 && Math.abs(dy)>Math.abs(dx) && quick;
-  const down  = dy> 70 && Math.abs(dy)>Math.abs(dx) && quick;
-  const left  = dx<-70 && Math.abs(dx)>Math.abs(dy) && quick;
-  const right = dx> 70 && Math.abs(dx)>Math.abs(dy) && quick;
+/* ---- how many fingers ----
+   Clamped by what the hardware can actually report. A panel that tracks
+   fewer touches than CFG.swipeFingers asks for would otherwise have no
+   navigation at all - and no way to reach the setting that would fix
+   that, since the control panel is itself behind a swipe. A mouse
+   reports zero touch points, so a desktop browser falls back to one. */
+const FINGERS=Math.max(1,Math.min(CFG.swipeFingers|0||1,
+                                  navigator.maxTouchPoints||1));
 
-  /* Whichever overlay is showing OWNS the gestures. Only its own dismiss
-     swipe does anything - you cannot skate sideways from the control
-     panel into the map, and a stray drag cannot fire the race timer
-     underneath. Its own buttons still work: they have their own
-     handlers and this one simply declines to act.
-     Each panel is dragged in from the edge it lives on:
-       map   sits off-screen left  -> swipe RIGHT in, LEFT out
-       music sits off-screen right -> swipe LEFT  in, RIGHT out          */
-  /* Same rule as the map and its library: the innermost thing showing
-     is what a dismiss swipe dismisses. */
+/* A gesture is every finger that was down between the first touch and
+   the last lift. Tracking them as a set rather than a single point is
+   what lets three-finger swipes exist at all, and it keeps the tap and
+   hold behaviour exactly as it was: those still want one finger. */
+let G=null;
+$('stage').addEventListener('pointerdown',e=>{
+  if(!G) G={p:new Map(), live:0, max:0, t0:Date.now()};
+  G.p.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
+  G.live++; G.max=Math.max(G.max,G.live);
+});
+$('stage').addEventListener('pointermove',e=>{
+  const q=G&&G.p.get(e.pointerId);
+  if(q){ q.x=e.clientX; q.y=e.clientY; }
+});
+const endGesture=e=>{
+  if(!G) return;
+  const q=G.p.get(e.pointerId);
+  if(!q) return;                       /* not one of ours */
+  q.x=e.clientX; q.y=e.clientY;
+  if(--G.live>0) return;               /* other fingers still down */
+  const g=G; G=null; judgeGesture(g);
+};
+$('stage').addEventListener('pointerup',endGesture);
+$('stage').addEventListener('pointercancel',endGesture);
+
+function judgeGesture(g){
+  /* The average of every finger's travel. One finger that slips while
+     the other two hold still is not a swipe, and averaging says so. */
+  let dx=0,dy=0;
+  g.p.forEach(q=>{ dx+=q.x-q.x0; dy+=q.y-q.y0; });
+  dx/=g.p.size; dy/=g.p.size;
+  const dt=Date.now()-g.t0, n=g.max;
+  const moved=Math.hypot(dx,dy), quick=dt<700;
+  const sw    = n>=FINGERS && quick;
+  const up    = sw && dy<-70 && Math.abs(dy)>Math.abs(dx);
+  const down  = sw && dy> 70 && Math.abs(dy)>Math.abs(dx);
+  const left  = sw && dx<-70 && Math.abs(dx)>Math.abs(dy);
+  const right = sw && dx> 70 && Math.abs(dx)>Math.abs(dy);
+
+  /* Whichever overlay is showing OWNS the gestures. The innermost thing
+     up is what a dismiss swipe dismisses, and nothing else acts: you
+     cannot page sideways out from under the control panel, and a stray
+     drag cannot fire the race timer underneath it. */
   if(panel.classList.contains('open')){
     if(down){ if(netsheet.classList.contains('on')) closeNet(); else closePanel(); }
     return; }
@@ -1837,16 +1878,19 @@ $('stage').addEventListener('pointerup',e=>{
   if(left)  return goPage(PAGE_I+1);
   if(right) return goPage(PAGE_I-1);
 
+  /* Taps and holds are one finger, wherever the swipes have got to. */
+  if(n!==1) return;
   if(moved>24) return;                       // a drag, not a tap
   if(PAGE_I!==1) return;                     // the taps below are the dial's
   if(dt>700){ clearTimeout(tapTimer); tapTimer=null; lastTap=0;
               return resetAll(); }           // hold anywhere = reset
 
+  const one=g.p.values().next().value;
   const r=$('stage').getBoundingClientRect();
-  const y=(e.clientY-r.top)/r.height;
+  const y=(one.y-r.top)/r.height;
   if(y<0.33)      timerTap();
   else if(y<0.68) showSTW=!showSTW;
-});
+}
 
 /* A single tap waits out one double-tap window so the first half of a
    double never fires the single action. 320 ms is about the shortest
