@@ -1385,6 +1385,41 @@ is already running, so ssh and a running desktop are unaffected.
 **`cage -s`.** VT switching has to be allowed or the Desktop tile cannot
 work - starting a display manager needs another VT to switch to.
 
+### And back to the kiosk
+
+The Desktop tile used to be a **one-way door**: the only way back to the
+kiosk was a reboot or SSH, and at the wheel you have neither. So the
+power sheet now carries a **Kiosk** tile, and the two are exact mirrors —
+netd offers `desktop` when no desktop is running and `cage` when one is,
+so there is always exactly one way out of wherever you are and never
+both.
+
+Going out is easy; coming back is not, and the asymmetry is the design.
+Cage **cannot** simply be launched from the root helper. It has to run in
+the login session on tty1, because NetworkManager's polkit rules grant a
+local *active* session the right to change networking without a password
+— and a cage started from a root helper has no session at all. Every WiFi
+and Bluetooth tile would come back dead, which looks exactly like a
+broken dongle and is not. (Same trap as the top of `cage-session.sh`,
+from the other side.)
+
+What actually gets you back is the mechanism that started cage in the
+first place: agetty autologins the owner on tty1, the login shell reads
+its profile, and the hook there runs `cage-session.sh`. So
+`to-cage.sh` stops the display manager and then **restarts
+`getty@tty1`**, which replays exactly that. It also closes the desktop's
+windowed app on the way — left running it would still own the browser
+profile, and cage's Chromium would sit waiting for a window on a desktop
+that no longer exists.
+
+Everything is verified **before** anything is torn down — cage installed,
+the tty1 autologin drop-in present, and the launch hook actually in the
+owner's profile — because stopping the desktop and *then* discovering the
+kiosk cannot start would leave the panel on a bare console. And if cage
+does not come up within ten seconds, the display manager is started again
+rather than leaving black glass with SSH as the only way in. The tests
+drive all five of those paths.
+
 ### Getting back to a desktop
 
 A **Desktop** tile appears in the power sheet, and only in cage mode:
@@ -1406,6 +1441,7 @@ not starting an arbitrary unit, so the tile needs one sudoers line:
 
 ```
 pi ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-desktop ""
+pi ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-cage ""
 ```
 
 Three things about that line. The script is installed **root-owned

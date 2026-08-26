@@ -9,8 +9,9 @@ STATE=/var/lib/confluence-cage
 MARK_A='# >>> confluence kiosk >>>'
 MARK_B='# <<< confluence kiosk <<<'
 
-rm -f /etc/sudoers.d/confluence-desktop /usr/local/sbin/confluence-to-desktop
-echo "   removed the Desktop tile's sudoers rule and helper"
+rm -f /etc/sudoers.d/confluence-desktop \
+      /usr/local/sbin/confluence-to-desktop /usr/local/sbin/confluence-to-cage
+echo "   removed the Desktop and Kiosk tiles' sudoers rule and helpers"
 
 rm -f "$OWNER_HOME/.config/autostart/confluence-window.desktop"
 echo "   removed the windowed-app autostart entry"

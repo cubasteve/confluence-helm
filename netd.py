@@ -769,13 +769,24 @@ def uptime_txt():
     return '%dm' % m
 
 
+TO_DESKTOP = '/usr/local/sbin/confluence-to-desktop'
+TO_CAGE = '/usr/local/sbin/confluence-to-cage'
+
+
 def power_status():
     # 'desktop' is offered only when there is a display manager to start
     # AND nothing graphical is already running - on a normal desktop
     # session the tile would be a no-op that switches you to the login
     # screen, which is not what anyone means by it.
+    #
+    # 'cage' is its exact mirror: offered only when a desktop IS running
+    # and there is a helper installed to leave it with. The two are
+    # mutually exclusive by construction, so the power sheet always shows
+    # one way out of wherever you are and never both.
+    running = desktop_running()
     return {'available': HAS_SYSTEMCTL, 'uptime': uptime_txt(),
-            'desktop': bool(DM) and not desktop_running()}
+            'desktop': bool(DM) and not running,
+            'cage': running and os.path.isfile(TO_CAGE)}
 
 
 def desktop_running():
@@ -783,6 +794,21 @@ def desktop_running():
         return False
     rc, out, err = run(['systemctl', 'is-active', DM + '.service'], 8)
     return out.strip() == 'active'
+
+
+def _via_sudo(helper):
+    """Run one of the two root helpers and turn its failure into words.
+
+    -n so a missing sudoers rule fails at once instead of hanging on a
+    password prompt nobody can answer at the helm."""
+    rc, out, err = run(['sudo', '-n', helper], 30)
+    if rc == 0:
+        return {'ok': True}
+    e = (err or out).lower()
+    if ('password' in e or 'no tty' in e or 'not allowed' in e
+            or 'not permitted' in e or 'sorry' in e):
+        return {'ok': False, 'error': 'NOT PERMITTED FROM HERE'}
+    return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
 
 
 def power_do(action):
@@ -800,14 +826,17 @@ def power_do(action):
         # on a prompt nobody can answer at the helm.
         if not DM:
             return {'ok': False, 'error': 'NO DISPLAY MANAGER'}
-        rc, out, err = run(['sudo', '-n', '/usr/local/sbin/confluence-to-desktop'], 30)
-        if rc == 0:
-            return {'ok': True}
-        e = (err or out).lower()
-        if ('password' in e or 'no tty' in e or 'not allowed' in e
-                or 'not permitted' in e or 'sorry' in e):
-            return {'ok': False, 'error': 'NOT PERMITTED FROM HERE'}
-        return {'ok': False, 'error': (err or out or 'FAILED')[:120]}
+        return _via_sudo(TO_DESKTOP)
+    if action == 'cage':
+        # Synchronous, like its opposite number and for the same reason:
+        # the helper checks that cage, the tty1 autologin and the login
+        # hook are all present BEFORE it stops anything, so a setup or
+        # permission failure comes back fast with the page still alive to
+        # show it. Only success takes the screen away, and by then the
+        # answer has nowhere to go anyway.
+        if not os.path.isfile(TO_CAGE):
+            return {'ok': False, 'error': 'NO KIOSK HELPER'}
+        return _via_sudo(TO_CAGE)
     if action == 'helper':
         # netd.sh's loop brings it straight back with whatever is on disk.
         # Deferred, because this one kills the process answering.

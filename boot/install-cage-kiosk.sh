@@ -85,17 +85,29 @@ else
   chmod 0755 /usr/local/sbin/confluence-to-desktop
   ok "installed /usr/local/sbin/confluence-to-desktop (for $DM)"
 
+  # The way back. Without it, leaving the kiosk is a one-way door: the
+  # only return was a reboot or SSH, and at the wheel you have neither.
+  # It needs the owner as well as the display manager baked in, because
+  # what brings cage back is a fresh autologin on tty1 - and it verifies
+  # that login will actually run the hook before it stops anything.
+  sed -e "s|__DM__|$DM|" -e "s|__OWNER__|$OWNER|" "$HERE/to-cage.sh" \
+    > /usr/local/sbin/confluence-to-cage
+  chown root:root /usr/local/sbin/confluence-to-cage
+  chmod 0755 /usr/local/sbin/confluence-to-cage
+  ok "installed /usr/local/sbin/confluence-to-cage (for $OWNER on tty1)"
+
   TMP="$(mktemp)"
-  # The trailing "" restricts the grant to the command with NO arguments.
+  # The trailing "" restricts each grant to the command with NO arguments.
   cat > "$TMP" <<'EOT'
-# Confluence kiosk: the panel's Desktop tile, and nothing else.
+# Confluence kiosk: the panel's Desktop and Kiosk tiles, and nothing else.
 EOT
   printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-desktop ""\n' "$OWNER" >> "$TMP"
+  printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/confluence-to-cage ""\n' "$OWNER" >> "$TMP"
   chmod 0440 "$TMP"
   visudo -cf "$TMP" >/dev/null || { rm -f "$TMP"; die "refusing to install a sudoers file visudo rejects"; }
   install -m 0440 "$TMP" /etc/sudoers.d/confluence-desktop
   rm -f "$TMP"
-  ok "checked by visudo and installed: $OWNER may run it with no arguments"
+  ok "checked by visudo and installed: $OWNER may run both, no arguments"
 fi
 
 say "4/8  tty1 owns the session"

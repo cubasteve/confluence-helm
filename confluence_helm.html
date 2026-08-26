@@ -3006,11 +3006,25 @@ const POWER_ACTIONS=[
  /* Only in cage mode, where there is no desktop running and this is the
     only way to ask for one. netd hides it otherwise - on a normal
     desktop session it would just throw you at the login screen. */
- {a:'desktop', name:'Desktop',         short:'Desktop', sub:'LEAVE THE KIOSK · REBOOT TO COME BACK',
+ {a:'desktop', name:'Desktop',         short:'Desktop', sub:'LEAVE THE KIOSK · THE KIOSK TILE COMES BACK',
   need:'desktop',
   ico:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
   ask:'Starts the desktop and switches the screen to it. The helm app '
-     +'keeps running behind it; a reboot brings the panel back.'},
+     +'keeps running behind it as a window, and this tile turns into '
+     +'"Back to the kiosk" so you can come straight back.'},
+ /* The exact mirror of the tile above, and only ever one of the two is
+    shown: netd offers 'desktop' when no desktop is running and 'cage'
+    when one is. Before this existed, leaving the kiosk was a one-way
+    door - the way back was a reboot, or SSH, neither of which you have
+    at the wheel. The arrows point INWARD, the same glyph the FULL/KIOSK
+    tile uses for the same idea. */
+ {a:'cage',    name:'Back to the kiosk', short:'Kiosk', sub:'FULL SCREEN · NO DESKTOP',
+  need:'cage',
+  ico:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>',
+  ask:'Stops the desktop and puts the panel back to full screen. The '
+     +'windowed app closes with it and the instruments come straight '
+     +'back. If the kiosk does not come up, the desktop is put back '
+     +'rather than leaving you with a black screen.'},
  {a:'reboot',  name:'Reboot',          short:'Reboot', sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
   ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
   ask:'Instruments, charts and the hotspot all go down for about a minute. '
