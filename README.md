@@ -555,12 +555,44 @@ the feed carries a liked state — so it never appears on a phone loading
 this page over the boat WiFi, where the loopback helper is unreachable
 and the tap could not go anywhere.
 
+### Playback controls
+
+Previous, play/pause and next, at the foot of the music page in one line
+with the lock. They need `user-modify-playback-state` on top of the
+library scopes, **Spotify Premium** (a free account answers 403), and an
+**active device** — the Pi deliberately is not one, so these drive
+whatever is actually playing, typically the phone feeding the cockpit
+speakers.
+
+All three of those can fail, and none of them fails at a moment this
+code can predict, so each is reported rather than swallowed:
+
+| the page flashes | means |
+|---|---|
+| `NO ACTIVE DEVICE` | 404 — nothing is playing anywhere to control |
+| `NOT ALLOWED` | 403 — no Premium, or the scope was never granted |
+| `NO HELPER` | netd unreachable, as on a phone |
+
+Same architecture as the heart: netd writes a command file, the poller
+performs it, one process owns the token. Play/pause is optimistic
+because the glyph *is* the state and a wrong guess corrects itself
+within a poll; skip never is, since pretending the next track had
+arrived would mean inventing a title. After a successful skip the poller
+re-reads immediately rather than leaving the old track on the glass for
+a whole poll interval.
+
+The buttons sit at the foot rather than in a row of their own — which
+needed the album art shrunk from 300px to 230 — or in the progress bar's
+row, which forced every target down to 58px and halved the bar. The cost
+is that the lock is no longer centred on this page alone. With the
+transport hidden, the foot row holds only the lock and centres it at
+exactly the same 540 as every other page.
+
 ### Long names travel
 
 A title clipped to `Shipping Up To Bos…` is the one thing you cannot fix
 by looking harder, so `.m-title` and `.m-artist` scroll instead when the
-text overflows — out, a dwell, back, a dwell. The album name rides on
-the artist's line, which is what one line being enough depends on.
+text overflows — out, a dwell, back, a dwell. The artist's line carries just the artist.
 
 Driven by the Web Animations API with **concrete pixel values**, not a
 CSS keyframe reading a custom property: a `var()` inside `@keyframes`

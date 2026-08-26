@@ -499,6 +499,17 @@ a.lib-row{text-decoration:none;color:inherit}
 .heart{width:78px;height:78px;border-radius:50%;background:none;border:none;
   padding:0;display:flex;align-items:center;justify-content:center;
   color:var(--label);flex:none}
+/* Transport. Filled glyphs rather than outlines: these are the smallest
+   marks on the page and an outline triangle at this size reads as mush
+   through spray. Same 78px target as everything else here. */
+.tbtn2{width:78px;height:78px;border-radius:50%;background:none;border:none;
+  padding:0;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-dim);flex:none}
+.tbtn2 svg{width:40px;height:40px;fill:currentColor;
+  transition:transform .12s,color .15s}
+.tbtn2:active{color:var(--ink)}
+.tbtn2:active svg{transform:scale(.84)}
+#m-play svg{width:46px;height:46px}
 .heart svg{width:46px;height:46px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
   transition:fill .18s,transform .18s}
@@ -683,6 +694,13 @@ a.lib-row{text-decoration:none;color:inherit}
    drawn in the SVG at the matching y - the face is a 1080 viewBox over a
    1080 stage, so the coordinates line up exactly. */
 #m-lock,#t-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
+/* The music page's foot carries the transport as well, so the row is
+   what gets placed and the lock goes back to being an ordinary item in
+   it. Alone in the row it lands at exactly the same 540 as everywhere
+   else, which is what a page with no transport must still look like. */
+.m-foot{position:absolute;left:50%;bottom:91px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:6px}
+.m-foot #m-lock{position:static;transform:none}
 /* the dial's lives in the SVG, so it scales with the face */
 #dial-lock{color:var(--label)}
 #dial-lock .lg{fill:none;stroke:var(--label);stroke-width:2;
@@ -1027,10 +1045,32 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
           16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
       </button>
     </div>
-    <button class="lockbtn" id="m-lock">
-      <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
-        <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
-    </button>
+    <!-- One line at the foot: transport, then the lock. Chosen over a
+         row of its own because that needed the album art shrunk from
+         300px to 230, and over sharing the bar's row because three more
+         buttons there forced every target down to 58px and squashed the
+         bar to half its length.
+
+         The cost is that the lock is no longer dead centre on THIS page
+         alone - everywhere else it still sits at left:50%. With the
+         transport hidden, which is what a phone and a Pi without
+         credentials get, the row holds only the lock and centres it
+         exactly where it has always been. -->
+    <div class="m-foot">
+      <button class="tbtn2" id="m-prev" style="display:none" aria-label="previous">
+        <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12z"/><rect x="5" y="5" width="2.4" height="14" rx="1"/></svg>
+      </button>
+      <button class="tbtn2" id="m-play" style="display:none" aria-label="play or pause">
+        <svg viewBox="0 0 24 24" id="m-playico"><path d="M8 5l11 7-11 7z"/></svg>
+      </button>
+      <button class="tbtn2" id="m-next" style="display:none" aria-label="next">
+        <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7z"/><rect x="16.6" y="5" width="2.4" height="14" rx="1"/></svg>
+      </button>
+      <button class="lockbtn" id="m-lock">
+        <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+          <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2738,8 +2778,8 @@ async function netStatus(){
      the music page may well have painted before this answer arrived -
      pollMusic and this race at boot and either can win. Without this the
      heart stays hidden until the next track change, on a page that looks
-     entirely finished. */
-  paintHeart();
+     entirely finished. The transport buttons are gated the same way. */
+  paintHeart(); paintTransport();
   const hadBL=BL.available, first=!NET.probed;
   BL=(j&&j.backlight)||{available:false};
   NET.probed=true;
@@ -3329,6 +3369,11 @@ async function pollMusic(){
          shows a title but no clock, this is what settles whether the
          poller is sending position/duration at all. */
       MUSIC_RAW=j;
+      /* The poller carried out a press and it was refused - say which.
+         "NO ACTIVE DEVICE" is the common one: these endpoints drive
+         whatever is really playing, so with nothing active there is
+         nothing to drive. */
+      if(j.cmderr) musicFlash(j.cmderr);
       /* the poller has caught up with the tap - stop overriding it */
       if(likePend!==null && (typeof j.liked==='boolean') && j.liked===likePend)
         likePend=null;
@@ -3367,6 +3412,42 @@ let likeBusy=false, likePend=null;
 function likeAvailable(){
   return !!(NET.st && NET.st.spotify && NET.st.spotify.available) && !!NP.id;
 }
+/* Transport is a separate permission from the heart and can be absent
+   on its own - it needs user-modify-playback-state AND an active device
+   AND Premium, none of which the library scope implies. netd reports
+   whether credentials exist; whether THESE work only shows on a press,
+   which is why a refusal has to be shown rather than swallowed. */
+function transportAvailable(){
+  return !!(NET.st && NET.st.spotify && NET.st.spotify.available);
+}
+function paintTransport(){
+  const show = transportAvailable();
+  ['m-prev','m-play','m-next'].forEach(id=>{
+    const el=$(id); if(el) el.style.display = show ? '' : 'none';
+  });
+  if(!show) return;
+  /* One button, two meanings - the glyph is the current ACTION, not the
+     current state: a triangle means "this will play". */
+  wAttr('m-playico','d', NP.playing ? 'M7 5h3.6v14H7zM13.4 5H17v14h-3.6z'
+                                    : 'M8 5l11 7-11 7z');
+}
+
+let ctlBusy=false;
+async function transport(op){
+  if(ctlBusy || !transportAvailable()) return;
+  ctlBusy=true;
+  /* Optimistic only for play/pause, where the glyph IS the state and a
+     wrong guess is corrected within a poll. Never for skip: pretending
+     the next track had arrived would mean inventing a title. */
+  if(op==='play'||op==='pause'){ NP.playing = (op==='play'); paintTransport(); }
+  const j=await netApi('/spotify/control',{op:op});
+  ctlBusy=false;
+  if(!j || !j.ok){
+    paintTransport();
+    musicFlash((j&&j.error) || 'NO HELPER');
+  }
+}
+
 function paintHeart(){
   const el=$('m-like'); if(!el) return;
   const show = likeAvailable() && NP.liked!==null;
@@ -3487,20 +3568,14 @@ function paintMusic(){
       : 'nowplaying.json is not answering');
     if(Date.now()>=musicFlashUntil)
       $('m-state').textContent = FEED==='missing' ? 'NOT SET UP' : 'OFFLINE';
-    paintHeart();
+    paintHeart(); paintTransport();
     return;
   }
   setScroller('m-title', NP.title || 'Nothing playing');
-  /* The album was already arriving and being thrown away. It goes on the
-     artist's line rather than a row of its own - there is no room for a
-     row, and a name too long for the lane now travels instead of being
-     cut, which is what makes one line enough. */
-  const sub = NP.album && NP.album!==NP.title
-            ? (NP.artist||'—')+' · '+NP.album : (NP.artist||'—');
-  setScroller('m-artist', sub);
+  setScroller('m-artist', NP.artist || '—');
   if(Date.now()>=musicFlashUntil)
     $('m-state').textContent = NP.playing ? 'NOW PLAYING' : 'PAUSED';
-  paintHeart();
+  paintHeart(); paintTransport();
   const art=$('m-art');
   if(NP.cover){
     if(!art.querySelector('img')){ art.innerHTML='<img>'; }
@@ -3682,6 +3757,13 @@ function musicTick(){
    the gesture reader's view of the pointer. */
 $('m-like').addEventListener('pointerdown',gClaim);
 $('m-like').addEventListener('click',e=>{ e.stopPropagation(); toggleLike(); });
+[['m-prev','prev'],['m-next','next']].forEach(([id,op])=>{
+  $(id).addEventListener('pointerdown',gClaim);
+  $(id).addEventListener('click',e=>{ e.stopPropagation(); transport(op); });
+});
+$('m-play').addEventListener('pointerdown',gClaim);
+$('m-play').addEventListener('click',e=>{ e.stopPropagation();
+  transport(NP.playing?'pause':'play'); });
 
 pollMusic(); musicTick();
 

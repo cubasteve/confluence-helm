@@ -43,6 +43,19 @@ POLL_IDLE = 20          # back off when nothing is playing
 API = "https://api.spotify.com/v1/me/player/currently-playing"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 SAVED = "https://api.spotify.com/v1/me/tracks"          # like / unlike / contains
+PLAYER = "https://api.spotify.com/v1/me/player"         # transport
+
+# What the panel may ask for, and how. Transport needs an ACTIVE DEVICE -
+# this Pi is not one, deliberately, so these drive whatever is really
+# playing: the phone feeding the cockpit speakers. With nothing active
+# Spotify answers 404, and on a free account 403, and both have to reach
+# the panel as words rather than as a button that quietly does nothing.
+CONTROLS = {
+    "next":  ("POST", PLAYER + "/next"),
+    "prev":  ("POST", PLAYER + "/previous"),
+    "play":  ("PUT",  PLAYER + "/play"),
+    "pause": ("PUT",  PLAYER + "/pause"),
+}
 
 # netd drops a like-or-unlike request here and this process carries it out.
 #
@@ -204,6 +217,33 @@ def set_saved(token, track_id, want):
     return want
 
 
+def do_control(token, op):
+    """Transport. Raises on refusal - the caller quarantines it."""
+    method, url = CONTROLS[op]
+    api(token, method, url)
+
+
+def try_control(token, op):
+    """Never raises. Returns '' on success or a short reason to show."""
+    try:
+        do_control(token.get(), op)
+        log("transport: %s" % op)
+        return ""
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            log("transport %s: no active device" % op)
+            return "NO ACTIVE DEVICE"
+        if e.code == 403:
+            log("transport %s: refused (403) - needs Premium and the "
+                "user-modify-playback-state scope" % op)
+            return "NOT ALLOWED"
+        log("transport %s: http %s" % (op, e.code))
+        return "HTTP %s" % e.code
+    except Exception as e:
+        log("transport %s failed: %s" % (op, e))
+        return "NO REPLY"
+
+
 def take_command():
     """Read and consume netd's request, if there is one."""
     try:
@@ -288,7 +328,7 @@ def to_dial(payload):
     now = int(time.time() * 1000)
     if not payload or not payload.get("item"):
         return {"event": "stopped", "title": "", "artist": "", "cover": "",
-                "album": "", "id": "", "liked": None,
+                "album": "", "id": "", "liked": None, "cmderr": "",
                 "position": 0, "duration": 0, "at": now}
     it = payload["item"]
     album = it.get("album") or {}
@@ -302,6 +342,7 @@ def to_dial(payload):
         # loop, which knows whether it needs to go and ask.
         "id": it.get("id") or "",
         "liked": None,
+        "cmderr": "",
         "position": int(payload.get("progress_ms") or 0),
         "duration": int(it.get("duration_ms") or 0),
         "at": now,
@@ -352,7 +393,23 @@ def main():
             # Every call below is wrapped so that it cannot stop the
             # write. A like that fails costs a heart, not the music.
             cmd = take_command()
-            if cmd and cmd.get("id") and try_set_saved(token, cmd):
+            if cmd and cmd.get("op") in CONTROLS:
+                # A transport press. Whatever happens it must not cost
+                # the feed, so the reason goes into the file the panel is
+                # already reading rather than raising out of here.
+                err = try_control(token, cmd["op"])
+                state["cmderr"] = err
+                # Re-read at once: after a skip the old track would
+                # otherwise sit on the glass for a whole poll interval.
+                if not err:
+                    try:
+                        payload, status = fetch_playing(token.get())
+                        state = to_dial(payload)
+                        state["cmderr"] = ""
+                    except Exception:
+                        pass
+                last = None
+            elif cmd and cmd.get("id") and try_set_saved(token, cmd):
                 liked_id, liked = cmd["id"], bool(cmd.get("want"))
                 last = None            # force a rewrite so the panel confirms
 
@@ -368,7 +425,7 @@ def main():
             # only rewrite when something actually changed, so the file's
             # mtime stays meaningful and the SD card is not churned
             key = (state["event"], state["title"], state["position"] // 5000,
-                   state["liked"])
+                   state["liked"], state.get("cmderr"))
             if key != last:
                 write(state)
                 last = key

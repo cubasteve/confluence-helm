@@ -939,15 +939,38 @@ def spotify_like(track_id, want):
         return {'ok': False, 'error': 'BAD TRACK ID'}
     if not os.path.isfile(SPOTIFY_CFG):
         return {'ok': False, 'error': 'NO SPOTIFY CREDENTIALS'}
+    r = _spotify_write({'id': track_id, 'want': bool(want)})
+    return dict(r, want=bool(want)) if r.get('ok') else r
+
+
+def _spotify_write(cmd):
+    """One command file, written atomically so the poller never reads a
+    half-written one. Last press wins: two taps inside the poller's
+    half-second pickup collapse to one, which for a skip is the right
+    answer anyway."""
     try:
         d = os.path.dirname(SPOTIFY_CMD) or '/tmp'
         fd, tmp = tempfile.mkstemp(dir=d, prefix='.spot-cmd-')
         with os.fdopen(fd, 'w') as f:
-            json.dump({'id': track_id, 'want': bool(want)}, f)
-        os.replace(tmp, SPOTIFY_CMD)          # atomic: never a half-read command
-        return {'ok': True, 'want': bool(want)}
+            json.dump(cmd, f)
+        os.replace(tmp, SPOTIFY_CMD)
+        return {'ok': True}
     except Exception as e:
         return {'ok': False, 'error': str(e)[:120]}
+
+
+SPOTIFY_OPS = ('next', 'prev', 'play', 'pause')
+
+
+def spotify_control(op):
+    """Transport, handed to the poller the same way a like is - netd does
+    not hold the token and must not start. See spotify_status."""
+    op = str(op or '').strip()
+    if op not in SPOTIFY_OPS:
+        return {'ok': False, 'error': 'BAD OP'}
+    if not os.path.isfile(SPOTIFY_CFG):
+        return {'ok': False, 'error': 'NO SPOTIFY CREDENTIALS'}
+    return _spotify_write({'op': op})
 
 
 def route(path, body):
@@ -959,6 +982,8 @@ def route(path, body):
 
     if path == '/spotify/like':
         return spotify_like(body.get('id'), body.get('want'))
+    if path == '/spotify/control':
+        return spotify_control(body.get('op'))
 
     if path == '/display/status':
         return dict(display_status(), ok=True)

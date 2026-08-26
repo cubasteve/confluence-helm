@@ -17,11 +17,15 @@ and add this exact redirect URI to it:
 Spotify no longer accepts "localhost" for loopback redirects - it has to
 be the literal 127.0.0.1, and the port has to match.
 
-Scopes requested are user-read-currently-playing, user-library-read and
-user-library-modify. The first two are read-only; the third is what lets
-the panel's heart add and remove the current track. Nothing here can
-control playback. It
-cannot skip, pause, or change anything on your account.
+Scopes requested are user-read-currently-playing, user-library-read,
+user-library-modify and user-modify-playback-state - read what is
+playing, add and remove tracks from your library, and drive playback.
+
+That last one is a real widening, so it is worth being plain about: with
+it this token can skip, pause and resume on whatever device is currently
+active. It cannot change your password, your subscription, or anything
+outside playback and saved tracks. Drop it from SCOPE below and re-run
+if you would rather the panel could not.
 """
 import base64
 import errno
@@ -47,7 +51,13 @@ REDIRECT = "http://127.0.0.1:%d/callback"
 # drive playback. Re-run this script after changing the list - an existing
 # refresh token carries the scopes it was granted with, so a widened SCOPE
 # does nothing until the consent screen is answered again.
-SCOPE = "user-read-currently-playing user-library-read user-library-modify"
+# user-modify-playback-state is what the transport buttons need. It is a
+# real widening: this token can now drive playback on whatever device is
+# active, not merely read and save. It also needs Spotify Premium - a
+# free account answers 403 on those endpoints - and an active device,
+# since the Pi deliberately is not one.
+SCOPE = ("user-read-currently-playing user-library-read user-library-modify "
+         "user-modify-playback-state")
 PORT = PORT_ENV or 8888
 REDIRECT = REDIRECT % PORT
 
