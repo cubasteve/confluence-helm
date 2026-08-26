@@ -1385,6 +1385,35 @@ is already running, so ssh and a running desktop are unaffected.
 **`cage -s`.** VT switching has to be allowed or the Desktop tile cannot
 work - starting a display manager needs another VT to switch to.
 
+### Which display stack is actually driving the panel
+
+```bash
+python3 ~/helm/boot/check-display.py      # while the DESKTOP is up
+```
+
+Read-only — it starts nothing, stops nothing, changes nothing. It exists
+because the two stacks have nothing in common where display geometry is
+concerned, and a wrong guess at the helm is a black screen.
+
+It identifies the stack by **which compositor is running**, not by this
+shell's environment, and that is the point: over SSH there is no
+`WAYLAND_DISPLAY` or `DISPLAY` to read, so an env check alone reports
+"neither" on a Pi that is plainly running one. It also reports the panel
+as the *kernel* sees it (`/sys/class/drm`, true under either stack), what
+`xrandr` or `wlr-randr` can reach, and any `video=` already set in
+`cmdline.txt`.
+
+`xrandr` is only ever called with `--query` and `wlr-randr` only with no
+arguments — both read-only forms, and the test asserts it.
+
+Two things it will tell you that are easy to get wrong:
+
+- **cage is running** → this is kiosk mode, not desktop mode. The answer
+  would be about the wrong thing, so it refuses and tells you to tap
+  Desktop first.
+- **Xwayland is up** → that is a decoy. It draws *into* the Wayland
+  compositor, so `xrandr` against it will not reshape the real output.
+
 ### And back to the kiosk
 
 The Desktop tile used to be a **one-way door**: the only way back to the
