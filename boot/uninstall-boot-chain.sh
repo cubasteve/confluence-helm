@@ -27,25 +27,8 @@ restore(){
 restore "$BOOTDIR/config.txt"
 restore "$BOOTDIR/cmdline.txt"
 restore "$OWNER_HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf"
-# Withdraw the alternative BEFORE deleting the theme it points at, or
-# the chain is left aimed at a directory that no longer exists.
-if command -v update-alternatives >/dev/null 2>&1; then
-  update-alternatives --remove x-cursor-theme \
-    /usr/share/icons/Confluence-blank/index.theme >/dev/null 2>&1 || true
-fi
-restore /usr/share/icons/default/index.theme
-# ...and if we created that file where there had been nothing, take it
-# away rather than leaving a theme behind that inherits one we are about
-# to delete.
-if [ -f /usr/share/icons/default/index.theme.confluence-new ]; then
-  rm -f /usr/share/icons/default/index.theme \
-        /usr/share/icons/default/index.theme.confluence-new
-  rmdir /usr/share/icons/default 2>/dev/null || true
-  echo "   removed the default cursor index we created"
-fi
-rm -rf /usr/share/icons/Confluence-blank
-rm -f /etc/lightdm/lightdm.conf.d/10-confluence-nocursor.conf
-echo "   pointer back to normal (log out and in, or reboot)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$HERE/uninstall-cursor.sh"
 
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   # pix is the Raspberry Pi OS stock theme; fall back to whatever else

@@ -164,101 +164,10 @@ else
 fi
 
 say "6/8  the mouse pointer"
-# X11 and Wayland both resolve pointers through Xcursor themes, so one
-# transparent theme covers whichever this Pi is running. `X -nocursor`
-# is more absolute but exists only under X, so it goes on as well when
-# the session is X - belt and braces.
-CURSOR_THEME=/usr/share/icons/Confluence-blank
-rm -rf "$CURSOR_THEME"
-mkdir -p "$CURSOR_THEME"
-cp -r "$HERE/cursor/." "$CURSOR_THEME/"
-ok "installed $CURSOR_THEME"
-
-# Making it the DEFAULT theme is the part that actually matters, and it
-# took two goes to get right, so the reasoning is here in full.
-#
-# cage hands wlroots a NULL theme name, and wlroots resolves NULL to the
-# theme literally called "default" - it does NOT consult XCURSOR_THEME
-# for that. So exporting XCURSOR_THEME in cage-session.sh, which is what
-# the man page tells you to do, is on its own not enough: if the theme
-# named "default" is missing or draws something, wlroots falls back to
-# the arrow it has compiled into itself, and you get a pointer on the
-# glass for the whole gap between Plymouth quitting and Chromium's first
-# paint. Both routes are set up below, because which one a given cage
-# uses is not something this script can know.
-#
-# /usr/share/icons/default/index.theme is where that lives, and on
-# Debian it is NOT an ordinary file: it is the tail of the
-# x-cursor-theme update-alternatives chain, so writing to that path
-# writes THROUGH the symlinks into a package-owned file. backup() could
-# not save us from that either - cp -a implies -d, so it copied the
-# symlink and not the file about to be clobbered, and the uninstaller
-# then restored a link pointing at a theme it had just deleted.
-#
-# So: update-alternatives first, because that is the supported way to
-# say "prefer mine" and the only one that can be withdrawn cleanly. But
-# it can legitimately refuse - most likely on a Pi where an earlier
-# version of THIS script already replaced the link with a plain file -
-# and the previous attempt swallowed that refusal and moved on with the
-# pointer still visible and a reassuring line in the log. Now the result
-# is checked, and a refusal escalates to writing the file directly
-# rather than being reported as success.
-DEFAULT_INDEX=/usr/share/icons/default/index.theme
-mkdir -p /usr/share/icons/default
-
-cursor_ok(){ python3 "$HERE/check-cursor.py" default Confluence-blank >/dev/null 2>&1; }
-
-USED=""
-if command -v update-alternatives >/dev/null 2>&1; then
-  # Points at the theme's OWN index.theme, which is the Debian
-  # convention - DMZ-White and friends are registered exactly this way,
-  # self-inheriting Inherits= line and all. That line is why this works:
-  # read through the symlink at icons/default/index.theme there is no
-  # cursors/ directory alongside, so the Inherits is the only thing that
-  # sends the lookup back here. make-blank-cursor.py writes it.
-  if update-alternatives --install "$DEFAULT_INDEX" x-cursor-theme \
-       "$CURSOR_THEME/index.theme" 155 >/dev/null 2>&1 &&
-     update-alternatives --set x-cursor-theme "$CURSOR_THEME/index.theme" \
-       >/dev/null 2>&1 && cursor_ok; then
-    USED="update-alternatives"
-    ok "registered as the x-cursor-theme alternative (priority 155)"
-  else
-    ok "update-alternatives would not take it - falling back to a plain file"
-  fi
-fi
-
-if [ -z "$USED" ]; then
-  # The direct write. Back up whatever is there first, symlink or file:
-  # cp -a keeps a symlink a symlink, which is what the uninstaller needs
-  # to put the alternatives chain back.
-  backup "$DEFAULT_INDEX"
-  # backup() is a no-op when there was nothing there, so leave a marker
-  # of our own as well: without it the uninstaller has no way to tell a
-  # file it should delete from one it should merely leave alone.
-  [ -f "$DEFAULT_INDEX.confluence-bak" ] || touch "$DEFAULT_INDEX.confluence-new"
-  rm -f "$DEFAULT_INDEX"
-  cat > "$DEFAULT_INDEX" <<'EOT'
-[Icon Theme]
-Name=Default
-Comment=Default cursor theme
-Inherits=Confluence-blank
-EOT
-  if cursor_ok; then
-    USED="a plain index.theme"
-    ok "wrote $DEFAULT_INDEX inheriting the blank theme"
-  fi
-fi
-
-# Say plainly whether the pointer is actually gone. This is the whole
-# point of the step, it has silently not worked twice, and the only
-# other place it shows up is on the panel at the next boot.
-if [ -n "$USED" ]; then
-  ok "verified: no pointer is drawn for theme 'default' or 'Confluence-blank' ($USED)"
-else
-  printf '\n   POINTER NOT HIDDEN. The details:\n\n'
-  python3 "$HERE/check-cursor.py" default Confluence-blank 2>&1 | sed 's/^/   /'
-  printf '\n   The boot chain is otherwise installed; this one step failed.\n'
-fi
+# Its own script, because install-cage-kiosk.sh needs exactly the same
+# thing and neither installer owns it. See install-cursor.sh for why a
+# theme, and why "default" has to be one of them.
+bash "$HERE/install-cursor.sh" || ok "the pointer step failed - see above"
 
 # Every one of these is allowed to fail. set -e is on, and a missing or
 # unhappy loginctl must not abort an installer that edits boot files.

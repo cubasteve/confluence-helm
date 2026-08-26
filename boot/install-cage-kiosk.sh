@@ -47,13 +47,23 @@ die(){ printf '\n   %s\n' "$*" >&2; exit 1; }
 
 mkdir -p "$STATE"
 
-say "1/7  cage"
+say "1/8  cage"
 command -v cage >/dev/null 2>&1 || die "cage is not installed.  sudo apt install cage"
 ok "$(command -v cage)"
 [ -x "$HERE/cage-session.sh" ] || chmod +x "$HERE/cage-session.sh"
 ok "session script: $HERE/cage-session.sh"
 
-say "2/7  the Desktop tile's one privilege"
+say "2/8  the mouse pointer"
+# cage-session.sh exports XCURSOR_THEME=Confluence-blank, and until now
+# nothing in THIS installer put that theme on the disk - it was a step
+# inside install-boot-chain.sh, a different script you might reasonably
+# never have run. A cage kiosk naming a theme that does not exist gets
+# wlroots' built-in arrow for the whole gap between Plymouth quitting and
+# Chromium's first paint, with nothing anywhere saying why. So the cage
+# installer installs it too now, and both are idempotent.
+bash "$HERE/install-cursor.sh" || ok "the pointer step failed - see above"
+
+say "3/8  the Desktop tile's one privilege"
 # logind hands a local active session reboot and poweroff for free, but
 # not starting an arbitrary unit - so the tile needs exactly this and
 # nothing more. Written to a temp file and checked by visudo BEFORE it
@@ -88,7 +98,7 @@ EOT
   ok "checked by visudo and installed: $OWNER may run it with no arguments"
 fi
 
-say "3/7  tty1 owns the session"
+say "4/8  tty1 owns the session"
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/confluence-autologin.conf <<EOT
 # Confluence kiosk: log $OWNER in on tty1 so the helm session is a real,
@@ -139,7 +149,7 @@ else
   ok "launch hook already in $PROFILE"
 fi
 
-say "4/7  what Desktop means"
+say "5/8  what Desktop means"
 # The Desktop tile stops the kiosk and starts a desktop session. What you
 # want on the other side is the helm app still in front of you - as a
 # window this time, since that is what a desktop is for. The desktop's
@@ -156,7 +166,7 @@ install -m 0644 "$HERE/../autostart/confluence-window.desktop" \
 chown -R "$OWNER:$OWNER" "$AUTOSTART"
 ok "tapping Desktop will open the helm app windowed on it"
 
-say "5/7  stop the desktop starting by itself"
+say "6/8  stop the desktop starting by itself"
 # Write-once, the same rule backup() applies at :41. Unconditional, this
 # was a trap: a SECOND installer run - which is the only way to pick up a
 # later commit - reads back the multi-user.target the FIRST run set and
@@ -179,7 +189,7 @@ systemctl set-default multi-user.target >/dev/null 2>&1 && ok "now: multi-user.t
   || ok "could not change the default target"
 systemctl daemon-reload || true
 
-say "6/7  the login banner"
+say "7/8  the login banner"
 # What lands on tty1 between Plymouth and cage is not kernel output, it
 # is the login banner: the uname line and the Debian warranty text come
 # from the MOTD, "Last login" from login(1), and /etc/issue from agetty.
@@ -217,7 +227,7 @@ os.replace(tmp, path)
 print('   console moved to tty3' if moved else '   no console=tty1 to move')
 CMDEDIT
 
-say "7/7  done"
+say "8/8  done"
 cat <<EOT
    sudo reboot
 

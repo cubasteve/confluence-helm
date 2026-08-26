@@ -885,6 +885,22 @@ no `cursors/` directory alongside the file, so the `Inherits` line is
 the only thing that sends the lookup back to the real theme. Debian's
 own DMZ-White does exactly the same.
 
+The theme is installed by **`boot/install-cursor.sh`**, which both
+installers call and which is safe to run on its own:
+
+```bash
+sudo bash ~/helm/boot/install-cursor.sh      # and reboot
+```
+
+It is its own script because both installers need it and neither owns
+it. It used to be a step inside `install-boot-chain.sh`, while the thing
+that actually depends on it — `cage-session.sh`, which exports
+`XCURSOR_THEME=Confluence-blank` — is installed by
+`install-cage-kiosk.sh`. So a Pi could have the entire cage kiosk set
+up, naming a theme that had never been put on the disk, and the only
+symptom was an arrow on the glass at every boot with nothing anywhere
+saying why. That is exactly what happened.
+
 **To find out whether the pointer will be drawn:**
 
 ```bash
