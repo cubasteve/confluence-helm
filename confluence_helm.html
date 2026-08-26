@@ -659,8 +659,14 @@ a.lib-row{text-decoration:none;color:inherit}
 /* One quiet row above the art. The instruments are context for the
    music here, not the subject - the dial proper is where you read them
    properly - so they sit small and stay out of the way.              */
+/* The negative top margin and the matching addition below are a pair,
+   and they cancel: the sheet's total height is unchanged, so the sheet -
+   which is vertically centred - does not move, and neither does anything
+   under the strip. Only the strip rises, into 28px of room that was
+   doing nothing between it and the bezel at the rim. It buys clearance
+   over the volume ring, whose topmost tick was 8px under it. */
 .ms-head{display:flex;align-items:center;justify-content:center;gap:20px;
-  min-height:40px;margin-bottom:20px;line-height:1.43;
+  min-height:40px;margin-top:-28px;margin-bottom:48px;line-height:1.43;
   font-size:22px;font-weight:600;letter-spacing:.1em;color:var(--label)}
 .ms-head b{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:0}
 .ms-head i{width:2px;height:24px;background:var(--hairline);display:block;flex:none}
@@ -3645,7 +3651,15 @@ async function toggleLike(){
    full volume in a cabin at anchor, and that is not a mistake worth
    being able to make. It also means the 8px threshold below can ignore
    taps entirely: a touch that never moves does nothing at all.        */
-const VT_N=44, V_A0=-150, V_SPAN=300;
+/* 45, not 44, and the reason is arithmetic rather than taste. The ticks
+   are laid out across VT_N-1 gaps, so the majors land on quarters of the
+   scale only when VT_N-1 divides by 4 - and the middle one sits at twelve
+   o'clock only when it is even. 44 ticks put the majors at 0, 25.6, 51.2
+   and 76.7 per cent and the "half" one three and a half degrees past top
+   dead centre, which is exactly the sort of wrong that is invisible until
+   you look at it against the strip above and cannot unsee. 45 gives 44
+   gaps: majors every 11 at 0, 25, 50, 75, 100, and 50% dead centre. */
+const VT_N=45, V_A0=-150, V_SPAN=300;
 let VTs=null, vLit=null, volPend=null, vDrag=null;
 
 function volAvailable(){

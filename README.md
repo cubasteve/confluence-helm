@@ -705,10 +705,20 @@ would just be a puzzle.
 
 ### The volume ring
 
-A tick bezel around the album art. 44 ticks over 300°, lit to the level,
+A tick bezel around the album art. 45 ticks over 300°, lit to the level,
 with the 60° at the foot left open — a gap gives the scale a beginning
 and an end, and without one 65% reads as nearly full. It is also where
 the title is, so nothing down there is a target.
+
+**45, not 44,** and the reason is arithmetic rather than taste. The ticks
+span `N-1` gaps, so the majors land on quarters of the scale only when
+`N-1` divides by 4, and the middle one sits at twelve o'clock only when
+it is even. 44 put the majors at 0, 25.6, 51.2 and 76.7 per cent and the
+"half" one 3.5° past top dead centre — invisible until you look at it
+against the strip above, and impossible to unsee afterwards. 45 gives 44
+gaps: majors every 11 at 0, 25, 50, 75, 100, and 50% dead centre. The
+test measures that against the ring's own geometry rather than against
+the tick index, so changing the count cannot quietly move it again.
 
 Ticks rather than a solid arc because this panel already has one tick
 ring, the wind bezel, and a second idiom for the same kind of reading
@@ -718,6 +728,14 @@ would be a second thing to learn.
 art; the ring and its hit target both overflow it. There were 21px of
 slack above the lock and this spends none of them, so the art stays at
 280.
+
+The instrument strip above it moved up 28px to make room, and that costs
+nothing either: `.ms-head` carries `margin-top:-28px` against
+`margin-bottom:48px`, a pair that cancels. The sheet's total height is
+unchanged, so the sheet — which is vertically centred — does not move,
+and neither does anything below the strip. Only the strip rises, into
+room that was doing nothing between it and the bezel at the rim. The
+topmost tick had 8px under it and now has 22.
 
 #### Turning it
 
