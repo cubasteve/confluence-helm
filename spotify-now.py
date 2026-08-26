@@ -284,11 +284,12 @@ def library_failed(what, e):
     code = getattr(e, "code", None)
     if code == 403:
         if not _lib["warned"]:
-            log("%s refused (403): this token has no library scope, so the "
-                "heart stays hidden. Music is unaffected. To enable it, "
-                "re-run spotify-auth.py - a refresh token carries the "
-                "scopes it was granted with, so widening them needs the "
-                "consent screen again." % what)
+            log("%s refused (403): this token has no library scope. The "
+                "heart still shows, dimmed, and says NOT ALLOWED if you "
+                "press it. Music is unaffected. To enable it, re-run "
+                "spotify-auth.py - a refresh token carries the scopes it "
+                "was granted with, so widening them needs the consent "
+                "screen again." % what)
             _lib["warned"] = True
         _lib["until"] = time.time() + 3600      # do not hammer it
     else:
@@ -308,19 +309,36 @@ def try_is_saved(token, track_id):
 
 
 def try_set_saved(token, cmd):
-    """Carry out a like/unlike. Returns whether it took. Never raises."""
+    """Carry out a like/unlike. '' if it took, else a short reason to
+    show on the glass. Never raises.
+
+    It reports the reason rather than just failing because the panel is
+    optimistic: the heart fills on the tap. A silent False there means
+    the heart quietly un-fills a few seconds later and the boat is told
+    nothing about why - which is the same failure the hidden heart was.
+    Same shape as try_control() for the same reason.
+    """
     want = bool(cmd.get("want"))
-    if not library_ready():
-        log("ignoring a %s - the library scope is not available"
-            % ("like" if want else "unlike"))
-        return False
+    verb = "like" if want else "unlike"
+    # Deliberately NOT gated on library_ready(). The backoff exists to
+    # stop the POLL loop hammering an endpoint that is refusing it; a
+    # press is one request that someone made on purpose, and refusing it
+    # locally would mean the panel showing a made-up reason instead of
+    # Spotify's real one. If the scope is genuinely missing this comes
+    # straight back 403 and says so, which is the useful answer.
     try:
         set_saved(token.get(), cmd["id"], want)
         log("%s %s" % ("liked" if want else "unliked", cmd["id"]))
-        return True
+        # It worked, so whatever the check was backing off from is over.
+        _lib["until"] = 0.0
+        return ""
+    except urllib.error.HTTPError as e:
+        library_failed(verb, e)
+        return "NOT ALLOWED" if e.code == 403 else "HTTP %s" % e.code
     except Exception as e:
-        library_failed("like" if want else "unlike", e)
-        return False
+        library_failed(verb, e)
+        return "NO REPLY"
+
 
 
 def to_dial(payload):
@@ -409,15 +427,30 @@ def main():
                     except Exception:
                         pass
                 last = None
-            elif cmd and cmd.get("id") and try_set_saved(token, cmd):
-                liked_id, liked = cmd["id"], bool(cmd.get("want"))
+            elif cmd and cmd.get("id"):
+                err = try_set_saved(token, cmd)
+                if err:
+                    # Say why, in the file the panel is already reading.
+                    # Also forget the stored answer: a refused like tells
+                    # us nothing about what the library holds, and what
+                    # we had was only ever a guess if it came back None.
+                    state["cmderr"] = err
+                    liked_id = None
+                else:
+                    liked_id, liked = cmd["id"], bool(cmd.get("want"))
                 last = None            # force a rewrite so the panel confirms
 
             # Only ask the library when the track actually changed. The
             # answer cannot differ between two polls of the same track,
             # and asking every time would double this loop's requests.
             if state["id"] and state["id"] != liked_id:
-                liked_id, liked = state["id"], try_is_saved(token, state["id"])
+                liked = try_is_saved(token, state["id"])
+                # Remember which track the answer is FOR only when there
+                # IS an answer. Recording the id beside a None means
+                # "already asked about this track", so a failure that
+                # clears in a minute would not be retried until the NEXT
+                # track - and on a long album that is the whole side.
+                liked_id = state["id"] if liked is not None else None
             elif not state["id"]:
                 liked_id, liked = None, None
             state["liked"] = liked if state["id"] else None

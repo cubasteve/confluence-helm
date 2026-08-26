@@ -513,14 +513,14 @@ matches it exactly.
 
 ### The like button, and who holds the token
 
-The heart beside the album art adds and removes the current track from
+The heart in the control bar adds and removes the current track from
 your library. Scopes are `user-read-currently-playing`,
-`user-library-read` and `user-library-modify` — **no playback-control
-scope**: this token sits on a boat, and being able to change the library
-is a smaller thing to hand over than being able to drive playback.
-Re-run `spotify-auth.py` after any scope change; a refresh token carries
-the scopes it was granted with, so widening the list does nothing until
-the consent screen is answered again.
+`user-library-read`, `user-library-modify` and — since the transport was
+added — `user-modify-playback-state`. Re-run `spotify-auth.py` after any
+scope change; a refresh token carries the scopes it was granted with, so
+widening the list does nothing until the consent screen is answered
+again. This is the single most common cause of a feature here being
+present in the code and inert on the glass.
 
 The write path is deliberately indirect. netd has the HTTP listener, so
 the panel posts to it — but netd does **not** call Spotify. It writes a
@@ -542,18 +542,27 @@ library. A failed tap puts the heart back and prints the reason where
 Asking every poll would double this loop's request rate for an answer
 that cannot differ between two polls of the same track.
 
-The heart shares the progress bar's row rather than taking one of its
-own — there is no vertical room on that page for another row, and the
-two belong together anyway. The bar gives up exactly the width the heart
-occupies (520px → 426px) and takes it straight back when the heart is
-hidden, since a `display:none` flex item is out of the row entirely. The
-elapsed and remaining times stay aligned to the bar's ends, and the lock
-does not move.
+The heart shows whenever netd reports credentials and something is
+playing — the same bar the transport clears. It is hidden on a phone
+loading this page over the boat WiFi, where the loopback helper is
+unreachable and a tap could not go anywhere, and that is the only case.
 
-The heart is hidden entirely unless netd reports credentials exist and
-the feed carries a liked state — so it never appears on a phone loading
-this page over the boat WiFi, where the loopback helper is unreachable
-and the tap could not go anywhere.
+It used to also require the feed to carry a real liked state, and that
+was wrong. A token without `user-library-read` answers 403, the poller
+writes `liked: null`, and the heart simply was not there — beside three
+transport buttons that were, with nothing on the glass saying why. Now
+an unknown answer is *drawn*: the heart appears dimmed, it is still
+pressable, and a refusal names itself on the state line the way a
+refused skip does. An empty heart means "not in your library"; a dim one
+means "I could not find out" — and only one of those is something you
+can fix.
+
+The same 403 puts the library check into an hour's backoff (a network
+wobble, a minute's). When that expires the check is asked again for the
+track still playing: the answer is recorded against a track ID only when
+there *is* an answer, since recording the ID beside a `None` reads as
+"already asked about this one" and would hold the heart unknown for the
+rest of the track however quickly the fault cleared.
 
 ### Playback controls
 
@@ -585,8 +594,12 @@ They live in a **second control bar** under the progress bar, with the
 heart — the four things you press about the track, together. The
 progress bar keeps its full 520px above them and the lock is back at
 dead centre on the foot, the same as every other page. The room came out
-of the album art, 300px down to 232, which was the only place on the
-page 68px existed.
+of the album art, which was the only place on the page it existed —
+though most of it came back afterwards by setting `line-height` on every
+row of that page to the font's own box (Poppins measures 1.42em by
+`measureText`, so 1.43) instead of leaving it at `normal`, which is
+about 1.5 and is pure waste for single-line rows. The art ended at
+280px.
 
 The heart sits slightly apart from the three: at an equal gap it read as
 a fourth transport button, and it is not one — those three move the
