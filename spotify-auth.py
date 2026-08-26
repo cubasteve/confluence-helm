@@ -24,6 +24,8 @@ control playback. It
 cannot skip, pause, or change anything on your account.
 """
 import base64
+import errno
+import subprocess
 import json
 import os
 import stat
@@ -35,7 +37,10 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 CONFIG = os.path.expanduser("~/.config/confluence-spotify.json")
-REDIRECT = "http://127.0.0.1:8888/callback"
+# Overridable, but only usefully so if you also change the redirect URI
+# registered in the Spotify dashboard - Spotify matches it exactly.
+PORT_ENV = int(os.environ.get("CONFLUENCE_AUTH_PORT") or 0)
+REDIRECT = "http://127.0.0.1:%d/callback"
 # Read what is playing, plus the two the like button needs. Deliberately
 # no playback-control scope: this token sits on a boat, and being able to
 # modify the library is a smaller thing to hand over than being able to
@@ -43,7 +48,8 @@ REDIRECT = "http://127.0.0.1:8888/callback"
 # refresh token carries the scopes it was granted with, so a widened SCOPE
 # does nothing until the consent screen is answered again.
 SCOPE = "user-read-currently-playing user-library-read user-library-modify"
-PORT = 8888
+PORT = PORT_ENV or 8888
+REDIRECT = REDIRECT % PORT
 
 _result = {}
 
@@ -68,8 +74,73 @@ class Catcher(BaseHTTPRequestHandler):
         pass          # keep the console clean
 
 
+def port_holder(port):
+    """Best effort at naming whatever already has the port, because
+    "Address already in use" on its own sends you nowhere."""
+    for cmd in (["ss", "-lptn", "sport = :%d" % port],
+                ["lsof", "-nP", "-i", ":%d" % port]):
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=4).stdout.strip()
+            if len(out.splitlines()) > 1:
+                return out
+        except Exception:
+            pass
+    return ""
+
+
+def try_bind():
+    """Claim the callback port, or explain why we could not.
+
+    Deliberately the FIRST thing main() does. It used to happen after the
+    credentials had been typed in and the consent screen approved, so a
+    busy port threw away all of that and left a traceback."""
+    try:
+        return HTTPServer(("127.0.0.1", PORT), Catcher)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+    print("\n  Port %d is already in use, so the callback cannot be caught\n"
+          "  here. Almost always that is an earlier run of this same script\n"
+          "  still waiting for a redirect that never arrived.\n" % PORT)
+    who = port_holder(PORT)
+    if who:
+        print("  What has it:\n")
+        for line in who.splitlines():
+            print("    " + line)
+        print()
+    print("  To clear it:    pkill -f spotify-auth\n"
+          "  Then run this again. Or carry on below and paste the code by\n"
+          "  hand - that works too, and does not need the port at all.\n")
+    return None
+
+
+def manual_code():
+    """The paste-it-in path.
+
+    Worth having for more than a busy port: the redirect goes to
+    127.0.0.1, so the browser has to be ON the Pi for it to be caught
+    automatically - and a boat Pi is usually driven over SSH with no
+    browser to open. Approve on a laptop instead, and the browser lands
+    on a page that will not load whose ADDRESS BAR holds the code."""
+    print("  After approving, your browser will try to reach 127.0.0.1 and\n"
+          "  most likely fail to connect. That is expected. Copy the whole\n"
+          "  address out of the bar - it looks like\n"
+          "    http://127.0.0.1:%d/callback?code=AQD...\n" % PORT)
+    raw = input("Paste that address (or just the code): ").strip()
+    if not raw:
+        return ""
+    if "code=" in raw:
+        q = urllib.parse.urlparse(raw).query or raw.split("?", 1)[-1]
+        got = urllib.parse.parse_qs(q).get("code") or []
+        return got[0].strip() if got else ""
+    return raw
+
+
 def main():
     print(__doc__)
+    # Before anything is typed: a failure here should cost nothing.
+    srv = try_bind()
     client_id = input("Client ID     : ").strip()
     client_secret = input("Client Secret : ").strip()
     if not client_id or not client_secret:
@@ -82,25 +153,37 @@ def main():
         "scope": SCOPE,
     })
 
-    print("\nOpen this in a browser on THIS machine and approve:\n\n  %s\n" % url)
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    print("\nOpen this in a browser and approve:\n\n  %s\n" % url)
+    # Only when there is a desktop of our own to open it on. Over SSH
+    # there is nothing to open, and under the cage kiosk the one browser
+    # on the machine is the helm display itself - handing it this URL
+    # would replace the instruments with a Spotify consent screen,
+    # because Chromium is single-instance per profile.
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
 
-    print("waiting for the redirect on %s ..." % REDIRECT)
-    srv = HTTPServer(("127.0.0.1", PORT), Catcher)
-    srv.handle_request()
-    srv.server_close()
-
-    if "code" not in _result:
-        print("\nno authorisation code received: %s" % _result.get("error", "unknown"))
-        sys.exit(1)
+    if srv is not None:
+        print("waiting for the redirect on %s ..." % REDIRECT)
+        srv.handle_request()
+        srv.server_close()
+        code = _result.get("code", "")
+        if not code:
+            print("\nno authorisation code received: %s"
+                  % _result.get("error", "unknown"))
+            sys.exit(1)
+    else:
+        code = manual_code()
+        if not code:
+            print("\nno code given - nothing written.")
+            sys.exit(1)
 
     basic = base64.b64encode(("%s:%s" % (client_id, client_secret)).encode()).decode()
     body = urllib.parse.urlencode({
         "grant_type": "authorization_code",
-        "code": _result["code"],
+        "code": code,
         "redirect_uri": REDIRECT,
     }).encode()
     req = urllib.request.Request(
@@ -127,7 +210,10 @@ def main():
     os.replace(tmp, CONFIG)
 
     print("\nwrote %s (0600)" % CONFIG)
-    print("now start the poller:  python3 /home/pi/helm/spotify-now.py")
+    print("\nRestart the helm session and the poller starts with it.")
+    print("Or right now, by hand:  python3 %s"
+          % os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "spotify-now.py"))
 
 
 if __name__ == "__main__":

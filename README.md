@@ -485,6 +485,32 @@ the three cases:
 `/tmp/cage-session.log` says which, and names the fix
 (`python3 ~/helm/spotify-auth.py`) when there are no credentials.
 
+### Authorising, on a Pi with no browser
+
+`spotify-auth.py` catches Spotify's redirect on `127.0.0.1:8888`, which
+means the browser you approve in has to be **on the Pi** for that to work
+automatically — and a boat Pi is usually driven over SSH with nothing to
+open. Two ways through:
+
+- **A browser on the Pi.** The script opens it for you *only* when there
+  is a desktop of its own to open it on. Never under the cage kiosk:
+  Chromium is single-instance per profile, so handing it the consent URL
+  would replace the instruments with a Spotify login screen.
+- **A browser anywhere else.** Approve there; the redirect to
+  `127.0.0.1` will fail to load, which is expected — the code is in the
+  address bar. Paste the whole address (or just the code) when asked.
+
+If the port is busy the script says so **before** asking for anything,
+names whatever is holding it, and offers the paste path. It used to bind
+after the credentials had been typed and the consent screen approved, so
+a busy port threw all of that away and left a traceback. The usual cause
+is an earlier run still waiting for a redirect that never arrived:
+`pkill -f spotify-auth`.
+
+`CONFLUENCE_AUTH_PORT` moves the port, but only usefully if you also
+change the redirect URI registered in the Spotify dashboard — Spotify
+matches it exactly.
+
 ### The like button, and who holds the token
 
 The heart beside the album art adds and removes the current track from
