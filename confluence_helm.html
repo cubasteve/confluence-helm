@@ -512,7 +512,11 @@ a.lib-row{text-decoration:none;color:inherit}
 .tbtn2:active{color:var(--ink)}
 .tbtn2:active svg{transform:scale(.84)}
 #m-play svg{width:46px;height:46px}
-.heart svg{width:46px;height:46px;fill:none;stroke:currentColor;
+/* 40 to match prev and next. Play is 46 because it is the primary
+   action of the three; the heart matching THAT made two competing focal
+   points in one row, and a filled shape already carries more weight than
+   an outlined triangle at the same size. */
+.heart svg{width:40px;height:40px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
   transition:fill .18s,transform .18s}
 .heart.on{color:var(--alarm)}
