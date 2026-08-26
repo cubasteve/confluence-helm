@@ -17,7 +17,10 @@ and add this exact redirect URI to it:
 Spotify no longer accepts "localhost" for loopback redirects - it has to
 be the literal 127.0.0.1, and the port has to match.
 
-Scope requested is user-read-currently-playing, which is read-only: it
+Scopes requested are user-read-currently-playing, user-library-read and
+user-library-modify. The first two are read-only; the third is what lets
+the panel's heart add and remove the current track. Nothing here can
+control playback. It
 cannot skip, pause, or change anything on your account.
 """
 import base64
@@ -33,7 +36,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 CONFIG = os.path.expanduser("~/.config/confluence-spotify.json")
 REDIRECT = "http://127.0.0.1:8888/callback"
-SCOPE = "user-read-currently-playing"
+# Read what is playing, plus the two the like button needs. Deliberately
+# no playback-control scope: this token sits on a boat, and being able to
+# modify the library is a smaller thing to hand over than being able to
+# drive playback. Re-run this script after changing the list - an existing
+# refresh token carries the scopes it was granted with, so a widened SCOPE
+# does nothing until the consent screen is answered again.
+SCOPE = "user-read-currently-playing user-library-read user-library-modify"
 PORT = 8888
 
 _result = {}

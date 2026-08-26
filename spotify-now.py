@@ -42,6 +42,19 @@ POLL_PLAYING = 5        # seconds between polls while something is playing
 POLL_IDLE = 20          # back off when nothing is playing
 API = "https://api.spotify.com/v1/me/player/currently-playing"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
+SAVED = "https://api.spotify.com/v1/me/tracks"          # like / unlike / contains
+
+# netd drops a like-or-unlike request here and this process carries it out.
+#
+# It goes through a file rather than netd calling Spotify itself because
+# ONE process must own the token. Spotify sometimes hands back a rotated
+# refresh token, and whoever receives it writes it to the config - two
+# processes refreshing independently means one of them is eventually
+# holding a refresh token that has been replaced, and the failure is a
+# dead integration hours later with nothing to point at. So netd, which
+# has the HTTP listener, writes the request; this loop, which has the
+# token, performs it.
+CMD = os.environ.get("HELM_SPOTIFY_CMD", "/tmp/confluence-spotify-cmd.json")
 
 # Spotify's rate limit is generous but not infinite. 5 s while playing is
 # 12 requests a minute; idling at 20 s is 3. Both sit far under it.
@@ -137,12 +150,59 @@ def fetch_playing(token):
         raise
 
 
+def api(token, method, url, timeout=20):
+    """A bare request that returns the parsed body, or None for 204/empty."""
+    req = urllib.request.Request(url, method=method,
+                                 headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        if r.status == 204:
+            return None
+        body = r.read()
+        return json.loads(body) if body else None
+
+
+def is_saved(token, track_id):
+    """Is this track in the library? One request, and the caller is
+    expected to ask only when the track ID has actually changed - asking
+    every poll would double this process's request rate for an answer
+    that cannot change between two polls of the same track."""
+    if not track_id:
+        return None
+    got = api(token, "GET", SAVED + "/contains?ids=" + urllib.parse.quote(track_id))
+    return bool(got[0]) if isinstance(got, list) and got else None
+
+
+def set_saved(token, track_id, want):
+    """Like (PUT) or unlike (DELETE). Returns the new state."""
+    api(token, "PUT" if want else "DELETE",
+        SAVED + "?ids=" + urllib.parse.quote(track_id))
+    return want
+
+
+def take_command():
+    """Read and consume netd's request, if there is one."""
+    try:
+        with open(CMD) as f:
+            cmd = json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        log("bad command file: %s" % e)
+        cmd = None
+    try:
+        os.remove(CMD)
+    except OSError:
+        pass
+    return cmd
+
+
 def to_dial(payload):
     """Map Spotify's shape onto what the dial's poller reads."""
     now = int(time.time() * 1000)
     if not payload or not payload.get("item"):
         return {"event": "stopped", "title": "", "artist": "", "cover": "",
-                "album": "", "position": 0, "duration": 0, "at": now}
+                "album": "", "id": "", "liked": None,
+                "position": 0, "duration": 0, "at": now}
     it = payload["item"]
     album = it.get("album") or {}
     return {
@@ -151,6 +211,10 @@ def to_dial(payload):
         "artist": ", ".join(a.get("name", "") for a in it.get("artists", [])),
         "album": album.get("name", ""),
         "cover": pick_cover(album.get("images") or []),
+        # id is what the like button acts on; liked is filled in by the
+        # loop, which knows whether it needs to go and ask.
+        "id": it.get("id") or "",
+        "liked": None,
         "position": int(payload.get("progress_ms") or 0),
         "duration": int(it.get("duration_ms") or 0),
         "at": now,
@@ -172,20 +236,53 @@ def write(state):
             log("write failed for %s: %s" % (target, e))
 
 
+def sleep_watching(delay):
+    """Sleep, but notice a command file promptly. A like that took the
+    poll interval to register would feel broken; a stat() twice a second
+    costs nothing next to the HTTPS request this is waiting to make."""
+    end = time.time() + delay
+    while time.time() < end:
+        if os.path.exists(CMD):
+            return
+        time.sleep(min(0.5, max(0.05, end - time.time())))
+
+
 def main():
     cfg = load_config()
     token = Token(cfg)
     last = None
     backoff = 0
+    liked_id, liked = None, None      # the library answer, and what it is for
 
     while True:
         delay = POLL_IDLE
         try:
+            # A like or unlike asked for by the panel, carried out here
+            # because this is the process that holds the token.
+            cmd = take_command()
+            if cmd and cmd.get("id"):
+                want = bool(cmd.get("want"))
+                set_saved(token.get(), cmd["id"], want)
+                log("%s %s" % ("liked" if want else "unliked", cmd["id"]))
+                liked_id, liked = cmd["id"], want
+                last = None            # force a rewrite so the panel confirms
+
             payload, status = fetch_playing(token.get())
             state = to_dial(payload)
+
+            # Only ask the library when the track actually changed. The
+            # answer cannot differ between two polls of the same track,
+            # and asking every time would double this loop's requests.
+            if state["id"] and state["id"] != liked_id:
+                liked_id, liked = state["id"], is_saved(token.get(), state["id"])
+            elif not state["id"]:
+                liked_id, liked = None, None
+            state["liked"] = liked if state["id"] else None
+
             # only rewrite when something actually changed, so the file's
             # mtime stays meaningful and the SD card is not churned
-            key = (state["event"], state["title"], state["position"] // 5000)
+            key = (state["event"], state["title"], state["position"] // 5000,
+                   state["liked"])
             if key != last:
                 write(state)
                 last = key
@@ -211,7 +308,7 @@ def main():
             backoff = min(backoff * 2 or 5, 300)
             delay = backoff
             log("%s (retry in %ss)" % (e, delay))
-        time.sleep(delay)
+        sleep_watching(delay)
 
 
 if __name__ == "__main__":

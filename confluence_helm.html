@@ -488,17 +488,48 @@ a.lib-row{text-decoration:none;color:inherit}
   color:var(--ink)}
 
 .m-sheet{width:600px;display:flex;flex-direction:column;align-items:center}
+/* The art is 300px in a 600px sheet, so there is 150px of slack either
+   side and the heart takes some of it - no new row, and the lock stays
+   at the foot where it is on every other page. */
+.m-artrow{position:relative;display:flex;justify-content:center;
+  width:100%;margin-bottom:26px}
 .art{width:300px;height:300px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
-  color:var(--label);margin-bottom:26px;flex:none}
+  color:var(--label);flex:none}
+.heart{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:78px;height:78px;border-radius:50%;background:none;border:none;
+  padding:0;display:flex;align-items:center;justify-content:center;
+  color:var(--label)}
+.heart svg{width:46px;height:46px;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
+  transition:fill .18s,transform .18s}
+.heart.on{color:var(--alarm)}
+.heart.on svg{fill:currentColor}
+.heart:active svg{transform:scale(.85)}
+/* While the poller is carrying it out. It is optimistic, so this is only
+   ever brief - and if it fails the state comes back and says so. */
+.heart.busy{opacity:.4}
 .art img{width:100%;height:100%;object-fit:cover}
 .art svg{width:90px;height:90px}
 .m-lbl{font-size:24px;font-weight:600;letter-spacing:.22em;color:var(--label);
   text-transform:uppercase;margin-bottom:14px}
 .m-title{font-size:50px;font-weight:600;max-width:600px;text-align:center;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  white-space:nowrap;overflow:hidden}
 .m-artist{font-size:34px;font-weight:500;color:var(--ink-dim);margin-top:8px;
-  max-width:600px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  max-width:600px;white-space:nowrap;overflow:hidden}
+/* --- long names scroll rather than truncate ---
+   A title clipped to "Shipping Up To Bos..." is the one thing you cannot
+   fix by looking harder, so it travels instead. The whole animation is
+   ONE composited transform on one element - the same discipline the wind
+   bezel uses, and the reason this costs nothing per frame: no rAF loop,
+   no JS during the travel, only a measurement when the track changes.
+
+   The dwell at each end is what makes it readable rather than restless:
+   it holds for 12% of each pass so the start and the end of the name are
+   both legible standing still. Speed is constant in px/s, so a very long
+   name takes longer rather than whipping past. */
+.m-title>span,.m-artist>span{display:inline-block;white-space:nowrap}
+.mq>span{will-change:transform}
 .m-bar{width:520px;height:12px;border-radius:6px;background:var(--chip);
   margin-top:30px;overflow:hidden}
 .m-fill{height:100%;width:0;background:var(--accent);border-radius:6px}
@@ -970,12 +1001,22 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </svg>
   <div class="m-sheet">
     <div class="ms-head" id="ms-strip"></div>
+    <div class="m-artrow">
     <div class="art" id="m-art">
       <svg viewBox="0 0 40 40" id="m-note"><path
         d="M15 28V10l16-3v18" fill="none" stroke="currentColor"
         stroke-width="3" stroke-linecap="round"/>
         <circle cx="11" cy="28" r="4.5" fill="currentColor"/>
         <circle cx="27" cy="25" r="4.5" fill="currentColor"/></svg>
+    </div>
+    <!-- Hidden until netd says credentials exist, so it never appears on
+         a phone loading this page over the boat WiFi - the helper is
+         loopback-only and the tap could not go anywhere. -->
+    <button class="heart" id="m-like" aria-pressed="false" style="display:none">
+      <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
+        2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
+        16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
+    </button>
     </div>
     <div class="m-lbl" id="m-state">NOW PLAYING</div>
     <div class="m-title" id="m-title">Nothing playing</div>
@@ -2202,6 +2243,7 @@ function layoutPages(){
     get().style.transform='translateX('+((i-PAGE_I)*100)+'%)'; });
   tmap .classList.toggle('open',PAGE_I===0);
   music.classList.toggle('open',PAGE_I===2);
+  if(typeof mqPage==='function') mqPage();   /* stop the names travelling off-page */
   const d=$('dots').children;
   for(let i=0;i<d.length;i++) d[i].classList.toggle('on',i===PAGE_I);
 }
@@ -2686,8 +2728,14 @@ function paintTiles(){
 async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
-        pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{};
-  NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx};
+        pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{}, spo=(j&&j.spotify)||{};
+  NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo};
+  /* The heart's visibility is decided by what the helper just said, and
+     the music page may well have painted before this answer arrived -
+     pollMusic and this race at boot and either can win. Without this the
+     heart stays hidden until the next track change, on a page that looks
+     entirely finished. */
+  paintHeart();
   const hadBL=BL.available, first=!NET.probed;
   BL=(j&&j.backlight)||{available:false};
   NET.probed=true;
@@ -3250,7 +3298,8 @@ setInterval(alertPaint,5000);
    player uses.
    ================================================================== */
 const music=$('music');
-let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
+let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:'',
+        album:'', id:'', liked:null};
 
 /* Why the music page is empty, when it is. "Nothing playing" is the
    right answer only when the poller is running and Spotify is idle -
@@ -3276,9 +3325,16 @@ async function pollMusic(){
          shows a title but no clock, this is what settles whether the
          poller is sending position/duration at all. */
       MUSIC_RAW=j;
-      const changed = wasBad || j.title!==NP.title || j.event!==NP.event;
+      /* the poller has caught up with the tap - stop overriding it */
+      if(likePend!==null && (typeof j.liked==='boolean') && j.liked===likePend)
+        likePend=null;
+      if(j.id && NP.id && j.id!==NP.id) likePend=null;   /* different track */
+      const changed = wasBad || j.title!==NP.title || j.event!==NP.event
+                      || j.album!==NP.album || (j.liked??null)!==NP.liked;
       NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
            pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
+           id:j.id||'', liked:(typeof j.liked==='boolean')?j.liked:null,
+           album:j.album||'',
            /* plain strings: spotify-now.py joins the artist list with
               ", " and the cover is a URL. The .split('\\n')[0] that used
               to be here was for librespot's multi-line values. */
@@ -3293,20 +3349,154 @@ async function pollMusic(){
   setTimeout(pollMusic, 2000);
 }
 
+/* ---- the like button ------------------------------------------------
+   Optimistic: the heart fills on the tap, not on the round trip. netd
+   only writes a request file - the poller holds the token and carries it
+   out - so confirmation is up to a second away, and a heart that waited
+   for it would feel broken on a boat.
+
+   The cost of being optimistic is that a failure has to be visible, or
+   the panel is lying about your library. So a refusal puts the heart
+   back and says which refusal it was. */
+let likeBusy=false, likePend=null;
+
+function likeAvailable(){
+  return !!(NET.st && NET.st.spotify && NET.st.spotify.available) && !!NP.id;
+}
+function paintHeart(){
+  const el=$('m-like'); if(!el) return;
+  const show = likeAvailable() && NP.liked!==null;
+  el.style.display = show ? '' : 'none';
+  if(!show) return;
+  const on = likePend!==null ? likePend : !!NP.liked;
+  el.classList.toggle('on', on);
+  el.classList.toggle('busy', likeBusy);
+  el.setAttribute('aria-pressed', on?'true':'false');
+}
+
+async function toggleLike(){
+  if(likeBusy || !likeAvailable()) return;
+  const id=NP.id, want = !(likePend!==null ? likePend : !!NP.liked);
+  likeBusy=true; likePend=want; paintHeart();          /* fills at once */
+  const j=await netApi('/spotify/like',{id:id, want:want});
+  likeBusy=false;
+  if(!j || !j.ok){
+    likePend=null; paintHeart();                       /* put it back */
+    musicFlash((j&&j.error) || 'NO HELPER');
+    return;
+  }
+  /* Hold the optimistic value until the poller's next write agrees with
+     it - dropping it now would flick the heart back for the second it
+     takes the file to be rewritten. Cleared when NP.liked catches up, or
+     after a few seconds if it never does. */
+  setTimeout(()=>{ if(likePend===want && NP.liked!==want){ likePend=null; paintHeart(); } }, 6000);
+}
+
+/* The state line doubles as the toast here, the way the track page's
+   status line does - there is nowhere else on this page to put one. */
+let musicFlashUntil=0;
+function musicFlash(msg){
+  musicFlashUntil=Date.now()+2600;
+  $('m-state').textContent=String(msg).toUpperCase().slice(0,28);
+  setTimeout(()=>{ if(Date.now()>=musicFlashUntil) paintMusic(); }, 2700);
+}
+
+/* px per second the text travels. Slow enough to read at the helm with
+   the boat moving, fast enough that a long name comes round again. */
+const MQ_SPEED=58;
+
+/* Longest one pass may take. Constant speed alone is right until a name
+   is very long indeed, where it becomes half a minute before you see the
+   end of it - so past this the travel speeds up instead. */
+const MQ_MAX=14000, MQ_MIN=3000;
+const MQ=new Map();          /* element id -> its running Animation */
+
+/* Put text in a lane, and set it moving only if it does not fit.
+   Driven by the animation API with CONCRETE pixel values rather than a
+   CSS keyframe reading a custom property. That is not a style
+   preference: a var() inside @keyframes cannot be composited, because
+   Chromium has to resolve it on the main thread every frame.
+
+   Measured, rather than assumed. On a bare page this animation costs
+   nothing at all - 0.09% of the main thread against a 0.03% baseline,
+   and zero style recalc, clipped or not. Inside the app it does show
+   up: three runs each, at 6x CPU throttle, scrolling against the same
+   page with the animation cancelled, gave style recalc 1.88% vs 1.12%
+   and main thread 11.7% vs 10.8% - spreads that do not overlap, so it
+   is real and not noise. Call it a point of throttled main thread,
+   which is about 0.15% unthrottled. Something in this page's
+   compositing context stops it being as free as it is in isolation; it
+   was not worth chasing further for that number, but it is not zero and
+   should not be written up as though it were.
+
+   Per frame this code does nothing regardless - the only work here is
+   the measurement, and that happens when the track changes. */
+function setScroller(id, text){
+  const el=$(id);
+  let sp=el.firstElementChild;
+  if(!sp || sp.tagName!=='SPAN'){
+    el.textContent=''; sp=document.createElement('span'); el.appendChild(sp);
+  }
+  if(sp.textContent!==text) sp.textContent=text;
+
+  const over = sp.scrollWidth - el.clientWidth;
+  const old=MQ.get(id);
+  if(old){ old.cancel(); MQ.delete(id); }
+  if(over <= 4){ el.classList.remove('mq'); return; }
+  el.classList.add('mq');
+
+  /* /0.76 because a pass spends 24% of itself holding still at the two
+     ends - without it the travel itself would be slower than intended. */
+  const dur = Math.min(MQ_MAX, Math.max(MQ_MIN, over/MQ_SPEED/0.76*1000));
+  const a = sp.animate([
+    {transform:'translateX(0px)',           offset:0},
+    {transform:'translateX(0px)',           offset:0.12},
+    {transform:'translateX('+(-over)+'px)', offset:0.88},
+    {transform:'translateX('+(-over)+'px)', offset:1}
+  ], {duration:dur, iterations:Infinity, direction:'alternate',
+      easing:'ease-in-out'});
+  MQ.set(id, a);
+  if(PAGE_I!==2) a.pause();      /* never travelling off-screen */
+}
+
+/* The music page is translated aside rather than hidden, so an animation
+   left running there would go on ticking behind the dial for the rest of
+   the voyage. */
+function mqPage(){
+  const on = PAGE_I===2;
+  MQ.forEach(a=>{ try{ on ? a.play() : a.pause(); }catch(e){} });
+}
+
+/* Web fonts land after the first paint, and a name measured in the
+   fallback face is measured wrong - too narrow, so a title that does
+   overflow would sit still and clipped. Measure again once. */
+if(document.fonts && document.fonts.ready)
+  document.fonts.ready.then(()=>{ if(FEED==='ok') paintMusic(); });
+
 function paintMusic(){
   /* Say which of the three it is. A helm that reads "Nothing playing"
      when the poller was never started sends you looking at Spotify. */
   if(FEED==='missing'||FEED==='offline'){
-    $('m-title').textContent  = 'No music feed';
-    $('m-artist').textContent = FEED==='missing'
+    setScroller('m-title', 'No music feed');
+    setScroller('m-artist', FEED==='missing'
       ? 'run spotify-auth.py once, then restart the session'
-      : 'nowplaying.json is not answering';
-    $('m-state').textContent  = FEED==='missing' ? 'NOT SET UP' : 'OFFLINE';
+      : 'nowplaying.json is not answering');
+    if(Date.now()>=musicFlashUntil)
+      $('m-state').textContent = FEED==='missing' ? 'NOT SET UP' : 'OFFLINE';
+    paintHeart();
     return;
   }
-  $('m-title').textContent  = NP.title  || 'Nothing playing';
-  $('m-artist').textContent = NP.artist || '—';
-  $('m-state').textContent  = NP.playing ? 'NOW PLAYING' : 'PAUSED';
+  setScroller('m-title', NP.title || 'Nothing playing');
+  /* The album was already arriving and being thrown away. It goes on the
+     artist's line rather than a row of its own - there is no room for a
+     row, and a name too long for the lane now travels instead of being
+     cut, which is what makes one line enough. */
+  const sub = NP.album && NP.album!==NP.title
+            ? (NP.artist||'—')+' · '+NP.album : (NP.artist||'—');
+  setScroller('m-artist', sub);
+  if(Date.now()>=musicFlashUntil)
+    $('m-state').textContent = NP.playing ? 'NOW PLAYING' : 'PAUSED';
+  paintHeart();
   const art=$('m-art');
   if(NP.cover){
     if(!art.querySelector('img')){ art.innerHTML='<img>'; }
@@ -3482,6 +3672,13 @@ function musicTick(){
     $('m-fill').style.width=NP.dur?(p/NP.dur*100)+'%':'0';
   }catch(e){ /* one bad pass must not cost the rest of the session */ }
 }
+/* gClaim, not stopPropagation - see the comment on it. This sits on the
+   music page where a swipe-down opens nothing, but the rule is the rule:
+   a button says "this touch is mine" by claiming it, never by breaking
+   the gesture reader's view of the pointer. */
+$('m-like').addEventListener('pointerdown',gClaim);
+$('m-like').addEventListener('click',e=>{ e.stopPropagation(); toggleLike(); });
+
 pollMusic(); musicTick();
 
 /* ==================================================================

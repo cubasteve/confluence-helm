@@ -485,6 +485,67 @@ the three cases:
 `/tmp/cage-session.log` says which, and names the fix
 (`python3 ~/helm/spotify-auth.py`) when there are no credentials.
 
+### The like button, and who holds the token
+
+The heart beside the album art adds and removes the current track from
+your library. Scopes are `user-read-currently-playing`,
+`user-library-read` and `user-library-modify` — **no playback-control
+scope**: this token sits on a boat, and being able to change the library
+is a smaller thing to hand over than being able to drive playback.
+Re-run `spotify-auth.py` after any scope change; a refresh token carries
+the scopes it was granted with, so widening the list does nothing until
+the consent screen is answered again.
+
+The write path is deliberately indirect. netd has the HTTP listener, so
+the panel posts to it — but netd does **not** call Spotify. It writes a
+one-line request file, and `spotify-now.py` performs it. The reason is
+that Spotify sometimes hands back a *rotated* refresh token, and
+whoever receives it writes it to the config: two processes refreshing
+independently would eventually leave one holding a token that has been
+replaced, and the symptom is a dead integration hours later with nothing
+to point at. One process owns the token.
+
+The poller checks for that file between polls rather than only at the
+top of the loop, so a tap registers within half a second. The heart
+fills immediately rather than waiting even for that — and because it is
+optimistic, a refusal has to be visible or the panel is lying about your
+library. A failed tap puts the heart back and prints the reason where
+`NOW PLAYING` normally sits.
+
+`GET /v1/me/tracks/contains` is asked **only when the track ID changes**.
+Asking every poll would double this loop's request rate for an answer
+that cannot differ between two polls of the same track.
+
+The heart is hidden entirely unless netd reports credentials exist and
+the feed carries a liked state — so it never appears on a phone loading
+this page over the boat WiFi, where the loopback helper is unreachable
+and the tap could not go anywhere.
+
+### Long names travel
+
+A title clipped to `Shipping Up To Bos…` is the one thing you cannot fix
+by looking harder, so `.m-title` and `.m-artist` scroll instead when the
+text overflows — out, a dwell, back, a dwell. The album name rides on
+the artist's line, which is what one line being enough depends on.
+
+Driven by the Web Animations API with **concrete pixel values**, not a
+CSS keyframe reading a custom property: a `var()` inside `@keyframes`
+cannot be composited, because Chromium has to resolve it on the main
+thread every frame.
+
+Measured rather than assumed. On a bare page the animation is free —
+0.09% of the main thread against a 0.03% baseline, zero style recalc,
+clipped or not. Inside the app it does cost something: three runs each
+at 6× CPU throttle, scrolling against the same page with the animation
+cancelled, gave style recalc 1.88% vs 1.12% and main thread 11.7% vs
+10.8%, spreads that do not overlap. About a point of throttled main
+thread, so roughly 0.15% unthrottled. Not free, and not written up as
+though it were.
+
+It pauses whenever the music page is not the one showing — the page is
+translated aside rather than hidden, so an animation left running there
+would tick behind the dial for the rest of the voyage.
+
 Then restart the session - a running desktop never re-reads
 `~/.config/autostart/`. To check it by hand without one:
 

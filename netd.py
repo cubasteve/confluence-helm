@@ -30,7 +30,7 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import json, os, re, shutil, subprocess, sys, threading, time
+import json, os, re, shutil, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
@@ -44,6 +44,12 @@ SYSFS = os.environ.get('HELM_SYSFS', '/sys')
 # same browser on the same machine as this process, and the socket is
 # loopback-only, so both are allowed and nothing else is.
 ORIGINS = {'http://localhost:8080', 'http://127.0.0.1:8080', 'null'}
+
+# The panel's like button. netd only ever writes the request here and
+# checks whether credentials exist - spotify-now.py owns the token and
+# does the talking. See spotify_status() for why that split matters.
+SPOTIFY_CFG = os.path.expanduser('~/.config/confluence-spotify.json')
+SPOTIFY_CMD = os.environ.get('HELM_SPOTIFY_CMD', '/tmp/confluence-spotify-cmd.json')
 
 MAC = re.compile(r'^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
 BT_MAC = re.compile(r'^Device ((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}) (.*)$')
@@ -908,11 +914,51 @@ def gpx_status():
 
 # --------------------------------------------------------------- http
 
+def spotify_status():
+    """Whether the panel should offer a like button at all.
+
+    Only that the credentials exist - netd deliberately knows nothing
+    else about Spotify. It does not hold the token and never talks to
+    the API: spotify-now.py owns both, because Spotify can hand back a
+    rotated refresh token and two processes refreshing independently
+    would eventually leave one of them holding a dead one."""
+    return {'available': os.path.isfile(SPOTIFY_CFG)}
+
+
+def spotify_like(track_id, want):
+    """Hand the request to the poller and return at once.
+
+    Writing a file rather than making the call is the whole design - see
+    spotify_status. The poller watches for this between polls, so it is
+    picked up within half a second, and the panel fills its heart
+    optimistically rather than waiting for either of us."""
+    track_id = str(track_id or '').strip()
+    # Spotify IDs are base62, 22 characters. Anything else is not going
+    # into a file another process will act on.
+    if not track_id or len(track_id) > 40 or not track_id.isalnum():
+        return {'ok': False, 'error': 'BAD TRACK ID'}
+    if not os.path.isfile(SPOTIFY_CFG):
+        return {'ok': False, 'error': 'NO SPOTIFY CREDENTIALS'}
+    try:
+        d = os.path.dirname(SPOTIFY_CMD) or '/tmp'
+        fd, tmp = tempfile.mkstemp(dir=d, prefix='.spot-cmd-')
+        with os.fdopen(fd, 'w') as f:
+            json.dump({'id': track_id, 'want': bool(want)}, f)
+        os.replace(tmp, SPOTIFY_CMD)          # atomic: never a half-read command
+        return {'ok': True, 'want': bool(want)}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)[:120]}
+
+
 def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
                 'display': display_status(), 'power': power_status(),
-                'backlight': backlight_status(), 'gpx': gpx_status()}
+                'backlight': backlight_status(), 'gpx': gpx_status(),
+                'spotify': spotify_status()}
+
+    if path == '/spotify/like':
+        return spotify_like(body.get('id'), body.get('want'))
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
