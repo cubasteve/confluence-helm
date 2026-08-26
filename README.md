@@ -1385,6 +1385,64 @@ is already running, so ssh and a running desktop are unaffected.
 **`cage -s`.** VT switching has to be allowed or the Desktop tile cannot
 work - starting a display manager needs another VT to switch to.
 
+### Fitting the desktop's corners into the circle
+
+A square desktop on a round panel loses its four corners: the ends of the
+taskbar, the clock, the close buttons. Two tiles in the power sheet shrink
+the whole X output and centre it, so the desktop becomes the largest
+square that fits *inside* the circle with black around it.
+
+**The largest square inside a circle of diameter D has side D/√2** — about
+70.7%. On this 1080 panel that is 762px (rounded even so the margins
+match), 159px of margin on every side, and a desktop corner lands at
+radius 538.8 against the glass's 540.
+
+The transform maps **output** pixels to **framebuffer** pixels, so
+shrinking the desktop means scaling *up*: the output samples a region
+larger than itself and the framebuffer lands in the middle of it. With
+side `s` and margin `t = (w-s)/2`, output `t` must sample framebuffer `0`
+and output `w-t` must sample framebuffer `w`, which gives `a = w/s` and
+`c = -a·t`:
+
+```
+xrandr --output HDMI-1   --transform 1.417323,0,-225.354,0,1.417323,-225.354,0,0,1   --fb 1080x1080
+```
+
+`--fb` pins the desktop to the panel's own size. Without it xrandr grows
+the screen to cover the transformed output's extents and the desktop gets
+*bigger* rather than smaller — the opposite of the point, with the extra
+area showing in the very corners meant to be black. Some xrandr versions
+refuse a screen smaller than those extents, so the plain form is tried
+second rather than treated as a failure, and which one took is reported.
+
+**X11 only.** `wlr-randr` has no transform, so on Wayland there is no live
+equivalent and netd reports nothing available — neither tile appears
+rather than a tile that does nothing.
+
+netd **discovers** the X display rather than reading it: it may have been
+started by `cage-session.sh`, which has no `DISPLAY` at all, so it tries
+`:0` and `:1` against each home's `.Xauthority` until one answers. Same
+approach as the probe below, for the same reason. A negative is cached
+briefly too — on a Wayland or cage Pi this would otherwise shell out
+twice a second for an answer that is always no.
+
+#### It reverts on its own
+
+This is the whole reason it is safe to put on a boat. **The panel cannot
+see what the panel looks like**, so a transform that leaves the screen
+unreadable would be unfixable from the screen.
+
+So netd applies the change and immediately arms a 25-second revert. The
+sheet turns into the question that revert is already asking — the size in
+pixels, a running countdown, **KEEP** and **PUT IT BACK** — and only
+something that can still read the screen stops it going back. It is the
+same shape every monitor-test dialog has had since 1998, and for the same
+reason.
+
+`fitted` is read back out of `xrandr --verbose`, never remembered.
+autopull kills netd on every push, and a remembered flag would come back
+saying "full size" over a desktop that is still shrunk.
+
 ### Which display stack is actually driving the panel
 
 ```bash

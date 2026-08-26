@@ -30,7 +30,7 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import json, os, re, shutil, subprocess, sys, tempfile, threading, time
+import json, math, os, re, shutil, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
@@ -55,13 +55,22 @@ MAC = re.compile(r'^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
 BT_MAC = re.compile(r'^Device ((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}) (.*)$')
 
 
-def run(argv, timeout=30):
+def run(argv, timeout=30, env=None):
     """Run a command and return (rc, stdout, stderr).
 
     Never shell=True. SSIDs and device names are user data, and spaces,
-    quotes and semicolons are all legitimate inside one."""
+    quotes and semicolons are all legitimate inside one.
+
+    `env` is merged over this process's own, for the one caller that
+    needs it: xrandr has to be told which X display to talk to, and this
+    process may well have been started by cage - where there was none."""
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        e = None
+        if env:
+            e = dict(os.environ)
+            e.update(env)
+        p = subprocess.run(argv, capture_output=True, text=True,
+                           timeout=timeout, env=e)
         return p.returncode, p.stdout.strip(), p.stderr.strip()
     except FileNotFoundError:
         return 127, '', argv[0] + ' is not installed'
@@ -769,6 +778,189 @@ def uptime_txt():
     return '%dm' % m
 
 
+# ---------------------------------------------------- the round panel
+#
+# A square desktop on a round panel loses its four corners: the taskbar's
+# ends, the clock, the close buttons. The fix is to shrink the whole
+# output and centre it, so the desktop becomes the largest square that
+# FITS INSIDE the circle with black around it.
+#
+# The largest square inside a circle of diameter D has side D/sqrt(2) -
+# about 70.7%. On this 1080 panel that is 763px, and 159px of margin on
+# every side.
+#
+# X11 only, and that is not a limitation to work around: wlr-randr has no
+# transform at all, so on Wayland there is no live equivalent. The probe
+# (boot/check-display.py) is what says which you have.
+FIT_MIN, FIT_MAX = 40, 100
+FIT_DEFAULT = 100.0 / math.sqrt(2.0)          # 70.71%, the inscribed square
+
+# Which environment reaches the X server, once it is known. netd may have
+# been started by cage-session.sh, which has no DISPLAY at all, so this
+# is DISCOVERED rather than read from the environment - the same approach
+# boot/check-display.py takes, and for the same reason.
+_xenv = {'env': None, 'at': 0.0}
+
+
+def _x_candidates():
+    """Every plausible way in, most likely first."""
+    if os.environ.get('DISPLAY'):
+        yield {'DISPLAY': os.environ['DISPLAY']}
+    homes = []
+    try:
+        homes = ['/home/' + u for u in os.listdir('/home')]
+    except Exception:
+        pass
+    homes.append(os.path.expanduser('~'))
+    for disp in (':0', ':1'):
+        yield {'DISPLAY': disp}
+        for h in homes:
+            xa = os.path.join(h, '.Xauthority')
+            if os.path.isfile(xa):
+                yield {'DISPLAY': disp, 'XAUTHORITY': xa}
+
+
+def x_env():
+    """An env that can reach an X server, or None. Re-probed sparingly.
+
+    A negative is cached too, and briefly: on a Wayland or cage Pi this
+    would otherwise try every candidate on every /status poll, which is
+    two subprocesses a second for an answer that is always no."""
+    if time.time() - _xenv['at'] < 20:
+        return _xenv['env']
+    _xenv['at'] = time.time()
+    _xenv['env'] = None
+    for env in _x_candidates():
+        rc, out, _ = run(['xrandr', '--query'], 8, env=env)
+        if rc == 0 and 'connected' in out:
+            _xenv['env'] = env
+            break
+    return _xenv['env']
+
+
+_OUT_RE = re.compile(r'^(\S+) connected (?:primary )?(\d+)x(\d+)\+', re.M)
+
+
+def fit_status():
+    """The output, its size, and whether it is currently shrunk."""
+    env = x_env()
+    if not env:
+        return {'available': False}
+    rc, out, _ = run(['xrandr', '--query'], 8, env=env)
+    m = _OUT_RE.search(out or '')
+    if rc != 0 or not m:
+        return {'available': False}
+    name, w, h = m.group(1), int(m.group(2)), int(m.group(3))
+    # The transform is read back rather than remembered. netd restarts -
+    # autopull kills it on every push - and a remembered flag would come
+    # back saying "full size" over a desktop that is still shrunk.
+    rc, ver, _ = run(['xrandr', '--query', '--verbose'], 10, env=env)
+    scale = 1.0
+    mt = re.search(r'Transform:\s+([\d.eE+-]+)', ver or '')
+    if rc == 0 and mt:
+        try:
+            scale = float(mt.group(1))
+        except ValueError:
+            scale = 1.0
+    fitted = abs(scale - 1.0) > 0.001
+    return {'available': True, 'output': name, 'w': w, 'h': h,
+            'fitted': fitted,
+            # Two mutually exclusive gates, the same shape the Desktop and
+            # Kiosk tiles use: the sheet offers one way and never both.
+            'can_fit': not fitted,
+            'pct': round(100.0 / scale, 1) if fitted and scale else 100.0,
+            'suggest': round(FIT_DEFAULT, 1)}
+
+
+def _fit_cmd(name, w, h, pct):
+    """The xrandr call, and the arithmetic behind it.
+
+    The transform maps OUTPUT pixels to FRAMEBUFFER pixels, so shrinking
+    the desktop means scaling UP: the output samples a region larger than
+    itself, and the framebuffer lands in the middle of it. With side s and
+    margin t = (w-s)/2, output t must sample framebuffer 0 and output w-t
+    must sample framebuffer w, which gives a = w/s and c = -a*t.
+    """
+    side = int(min(w, h) * pct / 100.0)
+    side -= side % 2                      # even, so the margins match
+    side = max(2, side)
+    ax, ay = w / float(side), h / float(side)
+    cx, cy = -ax * ((w - side) / 2.0), -ay * ((h - side) / 2.0)
+    matrix = '%f,0,%f,0,%f,%f,0,0,1' % (ax, cx, ay, cy)
+    return side, ['xrandr', '--output', name, '--transform', matrix]
+
+
+# The revert timer. This is the whole safety story: the panel cannot see
+# what the panel looks like, so a transform that leaves the screen
+# unreadable would be unfixable from the screen. It goes back on its own
+# unless something confirms, which is how every monitor-test dialog since
+# 1998 has worked and for the same reason.
+FIT_GRACE = 25
+_fit = {'timer': None}
+
+
+def _fit_revert(name, env):
+    rc, out, err = run(['xrandr', '--output', name, '--transform', 'none'],
+                       15, env=env)
+    print('[netd] display: reverted to full size (%s)'
+          % ('ok' if rc == 0 else (err or out)), flush=True)
+
+
+def _fit_disarm():
+    t = _fit['timer']
+    _fit['timer'] = None
+    if t:
+        t.cancel()
+
+
+def fit_set(pct):
+    try:
+        pct = float(pct)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'BAD SIZE'}
+    if not FIT_MIN <= pct <= FIT_MAX:
+        return {'ok': False, 'error': 'BAD SIZE'}
+    st = fit_status()
+    if not st.get('available'):
+        return {'ok': False, 'error': 'NO X DISPLAY'}
+    env = x_env()
+    name, w, h = st['output'], st['w'], st['h']
+    _fit_disarm()
+    if pct >= 100:
+        _fit_revert(name, env)
+        return dict(fit_status(), ok=True)
+    side, cmd = _fit_cmd(name, w, h, pct)
+    # --fb pins the desktop to the panel's own size. Without it xrandr
+    # grows the screen to cover the transformed output's extents, and the
+    # desktop gets BIGGER rather than smaller - the opposite of the point,
+    # with the extra area showing in the very corners meant to be black.
+    # Some xrandr versions refuse a screen smaller than those extents, so
+    # the plain form is tried second rather than treated as failure. Which
+    # one took is reported, because it changes what you are looking at.
+    rc, out, err = run(cmd + ['--fb', '%dx%d' % (w, h)], 20, env=env)
+    how = 'fb'
+    if rc != 0:
+        rc, out, err = run(cmd, 20, env=env)
+        how = 'transform-only'
+    if rc != 0:
+        _fit_revert(name, env)
+        return {'ok': False, 'error': (err or out or 'XRANDR REFUSED')[:120]}
+    print('[netd] display: %dx%d of %dx%d (%.1f%%, %s) - reverting in %ds '
+          'unless kept' % (side, side, w, h, pct, how, FIT_GRACE), flush=True)
+    t = threading.Timer(FIT_GRACE, _fit_revert, args=(name, env))
+    t.daemon = True
+    _fit['timer'] = t
+    t.start()
+    return dict(fit_status(), ok=True, side=side, how=how, grace=FIT_GRACE)
+
+
+def fit_keep():
+    """Cancel the revert. Only meaningful while one is armed."""
+    armed = _fit['timer'] is not None
+    _fit_disarm()
+    return dict(fit_status(), ok=True, kept=armed)
+
+
 TO_DESKTOP = '/usr/local/sbin/confluence-to-desktop'
 TO_CAGE = '/usr/local/sbin/confluence-to-cage'
 
@@ -1029,7 +1221,7 @@ def route(path, body):
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
                 'display': display_status(), 'power': power_status(),
                 'backlight': backlight_status(), 'gpx': gpx_status(),
-                'spotify': spotify_status()}
+                'spotify': spotify_status(), 'fit': fit_status()}
 
     if path == '/spotify/like':
         return spotify_like(body.get('id'), body.get('want'))
@@ -1040,6 +1232,10 @@ def route(path, body):
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
+    if path == '/display/fit':
+        if body.get('keep'):
+            return fit_keep()
+        return fit_set(body.get('pct', FIT_DEFAULT))
     if path == '/display/mode':
         if not CHROME:
             return {'ok': False, 'error': 'NO BROWSER'}
