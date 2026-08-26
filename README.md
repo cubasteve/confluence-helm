@@ -958,9 +958,9 @@ Measured, same machine, closing and reopening:
 
 | | CPU @1x | JS heap | image memory |
 |---|---|---|---|
-| closed | 2.5% | 1.8 MB | **0** |
-| radar open | 5.7% | 2.7 MB | **21.9 MB** |
-| closed again | 3.3% | 2.3 MB | **0** |
+| closed | 2.8% | 1.9 MB | **0** |
+| radar open | 6.0% | 2.7 MB | **24.9 MB** |
+| closed again | 3.8% | 2.3 MB | **0** |
 
 For comparison, `sail-weather.html` measured **34.8%** at the same
 throttle. Most of that difference is not the map — it is a 323-particle
@@ -1000,6 +1000,40 @@ about.
 | base | Esri World Dark Gray Canvas | none |
 | seamarks | OpenSeaMap | none |
 | radar | RainViewer, last hour + nowcast | none |
+| forecast | Tomorrow.io via the `keel-ics` Worker | `TOMORROW_KEY`, a Worker secret |
+
+### The futurecast
+
+Three frames at +1h, +2h and +3h, appended after the radar so the
+timeline runs past → nowcast → forecast in one pass. Each is rounded
+**down to the quarter hour** Tomorrow.io publishes on; asking for 14:07
+returns nothing at all.
+
+The key never reaches the panel. It lives as a secret in the Worker,
+which proxies `/tile/{z}/{x}/{y}/{iso}.png` and caches every tile at the
+Cloudflare edge for 15 minutes — so the free tier is shared across every
+device instead of burned per browser:
+
+```bash
+cd ics-worker && npx wrangler secret put TOMORROW_KEY && npx wrangler deploy
+```
+
+That trickle of quota is why these frames are fetched **one tile at a
+time**, and at a zoom backed off until the view fits in **six tiles**.
+A normal tile layer bursts dozens of requests and spends the day's quota
+on a single look.
+
+**An empty forecast frame must not read as clear sky.** A quota refusal
+and a fine afternoon draw identically — nothing — so each frame reports
+how many tiles actually arrived, and a frame that got none is discarded
+rather than shown. The run stops at the first refusal too: if the quota
+is gone for +1h it is gone for +2h, and three empty frames in the loop
+would read as three hours of clear weather. The HUD says
+`NO FORECAST — quota or upstream` instead.
+
+The timeline marks where **now** is, so past and forecast are told apart
+at a glance rather than by reading the clock, and the label distinguishes
+all three: `10:15 PM`, `· NOWCAST`, `· FORECAST`.
 
 **Not Carto**, which `sail-weather.html` uses. `basemaps.cartocdn.com`
 now returns a tile with **API KEY REQUIRED** stamped across the middle of

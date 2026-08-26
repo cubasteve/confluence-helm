@@ -180,6 +180,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   margin-top:10px;overflow:hidden}
 #rad-bar{height:100%;width:0;background:var(--accent);border-radius:4px;
   transition:width .2s linear}
+/* Where the present is on the timeline. Left of it is what happened,
+   right of it is what a model thinks will. */
+#rad-now{position:absolute;top:-3px;width:2px;height:14px;
+  background:#F2F4F6;opacity:.85}
+#rad-track{position:relative}
 #rad-note{margin-top:12px;font-size:22px;font-weight:600;color:#9AA2A9;
   letter-spacing:.06em}
 /* The credit Esri's unkeyed service asks for, kept out of the way and
@@ -5078,6 +5083,16 @@ const RAD={
       +'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
   sea:'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
   index:'https://api.rainviewer.com/public/weather-maps.json',
+  /* The futurecast. Tomorrow.io's real km-scale precipitation forecast,
+     proxied by the keel-ics Worker so the API key stays a Worker secret
+     and every tile is cached at the edge for 15 minutes - the free tier
+     is a trickle, and this way it is shared across every device instead
+     of burned per browser.
+     That trickle is also why these are fetched ONE AT A TIME and at a
+     zoom chosen so the view fits in six tiles: a normal tile layer would
+     burst dozens of requests and spend the day's quota on one look. */
+  tmr:'https://keel-ics.keel-app.workers.dev/tile/',
+  TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7,
   NATIVE_Z:7,        /* radar is real to here and upscaled above it */
   FRAME:512,         /* per-frame composite, see above */
   PAST:12,           /* how much of the last hour to keep */
@@ -5134,7 +5149,14 @@ async function radBuildBase(){
 /* One radar frame, composited into its own small canvas. The tiles that
    built it are unreferenced on the way out of this function - that is
    what keeps fifteen frames inside sixteen megabytes. */
-async function radBuildFrame(fr, host){
+/* Every frame - radar or futurecast - ends up as the same 512 canvas, so
+   playback never has to know which kind it is looking at.
+   `hits` is how many tiles actually arrived, and it is not decoration: a
+   futurecast frame that got nothing draws as empty, and empty is exactly
+   how "no rain forecast" draws. One is a quota refusal and the other is
+   a fine afternoon, and they must not look alike. */
+async function radBuildFrame(fr, urlFor, opt){
+  opt=opt||{};
   const gen=R.gen, N=RAD.FRAME;
   const c=document.createElement('canvas'); c.width=c.height=N;
   const g=c.getContext('2d');
@@ -5147,20 +5169,70 @@ async function radBuildFrame(fr, host){
      One zoom below the view, capped at the radar's native 7, is also
      self-consistent with a 512 canvas over a 1080 one - the frame is
      half the view's linear resolution either way. */
-  const z=Math.max(0, Math.min(R.view.z-1, RAD.NATIVE_Z));
-  const k=Math.pow(2, z-R.view.z);           /* view px -> tile px at z */
-  const gw=R.cv.width*k, gh=R.cv.height*k;
-  const save=R.view.z; R.view.z=z;
-  const ts=radTiles(z, gw, gh);
-  R.view.z=save;
-  const ims=await Promise.all(ts.map(t=>
-    radImg(host+fr.path+'/256/'+t.z+'/'+t.x+'/'+t.y+'/2/1_1.png', gen)));
+  let z=Math.max(0, Math.min(R.view.z-1, opt.maxZ||RAD.NATIVE_Z));
+  let k, gw, gh, ts;
+  for(;;){
+    k=Math.pow(2, z-R.view.z);               /* view px -> tile px at z */
+    gw=R.cv.width*k; gh=R.cv.height*k;
+    const save=R.view.z; R.view.z=z;
+    ts=radTiles(z, gw, gh);
+    R.view.z=save;
+    /* Back off a zoom until the view fits the budget. Only the
+       futurecast sets one, and for it the budget IS the feature: six
+       tiles an hour is a quota that lasts, sixty is one that does not. */
+    if(!opt.maxTiles || ts.length<=opt.maxTiles || z<=0) break;
+    z--;
+  }
+  let ims;
+  if(opt.serial){
+    ims=[];
+    for(const t of ts){
+      ims.push(await radImg(urlFor(t), gen));
+      if(!R||R.gen!==gen) return null;
+    }
+  }else{
+    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen)));
+  }
   if(!R||R.gen!==gen) return null;
   const sc=N/gw;                             /* that ground into N px */
   g.save(); g.scale(sc, sc);
-  ims.forEach((im,i)=>{ if(im) g.drawImage(im, ts[i].px, ts[i].py, 256,256); });
+  let hits=0;
+  ims.forEach((im,i)=>{ if(im){ hits++; g.drawImage(im, ts[i].px, ts[i].py, 256,256); } });
   g.restore();
-  return c;
+  return {c:c, hits:hits};
+}
+
+/* +1h, +2h, +3h, each rounded DOWN to the quarter hour Tomorrow.io
+   publishes on - asking for 14:07 gets nothing at all. */
+function radCastTimes(){
+  return RAD.TMR_HOURS.map(h=>{
+    const t=new Date(Date.now()+h*3600000);
+    t.setUTCMinutes(Math.floor(t.getUTCMinutes()/15)*15, 0, 0);
+    return {ms:t.getTime(), iso:t.toISOString().slice(0,19)+'Z'};
+  });
+}
+
+/* Built after the radar, never alongside it: the radar is what you came
+   for and must not queue behind a free tier. The first frame that comes
+   back empty ends the run - if the quota is gone for +1h it is gone for
+   +2h, and three empty frames in the loop would read as three hours of
+   clear sky. */
+async function radBuildCast(){
+  const gen=R.gen;
+  for(const t of radCastTimes()){
+    const r=await radBuildFrame(t,
+      tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
+      {serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z});
+    if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
+    if(!r || !r.hits){
+      if(r&&r.c) r.c.width=r.c.height=0;
+      radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
+      return;
+    }
+    R.frames.push(r.c); R.times.push(t.ms); R.kinds.push('cast');
+    radMarkNow();
+    radPaint();
+  }
 }
 
 async function radBuildFrames(){
@@ -5184,11 +5256,27 @@ async function radBuildFrames(){
      parallel tile requests over a marina's wifi, and the first frame -
      the only one anybody sees immediately - arrives last. */
   for(let i=0;i<list.length;i++){
-    const c=await radBuildFrame(list[i], data.host);
-    if(!R||R.gen!==gen){ if(c){ c.width=c.height=0; } return; }
-    R.frames[i]=c;
+    const fr=list[i];
+    const r=await radBuildFrame(fr,
+      t=>data.host+fr.path+'/256/'+t.z+'/'+t.x+'/'+t.y+'/2/1_1.png');
+    if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
+    if(r){ R.frames[i]=r.c; R.kinds[i]=fr.time*1000>Date.now()?'nowcast':'radar'; }
     radPaint();                       /* fill in as they land */
   }
+  radMarkNow();
+  await radBuildCast();
+}
+
+/* Where the present sits on the track, so past and forecast are told
+   apart at a glance rather than by reading the clock. */
+function radMarkNow(){
+  if(!R||!R.el.now) return;
+  const n=R.times.length;
+  if(n<2){ R.el.now.style.display='none'; return; }
+  let i=R.times.findIndex(t=>t>Date.now());
+  if(i<0){ R.el.now.style.display='none'; return; }
+  R.el.now.style.display='';
+  R.el.now.style.left=(i/(n-1)*100)+'%';
 }
 
 function radSay(msg){
@@ -5212,10 +5300,15 @@ function radPaint(){
       g.drawImage(fc,0,0,fc.width,fc.height,0,0,c.width,c.height);
       g.globalAlpha=1; };
     if(i+1<n && f>0.02){ draw(i,1-f); draw(i+1,f); } else draw(i,1);
-    if(R.el.time && R.times[i])
+    if(R.el.time && R.times[i]){
+      /* Three different things, and calling them all "the time" would
+         hide the only distinction that matters: what has happened,
+         what is about to, and what is a model's opinion. */
+      const kind=R.kinds[i]==='cast' ? ' · FORECAST'
+               : R.kinds[i]==='nowcast' ? ' · NOWCAST' : '';
       R.el.time.textContent=new Date(R.times[i]).toLocaleTimeString([],
-        {hour:'2-digit',minute:'2-digit'})
-        + (R.times[i]>Date.now()?' · NOWCAST':'');
+        {hour:'2-digit',minute:'2-digit'}) + kind;
+    }
     if(R.el.bar) R.el.bar.style.width=(n>1?(i/(n-1)*100):0)+'%';
   }
   /* The boat, if the GPS has ever answered. */
@@ -5241,7 +5334,8 @@ function radReview(){
   if(!R) return;
   R.gen++;
   R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
-  R.frames=[]; R.p=0;
+  R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
+  radMarkNow();
   radBuildBase();
   radBuildFrames();
 }
@@ -5254,17 +5348,20 @@ function radOpen(host){
   host.appendChild(cv);
   host.insertAdjacentHTML('beforeend',
     '<div id="rad-hud"><span id="rad-time">—</span>'
-    +'<div id="rad-track"><div id="rad-bar"></div></div>'
+    +'<div id="rad-track"><div id="rad-bar"></div>'
+    +'<div id="rad-now" style="display:none"></div></div>'
     +'<div id="rad-note"></div></div>'
     +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer</div>'
     +'<div id="rad-ctl">'
     +'<button class="radb" id="rad-out">–</button>'
     +'<button class="radb wide" id="rad-home">BOAT</button>'
     +'<button class="radb" id="rad-in">+</button></div>');
-  R={ ac:new AbortController(), gen:1, cv:cv, base:base, frames:[], times:[],
+  R={ ac:new AbortController(), gen:1, cv:cv, base:base,
+      frames:[], times:[], kinds:[],
       p:0, timer:null, note:'',
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
-      el:{time:$('rad-time'), bar:$('rad-bar'), note:$('rad-note')} };
+      el:{time:$('rad-time'), bar:$('rad-bar'), note:$('rad-note'),
+          now:$('rad-now')} };
   const zoom=d=>{ R.view.z=Math.max(RAD.MIN_Z,Math.min(RAD.MAX_Z,R.view.z+d));
                   radReview(); };
   $('rad-in') .addEventListener('click',()=>zoom(1));
@@ -5311,7 +5408,7 @@ function radClose(){
   try{ r.ac.abort(); }catch(e){}
   clearTimeout(r.timer);
   r.frames.forEach(c=>{ if(c) c.width=c.height=0; });
-  r.frames.length=0; r.times.length=0;
+  r.frames.length=0; r.times.length=0; r.kinds.length=0;
   if(r.base) r.base.width=r.base.height=0;
   if(r.cv)   r.cv.width=r.cv.height=0;
 }
