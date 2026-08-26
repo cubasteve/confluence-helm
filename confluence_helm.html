@@ -176,22 +176,29 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   width:440px;text-align:center;pointer-events:none;
   padding:10px 20px 14px;border-radius:20px;background:rgba(0,0,0,.55)}
 #rad-time{font-size:26px;font-weight:600;letter-spacing:.12em;color:#F2F4F6}
+/* The band you can actually hit. The bar inside it is 8px because that
+   is what reads; this is 50 because that is what a thumb needs. */
+#rad-scrub{pointer-events:auto;padding:22px 0 20px;margin-bottom:-18px;
+  touch-action:none}
 #rad-track{width:100%;height:8px;border-radius:4px;background:rgba(255,255,255,.18);
-  margin-top:10px;overflow:hidden}
+  overflow:hidden}
 #rad-bar{height:100%;width:0;background:var(--accent);border-radius:4px;
   transition:width .2s linear}
 /* Where the present is on the timeline. Left of it is what happened,
    right of it is what a model thinks will. */
 #rad-now{position:absolute;top:-3px;width:2px;height:14px;
   background:#F2F4F6;opacity:.85}
-#rad-track{position:relative}
+#rad-track{position:relative;overflow:visible}
 #rad-note{margin-top:12px;font-size:22px;font-weight:600;color:#9AA2A9;
   letter-spacing:.06em}
-/* The credit Esri's unkeyed service asks for, kept out of the way and
-   inside the glass: at y=1050 the circle is still ~390px across. */
-#rad-cred{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-  font-size:15px;font-weight:600;letter-spacing:.08em;color:#6C757C;
-  opacity:.85;pointer-events:none;white-space:nowrap}
+/* The credits Esri's unkeyed service asks for, inside the HUD rather
+   than along the foot. At the foot they were OUTSIDE THE GLASS: a 274px
+   line at y=1070 has its corners 547px from the centre, and the panel
+   stops at 540. It looked deliberate in the screenshot and was simply
+   clipped. Up here it is inside by construction, and the scrim it
+   already sits on makes it read over any map. */
+#rad-cred{margin-top:8px;font-size:15px;font-weight:600;letter-spacing:.07em;
+  color:#6C757C;opacity:.9;white-space:nowrap}
 #rad-ctl{position:absolute;bottom:132px;left:50%;transform:translateX(-50%);
   display:flex;gap:20px;align-items:center;z-index:2}
 .radb{width:88px;height:88px;border-radius:44px;border:2px solid var(--hairline);
@@ -5321,9 +5328,40 @@ function radPaint(){
 function radTick(){
   if(!R) return;
   R.timer=setTimeout(radTick, RAD.TICK);
-  const n=R.frames.length; if(!n) return;
+  const n=R.frames.length; if(!n||!R.playing) return;
+  /* Paused costs a timer that returns immediately - no advance, no
+     paint, no compositing. Keeping it running is what makes resuming
+     instant, and it is three lines of nothing every 80 ms. */
   R.p+=RAD.TICK/RAD.DWELL;
   if(R.p>=n) R.p=0;
+  radPaint();
+}
+
+/* The glyph is the ACTION, not the state: a triangle means "this will
+   play". The same rule the music page's transport follows, and for the
+   same reason - a button that shows what it will do needs no legend. */
+function radPlayIco(){
+  const e=$('rad-playico'); if(!e) return;
+  e.setAttribute('d', R&&R.playing ? 'M7 5h3.6v14H7zM13.4 5H17v14h-3.6z'
+                                   : 'M8 5l11 7-11 7z');
+  e.setAttribute('fill','currentColor');
+}
+function radPlay(on){
+  if(!R) return;
+  R.playing=on;
+  radPlayIco();
+}
+
+/* Scrubbing. The track itself is 8px, which no finger can hit, so the
+   target is the 50px band around it - and it pauses on touch, because a
+   timeline that keeps running under the thumb fights you. */
+function radScrubTo(clientX){
+  if(!R) return;
+  const n=R.frames.length; if(n<2) return;
+  const r=$('rad-track').getBoundingClientRect();
+  const f=Math.max(0, Math.min(1, (clientX-r.left)/r.width));
+  radPlay(false);
+  R.p=f*(n-1);
   radPaint();
 }
 
@@ -5335,6 +5373,7 @@ function radReview(){
   R.gen++;
   R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
+  radPlay(true);            /* a new view is a new look, not a held frame */
   radMarkNow();
   radBuildBase();
   radBuildFrames();
@@ -5348,17 +5387,21 @@ function radOpen(host){
   host.appendChild(cv);
   host.insertAdjacentHTML('beforeend',
     '<div id="rad-hud"><span id="rad-time">—</span>'
-    +'<div id="rad-track"><div id="rad-bar"></div>'
-    +'<div id="rad-now" style="display:none"></div></div>'
-    +'<div id="rad-note"></div></div>'
-    +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer</div>'
+    +'<div id="rad-scrub"><div id="rad-track"><div id="rad-bar"></div>'
+    +'<div id="rad-now" style="display:none"></div></div></div>'
+    +'<div id="rad-note"></div>'
+    +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer · Tomorrow.io</div>'
+    +'</div>'
     +'<div id="rad-ctl">'
     +'<button class="radb" id="rad-out">–</button>'
     +'<button class="radb wide" id="rad-home">BOAT</button>'
-    +'<button class="radb" id="rad-in">+</button></div>');
+    +'<button class="radb" id="rad-in">+</button>'
+    +'<button class="radb" id="rad-play" aria-label="play or pause">'
+    +'<svg viewBox="0 0 24 24"><path id="rad-playico" d=""/></svg>'
+    +'</button></div>');
   R={ ac:new AbortController(), gen:1, cv:cv, base:base,
       frames:[], times:[], kinds:[],
-      p:0, timer:null, note:'',
+      p:0, timer:null, note:'', playing:true,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-bar'), note:$('rad-note'),
           now:$('rad-now')} };
@@ -5368,6 +5411,16 @@ function radOpen(host){
   $('rad-out').addEventListener('click',()=>zoom(-1));
   $('rad-home').addEventListener('click',()=>{
     R.view.lat=CFG.lat; R.view.lon=CFG.lon; radReview(); });
+  $('rad-play').addEventListener('click',()=>radPlay(!R.playing));
+  let scrub=false;
+  const sc=$('rad-scrub');
+  sc.addEventListener('pointerdown',e=>{ gClaim(); scrub=true;
+    try{ sc.setPointerCapture(e.pointerId); }catch(err){}
+    radScrubTo(e.clientX); });
+  sc.addEventListener('pointermove',e=>{ if(scrub) radScrubTo(e.clientX); });
+  sc.addEventListener('pointerup',()=>{ scrub=false; });
+  sc.addEventListener('pointercancel',()=>{ scrub=false; });
+  radPlayIco();
   /* Drag to pan. The radar is hidden while the finger is down and
      rebuilt when it lifts: recompositing fifteen frames per pointermove
      would be the one expensive thing in here. */

@@ -1035,6 +1035,33 @@ The timeline marks where **now** is, so past and forecast are told apart
 at a glance rather than by reading the clock, and the label distinguishes
 all three: `10:15 PM`, `· NOWCAST`, `· FORECAST`.
 
+### Play, pause, scrub
+
+It plays on its own; the fourth button holds it. The glyph is the
+**action, not the state** — a triangle means "this will play" — the same
+rule the music page's transport follows, and for the same reason: a
+button that shows what it will do needs no legend.
+
+Paused, the timer keeps running and returns immediately. No advance, no
+paint, no compositing. That is what makes resuming instant, and it is
+three lines of nothing every 80 ms.
+
+Touching the timeline scrubs to that frame **and pauses**, because a
+timeline that keeps running under your thumb fights you. The bar is 8px
+because that is what reads; the hit band around it is **50px** because
+that is what a thumb needs. Changing the view resumes playing — that is a
+new look, not a held frame.
+
+### Everything is checked against the circle, not the viewport
+
+The credit line sat along the foot and was **outside the glass**: a 274px
+line at y=1070 has its corners 547px from the centre and the panel stops
+at 540. It looked deliberate in the screenshot and was simply clipped.
+It lives in the HUD now, inside by construction. The test asserts all
+four corners of every control are within 540px of the centre — the
+fourth button widened the control row, and that is exactly the kind of
+change that quietly pushes something off a round panel.
+
 **Not Carto**, which `sail-weather.html` uses. `basemaps.cartocdn.com`
 now returns a tile with **API KEY REQUIRED** stamped across the middle of
 it, on every subdomain — and it looks exactly like a working dark
