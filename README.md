@@ -542,6 +542,14 @@ library. A failed tap puts the heart back and prints the reason where
 Asking every poll would double this loop's request rate for an answer
 that cannot differ between two polls of the same track.
 
+The heart shares the progress bar's row rather than taking one of its
+own — there is no vertical room on that page for another row, and the
+two belong together anyway. The bar gives up exactly the width the heart
+occupies (520px → 426px) and takes it straight back when the heart is
+hidden, since a `display:none` flex item is out of the row entirely. The
+elapsed and remaining times stay aligned to the bar's ends, and the lock
+does not move.
+
 The heart is hidden entirely unless netd reports credentials exist and
 the feed carries a liked state — so it never appears on a phone loading
 this page over the boat WiFi, where the loopback helper is unreachable

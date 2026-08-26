@@ -488,18 +488,17 @@ a.lib-row{text-decoration:none;color:inherit}
   color:var(--ink)}
 
 .m-sheet{width:600px;display:flex;flex-direction:column;align-items:center}
-/* The art is 300px in a 600px sheet, so there is 150px of slack either
-   side and the heart takes some of it - no new row, and the lock stays
-   at the foot where it is on every other page. */
-.m-artrow{position:relative;display:flex;justify-content:center;
-  width:100%;margin-bottom:26px}
 .art{width:300px;height:300px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
-  color:var(--label);flex:none}
-.heart{position:absolute;right:6px;top:50%;transform:translateY(-50%);
-  width:78px;height:78px;border-radius:50%;background:none;border:none;
+  color:var(--label);margin-bottom:26px;flex:none}
+/* The heart shares a row with the progress bar rather than taking one of
+   its own - there is no vertical room on this page for another row, and
+   the two belong together anyway: both are about the track playing now.
+   A full 78px target, which is the thing worth protecting on a panel
+   tapped with wet hands. */
+.heart{width:78px;height:78px;border-radius:50%;background:none;border:none;
   padding:0;display:flex;align-items:center;justify-content:center;
-  color:var(--label)}
+  color:var(--label);flex:none}
 .heart svg{width:46px;height:46px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
   transition:fill .18s,transform .18s}
@@ -530,10 +529,12 @@ a.lib-row{text-decoration:none;color:inherit}
    name takes longer rather than whipping past. */
 .m-title>span,.m-artist>span{display:inline-block;white-space:nowrap}
 .mq>span{will-change:transform}
-.m-bar{width:520px;height:12px;border-radius:6px;background:var(--chip);
-  margin-top:30px;overflow:hidden}
+.m-prog{width:520px;display:flex;align-items:center;gap:16px;margin-top:30px}
+.m-progmain{flex:1;min-width:0}
+.m-bar{width:100%;height:12px;border-radius:6px;background:var(--chip);
+  overflow:hidden}
 .m-fill{height:100%;width:0;background:var(--accent);border-radius:6px}
-.m-time{width:520px;display:flex;justify-content:space-between;margin-top:12px;
+.m-time{width:100%;display:flex;justify-content:space-between;margin-top:12px;
   font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em}
 
 /* --- instruments on the music panel ---------------------------------
@@ -1001,7 +1002,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </svg>
   <div class="m-sheet">
     <div class="ms-head" id="ms-strip"></div>
-    <div class="m-artrow">
     <div class="art" id="m-art">
       <svg viewBox="0 0 40 40" id="m-note"><path
         d="M15 28V10l16-3v18" fill="none" stroke="currentColor"
@@ -1009,20 +1009,24 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <circle cx="11" cy="28" r="4.5" fill="currentColor"/>
         <circle cx="27" cy="25" r="4.5" fill="currentColor"/></svg>
     </div>
-    <!-- Hidden until netd says credentials exist, so it never appears on
-         a phone loading this page over the boat WiFi - the helper is
-         loopback-only and the tap could not go anywhere. -->
-    <button class="heart" id="m-like" aria-pressed="false" style="display:none">
-      <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
-        2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
-        16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
-    </button>
-    </div>
     <div class="m-lbl" id="m-state">NOW PLAYING</div>
     <div class="m-title" id="m-title">Nothing playing</div>
     <div class="m-artist" id="m-artist">—</div>
-    <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
-    <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
+    <!-- The bar gives up its right end to the heart. Hidden, the heart
+         is display:none and therefore out of the flex row entirely, so
+         the bar takes the full width back - which is exactly the layout
+         a phone or a Pi without credentials should get. -->
+    <div class="m-prog">
+      <div class="m-progmain">
+        <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
+        <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
+      </div>
+      <button class="heart" id="m-like" aria-pressed="false" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
+          2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
+          16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
+      </button>
+    </div>
     <button class="lockbtn" id="m-lock">
       <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
         <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
