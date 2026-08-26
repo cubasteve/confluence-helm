@@ -169,9 +169,16 @@ def fetch_playing(token):
 
 
 def api(token, method, url, timeout=20):
-    """A bare request that returns the parsed body, or None for 204/empty."""
-    req = urllib.request.Request(url, method=method,
-                                 headers={"Authorization": "Bearer " + token})
+    """A bare request that returns the parsed body, or None for 204/empty.
+
+    Content-Length is set explicitly because the ids travel in the query
+    string, so PUT and DELETE here carry no body - and urllib sends no
+    Content-Length at all in that case, which some servers refuse. It
+    costs nothing to be unambiguous about a request that has no body."""
+    head = {"Authorization": "Bearer " + token}
+    if method in ("PUT", "POST", "DELETE"):
+        head["Content-Length"] = "0"
+    req = urllib.request.Request(url, method=method, headers=head)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         if r.status == 204:
             return None
@@ -390,5 +397,71 @@ def main():
         sleep_watching(delay)
 
 
+def check(argv):
+    """Prove - against the real API, with the real token - whether the
+    heart does what it claims.
+
+        python3 spotify-now.py --check     what is playing, and is it saved
+        python3 spotify-now.py --like      save it, then RE-READ to confirm
+        python3 spotify-now.py --unlike    remove it, then re-read
+
+    The re-read is the point. A 200 from Spotify only says the request
+    was accepted; asking again afterwards is what shows the library
+    actually changed."""
+    cfg = load_config()
+    token = Token(cfg)
+    try:
+        tok = token.get()
+    except Exception as e:
+        print("token refresh FAILED: %s" % e)
+        print("  the credentials in %s are not working." % CONFIG)
+        return 1
+    print("token            ok")
+
+    payload, status = fetch_playing(tok)
+    state = to_dial(payload)
+    if not state["id"]:
+        print("playing          nothing (start something and try again)")
+        return 1
+    print("playing          %s - %s" % (state["title"], state["artist"]))
+    print("track id         %s" % state["id"])
+
+    try:
+        before = is_saved(tok, state["id"])
+    except urllib.error.HTTPError as e:
+        print("library scope    NO (%s on /me/tracks/contains)" % e.code)
+        print("  the heart cannot work until spotify-auth.py is re-run.")
+        return 1
+    print("library scope    ok")
+    print("saved already    %s" % ("yes" if before else "no"))
+
+    want = None
+    if "--like" in argv:
+        want = True
+    elif "--unlike" in argv:
+        want = False
+    if want is None:
+        print("\nadd --like or --unlike to actually change it.")
+        return 0
+
+    print("\nsending %s ..." % ("PUT (save)" if want else "DELETE (remove)"))
+    try:
+        set_saved(tok, state["id"], want)
+    except urllib.error.HTTPError as e:
+        print("REFUSED: http %s" % e.code)
+        if e.code == 403:
+            print("  no user-library-modify scope - re-run spotify-auth.py")
+        return 1
+    after = is_saved(tok, state["id"])
+    print("re-read from Spotify: saved = %s" % ("yes" if after else "no"))
+    if after == want:
+        print("\nCONFIRMED: the library really changed. Check Liked Songs.")
+        return 0
+    print("\nAccepted but the library did NOT change. Something is wrong.")
+    return 1
+
+
 if __name__ == "__main__":
+    if any(a in sys.argv[1:] for a in ("--check", "--like", "--unlike")):
+        sys.exit(check(sys.argv[1:]))
     main()
