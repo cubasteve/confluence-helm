@@ -20,6 +20,7 @@ Run spotify-auth.py once to produce that file.
 import base64
 import json
 import os
+import socket
 import sys
 import time
 import tempfile
@@ -200,6 +201,9 @@ def fetch_playing(token):
         raise
 
 
+_odd = set()          # endpoints that have answered with a non-JSON body
+
+
 def api(token, method, url, timeout=20):
     """A bare request that returns the parsed body, or None for 204/empty.
 
@@ -215,7 +219,26 @@ def api(token, method, url, timeout=20):
         if r.status == 204:
             return None
         body = r.read()
-        return json.loads(body) if body else None
+        if not body:
+            return None
+        try:
+            return json.loads(body)
+        except ValueError:
+            # The request was ACCEPTED - the status said so - and only the
+            # body is not JSON. The transport endpoints answer 204 or an
+            # empty 200 and the callers there want nothing back, so raising
+            # here would report a completed pause as a failure. The one
+            # caller that needs a value (is_saved) reads None as "unknown",
+            # which is true.
+            # Once per endpoint. If Spotify starts answering this way it
+            # will do so on every poll, and a line every five seconds
+            # would bury the log that has to stay readable on a boat.
+            here = method + " " + url.split("?")[0]
+            if here not in _odd:
+                _odd.add(here)
+                log("%s answered %s with a %s-byte body that is not JSON. "
+                    "Treating it as no answer." % (here, r.status, len(body)))
+            return None
 
 
 # Which shape of the library API is answering. Only a 404 - the path
@@ -283,6 +306,23 @@ def do_control(token, op):
     api(token, method, url)
 
 
+def why(e):
+    """A short, TRUE reason for a non-HTTP failure.
+
+    It used to be "NO REPLY" for everything that was not an HTTPError,
+    which is the least useful thing a boat can be told: it reads as "the
+    press did nothing" even when Spotify carried the command out and only
+    the answer went astray. These say which, and each one has a different
+    fix."""
+    if isinstance(e, socket.timeout) or isinstance(e, TimeoutError):
+        return "TIMED OUT"
+    if isinstance(e, urllib.error.URLError):
+        return "NO NETWORK"
+    if isinstance(e, ValueError):
+        return "BAD REPLY"
+    return "FAILED: %s" % type(e).__name__.upper()[:14]
+
+
 def try_control(token, op):
     """Never raises. Returns '' on success or a short reason to show."""
     try:
@@ -300,8 +340,8 @@ def try_control(token, op):
         log("transport %s: http %s" % (op, e.code))
         return "HTTP %s" % e.code
     except Exception as e:
-        log("transport %s failed: %s" % (op, e))
-        return "NO REPLY"
+        log("transport %s failed: %s: %s" % (op, type(e).__name__, e))
+        return why(e)
 
 
 def take_command():
@@ -402,7 +442,7 @@ def try_set_saved(token, cmd):
         return "NOT ALLOWED" if e.code == 403 else "HTTP %s" % e.code
     except Exception as e:
         library_failed(verb, e)
-        return "NO REPLY"
+        return why(e)
 
 
 
@@ -476,21 +516,31 @@ def main():
             # Every call below is wrapped so that it cannot stop the
             # write. A like that fails costs a heart, not the music.
             cmd = take_command()
+            acted = False
             if cmd and cmd.get("op") in CONTROLS:
                 # A transport press. Whatever happens it must not cost
                 # the feed, so the reason goes into the file the panel is
                 # already reading rather than raising out of here.
                 err = try_control(token, cmd["op"])
+                acted = True
+                # Re-read WHATEVER happened, including after a reported
+                # failure - especially then. A timeout or an answer we
+                # could not parse says nothing about whether Spotify
+                # carried the command out, and it usually did. Re-reading
+                # only on success meant a press that "failed" left the
+                # panel holding the state from BEFORE it: the music had
+                # paused and the glyph still said it was playing.
+                #
+                # The pause is for propagation. Spotify accepts the
+                # command and the player catches up a moment later, so an
+                # instant re-read can still answer with the old state.
+                time.sleep(0.35)
+                try:
+                    payload, status = fetch_playing(token.get())
+                    state = to_dial(payload)
+                except Exception:
+                    pass
                 state["cmderr"] = err
-                # Re-read at once: after a skip the old track would
-                # otherwise sit on the glass for a whole poll interval.
-                if not err:
-                    try:
-                        payload, status = fetch_playing(token.get())
-                        state = to_dial(payload)
-                        state["cmderr"] = ""
-                    except Exception:
-                        pass
                 last = None
             elif cmd and cmd.get("id"):
                 err = try_set_saved(token, cmd)
@@ -528,6 +578,12 @@ def main():
                 write(state)
                 last = key
             delay = POLL_PLAYING if state["event"] == "playing" else POLL_IDLE
+            # One quick follow-up after a press. The re-read above is a
+            # best effort against a player that may still have been
+            # catching up; this makes the panel agree with reality within
+            # about a second either way, rather than up to POLL_PLAYING.
+            if acted:
+                delay = 1
             backoff = 0
         except urllib.error.HTTPError as e:
             if e.code == 401:

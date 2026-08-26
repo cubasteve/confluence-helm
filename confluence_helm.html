@@ -509,11 +509,16 @@ a.lib-row{text-decoration:none;color:inherit}
 .art{width:280px;height:280px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
   color:var(--label);margin-bottom:18px;flex:none}
-/* The heart sits in the control bar with the transport - they are the
-   same kind of thing, the things you press about the track. A full 78px
-   target, which is the thing worth protecting on a panel tapped with wet
-   hands. */
-.heart{width:78px;height:78px;border-radius:50%;background:none;border:none;
+/* Save-to-library. A PLUS, not a heart, because Spotify's own apps stopped
+   using a heart for this: the heart and "add to playlist" were merged into
+   one + button, and a track already in your library shows a green
+   CHECKMARK. Matching that means the panel and the phone in your pocket
+   agree about what a saved track looks like, which is the whole job of an
+   icon. It still adds to Liked Songs - only the mark changed.
+   Sits in the control bar with the transport, the same kind of thing: the
+   things you press about the track. A full 78px target, which is what is
+   worth protecting on a panel tapped with wet hands. */
+.savebtn{width:78px;height:78px;border-radius:50%;background:none;border:none;
   padding:0;display:flex;align-items:center;justify-content:center;
   color:var(--label);flex:none}
 /* Transport. Filled glyphs rather than outlines: these are the smallest
@@ -528,23 +533,29 @@ a.lib-row{text-decoration:none;color:inherit}
 .tbtn2:active svg{transform:scale(.84)}
 #m-play svg{width:46px;height:46px}
 /* 40 to match prev and next. Play is 46 because it is the primary
-   action of the three; the heart matching THAT made two competing focal
-   points in one row, and a filled shape already carries more weight than
-   an outlined triangle at the same size. */
-.heart svg{width:40px;height:40px;fill:none;stroke:currentColor;
+   action of the three; the save button matching THAT made two competing
+   focal points in one row, and a filled disc already carries more weight
+   than an outlined triangle at the same size. */
+.savebtn svg{width:40px;height:40px;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linejoin:round;stroke-linecap:round;
-  transition:fill .18s,transform .18s}
-.heart.on{color:var(--alarm)}
-.heart.on svg{fill:currentColor}
-.heart:active svg{transform:scale(.85)}
+  transition:transform .18s}
+.savebtn circle{transition:fill .18s}
+/* Saved: the disc fills and the mark is punched out of it in the page
+   colour, which is how Spotify draws it. --stbd rather than a literal
+   green so NIGHT mode still gets a red one - nothing on this panel is
+   allowed to put white-green light in your eyes at 0200. */
+.savebtn.on{color:var(--stbd)}
+.savebtn.on circle{fill:currentColor}
+.savebtn.on path{stroke:var(--bg)}
+.savebtn:active svg{transform:scale(.85)}
 /* While the poller is carrying it out. It is optimistic, so this is only
    ever brief - and if it fails the state comes back and says so. */
-.heart.busy{opacity:.4}
+.savebtn.busy{opacity:.4}
 /* The library answer never arrived - no scope, or the check is in its
    backoff. Dimmed rather than hidden: it is still pressable, and a press
    is the fastest way to find out, since a refusal names itself on the
    state line. */
-.heart.unk{opacity:.42}
+.savebtn.unk{opacity:.42}
 .art img{width:100%;height:100%;object-fit:cover}
 .art svg{width:90px;height:90px}
 /* line-height is set on every row of this page rather than left at
@@ -578,14 +589,14 @@ a.lib-row{text-decoration:none;color:inherit}
 .m-time{width:520px;display:flex;justify-content:space-between;margin-top:10px;
   font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em;
   line-height:1.43}
-/* The second bar. Transport and the heart together, because they are
+/* The second bar. Transport and the save button together, because they are
    the same kind of thing: the things you press about the track. */
 .m-ctl{display:flex;align-items:center;justify-content:center;gap:22px;
   margin-top:12px}
-/* Set apart from the three. At an equal gap the heart reads as a fourth
+/* Set apart from the three. At an equal gap it reads as a fourth
    transport button, and it is not one - those three move the music,
    this one changes your library. */
-.m-ctl .heart{margin-left:14px}
+.m-ctl .savebtn{margin-left:14px}
 
 /* --- instruments on the music panel ---------------------------------
    Wind ANGLE goes on the bezel rather than in a cell: it is an angular
@@ -1074,7 +1085,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
          The whole row hides when nothing in it is available, which is
          what a phone gets: the helper is loopback-only, so neither the
-         heart nor the transport could do anything there. -->
+         save button nor the transport could do anything there. -->
     <div class="m-ctl" id="m-ctl">
       <button class="tbtn2" id="m-prev" style="display:none" aria-label="previous">
         <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12z"/><rect x="5" y="5" width="2.4" height="14" rx="1"/></svg>
@@ -1085,10 +1096,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <button class="tbtn2" id="m-next" style="display:none" aria-label="next">
         <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7z"/><rect x="16.6" y="5" width="2.4" height="14" rx="1"/></svg>
       </button>
-      <button class="heart" id="m-like" aria-pressed="false" style="display:none">
-        <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
-          2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
-          16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
+      <button class="savebtn" id="m-like" aria-pressed="false"
+              aria-label="save to your library" style="display:none">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <path id="m-saveico" d="M12 7v10M7 12h10"/>
+        </svg>
       </button>
     </div>
     <button class="lockbtn" id="m-lock">
@@ -2798,11 +2811,11 @@ async function netStatus(){
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
         pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{}, spo=(j&&j.spotify)||{};
   NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo};
-  /* The heart's visibility is decided by what the helper just said, and
+  /* The save button's visibility is decided by what the helper just said, and
      the music page may well have painted before this answer arrived -
      pollMusic and this race at boot and either can win. Without this the
-     heart stays hidden until the next track change, on a page that looks
-     entirely finished. The transport buttons are gated the same way. */
+     save button stays hidden until the next track change, on a page that
+     looks entirely finished. The transport is gated the same way. */
   paintHeart(); paintTransport();
   const hadBL=BL.available, first=!NET.probed;
   BL=(j&&j.backlight)||{available:false};
@@ -3431,21 +3444,21 @@ async function pollMusic(){
   setTimeout(pollMusic, 2000);
 }
 
-/* ---- the like button ------------------------------------------------
-   Optimistic: the heart fills on the tap, not on the round trip. netd
-   only writes a request file - the poller holds the token and carries it
-   out - so confirmation is up to a second away, and a heart that waited
-   for it would feel broken on a boat.
+/* ---- the save button ------------------------------------------------
+   Optimistic: the mark ticks on the tap, not on the round trip. netd only
+   writes a request file - the poller holds the token and carries it out -
+   so confirmation is up to a second away, and a button that waited for it
+   would feel broken on a boat.
 
    The cost of being optimistic is that a failure has to be visible, or
-   the panel is lying about your library. So a refusal puts the heart
-   back and says which refusal it was. */
+   the panel is lying about your library. So a refusal puts the mark back
+   and says which refusal it was. */
 let likeBusy=false, likePend=null;
 
 function likeAvailable(){
   return !!(NET.st && NET.st.spotify && NET.st.spotify.available) && !!NP.id;
 }
-/* Transport is a separate permission from the heart and can be absent
+/* Transport is a separate permission from the library and can be absent
    on its own - it needs user-modify-playback-state AND an active device
    AND Premium, none of which the library scope implies. netd reports
    whether credentials exist; whether THESE work only shows on a press,
@@ -3455,8 +3468,8 @@ function transportAvailable(){
 }
 /* The control bar collapses when there is nothing in it to press -
    otherwise a phone, where the loopback helper is unreachable and
-   neither the heart nor the transport can do anything, would carry an
-   empty 78px band under the progress bar for no reason. */
+   neither the save button nor the transport can do anything, would carry
+   an empty 78px band under the progress bar for no reason. */
 function paintCtlRow(){
   const row=$('m-ctl'); if(!row) return;
   const any=['m-prev','m-play','m-next','m-like']
@@ -3502,16 +3515,16 @@ async function transport(op){
    transport clears, and deliberately so.
 
    It used to also require NP.liked to be a real boolean, i.e. that the
-   poller had managed to ASK the library. That made a missing
-   user-library-read scope present as a heart that simply was not there,
-   next to three transport buttons that were - and nothing on the glass
-   or in the log said why. "The heart is still not showing, everything
-   else works" is exactly what that looks like from the helm.
+   poller had managed to ASK the library. That made a failing library call
+   present as a button that simply was not there, next to three transport
+   buttons that were - and nothing on the glass or in the log said why.
+   "It is still not showing, everything else works" is exactly what that
+   looks like from the helm.
 
    The transport is not held to that standard either: it needs Premium
    and an active device, neither of which is known until you press it,
    and a refusal is SHOWN rather than pre-empted by hiding the button.
-   The heart now behaves the same way - dim while the answer is unknown,
+   It now behaves the same way - dim while the answer is unknown,
    pressable, and a refusal says which one it was. */
 function paintHeart(){
   const el=$('m-like'); if(!el) return;
@@ -3519,11 +3532,14 @@ function paintHeart(){
   el.style.display = show ? '' : 'none';
   paintCtlRow();
   if(!show) return;
-  /* An unfilled heart says "not in your library". A DIM one says "I do
-     not know" - a distinction worth drawing, because only one of the
-     two is something you can fix. */
+  /* A plain + says "not in your library". A DIM one says "I do not
+     know" - a distinction worth drawing, because only one of the two is
+     something you can fix. */
   const known = likePend!==null || NP.liked!==null;
   const on = likePend!==null ? likePend : !!NP.liked;
+  /* + to add, a tick once it is in your library - the same two marks the
+     Spotify app uses, so the panel is not teaching a second vocabulary. */
+  wAttr('m-saveico','d', on ? 'M7.4 12.4l3.1 3.1 6.1-6.6' : 'M12 7v10M7 12h10');
   el.classList.toggle('on', on);
   el.classList.toggle('unk', !known);
   el.classList.toggle('busy', likeBusy);
@@ -3542,7 +3558,7 @@ async function toggleLike(){
     return;
   }
   /* Hold the optimistic value until the poller's next write agrees with
-     it - dropping it now would flick the heart back for the second it
+     it - dropping it now would flick the mark back for the second it
      takes the file to be rewritten. Cleared when NP.liked catches up, or
      after a few seconds if it never does. */
   setTimeout(()=>{ if(likePend===want && NP.liked!==want){ likePend=null; paintHeart(); } }, 6000);

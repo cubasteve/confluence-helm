@@ -511,9 +511,9 @@ is an earlier run still waiting for a redirect that never arrived:
 change the redirect URI registered in the Spotify dashboard — Spotify
 matches it exactly.
 
-### The like button, and who holds the token
+### The save button, and who holds the token
 
-The heart in the control bar adds and removes the current track from
+The **+** button in the control bar adds and removes the current track from
 your library. Scopes are `user-read-currently-playing`,
 `user-library-read`, `user-library-modify` and — since the transport was
 added — `user-modify-playback-state`. Re-run `spotify-auth.py` after any
@@ -532,10 +532,10 @@ replaced, and the symptom is a dead integration hours later with nothing
 to point at. One process owns the token.
 
 The poller checks for that file between polls rather than only at the
-top of the loop, so a tap registers within half a second. The heart
-fills immediately rather than waiting even for that — and because it is
+top of the loop, so a tap registers within half a second. The mark ticks
+immediately rather than waiting even for that — and because it is
 optimistic, a refusal has to be visible or the panel is lying about your
-library. A failed tap puts the heart back and prints the reason where
+library. A failed tap puts the **+** back and prints the reason where
 `NOW PLAYING` normally sits.
 
 `GET /v1/me/library/contains` is asked **only when the track ID
@@ -565,8 +565,8 @@ value, not a path), 40 items maximum, and success is a 200 with an empty
 body.
 
 That 403 is the whole of both bugs here: the contains check failed, so
-the poller wrote `liked: null` and the heart was hidden; and a tap on the
-heart went to a path that refused it, so nothing reached the library.
+the poller wrote `liked: null` and the button was hidden; and a tap went
+to a path that refused it, so nothing reached the library.
 It presents exactly like a missing scope and is not one — which is why
 `--check` now names *which* endpoint answered, and the 403 log line says
 which of the two causes it is.
@@ -576,28 +576,35 @@ answers **404** — a path that is not there is a better reason to try the
 old one than to lose the feature on a boat. A 403 is a real refusal and
 is reported, never routed around.
 
-#### It is a plus button now, not a heart
+#### A plus and a tick, not a heart
 
-Nothing on this panel changed, but what you are looking for in the
-Spotify app did. Spotify merged the heart and "add to playlist" into a
-single **+** button; a track that is saved shows a green **checkmark**,
-not a filled heart. Tracks saved from here land in **Liked Songs** as
-they always did — the confirmation just looks different. `--like`
-followed by a re-read is the way to settle it without trusting either
-UI.
+Spotify merged the heart and "add to playlist" into a single **+**
+button, and a saved track shows a green **checkmark** rather than a
+filled heart. This panel draws the same two marks, so it and the phone in
+your pocket agree about what a saved track looks like — which is the
+whole job of an icon. It still adds to Liked Songs; only the mark
+changed.
 
-The heart shows whenever netd reports credentials and something is
+Saved fills the disc and punches the tick out of it in the panel colour.
+The fill is `--stbd`, not a literal green, so **night mode gets a red
+one** — nothing here is allowed to put white-green light in your eyes at
+0200.
+
+`--like` followed by its re-read is the way to settle whether a track
+really saved, without trusting either UI.
+
+The button shows whenever netd reports credentials and something is
 playing — the same bar the transport clears. It is hidden on a phone
 loading this page over the boat WiFi, where the loopback helper is
 unreachable and a tap could not go anywhere, and that is the only case.
 
 It used to also require the feed to carry a real liked state, and that
 was wrong. A token without `user-library-read` answers 403, the poller
-writes `liked: null`, and the heart simply was not there — beside three
+writes `liked: null`, and the button simply was not there — beside three
 transport buttons that were, with nothing on the glass saying why. Now
-an unknown answer is *drawn*: the heart appears dimmed, it is still
+an unknown answer is *drawn*: it appears dimmed, it is still
 pressable, and a refusal names itself on the state line the way a
-refused skip does. An empty heart means "not in your library"; a dim one
+refused skip does. A plain **+** means "not in your library"; a dim one
 means "I could not find out" — and only one of those is something you
 can fix.
 
@@ -605,7 +612,7 @@ The same 403 puts the library check into an hour's backoff (a network
 wobble, a minute's). When that expires the check is asked again for the
 track still playing: the answer is recorded against a track ID only when
 there *is* an answer, since recording the ID beside a `None` reads as
-"already asked about this one" and would hold the heart unknown for the
+"already asked about this one" and would hold it unknown for the
 rest of the track however quickly the fault cleared.
 
 ### Playback controls
@@ -624,9 +631,26 @@ code can predict, so each is reported rather than swallowed:
 |---|---|
 | `NO ACTIVE DEVICE` | 404 — nothing is playing anywhere to control |
 | `NOT ALLOWED` | 403 — no Premium, or the scope was never granted |
+| `TIMED OUT` | the request went out and no answer came back |
+| `NO NETWORK` | it never left the boat |
+| `BAD REPLY` | answered, but not with anything parseable |
 | `NO HELPER` | netd unreachable, as on a phone |
 
-Same architecture as the heart: netd writes a command file, the poller
+Those last three used to be one word, `NO REPLY`, and that was the least
+useful thing a boat can be told: it reads as "the press did nothing" when
+in fact Spotify may well have carried the command out and only the answer
+went astray. Each of these has a different fix, so each says which.
+
+Which leads to the rule that matters more: **the poller re-reads after a
+press whatever the outcome, including a reported failure — especially
+then.** It used to re-read only on success, so a press that "failed" left
+the panel holding the state from *before* it. The music had paused and
+the glyph still said it was playing, under a message saying the press had
+not worked. A short pause before the re-read covers Spotify accepting a
+command a moment before the player catches up, and the next poll is
+shortened to a second so the panel converges either way.
+
+Same architecture as the save button: netd writes a command file, the poller
 performs it, one process owns the token. Play/pause is optimistic
 because the glyph *is* the state and a wrong guess corrects itself
 within a poll; skip never is, since pretending the next track had
@@ -647,7 +671,7 @@ re-reads immediately rather than leaving the old track on the glass for
 a whole poll interval.
 
 They live in a **second control bar** under the progress bar, with the
-heart — the four things you press about the track, together. The
+save button — the four things you press about the track, together. The
 progress bar keeps its full 520px above them and the lock is back at
 dead centre on the foot, the same as every other page. The room came out
 of the album art, which was the only place on the page it existed —
@@ -657,12 +681,12 @@ row of that page to the font's own box (Poppins measures 1.42em by
 about 1.5 and is pure waste for single-line rows. The art ended at
 280px.
 
-The heart sits slightly apart from the three: at an equal gap it read as
+It sits slightly apart from the three: at an equal gap it read as
 a fourth transport button, and it is not one — those three move the
 music, it changes your library.
 
 The whole row collapses when nothing in it is available, which is what a
-phone gets: the helper is loopback-only, so neither the heart nor the
+phone gets: the helper is loopback-only, so neither the save button nor the
 transport could do anything there, and an empty 78px band under the bar
 would just be a puzzle.
 
