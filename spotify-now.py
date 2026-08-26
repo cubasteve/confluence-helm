@@ -42,7 +42,26 @@ POLL_PLAYING = 5        # seconds between polls while something is playing
 POLL_IDLE = 20          # back off when nothing is playing
 API = "https://api.spotify.com/v1/me/player/currently-playing"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
-SAVED = "https://api.spotify.com/v1/me/tracks"          # like / unlike / contains
+# The library, and the reason there are two of these.
+#
+# Spotify's February 2026 Web API changes replaced every per-type save /
+# remove / contains endpoint with one generic pair on /me/library that
+# takes Spotify URIs instead of bare IDs. The old ones were not merely
+# marked deprecated: for a Development Mode app - which is what a
+# personal app like this one is - they answer 403 FORBIDDEN, with a valid
+# token and the right scopes. Existing dev-mode apps were migrated onto
+# that restriction on 9 March 2026.
+#
+# That 403 is the whole of the "the heart does not actually like the
+# song" bug, and it was also what hid the heart in the first place: the
+# contains check failed, the poller wrote liked: null, and the panel drew
+# nothing. It reads exactly like a missing scope and is not one - the
+# scopes here are unchanged, so nothing needs re-authorising.
+#
+# LEGACY is still here because a 404 on the new path is a better reason
+# to try the old one than to lose the feature on a boat.
+LIBRARY = "https://api.spotify.com/v1/me/library"       # like / unlike / contains
+LEGACY = "https://api.spotify.com/v1/me/tracks"         # pre-2026, 403 in dev mode
 PLAYER = "https://api.spotify.com/v1/me/player"         # transport
 
 # What the panel may ask for, and how. Transport needs an ACTIVE DEVICE -
@@ -199,6 +218,26 @@ def api(token, method, url, timeout=20):
         return json.loads(body) if body else None
 
 
+# Which shape of the library API is answering. Only a 404 - the path
+# genuinely not being there - moves this; a 403 is a real refusal and is
+# reported rather than worked around.
+_legacy = {"on": False}
+
+
+def _q(v):
+    """Percent-encode a whole value, colons included: a Spotify URI is
+    ONE query value, not a path."""
+    return urllib.parse.quote(v, safe="")
+
+
+def _fell_back(what):
+    if not _legacy["on"]:
+        log("%s: /me/library answered 404, falling back to the pre-2026 "
+            "endpoint. If the heart then stops working, that fallback is "
+            "why - the old path answers 403 for Development Mode apps." % what)
+        _legacy["on"] = True
+
+
 def is_saved(token, track_id):
     """Is this track in the library? One request, and the caller is
     expected to ask only when the track ID has actually changed - asking
@@ -206,14 +245,35 @@ def is_saved(token, track_id):
     that cannot change between two polls of the same track."""
     if not track_id:
         return None
-    got = api(token, "GET", SAVED + "/contains?ids=" + urllib.parse.quote(track_id))
+    if not _legacy["on"]:
+        try:
+            got = api(token, "GET",
+                      LIBRARY + "/contains?uris=" + _q("spotify:track:" + track_id))
+            return bool(got[0]) if isinstance(got, list) and got else None
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+            _fell_back("library check")
+    got = api(token, "GET", LEGACY + "/contains?ids=" + _q(track_id))
     return bool(got[0]) if isinstance(got, list) and got else None
 
 
 def set_saved(token, track_id, want):
-    """Like (PUT) or unlike (DELETE). Returns the new state."""
-    api(token, "PUT" if want else "DELETE",
-        SAVED + "?ids=" + urllib.parse.quote(track_id))
+    """Like (PUT) or unlike (DELETE). Returns the new state.
+
+    Both shapes carry the track in the query string and no body, so the
+    only difference is the path and whether it wants a URI or an ID."""
+    method = "PUT" if want else "DELETE"
+    if not _legacy["on"]:
+        try:
+            api(token, method,
+                LIBRARY + "?uris=" + _q("spotify:track:" + track_id))
+            return want
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+            _fell_back("like" if want else "unlike")
+    api(token, method, LEGACY + "?ids=" + _q(track_id))
     return want
 
 
@@ -284,12 +344,17 @@ def library_failed(what, e):
     code = getattr(e, "code", None)
     if code == 403:
         if not _lib["warned"]:
-            log("%s refused (403): this token has no library scope. The "
-                "heart still shows, dimmed, and says NOT ALLOWED if you "
-                "press it. Music is unaffected. To enable it, re-run "
-                "spotify-auth.py - a refresh token carries the scopes it "
-                "was granted with, so widening them needs the consent "
-                "screen again." % what)
+            log("%s refused (403). The heart still shows, dimmed, and says "
+                "NOT ALLOWED if you press it. Music is unaffected." % what)
+            if _legacy["on"]:
+                log("  this went to the PRE-2026 endpoint, which answers 403 "
+                    "for Development Mode apps whatever the token says. That "
+                    "is the cause, not your scopes.")
+            else:
+                log("  this went to /me/library, so 403 here really is the "
+                    "scope: re-run spotify-auth.py. A refresh token carries "
+                    "the scopes it was granted with, so widening them needs "
+                    "the consent screen again.")
             _lib["warned"] = True
         _lib["until"] = time.time() + 3600      # do not hammer it
     else:
@@ -519,10 +584,17 @@ def check(argv):
     try:
         before = is_saved(tok, state["id"])
     except urllib.error.HTTPError as e:
-        print("library scope    NO (%s on /me/tracks/contains)" % e.code)
-        print("  the heart cannot work until spotify-auth.py is re-run.")
+        where = "the pre-2026 /me/tracks/contains" if _legacy["on"] \
+                else "/me/library/contains"
+        print("library          NO (%s on %s)" % (e.code, where))
+        if e.code == 403 and _legacy["on"]:
+            print("  that endpoint answers 403 for Development Mode apps")
+            print("  whatever your scopes say. This is not fixed by re-auth.")
+        elif e.code == 403:
+            print("  no user-library-read scope - re-run spotify-auth.py")
         return 1
-    print("library scope    ok")
+    print("library          ok (%s)" %
+          ("pre-2026 /me/tracks" if _legacy["on"] else "/me/library"))
     print("saved already    %s" % ("yes" if before else "no"))
 
     want = None
@@ -539,13 +611,18 @@ def check(argv):
         set_saved(tok, state["id"], want)
     except urllib.error.HTTPError as e:
         print("REFUSED: http %s" % e.code)
-        if e.code == 403:
+        if e.code == 403 and _legacy["on"]:
+            print("  the pre-2026 endpoint refuses Development Mode apps.")
+        elif e.code == 403:
             print("  no user-library-modify scope - re-run spotify-auth.py")
         return 1
     after = is_saved(tok, state["id"])
     print("re-read from Spotify: saved = %s" % ("yes" if after else "no"))
     if after == want:
-        print("\nCONFIRMED: the library really changed. Check Liked Songs.")
+        print("\nCONFIRMED: the library really changed.")
+        print("  In the Spotify app the heart is now a + button, and a saved")
+        print("  track shows a green CHECKMARK rather than a filled heart.")
+        print("  If in doubt, look in the Liked Songs playlist itself.")
         return 0
     print("\nAccepted but the library did NOT change. Something is wrong.")
     return 1

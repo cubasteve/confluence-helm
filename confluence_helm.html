@@ -3413,6 +3413,15 @@ async function pollMusic(){
               to be here was for librespot's multi-line values. */
            title:j.title||'', artist:j.artist||'', cover:j.cover||'' };
       if(changed) paintMusic();
+      /* Unconditionally, and not folded into `changed`. The play glyph is
+         set OPTIMISTICALLY on a press, so it can be showing something the
+         feed never agreed with - and `changed` cannot see that, because it
+         only compares the feed with itself. Press pause, have it refused,
+         and the event never changes: the glyph then sat inverted until the
+         track did, telling you to press play while the music played on.
+         wAttr writes nothing when the value is the same, so calling this
+         every poll costs a map lookup and makes the drift impossible. */
+      paintTransport();
     }
   }catch(e){
     /* Nothing answered at all: AvNav down, the page opened over file://
@@ -3475,10 +3484,15 @@ async function transport(op){
   /* Optimistic only for play/pause, where the glyph IS the state and a
      wrong guess is corrected within a poll. Never for skip: pretending
      the next track had arrived would mean inventing a title. */
+  const was=NP.playing;
   if(op==='play'||op==='pause'){ NP.playing = (op==='play'); paintTransport(); }
   const j=await netApi('/spotify/control',{op:op});
   ctlBusy=false;
   if(!j || !j.ok){
+    /* Put the guess back. Without this the glyph stayed inverted after a
+       refusal - and since the button sends play or pause according to
+       NP.playing, the next press would have asked for the wrong one. */
+    NP.playing=was;
     paintTransport();
     musicFlash((j&&j.error) || 'NO HELPER');
   }

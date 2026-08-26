@@ -538,9 +538,53 @@ optimistic, a refusal has to be visible or the panel is lying about your
 library. A failed tap puts the heart back and prints the reason where
 `NOW PLAYING` normally sits.
 
-`GET /v1/me/tracks/contains` is asked **only when the track ID changes**.
-Asking every poll would double this loop's request rate for an answer
-that cannot differ between two polls of the same track.
+`GET /v1/me/library/contains` is asked **only when the track ID
+changes**. Asking every poll would double this loop's request rate for an
+answer that cannot differ between two polls of the same track.
+
+#### The February 2026 API change
+
+This code used to call `PUT`/`DELETE /v1/me/tracks` and
+`GET /v1/me/tracks/contains`. Spotify replaced every per-type save,
+remove and contains endpoint with one generic pair that takes Spotify
+**URIs** instead of bare IDs:
+
+| was | is |
+|---|---|
+| `PUT /v1/me/tracks?ids=<id>` | `PUT /v1/me/library?uris=spotify:track:<id>` |
+| `DELETE /v1/me/tracks?ids=<id>` | `DELETE /v1/me/library?uris=…` |
+| `GET /v1/me/tracks/contains?ids=<id>` | `GET /v1/me/library/contains?uris=…` |
+
+The old paths were not merely marked deprecated. For a **Development
+Mode** app — which is what a personal app like this one is — they answer
+**403 Forbidden** with a perfectly valid token and the right scopes;
+existing dev-mode apps were migrated onto that restriction on 9 March
+2026. Scopes did not change, so nothing needs re-authorising. The URIs
+go in the query string with their colons percent-encoded (they are one
+value, not a path), 40 items maximum, and success is a 200 with an empty
+body.
+
+That 403 is the whole of both bugs here: the contains check failed, so
+the poller wrote `liked: null` and the heart was hidden; and a tap on the
+heart went to a path that refused it, so nothing reached the library.
+It presents exactly like a missing scope and is not one — which is why
+`--check` now names *which* endpoint answered, and the 403 log line says
+which of the two causes it is.
+
+The legacy paths are still in the code, reached only if `/me/library`
+answers **404** — a path that is not there is a better reason to try the
+old one than to lose the feature on a boat. A 403 is a real refusal and
+is reported, never routed around.
+
+#### It is a plus button now, not a heart
+
+Nothing on this panel changed, but what you are looking for in the
+Spotify app did. Spotify merged the heart and "add to playlist" into a
+single **+** button; a track that is saved shows a green **checkmark**,
+not a filled heart. Tracks saved from here land in **Liked Songs** as
+they always did — the confirmation just looks different. `--like`
+followed by a re-read is the way to settle it without trusting either
+UI.
 
 The heart shows whenever netd reports credentials and something is
 playing — the same bar the transport clears. It is hidden on a phone
@@ -586,7 +630,19 @@ Same architecture as the heart: netd writes a command file, the poller
 performs it, one process owns the token. Play/pause is optimistic
 because the glyph *is* the state and a wrong guess corrects itself
 within a poll; skip never is, since pretending the next track had
-arrived would mean inventing a title. After a successful skip the poller
+arrived would mean inventing a title.
+
+The play button shows the **action, not the state** — a triangle means
+"this will play", two bars mean "this will pause" — and it is repainted
+on *every* poll rather than only when the feed reports a change. That
+looks redundant and is not: the glyph is set optimistically on a press,
+so it can be showing something the feed never agreed with, and a
+change-detector comparing the feed with itself cannot see that. Press
+pause, have it refused, and the event never changes — the glyph then sat
+inverted until the track did, offering play while the music played on.
+A refusal now also puts the guess back, which matters because the button
+sends `play` or `pause` according to that same flag: a stuck glyph meant
+the next press asked for the wrong one. After a successful skip the poller
 re-reads immediately rather than leaving the old track on the glass for
 a whole poll interval.
 
