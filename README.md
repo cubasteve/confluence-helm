@@ -666,7 +666,18 @@ pause, have it refused, and the event never changes — the glyph then sat
 inverted until the track did, offering play while the music played on.
 A refusal now also puts the guess back, which matters because the button
 sends `play` or `pause` according to that same flag: a stuck glyph meant
-the next press asked for the wrong one. After a successful skip the poller
+the next press asked for the wrong one.
+
+None of which was why it did not change. `id="m-playico"` was on the
+`<svg>` rather than on the `<path>` inside it, and `d` means nothing on an
+`<svg>` — so the write landed on an element that ignores it and the
+triangle drawn underneath never moved. It survived two rounds of fixing
+the *logic* because the test read the attribute back **off the same id it
+had just written to**, which passes whether or not anything is drawn. The
+check now finds the path by structure (`#m-play svg path`) and compares
+`getTotalLength()`, which is the rendering's own opinion of the shape and
+cannot be satisfied by an attribute nothing draws. Put it back the old way
+and six assertions fail. After a successful skip the poller
 re-reads immediately rather than leaving the old track on the glass for
 a whole poll interval.
 

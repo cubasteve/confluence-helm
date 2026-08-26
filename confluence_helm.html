@@ -1091,7 +1091,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12z"/><rect x="5" y="5" width="2.4" height="14" rx="1"/></svg>
       </button>
       <button class="tbtn2" id="m-play" style="display:none" aria-label="play or pause">
-        <svg viewBox="0 0 24 24" id="m-playico"><path d="M8 5l11 7-11 7z"/></svg>
+        <!-- the id is on the PATH, and that is the whole point: `d` means
+             nothing on an <svg>. It sat one element too high here and the
+             glyph never once changed on the glass, while a test reading
+             back the same attribute it had written passed every time. -->
+        <svg viewBox="0 0 24 24"><path id="m-playico" d="M8 5l11 7-11 7z"/></svg>
       </button>
       <button class="tbtn2" id="m-next" style="display:none" aria-label="next">
         <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7z"/><rect x="16.6" y="5" width="2.4" height="14" rx="1"/></svg>
