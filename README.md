@@ -142,7 +142,21 @@ between modes from the panel leaves this window alone.
 `--window-size=1080,1080` is load-bearing: a square viewport is what keeps
 the dial round. Any other shape and `fitStage()` squares it off.
 
-### The KIOSK tile
+### The KIOSK tile (removed)
+
+There used to be a third display tile that toggled kiosk against a
+windowed browser, with a hold-to-reload on it. It is gone. **Kiosk** and
+**Desktop** in the power sheet do the switching now, and they do it
+properly — taking the fit, the touch mapping and the desktop's own panel
+with them, none of which a tile that only knew about `--kiosk` could.
+The power sheet's Reload tile covers what the hold did, and
+`POST /display/mode {"mode":"kiosk"|"window"}` is still there for anyone
+who wants the old behaviour by hand.
+
+What follows is why that tile was the shape it was, kept because the
+reasoning still applies to the helper underneath it.
+
+#### It used to work like this
 
 The panel's third display tile used to be wired to the Fullscreen API,
 which on this Pi is wired to nothing. `--kiosk` is not the Fullscreen API:
@@ -1418,6 +1432,23 @@ and output `w-t` must sample framebuffer `w`, which gives `a = w/s` and
 xrandr --output HDMI-1   --transform 1.417323,0,-225.354,0,1.417323,-225.354,0,0,1   --fb 1080x1080
 ```
 
+#### `--fb` and `--panning`: the desktop, not just the picture
+
+A transform that shrinks the *picture* makes the output sample a
+framebuffer region **larger than itself** — 1080 × 1.417 = 1531 here —
+and xrandr sizes the screen to cover that. The letterbox then looks
+exactly right while the desktop behind it is half again too wide, so its
+right-hand edge, where a taskbar keeps the clock and the tray, is off the
+glass. All four corners of the *panel* are visible and the desktop is
+still cut off, which is a genuinely confusing thing to look at.
+
+`--panning WxH+0+0` pins the CRTC's area to the panel instead of letting
+the transform dictate it. It goes on with `--fb`, and if this xrandr will
+not take it the plain `--fb` form is used and the **screen size is read
+back and reported** — `oversize` in `/status`, and a log line saying so —
+rather than left to be discovered by something going missing off the
+right-hand side.
+
 `--fb` pins the desktop to the panel's own size, and it is **not
 optional**. Without it xrandr grows the screen to cover the transformed
 output's extents and the desktop gets *bigger* rather than smaller: you
@@ -1432,6 +1463,15 @@ were looking at. A refusal now reverts and says `SCREEN REFUSED`.
 `--transform none` carries `--fb` too, and that is not belt and braces:
 `none` alone does **not** shrink the screen again. xrandr grew it and
 leaves it there, so the next fit starts from a screen half again too big.
+
+#### And the desktop's panel has to be told
+
+lxpanel spans the screen width and does not re-read it, so after a resize
+its right-hand end stays wherever the old width put it — the same clock,
+missing for a second reason. `lxpanelctl restart` after a fit is cheap,
+comes back on its own, and is the difference between a fitted desktop and
+a fitted desktop you can read the clock on. A Pi without `lxpanelctl`
+just carries on.
 
 #### Read the size from the mode, never from the geometry
 

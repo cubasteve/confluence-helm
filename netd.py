@@ -848,6 +848,10 @@ _OUT_RE = re.compile(r'^(\S+) connected (?:primary )?(\d+)x(\d+)\+', re.M)
 # too big shows you its left-hand corners and hides the other two, which
 # is exactly what it did.
 _MODE_RE = re.compile(r'^\s+(\d+)x(\d+)\s+[\d.]+\*', re.M)
+# The SCREEN - the framebuffer every window is laid out inside. It is a
+# different number from the panel and from the mode, and it is the one
+# that decides whether the desktop's right-hand side exists at all.
+_SCREEN_RE = re.compile(r'^Screen \d+:.*?current\s+(\d+)\s*x\s*(\d+)', re.M)
 
 
 def fit_status():
@@ -879,7 +883,13 @@ def fit_status():
         except ValueError:
             scale = 1.0
     fitted = abs(scale - 1.0) > 0.001
+    sm = _SCREEN_RE.search(out or '')
+    sw, sh = (int(sm.group(1)), int(sm.group(2))) if sm else (0, 0)
     return {'available': True, 'output': name, 'w': w, 'h': h,
+            # Reported so it can be SEEN rather than deduced from what is
+            # missing off the edge of the glass.
+            'screen': '%dx%d' % (sw, sh) if sw else '?',
+            'oversize': bool(sw and (sw > w or sh > h)),
             'fitted': fitted,
             # Two mutually exclusive gates, the same shape the Desktop and
             # Kiosk tiles use: the sheet offers one way and never both.
@@ -994,7 +1004,10 @@ def _fit_revert(name, env, w=0, h=0):
     # the desktop's right-hand side off the glass.
     argv = ['xrandr', '--output', name, '--transform', 'none']
     if w and h:
-        argv += ['--fb', '%dx%d' % (w, h)]
+        argv += ['--fb', '%dx%d' % (w, h),
+                 # off, not left pinned: panning that outlives the
+                 # transform confines a full-size desktop for no reason.
+                 '--panning', '0x0']
     rc, out, err = run(argv, 15, env=env)
     # The touchscreen goes back with it, always - including when the
     # xrandr call above failed. A half-reverted panel whose picture is
@@ -1038,17 +1051,46 @@ def fit_set(pct, arm=True):
     # That was worse than failing: it produced a picture that looks
     # deliberate and is wrong, with no way to tell from the panel which
     # of the two you were looking at. A refusal now reverts and says so.
-    rc, out, err = run(cmd + ['--fb', '%dx%d' % (w, h)], 20, env=env)
-    how = 'fb'
+    # --panning as well as --fb, and this is the part that decides whether
+    # the DESKTOP fits or only the picture does.
+    #
+    # A transform that shrinks the picture makes the output sample a
+    # framebuffer region LARGER than itself - 1080 * 1.417 = 1531 here -
+    # and xrandr sizes the screen to cover that. The letterbox then looks
+    # right while the desktop behind it is half again too wide, so its
+    # right-hand edge, where a taskbar keeps the clock and the tray, is
+    # off the glass. --panning pins the CRTC's area to the panel instead
+    # of letting the transform dictate it.
+    box = '%dx%d' % (w, h)
+    rc, out, err = run(cmd + ['--fb', box, '--panning', box + '+0+0'], 20, env=env)
+    how = 'fb+panning'
+    if rc != 0:
+        # Without the panning constraint, in case this xrandr will not
+        # take it. The screen is read back either way, so an oversized
+        # desktop is REPORTED rather than left to be discovered by
+        # something going missing off the right-hand side.
+        rc, out, err = run(cmd + ['--fb', box], 20, env=env)
+        how = 'fb'
     if rc != 0:
         _fit_revert(name, env, w, h)
         return {'ok': False,
                 'error': ('SCREEN REFUSED: ' + (err or out or ''))[:120]}
     touched, note = touch_map(env, w, h, side)
-    print('[netd] display: %dx%d of %dx%d (%.1f%%, %s), touch: %s - reverting '
-          'in %ds unless kept'
-          % (side, side, w, h, pct, how, note or ('%d device(s)' % touched),
-             FIT_GRACE), flush=True)
+    after = fit_status()
+    print('[netd] display: %dx%d of %dx%d (%.1f%%, %s), screen %s, touch: %s'
+          % (side, side, w, h, pct, how, after.get('screen', '?'),
+             note or ('%d device(s)' % touched)), flush=True)
+    if after.get('oversize'):
+        print('[netd] display: the screen is BIGGER than the panel, so the '
+              'desktop runs off the right-hand side. xrandr would not take '
+              'the panning constraint on this version.', flush=True)
+    # Whatever the screen ended up as, the desktop's panel was laid out
+    # for the size it had a moment ago. lxpanel spans the screen width and
+    # does not re-read it, so its right-hand end - the clock and the tray -
+    # stays wherever the old width put it. Asking it to restart is cheap
+    # and is the difference between a fitted desktop and a fitted desktop
+    # you can read the clock on.
+    relayout(env)
     # No timer on the automatic path. A revert there would undo the very
     # thing tapping Desktop asked for, 25 seconds after it arrived.
     if arm:
@@ -1056,9 +1098,22 @@ def fit_set(pct, arm=True):
         t.daemon = True
         _fit['timer'] = t
         t.start()
-    return dict(fit_status(), ok=True, side=side, how=how,
+    return dict(after, ok=True, side=side, how=how,
                 grace=FIT_GRACE if arm else 0,
                 touched=touched, touchnote=note)
+
+
+def relayout(env):
+    """Nudge the desktop's own panel to re-read the screen size.
+
+    Only things that are known to be safe to restart and that come back
+    on their own. Never raises, never waits long."""
+    if shutil.which('lxpanelctl'):
+        rc, out, err = run(['lxpanelctl', 'restart'], 8, env=env)
+        print('[netd] display: lxpanel restart %s'
+              % ('ok' if rc == 0 else (err or out)[:60]), flush=True)
+        return 'lxpanel'
+    return ''
 
 
 def fit_auto():

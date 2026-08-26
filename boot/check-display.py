@@ -144,7 +144,13 @@ def main():
                 say('reached', env.get('DISPLAY') + (
                     '  (via %s)' % env['XAUTHORITY'] if 'XAUTHORITY' in env else ''))
                 for line in out.splitlines():
-                    if ' connected' in line or line.startswith('Screen'):
+                    if line.startswith('Screen'):
+                        # The one that decides whether the desktop's
+                        # right-hand side exists. If `current` is bigger
+                        # than the panel's mode below, the desktop runs
+                        # off the glass and the taskbar's clock with it.
+                        print('   ' + line.strip())
+                    elif ' connected' in line:
                         print('   ' + line.strip())
                     elif re.match(r'^\s+\d+x\d+', line) and '*' in line:
                         print('   current mode:' + line.rstrip())
