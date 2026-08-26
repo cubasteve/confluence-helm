@@ -1388,9 +1388,19 @@ work - starting a display manager needs another VT to switch to.
 ### Fitting the desktop's corners into the circle
 
 A square desktop on a round panel loses its four corners: the ends of the
-taskbar, the clock, the close buttons. Two tiles in the power sheet shrink
-the whole X output and centre it, so the desktop becomes the largest
-square that fits *inside* the circle with black around it.
+taskbar, the clock, the close buttons. So **Desktop fits them itself** —
+there is no separate button, because a desktop you cannot reach the
+corners of is not what anyone means by tapping Desktop. Kiosk puts the
+screen back before it stops X. The shrink makes the desktop the largest
+square that fits *inside* the circle, with black around it.
+
+Nothing is armed on that path: a revert would undo the thing the tile was
+tapped for. If a fit ever goes wrong the way back is a reboot, which
+brings cage up on a fresh X server, or one line over SSH:
+
+```bash
+xrandr --output HDMI-1 --transform none --fb 1080x1080
+```
 
 **The largest square inside a circle of diameter D has side D/√2** — about
 70.7%. On this 1080 panel that is 762px (rounded even so the margins
@@ -1408,12 +1418,34 @@ and output `w-t` must sample framebuffer `w`, which gives `a = w/s` and
 xrandr --output HDMI-1   --transform 1.417323,0,-225.354,0,1.417323,-225.354,0,0,1   --fb 1080x1080
 ```
 
-`--fb` pins the desktop to the panel's own size. Without it xrandr grows
-the screen to cover the transformed output's extents and the desktop gets
-*bigger* rather than smaller — the opposite of the point, with the extra
-area showing in the very corners meant to be black. Some xrandr versions
-refuse a screen smaller than those extents, so the plain form is tried
-second rather than treated as a failure, and which one took is reported.
+`--fb` pins the desktop to the panel's own size, and it is **not
+optional**. Without it xrandr grows the screen to cover the transformed
+output's extents and the desktop gets *bigger* rather than smaller: you
+see its top-left and bottom-left corners and the other two are off the
+glass.
+
+There used to be a fallback that dropped `--fb` when it was refused, and
+that was worse than failing — it produced a picture that looks deliberate
+and is wrong, with no way to tell from the panel which of the two you
+were looking at. A refusal now reverts and says `SCREEN REFUSED`.
+
+`--transform none` carries `--fb` too, and that is not belt and braces:
+`none` alone does **not** shrink the screen again. xrandr grew it and
+leaves it there, so the next fit starts from a screen half again too big.
+
+#### Read the size from the mode, never from the geometry
+
+```
+HDMI-1 connected primary 1531x1531+0+0 ...     <- the CRTC's extent
+   1080x1080     59.99*+                       <- the panel
+```
+
+Those two are the same number until a transform is applied and different
+afterwards. Reading the size off the `connected` line meant a second fit
+computed from 1531 instead of 1080 — and a desktop scaled for a panel
+half again too big shows you its left-hand corners and hides the other
+two. The starred mode line is the panel's real pixel size and never
+changes, so that is what is parsed.
 
 **X11 only.** `wlr-randr` has no transform, so on Wayland there is no live
 equivalent and netd reports nothing available — neither tile appears
@@ -1494,22 +1526,16 @@ GTK reads these when an application *starts*, so nothing already running
 changes. Tap Desktop then Kiosk, or log out and back in, before judging
 it.
 
-#### It reverts on its own
+#### `fitted` is read back, never remembered
 
-This is the whole reason it is safe to put on a boat. **The panel cannot
-see what the panel looks like**, so a transform that leaves the screen
-unreadable would be unfixable from the screen.
-
-So netd applies the change and immediately arms a 25-second revert. The
-sheet turns into the question that revert is already asking — the size in
-pixels, a running countdown, **KEEP** and **PUT IT BACK** — and only
-something that can still read the screen stops it going back. It is the
-same shape every monitor-test dialog has had since 1998, and for the same
-reason.
-
-`fitted` is read back out of `xrandr --verbose`, never remembered.
+Out of `xrandr --verbose`, every time.
 autopull kills netd on every push, and a remembered flag would come back
 saying "full size" over a desktop that is still shrunk.
+
+`POST /display/fit {"pct": 70.7}` still exists and still arms a
+25-second revert when called by hand — that path has no tile any more,
+but it is the right way to try a different size over SSH without being
+able to see the result.
 
 ### Which display stack is actually driving the panel
 

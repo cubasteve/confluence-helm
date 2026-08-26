@@ -3013,9 +3013,10 @@ const POWER_ACTIONS=[
  {a:'desktop', name:'Desktop',         short:'Desktop', sub:'LEAVE THE KIOSK · THE KIOSK TILE COMES BACK',
   need:'power.desktop',
   ico:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
-  ask:'Starts the desktop and switches the screen to it. The helm app '
-     +'keeps running behind it as a window, and this tile turns into '
-     +'"Back to the kiosk" so you can come straight back.'},
+  ask:'Starts the desktop and switches the screen to it, shrunk to the '
+     +'biggest square that fits inside the round panel so all four '
+     +'corners are reachable. The helm app keeps running behind it as a '
+     +'window, and this tile turns into "Back to the kiosk".'},
  /* The exact mirror of the tile above, and only ever one of the two is
     shown: netd offers 'desktop' when no desktop is running and 'cage'
     when one is. Before this existed, leaving the kiosk was a one-way
@@ -3025,27 +3026,10 @@ const POWER_ACTIONS=[
  {a:'cage',    name:'Back to the kiosk', short:'Kiosk', sub:'FULL SCREEN · NO DESKTOP',
   need:'power.cage',
   ico:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>',
-  ask:'Stops the desktop and puts the panel back to full screen. The '
-     +'windowed app closes with it and the instruments come straight '
-     +'back. If the kiosk does not come up, the desktop is put back '
-     +'rather than leaving you with a black screen.'},
- /* A square desktop on a round panel loses its four corners - the ends
-    of the taskbar, the clock, the close buttons. These shrink the whole
-    X output and centre it, so the desktop becomes the largest square that
-    fits INSIDE the circle. X11 only: wlr-randr has no transform, so on
-    Wayland netd reports nothing available and neither tile appears. */
- {a:'fit',   name:'Fit the corners', short:'Fit', sub:'SHRINK THE DESKTOP INTO THE CIRCLE',
-  need:'fit.can_fit', api:'/display/fit', body:()=>({}),
-  ico:'<circle cx="12" cy="12" r="9.2"/><rect x="6.2" y="6.2" width="11.6" height="11.6" rx="1.5"/>',
-  ask:'Shrinks the desktop to the biggest square that fits inside the '
-     +'round panel, with black around it. It goes back on its own after '
-     +'a few seconds unless you say to keep it, so a size you cannot '
-     +'read cannot strand you.'},
- {a:'unfit', name:'Full size',       short:'Full size', sub:'BACK TO THE WHOLE PANEL',
-  need:'fit.fitted', api:'/display/fit', body:()=>({pct:100}),
-  ico:'<rect x="3.2" y="3.2" width="17.6" height="17.6" rx="2"/>',
-  ask:'Puts the desktop back to the full panel. The four corners go '
-     +'outside the glass again.'},
+  ask:'Puts the desktop back to the full panel, stops it, and returns to '
+     +'the kiosk. The windowed app closes with it and the instruments '
+     +'come straight back. If the kiosk does not come up, the desktop is '
+     +'put back rather than leaving you with a black screen.'},
  {a:'reboot',  name:'Reboot',          short:'Reboot', sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
   ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
   ask:'Instruments, charts and the hotspot all go down for about a minute. '
@@ -3292,7 +3276,6 @@ $('pw-cancel').addEventListener('click',()=>{ showPw(false); setMsg(''); });
    Three views share the sheet - the list, the keyboard and this - and
    only one is ever up. */
 function showAsk(on,act){
-  if(!on) resetAsk();
   $('ns-ask-view') .style.display = on?'':'none';
   $('ns-list-view').style.display = on?'none':'';
   if(!on){ NET.ask=null; return; }
@@ -3301,22 +3284,8 @@ function showAsk(on,act){
   $('ask-body') .textContent=act.ask;
   setMsg('');
 }
-$('ask-no') .addEventListener('click',async()=>{
-  if(NET.ask && NET.ask.a==='fitkeep'){
-    resetAsk(); setMsg('PUTTING IT BACK…');
-    await netApi('/display/fit',{pct:100}); netStatus();
-    setMsg(''); showAsk(false); return;
-  }
-  showAsk(false); setMsg('');
-});
-$('ask-yes').addEventListener('click',async()=>{
-  if(NET.ask && NET.ask.a==='fitkeep'){
-    resetAsk(); setMsg('KEPT');
-    await netApi('/display/fit',{keep:true}); netStatus();
-    setTimeout(()=>{ showAsk(false); setMsg(''); },900); return;
-  }
-  askYes();
-});
+$('ask-no') .addEventListener('click',()=>{ showAsk(false); setMsg(''); });
+$('ask-yes').addEventListener('click',askYes);
 
 async function askYes(){
   const act=NET.ask; if(!act||NET.busy) return;
@@ -3328,8 +3297,7 @@ async function askYes(){
   }
   const heavy = act.a==='poweroff' || act.a==='reboot';
   NET.busy=act.name; setMsg(act.name.toUpperCase()+'…');
-  const j = act.api ? await netApi(act.api, act.body ? act.body() : {})
-                    : await netApi('/power/do',{action:act.a});
+  const j=await netApi('/power/do',{action:act.a});
   NET.busy='';
   /* A shutdown takes the helper down with everything else, so silence is
      the success case. Saying HELPER NOT ANSWERING there would read as a
@@ -3340,54 +3308,8 @@ async function askYes(){
      helper's answer - you have to look at the screen. netd has already
      armed a revert, so the sheet turns into the question that revert is
      asking anyway, with the clock running. Do nothing and it goes back. */
-  if(act.a==='fit' && j.grace) return askKeep(j);
   setMsg(act.a==='poweroff'?'SHUTTING DOWN…':act.a==='reboot'?'REBOOTING…':'DONE');
   if(!heavy) setTimeout(()=>{ showAsk(false); setMsg(''); },1400);
-  if(act.api) netStatus();          /* the tile flips to its opposite */
-}
-
-/* The monitor-test question, and it is deliberately the same shape every
-   monitor-test dialog has had since 1998: the change is already applied,
-   the clock is already running, and the only thing that stops it going
-   back is someone who can still read the screen. */
-let keepTick=null;
-function askKeep(j){
-  clearInterval(keepTick);
-  let left=Math.max(1,(j.grace|0)-1);
-  NET.ask={a:'fitkeep', name:'Keep this size'};
-  $('ask-title').textContent='Keep this size?';
-  /* The touch note matters more than the size does. Shrinking the
-     picture without moving the touchscreen with it gives you a desktop
-     that looks right and answers taps in the wrong place - and the first
-     tap you would make to fix that is the one that does not land. So if
-     the remap did not happen, that is the sentence, not a footnote. */
-  const bad = j.touchnote
-    ? (j.touchnote==='NO XINPUT'
-         ? 'TOUCH NOT MOVED - xinput is not installed, so taps will land '
-          +'in the wrong place. Put it back and: sudo apt install xinput'
-         : 'TOUCH NOT MOVED ('+j.touchnote+') - taps will land in the '
-          +'wrong place.')
-    : '';
-  $('ask-body') .textContent= bad ||
-    ((j.side?j.side+'×'+j.side+' of '+j.w+'×'+j.h+'. ':'')
-     +'If you can read this, keep it. Do nothing and the desktop goes back '
-     +'to the full panel on its own.');
-  $('ask-no') .textContent='PUT IT BACK';
-  $('ask-yes').textContent='KEEP';
-  const paint=()=>setMsg('REVERTING IN '+left+'s');
-  paint();
-  keepTick=setInterval(()=>{
-    if(--left<=0){ clearInterval(keepTick); keepTick=null;
-      setMsg('PUT BACK'); netStatus();
-      setTimeout(()=>{ showAsk(false); resetAsk(); },1200); return; }
-    paint();
-  },1000);
-}
-/* The two buttons are shared with every other confirm, so their labels
-   have to go back or the next Reboot sheet says KEEP. */
-function resetAsk(){
-  clearInterval(keepTick); keepTick=null;
-  $('ask-no').textContent='CANCEL'; $('ask-yes').textContent='CONFIRM';
 }
 
 async function pwJoin(){

@@ -839,6 +839,15 @@ def x_env():
 
 
 _OUT_RE = re.compile(r'^(\S+) connected (?:primary )?(\d+)x(\d+)\+', re.M)
+# The panel's REAL pixel size, from the current mode rather than from the
+# geometry on the `connected` line. Those are the same number until a
+# transform is applied and different afterwards: the geometry field then
+# reports the CRTC's extent in framebuffer space, which for a shrink is
+# larger than the panel. Reading it there meant a second apply computed
+# from 1531 instead of 1080 - and a desktop scaled for a panel half again
+# too big shows you its left-hand corners and hides the other two, which
+# is exactly what it did.
+_MODE_RE = re.compile(r'^\s+(\d+)x(\d+)\s+[\d.]+\*', re.M)
 
 
 def fit_status():
@@ -850,7 +859,14 @@ def fit_status():
     m = _OUT_RE.search(out or '')
     if rc != 0 or not m:
         return {'available': False}
-    name, w, h = m.group(1), int(m.group(2)), int(m.group(3))
+    name = m.group(1)
+    mm = _MODE_RE.search(out[m.end():] or '')
+    if mm:
+        w, h = int(mm.group(1)), int(mm.group(2))
+    else:
+        # No starred mode - fall back to the geometry, which is right
+        # whenever nothing is transformed, and say nothing clever.
+        w, h = int(m.group(2)), int(m.group(3))
     # The transform is read back rather than remembered. netd restarts -
     # autopull kills it on every push - and a remembered flag would come
     # back saying "full size" over a desktop that is still shrunk.
@@ -970,9 +986,16 @@ FIT_GRACE = 25
 _fit = {'timer': None}
 
 
-def _fit_revert(name, env):
-    rc, out, err = run(['xrandr', '--output', name, '--transform', 'none'],
-                       15, env=env)
+def _fit_revert(name, env, w=0, h=0):
+    # --fb goes back with the transform, and that is not belt and braces.
+    # `--transform none` alone does NOT shrink the screen again: xrandr
+    # grew it to cover the transformed extents and leaves it there. The
+    # next apply then starts from a screen half again too big and lands
+    # the desktop's right-hand side off the glass.
+    argv = ['xrandr', '--output', name, '--transform', 'none']
+    if w and h:
+        argv += ['--fb', '%dx%d' % (w, h)]
+    rc, out, err = run(argv, 15, env=env)
     # The touchscreen goes back with it, always - including when the
     # xrandr call above failed. A half-reverted panel whose picture is
     # full size and whose touch is still offset is the worst of both.
@@ -988,7 +1011,7 @@ def _fit_disarm():
         t.cancel()
 
 
-def fit_set(pct):
+def fit_set(pct, arm=True):
     try:
         pct = float(pct)
     except (TypeError, ValueError):
@@ -1002,35 +1025,78 @@ def fit_set(pct):
     name, w, h = st['output'], st['w'], st['h']
     _fit_disarm()
     if pct >= 100:
-        _fit_revert(name, env)
+        _fit_revert(name, env, w, h)
         return dict(fit_status(), ok=True)
     side, cmd = _fit_cmd(name, w, h, pct)
-    # --fb pins the desktop to the panel's own size. Without it xrandr
-    # grows the screen to cover the transformed output's extents, and the
-    # desktop gets BIGGER rather than smaller - the opposite of the point,
-    # with the extra area showing in the very corners meant to be black.
-    # Some xrandr versions refuse a screen smaller than those extents, so
-    # the plain form is tried second rather than treated as failure. Which
-    # one took is reported, because it changes what you are looking at.
+    # --fb pins the desktop to the panel's own size, and it is not
+    # optional. Without it xrandr grows the screen to cover the
+    # transformed output's extents and the desktop gets BIGGER rather
+    # than smaller - you see its top-left and bottom-left corners and the
+    # other two are off the glass.
+    #
+    # There used to be a fallback that dropped --fb when it was refused.
+    # That was worse than failing: it produced a picture that looks
+    # deliberate and is wrong, with no way to tell from the panel which
+    # of the two you were looking at. A refusal now reverts and says so.
     rc, out, err = run(cmd + ['--fb', '%dx%d' % (w, h)], 20, env=env)
     how = 'fb'
     if rc != 0:
-        rc, out, err = run(cmd, 20, env=env)
-        how = 'transform-only'
-    if rc != 0:
-        _fit_revert(name, env)
-        return {'ok': False, 'error': (err or out or 'XRANDR REFUSED')[:120]}
+        _fit_revert(name, env, w, h)
+        return {'ok': False,
+                'error': ('SCREEN REFUSED: ' + (err or out or ''))[:120]}
     touched, note = touch_map(env, w, h, side)
     print('[netd] display: %dx%d of %dx%d (%.1f%%, %s), touch: %s - reverting '
           'in %ds unless kept'
           % (side, side, w, h, pct, how, note or ('%d device(s)' % touched),
              FIT_GRACE), flush=True)
-    t = threading.Timer(FIT_GRACE, _fit_revert, args=(name, env))
-    t.daemon = True
-    _fit['timer'] = t
-    t.start()
-    return dict(fit_status(), ok=True, side=side, how=how, grace=FIT_GRACE,
+    # No timer on the automatic path. A revert there would undo the very
+    # thing tapping Desktop asked for, 25 seconds after it arrived.
+    if arm:
+        t = threading.Timer(FIT_GRACE, _fit_revert, args=(name, env, w, h))
+        t.daemon = True
+        _fit['timer'] = t
+        t.start()
+    return dict(fit_status(), ok=True, side=side, how=how,
+                grace=FIT_GRACE if arm else 0,
                 touched=touched, touchnote=note)
+
+
+def fit_auto():
+    """Fit the corners as soon as there is an X server to fit them on.
+
+    Tapping Desktop is a request for a usable desktop on a round panel,
+    and a square desktop on a round panel has no corners - so this is part
+    of what Desktop MEANS rather than a second thing to remember. It runs
+    on a thread because the display manager is still starting when the
+    tile's request returns, and X takes several seconds to answer.
+
+    No revert is armed. A revert here would undo what was just asked for.
+    If it ever goes wrong the way back is a reboot, which brings cage up
+    with a fresh X server, or over SSH:
+        xrandr --output HDMI-1 --transform none --fb 1080x1080
+    """
+    def go():
+        for _ in range(40):                       # ~40s, X is slow to arrive
+            time.sleep(1.0)
+            _xenv['at'] = 0.0                     # the display is new; re-probe
+            if not x_env():
+                continue
+            st = fit_status()
+            if not st.get('available'):
+                continue
+            if st.get('fitted'):
+                print('[netd] display: already fitted, leaving it', flush=True)
+                return
+            r = fit_set(FIT_DEFAULT, arm=False)
+            if r.get('ok'):
+                return
+            print('[netd] display: auto-fit failed: %s'
+                  % r.get('error', '?'), flush=True)
+            return
+        print('[netd] display: no X server appeared, nothing to fit', flush=True)
+    t = threading.Thread(target=go)
+    t.daemon = True
+    t.start()
 
 
 def fit_keep():
@@ -1097,7 +1163,10 @@ def power_do(action):
         # on a prompt nobody can answer at the helm.
         if not DM:
             return {'ok': False, 'error': 'NO DISPLAY MANAGER'}
-        return _via_sudo(TO_DESKTOP)
+        r = _via_sudo(TO_DESKTOP)
+        if r.get('ok'):
+            fit_auto()
+        return r
     if action == 'cage':
         # Synchronous, like its opposite number and for the same reason:
         # the helper checks that cage, the tty1 autologin and the login
@@ -1107,6 +1176,15 @@ def power_do(action):
         # answer has nowhere to go anyway.
         if not os.path.isfile(TO_CAGE):
             return {'ok': False, 'error': 'NO KIOSK HELPER'}
+        # Put the screen back before the X server that holds it is
+        # stopped. Not because cage would inherit anything - it is a
+        # different compositor and starts clean - but because an armed
+        # revert timer would otherwise fire into a dead display a few
+        # seconds later and log a failure that means nothing.
+        _fit_disarm()
+        st = fit_status()
+        if st.get('fitted'):
+            _fit_revert(st['output'], x_env(), st['w'], st['h'])
         return _via_sudo(TO_CAGE)
     if action == 'helper':
         # netd.sh's loop brings it straight back with whatever is on disk.
