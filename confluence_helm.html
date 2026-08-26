@@ -3259,6 +3259,7 @@ let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
    spotify-now.py runs only because cage-session.sh starts it, and it
    exits immediately with no credentials. */
 let FEED='waiting';        /* waiting | ok | missing | offline */
+let MUSIC_RAW=null;        /* last JSON the poller served - for diagnosis */
 
 async function pollMusic(){
   try{
@@ -3270,6 +3271,11 @@ async function pollMusic(){
       const wasBad = FEED!=='ok';
       FEED='ok';
       const j=await r.json();
+      /* The raw feed, reachable from a console without a network tap:
+         `MUSIC_RAW` is whatever nowplaying.json last said. When the page
+         shows a title but no clock, this is what settles whether the
+         poller is sending position/duration at all. */
+      MUSIC_RAW=j;
       const changed = wasBad || j.title!==NP.title || j.event!==NP.event;
       NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
            pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
@@ -3444,19 +3450,37 @@ function paintStrip(){
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
 
+/* How far the local clock may run ahead of the last write before it is
+   not believed. spotify-now.py rewrites every 5 s of track progress, so
+   anything past a couple of minutes means the poller stopped - or the
+   two clocks disagree, which is not exotic here: `at` comes from the
+   Pi, Date.now() from whatever is showing the page. On a phone over the
+   boat WiFi that is a different machine, and on the Pi itself it is a
+   machine with no RTC that starts at the epoch and jumps when NTP
+   lands. Either way the bar used to pin to one end and stay there. */
+const NP_MAX_DRIFT=120000;
+
 function musicTick(){
-  if(music.classList.contains('open')){
+  /* The reschedule is the first thing, and the work is wrapped. This is
+     a single-shot chain: one throw anywhere below - in paintBezel, in
+     paintStrip, in a readout - and the clock stops for the rest of the
+     session while pollMusic carries on updating the title and the art
+     around it. That failure looks exactly like "the time does not
+     work", and nothing would say otherwise.
+     250 ms matches the SignalK feed and the bezel's transition, so the
+     wedge gets a fresh target exactly as the last one lands. */
+  setTimeout(musicTick,250);
+  try{
+    if(!music.classList.contains('open')) return;
     paintBezel(); paintStrip();
     let p=NP.pos;
-    if(NP.playing) p+=Date.now()-NP.at;           // advance between events
+    const since=Date.now()-NP.at;
+    if(NP.playing && since>0 && since<NP_MAX_DRIFT) p+=since;
     if(NP.dur) p=Math.min(p,NP.dur);
     $('m-pos').textContent=mmss(p);
     $('m-dur').textContent=mmss(NP.dur);
     $('m-fill').style.width=NP.dur?(p/NP.dur*100)+'%':'0';
-  }
-  /* 250 ms matches the SignalK feed and the bezel's transition, so the
-     wedge gets a fresh target exactly as the last one lands */
-  setTimeout(musicTick,250);
+  }catch(e){ /* one bad pass must not cost the rest of the session */ }
 }
 pollMusic(); musicTick();
 
