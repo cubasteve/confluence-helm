@@ -511,6 +511,32 @@ is an earlier run still waiting for a redirect that never arrived:
 change the redirect URI registered in the Spotify dashboard — Spotify
 matches it exactly.
 
+### Nothing here is a Connect device
+
+Worth stating plainly, because the obvious way to put Spotify on a Pi is
+to install `raspotify` and it is the wrong way for this one.
+
+The panel never streams audio. `spotify-now.py` polls the Web API and
+writes `nowplaying.json`; the transport and volume drive whatever device
+is *actually* playing — typically the phone feeding the cockpit speakers.
+Resident size is a few tens of MB against librespot's hundred-plus, on a
+Pi that is also running Chromium, AvNav and a chart renderer.
+
+So **this repo installs, enables and references no Connect daemon at
+all** — no `raspotify`, no `librespot`, no `spotifyd`, no unit file, no
+`apt` line. The only thing any autostart entry or `cage-session.sh`
+starts is the poller. If `raspotify` is running on the Pi it arrived from
+somewhere else and nothing here will miss it:
+
+```bash
+sudo systemctl disable --now raspotify
+sudo apt purge -y raspotify        # and this, to stop it coming back
+systemctl status raspotify         # "could not be found" is the answer you want
+```
+
+`free -h` before and after is the honest measure. Nothing on the music
+page changes: it reads the same JSON either way.
+
 ### The save button, and who holds the token
 
 The **+** button in the control bar adds and removes the current track from
