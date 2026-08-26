@@ -61,8 +61,34 @@ re-reads `~/.config/autostart/`.
 ### Chromium is single-instance, and the kiosk loop has to know it
 
 Only one Chromium can own a browser profile. A second launch does not
-start a second browser: it hands the URL to the window already running and
-exits immediately. Everything on this Pi shares one profile on purpose -
+start a second browser: it hands the command line to the window already
+running and exits immediately.
+
+**And that window then opens a new one with it.** Which is the whole
+trap: "the launcher exited" is not "nothing happened". Tap Desktop, and
+the desktop session that comes up runs every entry in
+`~/.config/autostart` at once — including the windowed app. If anything
+else on that Pi also puts the helm on screen at login, the second
+launcher hands its URL to the first window, that window opens another,
+and you have two Confluences, both working perfectly. That is what it
+looks like from the helm, and nothing in the logs calls it an error.
+
+The fix is to ask **before** launching, not after. `start-kiosk.sh` used
+to check `owned_by_another` only when Chromium exited inside five
+seconds — which is checking after the damage: the duplicate already
+exists by the time the check runs, and it correctly reports that someone
+else owns the profile, having just created the window it exists to
+avoid. It now checks at the top of every iteration and waits instead.
+`open-window.sh` carries the matching guard (`--force` overrides it), and
+`--app` is the worst case for the want of one: a plain `chromium <url>`
+hand-off at least reuses the window, but `--app` always opens a new one,
+so the duplicate is guaranteed rather than likely.
+
+Both launchers are started by the same autostart within the same second,
+so "is anyone else up yet" can be asked before the other has got as far
+as a process. `start-kiosk.sh` settles for three seconds before its first
+check — invisible next to the AvNav wait it already does, and it removes
+the tie. Everything on this Pi shares one profile on purpose -
 the desktop shortcut, the windowed browser the panel can start, and the
 kiosk - so that saved races and cached tiles are the same everywhere.
 
@@ -78,7 +104,7 @@ So the loop now distinguishes three cases:
 | Chromium exits | means | response |
 |---|---|---|
 | after running | a crash | restart at once, as before |
-| at once, another window has the profile | a handoff | wait for that window to close, then take the screen back |
+| at once, another window has the profile | a handoff that already opened a duplicate | wait for that window to close, then take the screen back — and the check above means this case should now be unreachable |
 | at once, nothing else has it | Chromium is unhappy | back off 5s, 10s, … to 30s rather than hammer it |
 
 The process patterns are anchored on the executable (`^[^ ]*chromium[^ ]*

@@ -69,8 +69,29 @@ owned_by_another(){
   pgrep -f '^[^ ]*chromium[^ ]* .*--start-maximized' >/dev/null 2>&1
 }
 
+# Both launchers are started by the same autostart, within the same
+# second of each other, so "is anyone else up yet" can be asked before
+# the other one has got as far as a process. Three seconds is invisible
+# next to the AvNav wait above and removes the tie.
+sleep 3
+
 quick=0
 while true; do
+  # BEFORE the launch, and that is the whole point. Asking only
+  # afterwards means the hand-off has ALREADY happened: Chromium is
+  # single-instance per profile, so this command line goes to the window
+  # that owns it, that window opens a SECOND one with it, and the
+  # launcher exits at once. The check below then correctly reports that
+  # someone else owns the profile - having just created the duplicate it
+  # exists to avoid. Two Confluences, both working, which is exactly what
+  # tapping Desktop produced.
+  if owned_by_another; then
+    echo "helm: another window owns the browser profile - waiting for it" >&2
+    echo "      rather than handing it a URL and opening a second one." >&2
+    while owned_by_another; do sleep 5; done
+    echo "helm: it closed - taking the screen back" >&2
+  fi
+
   started=$(date +%s)
   # --default-background-color is what the browser paints before the page
   # has anything to show. Left alone it is white, which after a whole

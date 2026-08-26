@@ -598,10 +598,16 @@ def go_windowed():
     run(['pkill', '-f', 'start-kiosk.sh'], 10)
     run(['pkill', '-f', KIOSK_PAT], 10)
     time.sleep(1.5)
-    # If a window already owns the profile - the desktop shortcut - then
-    # launching another gets us nothing: Chromium would hand that window
-    # the URL and quit. Stopping the kiosk was the whole job.
-    if display_status().get('other'):
+    # If a window already owns the profile - the desktop shortcut, or a
+    # windowed one we started earlier - then launching another gets us
+    # nothing, and worse than nothing: Chromium is single-instance per
+    # profile, so it hands that window the URL, that window opens a
+    # SECOND one, and the launcher quits. Stopping the kiosk was the
+    # whole job. `windowed` counts here as well as `other`; leaving it
+    # out meant a second tap could stack another maximized window on the
+    # one already there.
+    st = display_status()
+    if st.get('other') or st.get('windowed'):
         return
     # ?v= for the same reason start-kiosk.sh uses one: without it Chromium
     # paints the copy it already has and the old panel flashes up first.
