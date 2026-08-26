@@ -488,9 +488,11 @@ a.lib-row{text-decoration:none;color:inherit}
   color:var(--ink)}
 
 .m-sheet{width:600px;display:flex;flex-direction:column;align-items:center}
-.art{width:300px;height:300px;border-radius:50%;background:var(--chip);
+/* 232 rather than 300: the control bar below needed 68px of vertical
+   room and this was the only place on the page it existed. */
+.art{width:232px;height:232px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
-  color:var(--label);margin-bottom:26px;flex:none}
+  color:var(--label);margin-bottom:22px;flex:none}
 /* The heart shares a row with the progress bar rather than taking one of
    its own - there is no vertical room on this page for another row, and
    the two belong together anyway: both are about the track playing now.
@@ -540,13 +542,19 @@ a.lib-row{text-decoration:none;color:inherit}
    name takes longer rather than whipping past. */
 .m-title>span,.m-artist>span{display:inline-block;white-space:nowrap}
 .mq>span{will-change:transform}
-.m-prog{width:520px;display:flex;align-items:center;gap:16px;margin-top:30px}
-.m-progmain{flex:1;min-width:0}
-.m-bar{width:100%;height:12px;border-radius:6px;background:var(--chip);
-  overflow:hidden}
+.m-bar{width:520px;height:12px;border-radius:6px;background:var(--chip);
+  margin-top:28px;overflow:hidden}
 .m-fill{height:100%;width:0;background:var(--accent);border-radius:6px}
-.m-time{width:100%;display:flex;justify-content:space-between;margin-top:12px;
+.m-time{width:520px;display:flex;justify-content:space-between;margin-top:12px;
   font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em}
+/* The second bar. Transport and the heart together, because they are
+   the same kind of thing: the things you press about the track. */
+.m-ctl{display:flex;align-items:center;justify-content:center;gap:22px;
+  margin-top:16px}
+/* Set apart from the three. At an equal gap the heart reads as a fourth
+   transport button, and it is not one - those three move the music,
+   this one changes your library. */
+.m-ctl .heart{margin-left:14px}
 
 /* --- instruments on the music panel ---------------------------------
    Wind ANGLE goes on the bezel rather than in a cell: it is an angular
@@ -694,13 +702,7 @@ a.lib-row{text-decoration:none;color:inherit}
    drawn in the SVG at the matching y - the face is a 1080 viewBox over a
    1080 stage, so the coordinates line up exactly. */
 #m-lock,#t-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
-/* The music page's foot carries the transport as well, so the row is
-   what gets placed and the lock goes back to being an ordinary item in
-   it. Alone in the row it lands at exactly the same 540 as everywhere
-   else, which is what a page with no transport must still look like. */
-.m-foot{position:absolute;left:50%;bottom:91px;transform:translateX(-50%);
-  display:flex;align-items:center;gap:6px}
-.m-foot #m-lock{position:static;transform:none}
+
 /* the dial's lives in the SVG, so it scales with the face */
 #dial-lock{color:var(--label)}
 #dial-lock .lg{fill:none;stroke:var(--label);stroke-width:2;
@@ -1030,33 +1032,19 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="m-lbl" id="m-state">NOW PLAYING</div>
     <div class="m-title" id="m-title">Nothing playing</div>
     <div class="m-artist" id="m-artist">—</div>
-    <!-- The bar gives up its right end to the heart. Hidden, the heart
-         is display:none and therefore out of the flex row entirely, so
-         the bar takes the full width back - which is exactly the layout
-         a phone or a Pi without credentials should get. -->
-    <div class="m-prog">
-      <div class="m-progmain">
-        <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
-        <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
-      </div>
-      <button class="heart" id="m-like" aria-pressed="false" style="display:none">
-        <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
-          2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
-          16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
-      </button>
-    </div>
-    <!-- One line at the foot: transport, then the lock. Chosen over a
-         row of its own because that needed the album art shrunk from
-         300px to 230, and over sharing the bar's row because three more
-         buttons there forced every target down to 58px and squashed the
-         bar to half its length.
+    <div class="m-bar"><div class="m-fill" id="m-fill"></div></div>
+    <div class="m-time"><span id="m-pos">0:00</span><span id="m-dur">0:00</span></div>
 
-         The cost is that the lock is no longer dead centre on THIS page
-         alone - everywhere else it still sits at left:50%. With the
-         transport hidden, which is what a phone and a Pi without
-         credentials get, the row holds only the lock and centres it
-         exactly where it has always been. -->
-    <div class="m-foot">
+    <!-- A bar of its own for everything you press about the track. The
+         progress bar gets its full width back above it, and the lock
+         goes back to dead centre at the foot where it is on every other
+         page. The room came out of the album art, 300px to 232 - the
+         only place on this page there was 68px to find.
+
+         The whole row hides when nothing in it is available, which is
+         what a phone gets: the helper is loopback-only, so neither the
+         heart nor the transport could do anything there. -->
+    <div class="m-ctl" id="m-ctl">
       <button class="tbtn2" id="m-prev" style="display:none" aria-label="previous">
         <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12z"/><rect x="5" y="5" width="2.4" height="14" rx="1"/></svg>
       </button>
@@ -1066,11 +1054,16 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <button class="tbtn2" id="m-next" style="display:none" aria-label="next">
         <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7z"/><rect x="16.6" y="5" width="2.4" height="14" rx="1"/></svg>
       </button>
-      <button class="lockbtn" id="m-lock">
-        <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
-          <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+      <button class="heart" id="m-like" aria-pressed="false" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.45-1.32C5.4 14.36 2 11.28
+          2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2
+          16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.55 11.54L12 20.3z"/></svg>
       </button>
     </div>
+    <button class="lockbtn" id="m-lock">
+      <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
+        <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+    </button>
   </div>
 </div>
 
@@ -3420,11 +3413,23 @@ function likeAvailable(){
 function transportAvailable(){
   return !!(NET.st && NET.st.spotify && NET.st.spotify.available);
 }
+/* The control bar collapses when there is nothing in it to press -
+   otherwise a phone, where the loopback helper is unreachable and
+   neither the heart nor the transport can do anything, would carry an
+   empty 78px band under the progress bar for no reason. */
+function paintCtlRow(){
+  const row=$('m-ctl'); if(!row) return;
+  const any=['m-prev','m-play','m-next','m-like']
+    .some(id=>{ const e=$(id); return e && e.style.display!=='none'; });
+  wSty('m-ctl','display', any ? 'flex' : 'none');
+}
+
 function paintTransport(){
   const show = transportAvailable();
   ['m-prev','m-play','m-next'].forEach(id=>{
     const el=$(id); if(el) el.style.display = show ? '' : 'none';
   });
+  paintCtlRow();
   if(!show) return;
   /* One button, two meanings - the glyph is the current ACTION, not the
      current state: a triangle means "this will play". */
@@ -3452,6 +3457,7 @@ function paintHeart(){
   const el=$('m-like'); if(!el) return;
   const show = likeAvailable() && NP.liked!==null;
   el.style.display = show ? '' : 'none';
+  paintCtlRow();
   if(!show) return;
   const on = likePend!==null ? likePend : !!NP.liked;
   el.classList.toggle('on', on);

@@ -581,12 +581,21 @@ arrived would mean inventing a title. After a successful skip the poller
 re-reads immediately rather than leaving the old track on the glass for
 a whole poll interval.
 
-The buttons sit at the foot rather than in a row of their own — which
-needed the album art shrunk from 300px to 230 — or in the progress bar's
-row, which forced every target down to 58px and halved the bar. The cost
-is that the lock is no longer centred on this page alone. With the
-transport hidden, the foot row holds only the lock and centres it at
-exactly the same 540 as every other page.
+They live in a **second control bar** under the progress bar, with the
+heart — the four things you press about the track, together. The
+progress bar keeps its full 520px above them and the lock is back at
+dead centre on the foot, the same as every other page. The room came out
+of the album art, 300px down to 232, which was the only place on the
+page 68px existed.
+
+The heart sits slightly apart from the three: at an equal gap it read as
+a fourth transport button, and it is not one — those three move the
+music, it changes your library.
+
+The whole row collapses when nothing in it is available, which is what a
+phone gets: the helper is loopback-only, so neither the heart nor the
+transport could do anything there, and an empty 78px band under the bar
+would just be a puzzle.
 
 ### Long names travel
 
