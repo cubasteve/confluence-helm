@@ -926,6 +926,96 @@ The list is paged rather than scrolled. `html`/`body` carry
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
 
+## Two drawers, and apps
+
+Swipe **down** for the control panel, **up** for the app drawer. Opposite
+edges, opposite gestures, each going back the way it came — the panel
+used to come up from the bottom, which is where the drawer lives now, and
+two surfaces sharing an edge and an animation would have been two things
+that felt like one.
+
+An **app is not a page**. A page is always loaded and always costing
+something; an app exists between the tap that launches it and the tap
+that closes it, and then it is torn down. Each entry in `APPS` carries
+its own `open(host)` and `close()`, because only the app knows what it
+allocated.
+
+## Radar
+
+A slippy map without Leaflet. Web Mercator is two functions and a tile
+layer is `drawImage` at a computed offset, so the library buys nothing
+here and costs 144 kB, a CDN dependency and fifteen tile layers of DOM.
+
+### The memory is the design
+
+Kept the obvious way — every frame's tiles decoded and held — fifteen
+frames over a 1080 view is ~375 tiles at 256 kB, about **100 MB** of
+image memory that never appears in the JS heap and never comes back. So
+each frame is composited **once** into a single 512² canvas and its
+source tiles are released.
+
+Measured, same machine, closing and reopening:
+
+| | CPU @1x | JS heap | image memory |
+|---|---|---|---|
+| closed | 2.5% | 1.8 MB | **0** |
+| radar open | 5.7% | 2.7 MB | **21.9 MB** |
+| closed again | 3.3% | 2.3 MB | **0** |
+
+For comparison, `sail-weather.html` measured **34.8%** at the same
+throttle. Most of that difference is not the map — it is a 323-particle
+wind field on `requestAnimationFrame`, which the dial's wind bezel
+already covers.
+
+512 is not a compromise: RainViewer's free radar is real only through z7
+and is upscaled above it, so past z7 the native content across the view
+is already fewer than 512 px.
+
+### Frames cover the view, not a pixel count
+
+The frame canvas stands for exactly the view, so the tiles fetched must
+cover exactly the view — **the same ground at a lower zoom, not the same
+number of pixels**. Covering `FRAME × span` px at the radar's zoom is
+twice the ground when span is 2, and the radar then draws at half scale
+over a base that is correct: two layers of the same coastline, one of
+them wrong. One zoom below the view, capped at the radar's native 7, is
+also self-consistent with a 512 canvas over a 1080 one.
+
+Frames are built **one at a time**. Fifteen fired at once is sixty-odd
+parallel tile requests over a marina's wifi, and the first frame — the
+only one anybody sees immediately — arrives last.
+
+### Giving it back
+
+`close()` aborts the one `AbortController` every fetch shares, clears the
+timer, and sets every canvas to `width = height = 0`. That last one is
+what actually frees the pixel buffer: dropping the reference only makes
+it eligible, and a 1080 canvas is 4.7 MB the collector is in no hurry
+about.
+
+### Sources, and the one that needs a key and hides it
+
+| | source | key |
+|---|---|---|
+| base | Esri World Dark Gray Canvas | none |
+| seamarks | OpenSeaMap | none |
+| radar | RainViewer, last hour + nowcast | none |
+
+**Not Carto**, which `sail-weather.html` uses. `basemaps.cartocdn.com`
+now returns a tile with **API KEY REQUIRED** stamped across the middle of
+it, on every subdomain — and it looks exactly like a working dark
+basemap until you read the words. Esri's canvas service is unkeyed and
+asks only for the credit line at the foot of the app.
+
+Esri puts **y before x** in its tile path. Tokens are replaced by name,
+so the order in the template is the order on the wire.
+
+Tiles are drawn and never read back, so the canvas may taint and no CORS
+handshake is needed — one whole class of failure removed.
+
+No network is `NO RADAR — no internet` on the glass, not a thrown
+exception.
+
 ## Preferences
 
 Theme, depth units, the shallow alarm and brightness persist in
