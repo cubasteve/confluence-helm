@@ -13,8 +13,11 @@
 # a dead WiFi dongle and is not.
 #
 # It also has to do by hand what the desktop session used to do for
-# free: cage reads no ~/.config/autostart, so netd and autopull are
-# started here or not at all.
+# free: cage reads no ~/.config/autostart, so netd, autopull and the
+# now-playing poller are started here or not at all. Every feature whose
+# starter lives in an autostart entry is invisible to cage, and each one
+# that has been forgotten failed the same way - silently, looking like
+# the feature simply had nothing to show.
 # =====================================================================
 set -u
 
@@ -74,6 +77,35 @@ start_helpers(){
     log "starting autopull"
     ( bash "$REPO/autopull.sh" 300 >>"$LOG" 2>&1 & )
   fi
+
+  # The now-playing poller. Same trap the cursor theme fell into: there
+  # IS an autostart entry for it, and cage reads no ~/.config/autostart,
+  # so under cage it is started here or not at all. Nothing said so - the
+  # music page just sat on "Nothing playing", which is also what a real
+  # idle Spotify looks like.
+  #
+  # It needs credentials, and without them it exits at once with a log
+  # line. Checking here rather than letting it fail means the reason and
+  # the fix both end up in this log instead of scrolling past in its own.
+  if [ ! -f "$HOME/.config/confluence-spotify.json" ]; then
+    log "no Spotify credentials - the music page will say NOT SET UP"
+    log "  once, to fix: python3 $REPO/spotify-auth.py"
+  elif ! pgrep -f '^python3 .*spotify-now\.py' >/dev/null 2>&1; then
+    log "starting the now-playing poller"
+    # Anchored on the executable, the same rule netd's probe above uses
+    # and for the same reason: an unanchored -f matches any process whose
+    # command line merely MENTIONS the name - a grep, an editor, the very
+    # shell you are debugging from. A false positive here does not start
+    # something twice, it never starts it at all, which is the failure
+    # being fixed. (Caught exactly this way while testing it.)
+    #
+    # A restart loop, because nothing else supervises it and a poller
+    # that dies quietly puts the page back to looking merely idle.
+    ( while true; do
+        python3 "$REPO/spotify-now.py" >>"$LOG" 2>&1
+        sleep 30
+      done & )
+  fi
 }
 
 # ---- AvNav ----------------------------------------------------------
@@ -124,7 +156,7 @@ main(){
     if python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" >/dev/null 2>&1; then
       log "pointer: hidden (themes 'default' and '$XCURSOR_THEME' both blank)"
     else
-      log "pointer: WILL BE DRAWN - run: sudo bash $REPO/boot/install-boot-chain.sh"
+      log "pointer: WILL BE DRAWN - run: sudo bash $REPO/boot/install-cursor.sh"
       python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" 2>&1 |
         while IFS= read -r l; do log "  $l"; done
     fi

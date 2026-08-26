@@ -195,12 +195,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bar-scale{display:flex;justify-content:space-between;font-size:19px;
   font-weight:600;color:var(--label);letter-spacing:.1em}
 .steprow{display:flex;align-items:center;gap:14px;margin-top:6px}
-/* Reads as a warning while it is on, because that is what it is: the
-   sensor glyphs are lit by numbers nobody measured. Plain label off. */
-/* fixed width, or the button beside it resizes between ON and OFF */
-.demo-state{font-size:26px;font-weight:600;letter-spacing:.14em;
-  color:var(--label);min-width:72px;text-align:right}
-.demo-state.on{color:var(--warn)}
 .numv{min-width:118px;text-align:center;font-size:40px;font-weight:600;color:var(--accent)}
 .numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
   letter-spacing:.12em}
@@ -215,7 +209,18 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   letter-spacing:.14em;color:var(--label)}
 /* :active handled by the single .mini:active rule above */
 
-#sen-svg{display:block;width:340px;height:60px;margin:0 auto 26px}
+.senrow{position:relative;margin-bottom:26px}
+#sen-svg{display:block;width:340px;height:60px;margin:0 auto}
+/* Absolutely placed rather than laid out in a flex row, so the four
+   glyphs stay centred on the sheet exactly where they were and the
+   toggle takes the slack that was already there beside them. */
+.demo-tog{position:absolute;right:0;top:8px;height:44px;padding:0 20px;
+  border:2px solid var(--hairline);border-radius:22px;background:none;
+  color:var(--label);font:600 21px/1 inherit;letter-spacing:.14em;
+  opacity:.5;transition:opacity .2s,color .2s,border-color .2s,background .2s}
+.demo-tog:active{background:var(--chip)}
+/* On, it is a warning and reads like one: these glyphs are lying. */
+.demo-tog.on{opacity:1;color:var(--warn);border-color:var(--warn)}
 
 /* --- connectivity ------------------------------------------------
    A row of radios at the top of the panel. No words on them, because
@@ -819,6 +824,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          "is anything actually feeding me", which is a question you ask
          when you are already in the settings - and the dial's foot was
          the one place the lock and the page dots both needed. -->
+    <div class="senrow">
     <svg id="sen-svg" viewBox="370 928 340 60">
   <g id="sensors" transform="translate(540 958)">
     <g class="sen" id="s-gps" transform="translate(-141 0)">
@@ -843,26 +849,18 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     </g>
   </g>
     </svg>
+    <!-- Beside the glyphs on purpose. The demo feed writes into the same
+         store the real sensors do, so while it is on those four glyphs
+         are lit green by numbers nobody measured - and this is the only
+         thing on the panel that says so. A slab and a row of its own put
+         that admission somewhere you had to go looking for it. -->
+    <button class="demo-tog" id="demo-btn" aria-pressed="false">DEMO</button>
+    </div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
          does not: on a phone loading this same page over boat WiFi the
          helper is unreachable, and dead radios would be worse than none. -->
     <div class="conn" id="conn-sec" style="display:none"></div>
-
-    <!-- The demo feed fabricates wind and depth so the bezel and the
-         shallow alarm can be judged before the vane and transducer are
-         fitted. It writes into the same store the real sensors use, so
-         while it is on the four glyphs above are lit by data that is not
-         coming off the boat - and the shallow alarm is firing on it. It
-         needed to be switchable from here rather than only by editing
-         CFG: the one moment you want it off is standing at the panel
-         with the vane just bolted on. It also switches itself off the
-         moment a real reading turns up. -->
-    <div class="slab">Sensors</div>
-    <div class="steprow">
-      <button class="mini wide" id="demo-btn">DEMO DATA</button>
-      <div class="demo-state" id="demo-state">OFF</div>
-    </div>
 
     <div class="slab">Display <span id="dim-pct">100%</span></div>
     <div class="dimrow">
@@ -3254,12 +3252,25 @@ setInterval(alertPaint,5000);
 const music=$('music');
 let NP={playing:false, pos:0, dur:0, at:0, title:'', artist:'', cover:''};
 
+/* Why the music page is empty, when it is. "Nothing playing" is the
+   right answer only when the poller is running and Spotify is idle -
+   and the two ways it can be wrong used to look exactly like that.
+   Neither is rare: cage reads no ~/.config/autostart, so on this Pi
+   spotify-now.py runs only because cage-session.sh starts it, and it
+   exits immediately with no credentials. */
+let FEED='waiting';        /* waiting | ok | missing | offline */
+
 async function pollMusic(){
   try{
     const r=await fetchT('nowplaying.json?_='+Date.now(), 5000);
+    /* A 404 is the poller never having written the file - not a network
+       problem, and worth saying differently from one. */
+    if(!r.ok && FEED!=='missing' && r.status===404){ FEED='missing'; paintMusic(); }
     if(r.ok){
+      const wasBad = FEED!=='ok';
+      FEED='ok';
       const j=await r.json();
-      const changed = j.title!==NP.title || j.event!==NP.event;
+      const changed = wasBad || j.title!==NP.title || j.event!==NP.event;
       NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
            pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
            /* plain strings: spotify-now.py joins the artist list with
@@ -3268,11 +3279,25 @@ async function pollMusic(){
            title:j.title||'', artist:j.artist||'', cover:j.cover||'' };
       if(changed) paintMusic();
     }
-  }catch(e){ /* no file yet, or spotify-now.py is not running */ }
+  }catch(e){
+    /* Nothing answered at all: AvNav down, the page opened over file://
+       (where fetch cannot work), or the request hit its deadline. */
+    if(FEED!=='offline'){ FEED='offline'; paintMusic(); }
+  }
   setTimeout(pollMusic, 2000);
 }
 
 function paintMusic(){
+  /* Say which of the three it is. A helm that reads "Nothing playing"
+     when the poller was never started sends you looking at Spotify. */
+  if(FEED==='missing'||FEED==='offline'){
+    $('m-title').textContent  = 'No music feed';
+    $('m-artist').textContent = FEED==='missing'
+      ? 'run spotify-auth.py once, then restart the session'
+      : 'nowplaying.json is not answering';
+    $('m-state').textContent  = FEED==='missing' ? 'NOT SET UP' : 'OFFLINE';
+    return;
+  }
   $('m-title').textContent  = NP.title  || 'Nothing playing';
   $('m-artist').textContent = NP.artist || '—';
   $('m-state').textContent  = NP.playing ? 'NOW PLAYING' : 'PAUSED';
@@ -3373,8 +3398,8 @@ function demoSet(on, why){
 }
 function drawDemo(){
   const on=!!CFG.windDemo;
-  wText('demo-state', on?'ON':'OFF');
-  wCls('demo-state','on',on);
+  wCls('demo-btn','on',on);
+  wAttr('demo-btn','aria-pressed', on?'true':'false');
 }
 
 function windDemoTick(){

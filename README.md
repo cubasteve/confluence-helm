@@ -467,6 +467,24 @@ radio, brightness and power tile being dead for no stated reason.
 up: `spotify-now.py` exits at once with a log line when
 `~/.config/confluence-spotify.json` is missing.
 
+**In cage mode none of these entries run at all.** cage reads no
+`~/.config/autostart`, so `cage-session.sh` starts netd, autopull and
+the now-playing poller by hand. Every feature whose starter lives in an
+autostart entry is invisible to cage, and each one that has been
+forgotten failed the same way: silently, looking exactly like the
+feature having nothing to show. The music page sat on "Nothing playing",
+which is also what an idle Spotify looks like — so it now distinguishes
+the three cases:
+
+| the page says | means |
+|---|---|
+| `NOT SET UP` | `nowplaying.json` 404s — the poller has never written it |
+| `OFFLINE` | nothing answered: AvNav down, or the page opened over `file://` |
+| `Nothing playing` | the poller **is** running and Spotify is genuinely idle |
+
+`/tmp/cage-session.log` says which, and names the fix
+(`python3 ~/helm/spotify-auth.py`) when there are no credentials.
+
 Then restart the session - a running desktop never re-reads
 `~/.config/autostart/`. To check it by hand without one:
 
