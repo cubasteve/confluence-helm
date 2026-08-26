@@ -60,6 +60,25 @@ else
   exit 1
 fi
 
+# ---- the app drawer's apps ------------------------------------------
+# The drawer launches things AvNav serves out of this same directory, and
+# they live in their own repos - sail-weather.html belongs to keel-app.
+# This COPIES; it never edits, and keel-app stays the one place that file
+# is written. If the clone is not on this Pi nothing happens here and the
+# tile says so when you tap it, which is a better failure than a blank
+# frame.
+APPS_SRC="${KEEL_APP:-$HOME/keel-app}"
+for app in sail-weather.html; do
+  if [ -f "$APPS_SRC/$app" ]; then
+    # Beside the target and renamed, for the same reason the main copy is.
+    cp "$APPS_SRC/$app" "$DST_DIR/$app.new"
+    mv -f "$DST_DIR/$app.new" "$DST_DIR/$app"
+    echo "published $app  $(wc -c < "$DST_DIR/$app") bytes  <-  $APPS_SRC"
+  else
+    echo "no $APPS_SRC/$app - the drawer's tile will say it is not here"
+  fi
+done
+
 # A quick liveness check, since a deploy that AvNav cannot serve is not a
 # deploy. Non-fatal: AvNav might legitimately be down while you work.
 if command -v curl >/dev/null 2>&1; then

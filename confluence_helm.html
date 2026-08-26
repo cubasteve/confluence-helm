@@ -180,6 +180,39 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    left of the 600 px sheet after three tiles - about 234 px - which is
    short for a drag control, so the thumb stays large to compensate.   */
 .dimrow{display:flex;align-items:center;gap:18px;padding-top:10px}
+/* The app drawer. Same tile as the display row above it, so an app reads
+   as another thing the panel offers rather than a different species. */
+.approw{display:flex;align-items:flex-start;gap:18px;padding-top:10px;
+  flex-wrap:wrap}
+.approw .tile{width:150px}
+.approw .tile .sub{font-size:14px;letter-spacing:.08em;opacity:.75}
+/* A launched app. It gets the whole circle; the name and the close
+   button float over it on the centre line. */
+#app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
+#app-run.on{display:block}
+#app-body{position:absolute;inset:0;overflow:hidden}
+#app-body iframe{position:absolute;inset:0;width:100%;height:100%;border:0;
+  display:block;background:var(--bg)}
+/* Both chrome pieces are centred and inset far enough to stay inside the
+   glass: at y=54 the circle is ~640px across, at y=946 the same. */
+#app-name{position:absolute;top:44px;left:50%;transform:translateX(-50%);
+  max-width:560px;padding:8px 22px;border-radius:24px;
+  background:var(--panel);color:var(--label);
+  font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:.92;pointer-events:none}
+#app-close{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);
+  min-width:190px;height:76px;padding:0 34px;border:2px solid var(--hairline);
+  border-radius:38px;background:var(--panel);color:var(--ink);
+  font-family:var(--font);font-size:23px;font-weight:600;letter-spacing:.18em;
+  opacity:.94}
+#app-close:active{background:var(--chip)}
+#app-msg{display:none;position:absolute;top:130px;left:50%;
+  transform:translateX(-50%);width:560px;
+  font-size:25px;font-weight:600;line-height:1.5;color:var(--label);
+  letter-spacing:.03em;text-align:center}
+#app-run.failed #app-msg{display:block}
+#app-run.failed #app-body{display:none}
 /* .dimico/.dimico.sm retired with the sun icons that used to flank the
    brightness slider - the tiles carry their own glyphs now. */
 #dim-pct{float:right;color:var(--accent);letter-spacing:.06em}
@@ -949,6 +982,31 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <div id="dots"><i></i><i></i><i></i></div>
 
 <!-- ============== CONTROL PANEL ============== -->
+<!-- ============== APPS ==============
+     A launched app runs in an iframe that is CREATED on launch and
+     REMOVED on close. That is the whole design and the reason this is
+     an app drawer rather than a fourth page: sail-weather costs about
+     nine times the instruments' CPU, most of it a wind-particle field on
+     requestAnimationFrame that never stops. As a page it would be paying
+     that whenever the app was loaded; as a drawer it pays only while you
+     are looking at it, and removing the element takes the document, its
+     timers, its rAF loop and its tile cache with it.
+
+     z-index 25: above the control panel it was launched from, below the
+     screensaver, the alerts, the touch lock and the boot splash - all of
+     which must still be able to cover an app. -->
+<div id="app-run">
+  <!-- The app gets the WHOLE circle and the chrome floats over it. A bar
+       across the top looked obvious and put its two ends - the name and
+       the close button - outside the glass: at y=20 the circle is only
+       about 300px wide. Both controls now sit on the centre line, which
+       is the only place on a round panel that is wide at every height. -->
+  <div id="app-body"></div>
+  <div id="app-msg"></div>
+  <div id="app-name">App</div>
+  <button id="app-close">CLOSE</button>
+</div>
+
 <div id="panel">
   <div class="grab"></div>
   <div class="sheet">
@@ -1009,6 +1067,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       </button>
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
+
+    <!-- The app drawer. Built from the APPS registry rather than written
+         out here, so adding one is a line of data and not a line of
+         markup plus a handler. Hidden entirely when the registry is
+         empty - an empty slab reads as something broken. -->
+    <div class="slab" id="app-slab" style="display:none">Apps</div>
+    <div class="approw" id="app-row" style="display:none"></div>
 
     <div class="slab">Shallow alarm</div>
     <div class="depthwrap">
@@ -1628,6 +1693,7 @@ const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o);
 
 const dialVisible=()=>PAGE_I===1
                    && !panel.classList.contains('open')
+                   && !APP.on
                    && !ssOn;
 
 /* DRAW rate. See the gate in render() for why this is not 60 Hz. */
@@ -2402,7 +2468,7 @@ function goPage(i){
 }
 
 const openPanel =()=>{ markSlide('panel-open');  panel.classList.add('open');
-                       netPanelOpen();  };
+                       drawApps(); netPanelOpen();  };
 const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
                        netPanelClose(); };
 const showMusic =()=>goPage(2);
@@ -2500,6 +2566,10 @@ function judgeGesture(g){
      up is what a dismiss swipe dismisses, and nothing else acts: you
      cannot page sideways out from under the control panel, and a stray
      drag cannot fire the race timer underneath it. */
+  /* A launched app is the innermost thing up, so it owns the gestures -
+     including the paging ones, which would otherwise slide the
+     instruments out from under it and leave it running unseen. */
+  if(APP.on){ if(down) closeApp(); return; }
   if(panel.classList.contains('open')){
     if(down){ if(netsheet.classList.contains('on')) closeNet(); else closePanel(); }
     return; }
@@ -4927,6 +4997,112 @@ function drawAmbient(){
   $('ss-btn').classList.toggle('on', on);
   $('ss-btn').classList.toggle('off', !on);
 }
+
+/* ==================================================================
+   THE APP DRAWER
+
+   Other pages of this app are always loaded and always costing
+   something. An APP is not: it exists between the tap that launches it
+   and the tap that closes it, and then it is gone - the element removed,
+   which takes the document, its timers, its rAF loops and its tile cache
+   with it.
+
+   That distinction is the whole reason this is a drawer and not a fourth
+   page. sail-weather.html measured at about nine times the instruments'
+   CPU - a 323-particle wind field on requestAnimationFrame, a Leaflet
+   map, an animated radar loop and six feeds. As a page it would pay that
+   whenever it was loaded. As an app it pays only while you are looking
+   at it, and while you are looking at it the dial is not drawing anyway:
+   dialVisible() says so.
+
+   Adding an app is one entry here.
+     url   same-origin paths are probed before launching, so an app that
+           was never deployed says so instead of showing a blank frame
+     net   true if it needs the INTERNET, not merely the boat network -
+           worth saying on the tile, because out on the water that is
+           the difference between an app and a blank screen
+     geo   true to hand it the browser's geolocation; an iframe gets none
+           unless it is granted, and a weather app with no position sits
+           on "Waiting for a location" for ever                        */
+const APPS=[
+  {id:'weather', name:'Sail Weather', short:'Weather', sub:'RADAR · WIND · TIDES',
+   url:'/user/helm/sail-weather.html', net:true, geo:true,
+   ico:'<path d="M7.5 18.5h9a4 4 0 0 0 .4-8 6 6 0 0 0-11.4 1.4 3.4 3.4 0 0 0 '
+      +'.6 6.6z"/><path d="M9 21.5l-.8 1.6M12.5 21.5l-.8 1.6M16 21.5l-.8 1.6"/>'},
+];
+
+const APP={on:null, busy:false};
+
+function drawApps(){
+  const row=$('app-row');
+  wSty('app-slab','display', APPS.length?'':'none');
+  wSty('app-row','display', APPS.length?'':'none');
+  if(row.childElementCount===APPS.length) return;      /* built once */
+  row.innerHTML=APPS.map((a,i)=>
+    '<button class="tile" data-app="'+i+'">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" '
+    +'stroke-linecap="round" stroke-linejoin="round">'+a.ico+'</svg>'
+    +'<span>'+(a.short||a.name).toUpperCase()+'</span>'
+    +'<span class="sub">'+(a.net?'NEEDS INTERNET':(a.sub||''))+'</span></button>').join('');
+  row.querySelectorAll('[data-app]').forEach(b=>
+    b.addEventListener('click',()=>openApp(APPS[+b.dataset.app])));
+}
+
+/* Same-origin only. A cross-origin probe answers opaque or fails on CORS
+   whatever the server did, so it would refuse to launch perfectly good
+   apps - and the one thing worse than a blank frame is a launcher that
+   will not launch. */
+async function appReachable(url){
+  if(/^https?:\/\//i.test(url)) return true;
+  const ctl=new AbortController();
+  const t=setTimeout(()=>ctl.abort(), 4000);
+  try{
+    const r=await fetch(url,{cache:'no-store', signal:ctl.signal});
+    return r.ok;
+  }catch(e){ return false; }
+  finally{ clearTimeout(t); }
+}
+
+async function openApp(a){
+  if(APP.on||APP.busy) return;
+  APP.busy=true; APP.on=a;
+  $('app-name').textContent=a.name;
+  $('app-run').classList.remove('failed');
+  $('app-msg').textContent='';
+  $('app-run').classList.add('on');
+  closePanel();
+  if(!(await appReachable(a.url))){
+    $('app-run').classList.add('failed');
+    $('app-msg').textContent = a.url.charAt(0)==='/'
+      ? 'Not on this Pi. AvNav is not serving ' + a.url
+       + ' - run deploy.sh, which is what copies it there.'
+      : 'Could not reach ' + a.url;
+    APP.busy=false;
+    return;
+  }
+  /* Built here rather than sitting in the markup, so that closing it can
+     REMOVE it. An iframe left in the document with its src cleared keeps
+     a live about:blank around; a removed one keeps nothing. */
+  const f=document.createElement('iframe');
+  f.id='app-frame';
+  if(a.geo) f.setAttribute('allow','geolocation');
+  f.setAttribute('referrerpolicy','no-referrer');
+  f.src=a.url;
+  $('app-body').appendChild(f);
+  APP.busy=false;
+}
+
+function closeApp(){
+  if(!APP.on) return;
+  APP.on=null; APP.busy=false;
+  $('app-run').classList.remove('on','failed');
+  const f=$('app-frame');
+  /* about:blank first, then remove. Removing is what actually frees it;
+     pointing it at nothing first stops the old document fetching in the
+     frame or two before the removal lands. */
+  if(f){ try{ f.src='about:blank'; }catch(e){} f.remove(); }
+}
+$('app-close').addEventListener('click',closeApp);
 
 /* ---- fullscreen -------------------------------------------------------
    On the boat this is a no-op: the Pi already launches Chromium with

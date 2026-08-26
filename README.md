@@ -926,6 +926,76 @@ The list is paged rather than scrolled. `html`/`body` carry
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
 
+## The app drawer
+
+Apps live in the control panel under **Apps**, and an app is not a page:
+it exists between the tap that launches it and the tap that closes it,
+and then it is gone. Closing removes the `<iframe>` element, which takes
+the document, its timers, its `requestAnimationFrame` loops and its tile
+cache with it.
+
+That distinction is the whole reason this is a drawer rather than a
+fourth page. Measured on the same machine, same run, with the CDN and
+tiles served from disk so network latency is out of it:
+
+| | confluence_helm | sail-weather |
+|---|---|---|
+| CPU, unthrottled | 3.8% | **34.8%** |
+| CPU, 6× throttle | 18.9% | 99.2% — saturated |
+| JS heap | 1.9–2.4 MB | 2.7–2.8 MB |
+| DOM nodes / listeners | 1128 / 108 | ~1500 / 431 |
+| Requests on load | 10 | 113 (102 tiles, ~1.1 MB) |
+
+About **nine times** the instruments' CPU. Roughly half of it is a
+323-particle wind field on `requestAnimationFrame`; the rest is Leaflet,
+an animated radar loop and six feeds. As a page it would pay that
+whenever it was loaded. As an app it pays only while it is on screen —
+and while it is, the dial is not drawing anyway: `dialVisible()` returns
+false whenever `APP.on` is set, the same way it does for the panel and
+the screensaver.
+
+### Adding one
+
+One entry in `APPS`:
+
+```js
+{id:'weather', name:'Sail Weather', short:'Weather',
+ url:'/user/helm/sail-weather.html', net:true, geo:true, ico:'<path .../>'}
+```
+
+- `short` is the tile label. "Sail Weather" wrapped onto two lines in a
+  150px tile and read as two apps.
+- `net` puts **NEEDS INTERNET** on the tile. Out on the water that is the
+  difference between an app and a blank screen, and it is worth saying
+  before the tap rather than after.
+- `geo` grants the frame geolocation. An iframe gets **none** unless it
+  is granted, and a weather app with no position sits on "Waiting for a
+  location" for ever.
+- Same-origin `url`s are probed before launching, so an app that was
+  never deployed says *"AvNav is not serving … — run deploy.sh"* instead
+  of showing a blank frame. Cross-origin ones are not probed: an opaque
+  or CORS-failed response would refuse to launch perfectly good apps, and
+  a launcher that will not launch is worse than a blank frame.
+
+`deploy.sh` copies each app from its own repo — `sail-weather.html` from
+`~/keel-app`, overridable with `KEEL_APP` — into the directory AvNav
+serves. It copies and never edits: keel-app stays the one place that file
+is written.
+
+### On a round panel the chrome goes on the centre line
+
+The app gets the whole circle and the name and CLOSE float over it. A bar
+across the top is the obvious layout and it puts its two ends outside the
+glass — at y=20 the circle is only about 300px wide. Both controls sit
+centred instead, which is the only place on a round panel that is wide at
+every height. The test asserts all four corners of each are within 540px
+of the centre.
+
+A launched app is the innermost thing up, so it **owns the gestures**,
+including the paging ones — otherwise a swipe would slide the instruments
+out from under it and leave it running unseen. Swipe down closes it, the
+same as everything else.
+
 ## Preferences
 
 Theme, depth units, the shallow alarm and brightness persist in
