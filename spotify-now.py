@@ -102,12 +102,30 @@ class Token(object):
         basic = base64.b64encode(
             ("%s:%s" % (self.cfg["client_id"], self.cfg["client_secret"])).encode()
         ).decode()
-        d = post_form(
-            TOKEN_URL,
-            {"grant_type": "refresh_token", "refresh_token": self.cfg["refresh_token"]},
-            {"Authorization": "Basic " + basic,
-             "Content-Type": "application/x-www-form-urlencoded"},
-        )
+        try:
+            d = post_form(
+                TOKEN_URL,
+                {"grant_type": "refresh_token",
+                 "refresh_token": self.cfg["refresh_token"]},
+                {"Authorization": "Basic " + basic,
+                 "Content-Type": "application/x-www-form-urlencoded"},
+            )
+        except urllib.error.HTTPError as e:
+            # Spotify answers a bad client secret or a revoked refresh
+            # token with a 400 or a 401 and a one-word reason, and
+            # "http 400" on its own sends you nowhere. Rotating the
+            # client secret in the dashboard is the usual way to get
+            # here: the config still holds the old one.
+            if e.code in (400, 401):
+                why = ""
+                try:
+                    why = json.load(e).get("error_description") or ""
+                except Exception:
+                    pass
+                log("token refresh REFUSED (%s)%s" % (e.code, ": " + why if why else ""))
+                log("  the credentials in %s no longer work." % CONFIG)
+                log("  if you rotated the client secret, re-run spotify-auth.py")
+            raise
         self.value = d["access_token"]
         self.expires = time.time() + int(d.get("expires_in", 3600))
         # Spotify occasionally hands back a rotated refresh token
@@ -196,6 +214,68 @@ def take_command():
     return cmd
 
 
+# --------------------------------------------------------------------
+# The library half, quarantined.
+#
+# is_saved() used to be called between to_dial() and write(), unwrapped.
+# A 403 there - which is precisely what a token without
+# user-library-read returns - propagated out of the loop body and the
+# write never happened. So an OPTIONAL feature took the whole
+# now-playing feed down with it, and the panel just went quiet.
+#
+# Nothing below may raise. The rule is that the heart can fail; the
+# music cannot notice.
+_lib = {"warned": False, "until": 0.0}
+
+
+def library_ready():
+    return time.time() >= _lib["until"]
+
+
+def library_failed(what, e):
+    """Record a library failure and stop asking for a while."""
+    code = getattr(e, "code", None)
+    if code == 403:
+        if not _lib["warned"]:
+            log("%s refused (403): this token has no library scope, so the "
+                "heart stays hidden. Music is unaffected. To enable it, "
+                "re-run spotify-auth.py - a refresh token carries the "
+                "scopes it was granted with, so widening them needs the "
+                "consent screen again." % what)
+            _lib["warned"] = True
+        _lib["until"] = time.time() + 3600      # do not hammer it
+    else:
+        log("%s failed: %s" % (what, e))
+        _lib["until"] = time.time() + 60
+
+
+def try_is_saved(token, track_id):
+    """The liked state, or None if we could not find out. Never raises."""
+    if not library_ready():
+        return None
+    try:
+        return is_saved(token.get(), track_id)
+    except Exception as e:
+        library_failed("library check", e)
+        return None
+
+
+def try_set_saved(token, cmd):
+    """Carry out a like/unlike. Returns whether it took. Never raises."""
+    want = bool(cmd.get("want"))
+    if not library_ready():
+        log("ignoring a %s - the library scope is not available"
+            % ("like" if want else "unlike"))
+        return False
+    try:
+        set_saved(token.get(), cmd["id"], want)
+        log("%s %s" % ("liked" if want else "unliked", cmd["id"]))
+        return True
+    except Exception as e:
+        library_failed("like" if want else "unlike", e)
+        return False
+
+
 def to_dial(payload):
     """Map Spotify's shape onto what the dial's poller reads."""
     now = int(time.time() * 1000)
@@ -257,24 +337,23 @@ def main():
     while True:
         delay = POLL_IDLE
         try:
-            # A like or unlike asked for by the panel, carried out here
-            # because this is the process that holds the token.
-            cmd = take_command()
-            if cmd and cmd.get("id"):
-                want = bool(cmd.get("want"))
-                set_saved(token.get(), cmd["id"], want)
-                log("%s %s" % ("liked" if want else "unliked", cmd["id"]))
-                liked_id, liked = cmd["id"], want
-                last = None            # force a rewrite so the panel confirms
-
+            # ---- the core, and nothing optional may come before it ----
             payload, status = fetch_playing(token.get())
             state = to_dial(payload)
+
+            # ---- the library half, which is not allowed to matter ----
+            # Every call below is wrapped so that it cannot stop the
+            # write. A like that fails costs a heart, not the music.
+            cmd = take_command()
+            if cmd and cmd.get("id") and try_set_saved(token, cmd):
+                liked_id, liked = cmd["id"], bool(cmd.get("want"))
+                last = None            # force a rewrite so the panel confirms
 
             # Only ask the library when the track actually changed. The
             # answer cannot differ between two polls of the same track,
             # and asking every time would double this loop's requests.
             if state["id"] and state["id"] != liked_id:
-                liked_id, liked = state["id"], is_saved(token.get(), state["id"])
+                liked_id, liked = state["id"], try_is_saved(token, state["id"])
             elif not state["id"]:
                 liked_id, liked = None, None
             state["liked"] = liked if state["id"] else None
