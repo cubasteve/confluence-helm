@@ -17,15 +17,18 @@ and add this exact redirect URI to it:
 Spotify no longer accepts "localhost" for loopback redirects - it has to
 be the literal 127.0.0.1, and the port has to match.
 
-Scopes requested are user-read-currently-playing, user-library-read,
-user-library-modify and user-modify-playback-state - read what is
-playing, add and remove tracks from your library, and drive playback.
+Scopes requested are user-read-currently-playing, user-read-playback-state,
+user-library-read, user-library-modify and user-modify-playback-state -
+read what is playing and on which device, add and remove tracks from your
+library, and drive playback and volume.
 
-That last one is a real widening, so it is worth being plain about: with
-it this token can skip, pause and resume on whatever device is currently
-active. It cannot change your password, your subscription, or anything
-outside playback and saved tracks. Drop it from SCOPE below and re-run
-if you would rather the panel could not.
+The last two are a real widening, so it is worth being plain about: with
+them this token can skip, pause, resume and change the volume on whatever
+device is currently active, and can see which devices you have. It cannot
+change your password, your subscription, or anything outside playback and
+saved tracks. Drop either from SCOPE below and re-run if you would rather
+the panel could not - the volume ring and the transport are the only
+things that stop working.
 """
 import base64
 import errno
@@ -56,8 +59,17 @@ REDIRECT = "http://127.0.0.1:%d/callback"
 # active, not merely read and save. It also needs Spotify Premium - a
 # free account answers 403 on those endpoints - and an active device,
 # since the Pi deliberately is not one.
-SCOPE = ("user-read-currently-playing user-library-read user-library-modify "
-         "user-modify-playback-state")
+#
+# user-read-playback-state is what the volume ring needs, and it is the
+# reason the poller can ask GET /me/player rather than
+# /me/player/currently-playing: same track, same position, and the DEVICE
+# too - which carries the current volume and, crucially, whether that
+# device can have its volume set at all. Many cannot (an iPhone reports
+# supports_volume false), and a ring that silently does nothing is worse
+# than no ring. Without this scope the poller falls back to the old
+# endpoint and everything except the ring carries on.
+SCOPE = ("user-read-currently-playing user-read-playback-state "
+         "user-library-read user-library-modify user-modify-playback-state")
 PORT = PORT_ENV or 8888
 REDIRECT = REDIRECT % PORT
 

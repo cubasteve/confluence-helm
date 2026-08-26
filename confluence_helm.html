@@ -506,9 +506,42 @@ a.lib-row{text-decoration:none;color:inherit}
    clip the first title with an accented capital in it. So the safe
    bound, not the observed one. The test asserts every lane against the
    font box so this cannot be tightened by eye later. */
+.artwrap{position:relative;width:280px;height:280px;margin-bottom:18px;flex:none}
 .art{width:280px;height:280px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
-  color:var(--label);margin-bottom:18px;flex:none}
+  color:var(--label);flex:none;position:relative;z-index:1}
+/* --- the volume bezel ---
+   Ticks rather than a solid arc, because this panel already has one tick
+   ring - the wind bezel - and a second idiom for the same kind of reading
+   would be a second thing to learn. The 60 degrees at the bottom are left
+   open on purpose: a gap gives the scale a beginning and an end, and
+   without one 65% reads as nearly full. It is also where the title is,
+   so nothing there is a target. */
+.vring{position:absolute;left:-40px;top:-40px;width:360px;height:360px;
+  pointer-events:none;z-index:2}
+.vt{stroke:var(--hairline);stroke-width:3.5;stroke-linecap:round}
+.vt.maj{stroke-width:5}
+.vt.on{stroke:var(--accent)}
+/* The device reports a volume and refuses to set one - an iPhone does
+   exactly this. Shown, so it is not mysteriously missing, but plainly
+   not live, and a touch says why. */
+.artwrap.dead .vring{opacity:.34}
+.vhit{position:absolute;left:-40px;top:-40px;width:360px;height:360px;
+  border-radius:50%;z-index:0}
+.vnum{position:absolute;inset:0;z-index:3;border-radius:50%;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  color:var(--ink);font-size:76px;font-weight:600;letter-spacing:.03em;
+  line-height:1.1}
+/* The scrim is a layer of its own so the number can sit on it at FULL
+   strength. A translucent black panel was fine at night and unreadable
+   in daylight, where --ink is nearly black too: ink on a dark wash is no
+   contrast at all. --bg under --ink is the app's own contrast pair and
+   is right in all three themes by construction. */
+.vnum::before{content:'';position:absolute;inset:0;border-radius:50%;
+  background:var(--bg);opacity:.88}
+.vnum>*{position:relative}
+.vnum svg{width:38px;height:38px;fill:currentColor;opacity:.7}
+.artwrap.turning .vnum{display:flex}
 /* Save-to-library. A PLUS, not a heart, because Spotify's own apps stopped
    using a heart for this: the heart and "add to playlist" were merged into
    one + button, and a track already in your library shows a green
@@ -1064,12 +1097,34 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </svg>
   <div class="m-sheet">
     <div class="ms-head" id="ms-strip"></div>
-    <div class="art" id="m-art">
-      <svg viewBox="0 0 40 40" id="m-note"><path
-        d="M15 28V10l16-3v18" fill="none" stroke="currentColor"
-        stroke-width="3" stroke-linecap="round"/>
-        <circle cx="11" cy="28" r="4.5" fill="currentColor"/>
-        <circle cx="27" cy="25" r="4.5" fill="currentColor"/></svg>
+    <!-- The art, and the volume bezel around it. The wrapper is exactly
+         the size of the art, so adding the ring costs the page NO height
+         - the ring and the hit ring both overflow it, and the layout
+         below is untouched. There were 21px of slack above the lock and
+         this spends none of them. -->
+    <div class="artwrap" id="m-artwrap">
+      <!-- Behind the art, and 40px wider all round, so it collects only
+           what lands in the ANNULUS: the art is a circle and hit-testing
+           respects border-radius, so a touch on the cover itself falls
+           through to the gesture reader and still swipes pages. -->
+      <div class="vhit" id="m-vhit"></div>
+      <svg class="vring" id="vring" viewBox="0 0 360 360" style="display:none"></svg>
+      <div class="art" id="m-art">
+        <svg viewBox="0 0 40 40" id="m-note"><path
+          d="M15 28V10l16-3v18" fill="none" stroke="currentColor"
+          stroke-width="3" stroke-linecap="round"/>
+          <circle cx="11" cy="28" r="4.5" fill="currentColor"/>
+          <circle cx="27" cy="25" r="4.5" fill="currentColor"/></svg>
+      </div>
+      <!-- Only while you are turning it. A permanent readout would have
+           to live below the art, and there is no room below the art;
+           over it, at 76px, it is legible from the wheel. -->
+      <div class="vnum" id="m-vnum">
+        <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/>
+          <path d="M16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span id="m-volnum">0</span>
+      </div>
     </div>
     <div class="m-lbl" id="m-state">NOW PLAYING</div>
     <div class="m-title" id="m-title">Nothing playing</div>
@@ -2820,7 +2875,7 @@ async function netStatus(){
      pollMusic and this race at boot and either can win. Without this the
      save button stays hidden until the next track change, on a page that
      looks entirely finished. The transport is gated the same way. */
-  paintHeart(); paintTransport();
+  paintHeart(); paintTransport(); paintVolume();
   const hadBL=BL.available, first=!NET.probed;
   BL=(j&&j.backlight)||{available:false};
   NET.probed=true;
@@ -3421,10 +3476,17 @@ async function pollMusic(){
       if(j.id && NP.id && j.id!==NP.id) likePend=null;   /* different track */
       const changed = wasBad || j.title!==NP.title || j.event!==NP.event
                       || j.album!==NP.album || (j.liked??null)!==NP.liked;
+      /* the poller has caught up with the turn - stop overriding it */
+      if(volPend!==null && j.volume===volPend) volPend=null;
       NP={ event:j.event, playing:/playing|started|changed/.test(j.event||''),
            pos:j.position||0, dur:j.duration||0, at:j.at||Date.now(),
            id:j.id||'', liked:(typeof j.liked==='boolean')?j.liked:null,
            album:j.album||'',
+           /* null, not 0: 0 is a real volume, and the ring has to be able
+              to tell "muted" from "I cannot see". */
+           volume:(typeof j.volume==='number')?j.volume:null,
+           volOk:(typeof j.vol_ok==='boolean')?j.vol_ok:null,
+           device:j.device||'',
            /* plain strings: spotify-now.py joins the artist list with
               ", " and the cover is a URL. The .split('\\n')[0] that used
               to be here was for librespot's multi-line values. */
@@ -3439,6 +3501,11 @@ async function pollMusic(){
          wAttr writes nothing when the value is the same, so calling this
          every poll costs a map lookup and makes the drift impossible. */
       paintTransport();
+      /* Same rule, same reason: it is set optimistically while you turn
+         it, so only the feed can be trusted to put it right, and a
+         change-detector comparing the feed with itself cannot see the
+         difference. */
+      paintVolume();
     }
   }catch(e){
     /* Nothing answered at all: AvNav down, the page opened over file://
@@ -3568,6 +3635,117 @@ async function toggleLike(){
   setTimeout(()=>{ if(likePend===want && NP.liked!==want){ likePend=null; paintHeart(); } }, 6000);
 }
 
+/* ---- the volume bezel -----------------------------------------------
+   44 ticks over 300 degrees, lit up to the level. Built once and then
+   only the ticks whose state actually changed are touched, so turning it
+   costs a handful of class flips rather than 44 DOM writes a frame.
+
+   Turning is RELATIVE - how far you rotate, not where you touch. An
+   absolute ring would mean a stray knuckle at the top of the bezel is
+   full volume in a cabin at anchor, and that is not a mistake worth
+   being able to make. It also means the 8px threshold below can ignore
+   taps entirely: a touch that never moves does nothing at all.        */
+const VT_N=44, V_A0=-150, V_SPAN=300;
+let VTs=null, vLit=null, volPend=null, vDrag=null;
+
+function volAvailable(){
+  return !!(NET.st && NET.st.spotify && NET.st.spotify.available)
+         && NP.volume!==null;
+}
+function buildVTicks(){
+  const svg=$('vring'); if(!svg || VTs) return;
+  VTs=[];
+  /* The 360 box, art radius 140. R is set by what is ABOVE it: the
+     instrument strip's baseline sits about 9px clear of the topmost
+     major tick at this radius, and every px further out puts the scale
+     through "13.3 AWS". */
+  const C=180, R=156;
+  for(let i=0;i<VT_N;i++){
+    const deg=V_A0+V_SPAN/(VT_N-1)*i, maj=(i%11===0), o=maj?10:6.5;
+    const rad=(deg-90)*Math.PI/180, c=Math.cos(rad), s=Math.sin(rad);
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',(C+(R-o)*c).toFixed(1)); l.setAttribute('y1',(C+(R-o)*s).toFixed(1));
+    l.setAttribute('x2',(C+(R+o)*c).toFixed(1)); l.setAttribute('y2',(C+(R+o)*s).toFixed(1));
+    l.setAttribute('class', maj?'vt maj':'vt');
+    svg.appendChild(l); VTs.push(l);
+  }
+}
+function volNow(){ return volPend!==null ? volPend : NP.volume; }
+function paintVolume(){
+  const wrap=$('m-artwrap'); if(!wrap) return;
+  const show=volAvailable();
+  wSty('vring','display', show?'':'none');
+  if(!show){ wrap.classList.remove('turning','dead'); return; }
+  buildVTicks();
+  wrap.classList.toggle('dead', NP.volOk===false);
+  const v=volNow();
+  /* -1 so that muted lights NOTHING. Rounding 0 to tick zero would leave
+     one lit pip at silence, which reads as "nearly off" rather than off. */
+  const lit = v<=0 ? -1 : Math.round(v/100*(VT_N-1));
+  if(lit!==vLit){
+    for(let i=0;i<VT_N;i++){
+      const on=i<=lit;
+      if(VTs[i]._on!==on){ VTs[i]._on=on; VTs[i].classList.toggle('on',on); }
+    }
+    vLit=lit;
+  }
+  $('m-volnum').textContent = v;
+}
+
+/* 0 at twelve o'clock, positive clockwise. atan2(dx,-dy) rather than the
+   usual (dy,dx) so the zero is where the scale's zero is. */
+function vAngle(e){
+  const r=$('m-art').getBoundingClientRect();
+  return Math.atan2(e.clientX-(r.left+r.width/2),
+                    -(e.clientY-(r.top+r.height/2)))*180/Math.PI;
+}
+function vDown(e){
+  if(!volAvailable()) return;
+  /* The open 60 degrees at the foot are not part of the scale, and the
+     title lives under them. */
+  const a=vAngle(e); if(Math.abs(a)>150) return;
+  if(NP.volOk===false){ musicFlash("DEVICE WON'T"); return; }
+  vDrag={id:e.pointerId, aPrev:a, v:volNow(), moved:false,
+         x0:e.clientX, y0:e.clientY};
+  try{ $('m-vhit').setPointerCapture(e.pointerId); }catch(err){}
+}
+function vMove(e){
+  if(!vDrag || e.pointerId!==vDrag.id) return;
+  if(!vDrag.moved){
+    if(Math.hypot(e.clientX-vDrag.x0, e.clientY-vDrag.y0) < 8) return;
+    vDrag.moved=true;
+    gClaim();                       /* this touch is the bezel's, not a swipe */
+    $('m-artwrap').classList.add('turning');
+  }
+  /* Accumulated from the LAST angle, not the first: measuring from the
+     start would jump by 360 the moment a slow turn crossed six o'clock. */
+  let d=vAngle(e)-vDrag.aPrev;
+  while(d>180) d-=360; while(d<-180) d+=360;
+  vDrag.aPrev+=d;
+  vDrag.v=Math.max(0, Math.min(100, vDrag.v + d/V_SPAN*100));
+  volPend=Math.round(vDrag.v);
+  paintVolume();
+}
+async function vUp(e){
+  if(!vDrag || e.pointerId!==vDrag.id) return;
+  const moved=vDrag.moved; vDrag=null;
+  $('m-artwrap').classList.remove('turning');
+  if(!moved || volPend===null) return;
+  /* Sent on release only. Following the finger with a request every few
+     degrees would be a dozen writes for one turn, and Spotify does not
+     promise they arrive in order - the last one to land would win, which
+     is not necessarily the last one you meant. */
+  const want=volPend;
+  const j=await netApi('/spotify/volume',{pct:want});
+  if(!j || !j.ok){
+    volPend=null; paintVolume();
+    musicFlash((j&&j.error) || 'NO HELPER');
+    return;
+  }
+  setTimeout(()=>{ if(volPend===want && NP.volume!==want){
+    volPend=null; paintVolume(); } }, 6000);
+}
+
 /* The state line doubles as the toast here, the way the track page's
    status line does - there is nowhere else on this page to put one. */
 let musicFlashUntil=0;
@@ -3659,14 +3837,14 @@ function paintMusic(){
       : 'nowplaying.json is not answering');
     if(Date.now()>=musicFlashUntil)
       $('m-state').textContent = FEED==='missing' ? 'NOT SET UP' : 'OFFLINE';
-    paintHeart(); paintTransport();
+    paintHeart(); paintTransport(); paintVolume();
     return;
   }
   setScroller('m-title', NP.title || 'Nothing playing');
   setScroller('m-artist', NP.artist || '—');
   if(Date.now()>=musicFlashUntil)
     $('m-state').textContent = NP.playing ? 'NOW PLAYING' : 'PAUSED';
-  paintHeart(); paintTransport();
+  paintHeart(); paintTransport(); paintVolume();
   const art=$('m-art');
   if(NP.cover){
     if(!art.querySelector('img')){ art.innerHTML='<img>'; }
@@ -3852,6 +4030,10 @@ $('m-like').addEventListener('click',e=>{ e.stopPropagation(); toggleLike(); });
   $(id).addEventListener('pointerdown',gClaim);
   $(id).addEventListener('click',e=>{ e.stopPropagation(); transport(op); });
 });
+$('m-vhit').addEventListener('pointerdown',vDown);
+$('m-vhit').addEventListener('pointermove',vMove);
+$('m-vhit').addEventListener('pointerup',vUp);
+$('m-vhit').addEventListener('pointercancel',vUp);
 $('m-play').addEventListener('pointerdown',gClaim);
 $('m-play').addEventListener('click',e=>{ e.stopPropagation();
   transport(NP.playing?'pause':'play'); });

@@ -515,8 +515,10 @@ matches it exactly.
 
 The **+** button in the control bar adds and removes the current track from
 your library. Scopes are `user-read-currently-playing`,
-`user-library-read`, `user-library-modify` and — since the transport was
-added — `user-modify-playback-state`. Re-run `spotify-auth.py` after any
+`user-library-read`, `user-library-modify`, `user-modify-playback-state`
+(the transport and the volume ring) and `user-read-playback-state` (the
+volume ring's *reading* half — it is what makes the device visible).
+Re-run `spotify-auth.py` after any
 scope change; a refresh token carries the scopes it was granted with, so
 widening the list does nothing until the consent screen is answered
 again. This is the single most common cause of a feature here being
@@ -700,6 +702,92 @@ The whole row collapses when nothing in it is available, which is what a
 phone gets: the helper is loopback-only, so neither the save button nor the
 transport could do anything there, and an empty 78px band under the bar
 would just be a puzzle.
+
+### The volume ring
+
+A tick bezel around the album art. 44 ticks over 300°, lit to the level,
+with the 60° at the foot left open — a gap gives the scale a beginning
+and an end, and without one 65% reads as nearly full. It is also where
+the title is, so nothing down there is a target.
+
+Ticks rather than a solid arc because this panel already has one tick
+ring, the wind bezel, and a second idiom for the same kind of reading
+would be a second thing to learn.
+
+**It costs the page no height.** The wrapper is exactly the size of the
+art; the ring and its hit target both overflow it. There were 21px of
+slack above the lock and this spends none of them, so the art stays at
+280.
+
+#### Turning it
+
+Relative, not absolute: what moves the volume is how far you *rotate*,
+not where you touch. An absolute ring means a stray knuckle at the top of
+the bezel is full volume in a cabin at anchor, and that is not a mistake
+worth being able to make. It also means a touch that never moves does
+nothing at all — the drag has to clear 8px before it counts.
+
+The hit target sits **behind** the art and 40px wider all round, so it
+collects only what lands in the annulus. The art is a circle and CSS
+hit-testing respects `border-radius`, so a touch on the cover itself
+falls through to the gesture reader and still swipes pages — which
+matters, since swiping is how you leave this page. Touches in the open
+60° at the foot are ignored for the same reason.
+
+The request is sent **on release only**. Following the finger with a
+request every few degrees would be a dozen writes for one turn, and
+Spotify does not promise they arrive in order — the last one to land
+would win, which is not necessarily the last one you meant.
+
+The number appears over the cover only while you are turning, at 76px.
+A permanent readout would have to live below the art and there is no room
+below the art. Its scrim is a layer of its own so the number sits on it
+at full strength: a translucent black wash was fine at night and
+unreadable in daylight, where `--ink` is nearly black too.
+
+#### What can go wrong, and how it says so
+
+| the page flashes | means |
+|---|---|
+| `DEVICE WON'T` | the active device will not take a volume |
+| `NOT ALLOWED` | 403 — no Premium, or the scope was never granted |
+
+`DEVICE WON'T` is deliberately not the transport's `NO ACTIVE DEVICE`.
+A 404 on the transport means nothing is playing anywhere; a 404 here
+usually means the device that *is* playing refuses volume — an iPhone is
+the common case — and telling someone to start playing something would be
+wrong advice.
+
+Spotify reports this in advance as `supports_volume`, so the ring does
+not have to wait to be pressed to find out. A device that reports a
+volume and refuses to set one gets a ring drawn at a third opacity: shown,
+so it is not mysteriously missing, plainly not live, and a touch says
+why. `--check` reports the same thing before you touch anything:
+
+```
+device           Steve iPhone
+volume           40%
+supports volume  no - the ring cannot work on this device
+```
+
+#### The scope, and the fallback under it
+
+Reading the volume needs `GET /v1/me/player` — the same track, position
+and playing state as `/currently-playing`, plus the **device**, which is
+where `volume_percent` and `supports_volume` live. That endpoint needs
+`user-read-playback-state`, which tokens issued before the ring existed
+do not carry.
+
+So the poller tries `/me/player` and falls back to `/currently-playing`
+on a 403, once, with a log line saying which. The rule from the library
+403 stands and is the reason the ring was built this way round: **an
+optional feature never takes the music down with it.** Without the scope
+you lose the ring and nothing else.
+
+Zero is a real volume, so the feed carries `null` rather than `0` when
+there is no answer — the ring has to be able to tell *muted* from *I
+cannot see*. Muted lights no ticks at all; rounding it to the first tick
+would read as "nearly off" rather than off.
 
 ### Long names travel
 

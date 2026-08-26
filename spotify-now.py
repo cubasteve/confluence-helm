@@ -41,7 +41,19 @@ TARGETS = [
 
 POLL_PLAYING = 5        # seconds between polls while something is playing
 POLL_IDLE = 20          # back off when nothing is playing
-API = "https://api.spotify.com/v1/me/player/currently-playing"
+# Two ways to ask what is playing, and the difference is one scope.
+#
+# /me/player answers with the track AND the DEVICE - which carries the
+# current volume and whether that device can have its volume set at all.
+# It needs user-read-playback-state. /me/player/currently-playing needs
+# only user-read-currently-playing and answers without the device.
+#
+# The first is tried and the second is the fallback, because a token
+# granted before the volume ring existed has the older scope and MUST
+# keep working: the rule from the library 403 stands, an optional feature
+# never takes the music down with it.
+API = "https://api.spotify.com/v1/me/player"
+API_BASIC = "https://api.spotify.com/v1/me/player/currently-playing"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 # The library, and the reason there are two of these.
 #
@@ -187,9 +199,13 @@ def pick_cover(images):
     return ordered[len(ordered) // 2].get("url", "")
 
 
-def fetch_playing(token):
-    """Returns (state_dict_or_None, http_status)."""
-    req = urllib.request.Request(API, headers={"Authorization": "Bearer " + token})
+# Whether this token can see the device. A 403 means the scope was never
+# granted; nothing but a re-auth changes that, so it is asked once.
+_dev = {"blind": False}
+
+
+def _get_player(token, url):
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             if r.status == 204:                 # nothing playing
@@ -199,6 +215,27 @@ def fetch_playing(token):
         if e.code == 204:
             return None, 204
         raise
+
+
+def fetch_playing(token):
+    """Returns (state_dict_or_None, http_status).
+
+    Never raises for want of the playback-state scope: without it this
+    falls back to the endpoint that has always worked, and everything
+    except the volume ring carries on exactly as before."""
+    if not _dev["blind"]:
+        try:
+            return _get_player(token, API)
+        except urllib.error.HTTPError as e:
+            if e.code != 403:
+                raise
+            _dev["blind"] = True
+            log("GET /me/player refused (403): this token has no "
+                "user-read-playback-state, so the volume ring cannot be "
+                "drawn. Everything else is unaffected. To enable it, "
+                "re-run spotify-auth.py - a refresh token carries the "
+                "scopes it was granted with.")
+    return _get_player(token, API_BASIC)
 
 
 _odd = set()          # endpoints that have answered with a non-JSON body
@@ -298,6 +335,45 @@ def set_saved(token, track_id, want):
             _fell_back("like" if want else "unlike")
     api(token, method, LEGACY + "?ids=" + _q(track_id))
     return want
+
+
+VOLUME = PLAYER + "/volume"
+
+
+def set_volume(token, pct):
+    """Volume is a query parameter, like everything else here. Clamped
+    rather than trusted: this arrives from a file netd wrote."""
+    pct = max(0, min(100, int(pct)))
+    api(token, "PUT", VOLUME + "?volume_percent=%d" % pct)
+    return pct
+
+
+def try_volume(token, pct):
+    """Never raises. '' on success or a short reason to show.
+
+    404 here is worth its own words. The transport's 404 means nothing is
+    playing; this one usually means the active device will not take a
+    volume - an iPhone is the common case - and telling someone to start
+    playing something would be wrong advice."""
+    try:
+        if pct is None:
+            return "NO VOLUME"
+        set_volume(token.get(), pct)
+        log("volume: %s" % pct)
+        return ""
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            log("volume %s: no device would take it" % pct)
+            return "DEVICE WON'T"
+        if e.code == 403:
+            log("volume %s: refused (403) - needs Premium and the "
+                "user-modify-playback-state scope" % pct)
+            return "NOT ALLOWED"
+        log("volume %s: http %s" % (pct, e.code))
+        return "HTTP %s" % e.code
+    except Exception as e:
+        log("volume %s failed: %s: %s" % (pct, type(e).__name__, e))
+        return why(e)
 
 
 def do_control(token, op):
@@ -449,9 +525,20 @@ def try_set_saved(token, cmd):
 def to_dial(payload):
     """Map Spotify's shape onto what the dial's poller reads."""
     now = int(time.time() * 1000)
+    dev = (payload or {}).get("device") or {}
+    # None, not 0, when there is no answer: 0 is a real volume and the
+    # panel has to be able to tell "muted" from "I cannot see".
+    vol = dev.get("volume_percent")
+    vol = int(vol) if isinstance(vol, (int, float)) else None
+    # supports_volume is what stops the ring lying. Plenty of Connect
+    # devices - an iPhone among them - report the volume happily and
+    # refuse every attempt to set it.
+    vol_ok = dev.get("supports_volume")
+    vol_ok = bool(vol_ok) if vol_ok is not None else None
     if not payload or not payload.get("item"):
         return {"event": "stopped", "title": "", "artist": "", "cover": "",
                 "album": "", "id": "", "liked": None, "cmderr": "",
+                "volume": vol, "vol_ok": vol_ok, "device": dev.get("name", ""),
                 "position": 0, "duration": 0, "at": now}
     it = payload["item"]
     album = it.get("album") or {}
@@ -466,6 +553,9 @@ def to_dial(payload):
         "id": it.get("id") or "",
         "liked": None,
         "cmderr": "",
+        "volume": vol,
+        "vol_ok": vol_ok,
+        "device": dev.get("name", ""),
         "position": int(payload.get("progress_ms") or 0),
         "duration": int(it.get("duration_ms") or 0),
         "at": now,
@@ -515,14 +605,31 @@ def main():
             # ---- the library half, which is not allowed to matter ----
             # Every call below is wrapped so that it cannot stop the
             # write. A like that fails costs a heart, not the music.
+            # Whatever the panel asked for, it must not cost the feed:
+            # the reason goes into the file the panel is already reading
+            # rather than raising out of here.
             cmd = take_command()
             acted = False
-            if cmd and cmd.get("op") in CONTROLS:
-                # A transport press. Whatever happens it must not cost
-                # the feed, so the reason goes into the file the panel is
-                # already reading rather than raising out of here.
+            err = ""
+            if cmd and cmd.get("op") == "volume":
+                err = try_volume(token, cmd.get("pct"))
+                acted = True
+            elif cmd and cmd.get("op") in CONTROLS:
                 err = try_control(token, cmd["op"])
                 acted = True
+            elif cmd and cmd.get("id"):
+                err = try_set_saved(token, cmd)
+                if err:
+                    # A refused like tells us nothing about what the
+                    # library holds, and what we had was only ever a guess
+                    # if it came back None. So forget it and ask again.
+                    liked_id = None
+                else:
+                    liked_id, liked = cmd["id"], bool(cmd.get("want"))
+                state["cmderr"] = err
+                last = None            # force a rewrite so the panel confirms
+
+            if acted:
                 # Re-read WHATEVER happened, including after a reported
                 # failure - especially then. A timeout or an answer we
                 # could not parse says nothing about whether Spotify
@@ -542,18 +649,6 @@ def main():
                     pass
                 state["cmderr"] = err
                 last = None
-            elif cmd and cmd.get("id"):
-                err = try_set_saved(token, cmd)
-                if err:
-                    # Say why, in the file the panel is already reading.
-                    # Also forget the stored answer: a refused like tells
-                    # us nothing about what the library holds, and what
-                    # we had was only ever a guess if it came back None.
-                    state["cmderr"] = err
-                    liked_id = None
-                else:
-                    liked_id, liked = cmd["id"], bool(cmd.get("want"))
-                last = None            # force a rewrite so the panel confirms
 
             # Only ask the library when the track actually changed. The
             # answer cannot differ between two polls of the same track,
@@ -573,7 +668,8 @@ def main():
             # only rewrite when something actually changed, so the file's
             # mtime stays meaningful and the SD card is not churned
             key = (state["event"], state["title"], state["position"] // 5000,
-                   state["liked"], state.get("cmderr"))
+                   state["liked"], state.get("cmderr"),
+                   state.get("volume"), state.get("vol_ok"))
             if key != last:
                 write(state)
                 last = key
@@ -636,6 +732,24 @@ def check(argv):
         return 1
     print("playing          %s - %s" % (state["title"], state["artist"]))
     print("track id         %s" % state["id"])
+
+    # The volume ring's whole answer, in three lines. Which device is
+    # active, what it is at, and - the one that decides it - whether that
+    # device will take a volume at all. Plenty report one and refuse to
+    # set it, so "supports volume: no" is a real answer, not a fault.
+    if _dev["blind"]:
+        print("device           CANNOT SEE (no user-read-playback-state)")
+        print("  re-run spotify-auth.py to enable the volume ring.")
+    elif not state.get("device"):
+        print("device           none reported")
+    else:
+        print("device           %s" % state["device"])
+        print("volume           %s" % ("unknown" if state.get("volume") is None
+                                       else "%s%%" % state["volume"]))
+        ok_v = state.get("vol_ok")
+        print("supports volume  %s" % ("yes" if ok_v else
+                                       ("no - the ring cannot work on this "
+                                        "device" if ok_v is False else "unknown")))
 
     try:
         before = is_saved(tok, state["id"])

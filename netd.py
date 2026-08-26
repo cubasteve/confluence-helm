@@ -973,6 +973,22 @@ def spotify_control(op):
     return _spotify_write({'op': op})
 
 
+def spotify_volume(pct):
+    """Volume, by the same route as everything else Spotify: netd writes
+    a request, the poller performs it. Validated here rather than trusted
+    - this arrives over HTTP, and 0-100 is the whole of what Spotify will
+    accept."""
+    try:
+        n = int(pct)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'BAD VOLUME'}
+    if not 0 <= n <= 100:
+        return {'ok': False, 'error': 'BAD VOLUME'}
+    if not os.path.isfile(SPOTIFY_CFG):
+        return {'ok': False, 'error': 'NO SPOTIFY CREDENTIALS'}
+    return _spotify_write({'op': 'volume', 'pct': n})
+
+
 def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
@@ -984,6 +1000,8 @@ def route(path, body):
         return spotify_like(body.get('id'), body.get('want'))
     if path == '/spotify/control':
         return spotify_control(body.get('op'))
+    if path == '/spotify/volume':
+        return spotify_volume(body.get('pct'))
 
     if path == '/display/status':
         return dict(display_status(), ok=True)
