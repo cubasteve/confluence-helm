@@ -154,6 +154,48 @@ def main():
             print('   no X server answered on :0 or :1')
             print('   (expected if this is Wayland - see the verdict)')
 
+    block('touch input')
+    # The panel is a touchscreen, so this is half the answer to "why did
+    # my tap land there". xrandr moves the OUTPUT; an absolute input
+    # device still maps onto the whole framebuffer unless its Coordinate
+    # Transformation Matrix is moved to match.
+    if not shutil.which('xinput'):
+        print('   xinput is not installed - the fit CANNOT move the touch')
+        print('   mapping without it:  sudo apt install xinput')
+    else:
+        seen = False
+        for env in x_env():
+            rc, out = run(['xinput', 'list'], env=env)
+            if rc != 0 or 'id=' not in out:
+                continue
+            seen = True
+            for line in out.splitlines():
+                mm = re.search(r'(.+?)\s+id=(\d+)\s+\[slave\s+pointer', line)
+                if not mm:
+                    continue
+                did = mm.group(2)
+                rc2, det = run(['xinput', 'list', did], env=env)
+                mode = 'absolute' if re.search(r'Mode:\s*absolute', det or '',
+                                               re.I) else 'relative'
+                rc3, props = run(['xinput', 'list-props', did], env=env)
+                ctm = '?'
+                mp = re.search(r'Coordinate Transformation Matrix[^:]*:\s*(.+)',
+                               props or '')
+                if mp:
+                    ctm = mp.group(1).strip()
+                say(mm.group(1).strip().lstrip('\u23a3\u21b3 '),
+                    '%s  id=%s' % (mode.upper(), did))
+                say('', 'matrix: ' + ctm)
+                if mode == 'absolute':
+                    ident = all(abs(float(v) - w) < 1e-6 for v, w in
+                                zip(ctm.split(','), (1, 0, 0, 0, 1, 0, 0, 0, 1))
+                                ) if ctm.count(',') == 8 else None
+                    if ident is False:
+                        say('', '(not identity - something has remapped it)')
+            break
+        if not seen:
+            print('   could not reach an X server to ask')
+
     block('Wayland: can anything drive it')
     if not shutil.which('wlr-randr'):
         print('   wlr-randr is not installed'

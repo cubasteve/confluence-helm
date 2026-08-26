@@ -3356,10 +3356,22 @@ function askKeep(j){
   let left=Math.max(1,(j.grace|0)-1);
   NET.ask={a:'fitkeep', name:'Keep this size'};
   $('ask-title').textContent='Keep this size?';
-  $('ask-body') .textContent=
-    (j.side?j.side+'×'+j.side+' of '+j.w+'×'+j.h+'. ':'')
-    +'If you can read this, keep it. Do nothing and the desktop goes back '
-    +'to the full panel on its own.';
+  /* The touch note matters more than the size does. Shrinking the
+     picture without moving the touchscreen with it gives you a desktop
+     that looks right and answers taps in the wrong place - and the first
+     tap you would make to fix that is the one that does not land. So if
+     the remap did not happen, that is the sentence, not a footnote. */
+  const bad = j.touchnote
+    ? (j.touchnote==='NO XINPUT'
+         ? 'TOUCH NOT MOVED - xinput is not installed, so taps will land '
+          +'in the wrong place. Put it back and: sudo apt install xinput'
+         : 'TOUCH NOT MOVED ('+j.touchnote+') - taps will land in the '
+          +'wrong place.')
+    : '';
+  $('ask-body') .textContent= bad ||
+    ((j.side?j.side+'×'+j.side+' of '+j.w+'×'+j.h+'. ':'')
+     +'If you can read this, keep it. Do nothing and the desktop goes back '
+     +'to the full panel on its own.');
   $('ask-no') .textContent='PUT IT BACK';
   $('ask-yes').textContent='KEEP';
   const paint=()=>setMsg('REVERTING IN '+left+'s');

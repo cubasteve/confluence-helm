@@ -1426,6 +1426,74 @@ approach as the probe below, for the same reason. A negative is cached
 briefly too — on a Wayland or cage Pi this would otherwise shell out
 twice a second for an answer that is always no.
 
+#### The touchscreen has to move with the picture
+
+`xrandr --transform` moves the **output**. It does not move the **input**:
+an absolute device still maps its own [0,1] square onto the whole
+framebuffer, so once the desktop is shrunk into the middle of the glass,
+every touch lands somewhere it is not — offset *and* scaled. That reads
+as "the pointer clicks in the wrong place", and it is the reason this is
+done by the same call rather than left as a separate step.
+
+X11's fix is the device's **Coordinate Transformation Matrix**, set to
+the same map the output got. A touch at panel pixel `p` should reach
+framebuffer `f = a·(p − t)`. The CTM works in *normalised* coordinates,
+so X computes `f = w·(m00·(p/w) + m02)`; equating the two gives
+`m00 = a` and `m02 = −a·t/w`, which simplifies to `−(w−side)/(2·side)`:
+
+```
+xinput set-prop <id> "Coordinate Transformation Matrix"   1.417323 0 -0.208661  0 1.417323 -0.208661  0 0 1
+```
+
+**Only absolute devices**, and that is not a detail: the same matrix on a
+mouse does not reposition it, it multiplies every movement — so a fitted
+desktop would come with a pointer that flies off the screen. `Mode:
+absolute` on a valuator is what separates them, and the test asserts that
+a relative device is left alone.
+
+If the remap cannot happen — no `xinput`, no touch device — the fit still
+applies but the keep sheet **leads with that** rather than the size. A
+picture that looks right and answers taps somewhere else is the worst
+failure this feature has, because the first tap you would make to fix it
+is the one that does not land. `check-display.py` reports every pointer
+device, its mode, and its current matrix.
+
+#### Single tap, double tap
+
+```bash
+python3 ~/helm/boot/touch-tune.py            # apply
+python3 ~/helm/boot/touch-tune.py --show     # what is set now
+python3 ~/helm/boot/touch-tune.py --revert   # put it back, exactly
+```
+
+GTK decides "that was a double click" from two thresholds: how long
+between the taps, and **how far apart they were**. The default distance
+is **five pixels** — a sensible number for a mouse, which does not move
+at all between clicks, and a hopeless one for a finger on glass. Two
+deliberate taps in the same place routinely land 15–25px apart, so GTK
+scores them as two separate single clicks and nothing opens. People then
+tap harder and faster, which makes the spread worse.
+
+So the distance is the fix and the time is the smaller half: **30px and
+500ms**. It writes `~/.config/gtk-3.0/settings.ini` and `~/.gtkrc-2.0`,
+keeps a byte-for-byte backup so `--revert` is a restore rather than a
+guess at defaults, and takes that backup **once** — a second run must not
+record its own first run as the original, which is the same trap
+`install-cage-kiosk.sh` documents about the default systemd target.
+
+The keys must land *inside* `[Settings]`. A key appended after some other
+section belongs to that section and GTK never sees it, so the writer
+rewrites in place and the test checks the position, not just the
+presence.
+
+It deliberately does **not** turn on single-click-to-open. That would
+make both gestures do the same thing, and the point is to keep them
+telling apart: one tap selects, two open.
+
+GTK reads these when an application *starts*, so nothing already running
+changes. Tap Desktop then Kiosk, or log out and back in, before judging
+it.
+
 #### It reverts on its own
 
 This is the whole reason it is safe to put on a boat. **The panel cannot

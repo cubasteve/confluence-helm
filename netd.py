@@ -890,6 +890,77 @@ def _fit_cmd(name, w, h, pct):
     return side, ['xrandr', '--output', name, '--transform', matrix]
 
 
+# ---- the touchscreen has to move with the picture ------------------
+#
+# xrandr --transform moves the OUTPUT. It does not move the INPUT: an
+# absolute device still maps its own [0,1] square onto the whole
+# framebuffer, so once the desktop is shrunk into the middle of the
+# glass, every touch lands somewhere it is not. Offset AND scaled, which
+# reads as "the pointer clicks in the wrong place".
+#
+# X11's fix is the device's Coordinate Transformation Matrix, and it has
+# to be the same map the output got. A touch at panel pixel p should
+# reach framebuffer f = a*(p - t), with a = w/side and t = (w-side)/2.
+# The CTM works in NORMALISED coordinates, so X computes
+# f = w*(m00*(p/w) + m02); equating the two gives m00 = a and
+# m02 = -a*t/w, which simplifies to -(w-side)/(2*side).
+_TOUCH_RE = re.compile(r'^\W*(.+?)\s+id=(\d+)\s+\[slave\s+pointer', re.M)
+
+
+def touch_devices(env):
+    """Absolute pointing devices only.
+
+    Relative ones are excluded deliberately and this is not a detail: the
+    same matrix on a mouse does not reposition it, it multiplies every
+    movement - so a fitted desktop would come with a mouse that flies off
+    the screen. `Mode: absolute` on a valuator is what separates them."""
+    rc, out, _ = run(['xinput', 'list'], 8, env=env)
+    if rc != 0:
+        return []
+    devs = []
+    for name, did in _TOUCH_RE.findall(out or ''):
+        rc2, d, _ = run(['xinput', 'list', did], 8, env=env)
+        if rc2 == 0 and re.search(r'Mode:\s*absolute', d, re.I):
+            devs.append((did, name.strip()))
+    return devs
+
+
+IDENTITY = ('1', '0', '0', '0', '1', '0', '0', '0', '1')
+
+
+def touch_map(env, w, h, side):
+    """Point the touchscreen at where the picture actually is.
+
+    Returns (how many devices, a short note). Never raises: a panel that
+    fits but cannot be touched is worse than one that does not fit, so
+    the note travels back to the sheet rather than being swallowed."""
+    if not shutil.which('xinput'):
+        return 0, 'NO XINPUT'
+    if side is None:
+        m = IDENTITY
+    else:
+        ax, ay = w / float(side), h / float(side)
+        m = ('%f' % ax, '0', '%f' % (-(w - side) / (2.0 * side)),
+             '0', '%f' % ay, '%f' % (-(h - side) / (2.0 * side)),
+             '0', '0', '1')
+    devs = touch_devices(env)
+    if not devs:
+        return 0, 'NO TOUCH DEVICE'
+    done = 0
+    for did, name in devs:
+        rc, out, err = run(['xinput', 'set-prop', did,
+                            'Coordinate Transformation Matrix'] + list(m), 8, env=env)
+        if rc == 0:
+            done += 1
+            print('[netd] touch: %s (id=%s) -> %s'
+                  % (name, did, 'identity' if side is None else ' '.join(m[:3])),
+                  flush=True)
+        else:
+            print('[netd] touch: %s (id=%s) REFUSED: %s'
+                  % (name, did, (err or out)[:80]), flush=True)
+    return done, '' if done else 'TOUCH REFUSED'
+
+
 # The revert timer. This is the whole safety story: the panel cannot see
 # what the panel looks like, so a transform that leaves the screen
 # unreadable would be unfixable from the screen. It goes back on its own
@@ -902,6 +973,10 @@ _fit = {'timer': None}
 def _fit_revert(name, env):
     rc, out, err = run(['xrandr', '--output', name, '--transform', 'none'],
                        15, env=env)
+    # The touchscreen goes back with it, always - including when the
+    # xrandr call above failed. A half-reverted panel whose picture is
+    # full size and whose touch is still offset is the worst of both.
+    touch_map(env, 0, 0, None)
     print('[netd] display: reverted to full size (%s)'
           % ('ok' if rc == 0 else (err or out)), flush=True)
 
@@ -945,13 +1020,17 @@ def fit_set(pct):
     if rc != 0:
         _fit_revert(name, env)
         return {'ok': False, 'error': (err or out or 'XRANDR REFUSED')[:120]}
-    print('[netd] display: %dx%d of %dx%d (%.1f%%, %s) - reverting in %ds '
-          'unless kept' % (side, side, w, h, pct, how, FIT_GRACE), flush=True)
+    touched, note = touch_map(env, w, h, side)
+    print('[netd] display: %dx%d of %dx%d (%.1f%%, %s), touch: %s - reverting '
+          'in %ds unless kept'
+          % (side, side, w, h, pct, how, note or ('%d device(s)' % touched),
+             FIT_GRACE), flush=True)
     t = threading.Timer(FIT_GRACE, _fit_revert, args=(name, env))
     t.daemon = True
     _fit['timer'] = t
     t.start()
-    return dict(fit_status(), ok=True, side=side, how=how, grace=FIT_GRACE)
+    return dict(fit_status(), ok=True, side=side, how=how, grace=FIT_GRACE,
+                touched=touched, touchnote=note)
 
 
 def fit_keep():
