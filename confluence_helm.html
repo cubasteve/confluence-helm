@@ -488,11 +488,27 @@ a.lib-row{text-decoration:none;color:inherit}
   color:var(--ink)}
 
 .m-sheet{width:600px;display:flex;flex-direction:column;align-items:center}
-/* 232 rather than 300: the control bar below needed 68px of vertical
-   room and this was the only place on the page it existed. */
-.art{width:232px;height:232px;border-radius:50%;background:var(--chip);
+/* Back to 300. The control bar's 68px came out of the art when it was
+   added; tightening every line-height on this page from Poppins' loose
+   `normal` metrics, plus a few margins, gave most of it back: 280
+   rather than 232. The sheet is vertically centred, so every 2px of art
+   costs 1px of the gap between the control bar and the lock - 280 is
+   what leaves 21px there, and both are tap targets so that gap is the
+   thing that sets the size.
+
+   1.43 and not lower, and the number is measured rather than chosen.
+   Poppins' `normal` line-height is about 1.5; its FONT BOX - ascent
+   plus descent, which is what half-leading centres in the line box - is
+   1.42em. At or above that, no glyph the font can draw can meet the
+   lane's overflow:hidden. Below it, some can: the ink of ordinary Latin
+   text survives down to about 1.24, but a track title is arbitrary text
+   from Spotify and tuning to the descenders of an English sample would
+   clip the first title with an accented capital in it. So the safe
+   bound, not the observed one. The test asserts every lane against the
+   font box so this cannot be tightened by eye later. */
+.art{width:280px;height:280px;border-radius:50%;background:var(--chip);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
-  color:var(--label);margin-bottom:22px;flex:none}
+  color:var(--label);margin-bottom:18px;flex:none}
 /* The heart shares a row with the progress bar rather than taking one of
    its own - there is no vertical room on this page for another row, and
    the two belong together anyway: both are about the track playing now.
@@ -527,12 +543,18 @@ a.lib-row{text-decoration:none;color:inherit}
 .heart.busy{opacity:.4}
 .art img{width:100%;height:100%;object-fit:cover}
 .art svg{width:90px;height:90px}
+/* line-height is set on every row of this page rather than left at
+   `normal`. Poppins' normal metrics are about 1.5, which is right for
+   running text and pure waste for single-line rows - and every pixel of
+   it came out of the album art. Not so tight that descenders clip: the
+   check for that is in the test, comparing each lane's scrollHeight
+   against its clientHeight. */
 .m-lbl{font-size:24px;font-weight:600;letter-spacing:.22em;color:var(--label);
-  text-transform:uppercase;margin-bottom:14px}
+  text-transform:uppercase;margin-bottom:10px;line-height:1.43}
 .m-title{font-size:50px;font-weight:600;max-width:600px;text-align:center;
-  white-space:nowrap;overflow:hidden}
-.m-artist{font-size:34px;font-weight:500;color:var(--ink-dim);margin-top:8px;
-  max-width:600px;white-space:nowrap;overflow:hidden}
+  white-space:nowrap;overflow:hidden;line-height:1.43}
+.m-artist{font-size:34px;font-weight:500;color:var(--ink-dim);margin-top:6px;
+  max-width:600px;white-space:nowrap;overflow:hidden;line-height:1.43}
 /* --- long names scroll rather than truncate ---
    A title clipped to "Shipping Up To Bos..." is the one thing you cannot
    fix by looking harder, so it travels instead. The whole animation is
@@ -547,14 +569,15 @@ a.lib-row{text-decoration:none;color:inherit}
 .m-title>span,.m-artist>span{display:inline-block;white-space:nowrap}
 .mq>span{will-change:transform}
 .m-bar{width:520px;height:12px;border-radius:6px;background:var(--chip);
-  margin-top:28px;overflow:hidden}
+  margin-top:22px;overflow:hidden}
 .m-fill{height:100%;width:0;background:var(--accent);border-radius:6px}
-.m-time{width:520px;display:flex;justify-content:space-between;margin-top:12px;
-  font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em}
+.m-time{width:520px;display:flex;justify-content:space-between;margin-top:10px;
+  font-size:22px;font-weight:600;color:var(--label);letter-spacing:.08em;
+  line-height:1.43}
 /* The second bar. Transport and the heart together, because they are
    the same kind of thing: the things you press about the track. */
 .m-ctl{display:flex;align-items:center;justify-content:center;gap:22px;
-  margin-top:16px}
+  margin-top:12px}
 /* Set apart from the three. At an equal gap the heart reads as a fourth
    transport button, and it is not one - those three move the music,
    this one changes your library. */
@@ -589,7 +612,7 @@ a.lib-row{text-decoration:none;color:inherit}
    music here, not the subject - the dial proper is where you read them
    properly - so they sit small and stay out of the way.              */
 .ms-head{display:flex;align-items:center;justify-content:center;gap:20px;
-  min-height:40px;margin-bottom:28px;
+  min-height:40px;margin-bottom:20px;line-height:1.43;
   font-size:22px;font-weight:600;letter-spacing:.1em;color:var(--label)}
 .ms-head b{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:0}
 .ms-head i{width:2px;height:24px;background:var(--hairline);display:block;flex:none}
