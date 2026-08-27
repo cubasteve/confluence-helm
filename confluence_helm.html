@@ -174,9 +174,52 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Its own scrim. The map underneath is dark whatever the panel's theme
    is, so a HUD in --ink over --chip is white on white by day and gone;
    this reads on either. */
+/* pointer-events stays off the box so the gaps beside the type do not
+   eat a drag on the map; the two children take it back. */
 #rad-hud{position:absolute;top:104px;left:50%;transform:translateX(-50%);
-  width:440px;text-align:center;pointer-events:none;
+  width:460px;text-align:center;pointer-events:none;
   padding:6px 20px 8px;border-radius:18px;background:rgba(0,0,0,.55)}
+#rad-head{pointer-events:auto;cursor:pointer}
+/* Ten net pixels of affordance. The HUD was just trimmed to 67 and a
+   full-sized chevron would have handed a third of that straight back. */
+#rad-chev{width:20px;height:20px;display:block;margin:-1px auto -5px;
+  fill:none;stroke:#6C757C;stroke-width:2.6;stroke-linecap:round;
+  stroke-linejoin:round;transition:transform .24s ease}
+#rad-hud.open #rad-chev{transform:rotate(180deg)}
+/* max-height rather than the grid-rows trick: this has to animate on
+   whatever Chromium the Pi is carrying, and 460 is checked against the
+   content in the test so a longer table cannot silently clip. */
+#rad-more{max-height:0;overflow:hidden;text-align:left;
+  transition:max-height .26s ease}
+#rad-hud.open #rad-more{max-height:480px;pointer-events:auto}
+/* Three lines of clock can live on a light scrim; a tide table and a
+   chart cannot. The sheet darkens as it opens. */
+#rad-hud.open{background:rgba(0,0,0,.74)}
+.rad-sec{margin-top:13px;font-size:14px;font-weight:600;letter-spacing:.16em;
+  color:#6C757C;display:flex;justify-content:space-between;align-items:baseline;
+  gap:12px;border-top:1px solid rgba(255,255,255,.1);padding-top:11px}
+.rad-sec span{font-size:13px;letter-spacing:.05em;font-weight:600;
+  color:#8A9299;text-align:right;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis}
+#rad-tide{margin-top:7px;font-variant-numeric:tabular-nums}
+.tid{display:flex;align-items:baseline;gap:12px;font-size:19px;font-weight:600;
+  color:#F2F4F6;letter-spacing:.04em;line-height:1.55}
+/* The one before now stays on the list - whether the water is going out
+   or coming in is the thing you actually want, and two future highs
+   cannot tell you that. It is dimmed, not hidden. */
+.tid.past{opacity:.45}
+.tid.dim{color:#9AA2A9;font-size:17px;letter-spacing:.07em}
+.tid b{color:#6C757C;font-weight:600;font-size:14px;letter-spacing:.12em;
+  width:46px;flex:0 0 46px}
+.tid i{font-style:normal;color:#9AA2A9;font-size:17px;margin-left:auto}
+#rad-win{margin-top:7px;font-size:22px;font-weight:600;color:#F2F4F6;
+  letter-spacing:.04em;font-variant-numeric:tabular-nums}
+#rad-win.none{color:#9AA2A9;font-size:17px;letter-spacing:.08em}
+#rad-winsub{font-size:16px;font-weight:600;color:#9AA2A9;letter-spacing:.05em;
+  margin-top:1px}
+#rad-strip{display:block;width:100%;height:76px;margin-top:10px}
+#rad-sun{margin-top:6px;font-size:14px;font-weight:600;color:#6C757C;
+  letter-spacing:.1em}
 #rad-time{font-size:23px;font-weight:600;letter-spacing:.12em;color:#F2F4F6;
   line-height:1.25}
 #rad-note{margin-top:7px;font-size:20px;font-weight:600;color:#9AA2A9;
@@ -187,7 +230,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    stops at 540. It looked deliberate in the screenshot and was simply
    clipped. Up here it is inside by construction, and the scrim it
    already sits on makes it read over any map. */
-#rad-cred{margin-top:4px;font-size:14px;font-weight:600;letter-spacing:.07em;
+#rad-cred{margin-top:3px;font-size:14px;font-weight:600;letter-spacing:.07em;
   color:#6C757C;opacity:.9;white-space:nowrap;line-height:1.2}
 /* The toolbar, in the keel app's idiom: a transport row - play, the
    two ends of the timeline named, the track between them - and under it
@@ -5416,6 +5459,314 @@ function radScrubTo(clientX){
   radPaint();
 }
 
+/* ---- the extended HUD ---------------------------------------------
+   Tapping the clock drops the rest of it down: the tide table for the
+   nearest station, and the hours it is actually worth going out in.
+
+   Nothing here is fetched until that first tap. Somebody who only ever
+   wants the radar pays exactly what they paid before, and both answers
+   are then held OUTSIDE R - which dies with the app - so closing and
+   reopening the map does not re-download a tide table.               */
+const SAIL={
+  /* A club boat's band. Under MIN nobody is racing, over MAX the fleet
+     is on its ear, and it is the GUST that actually ends an afternoon:
+     the hourly average can look perfectly reasonable straight through
+     one. All three are here rather than inline so a heavier boat can
+     move them without hunting through the drawing code. */
+  MIN:6, MAX:20, GUST:28, HOURS:24,
+  /* Open-Meteo needs no key and sends CORS headers, which is the whole
+     reason it is here rather than another Tomorrow.io route: the panel
+     can ask it directly and the Worker stays a tile proxy. */
+  wind:'https://api.open-meteo.com/v1/forecast',
+  idx:'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json'
+     +'?type=tidepredictions',
+  pred:'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter',
+  /* Past this, the nearest gauge is telling you about somebody else's
+     water. An inland lake gets told so instead of being handed a tide. */
+  NEAR_KM:60,
+  WIND_TTL:20*60e3, TIDE_TTL:6*60*60e3,
+};
+const SEA={ tide:null, wind:null, busy:false };
+
+/* 0.25 deg either way - one cell is about 28 km, so the station is
+   resolved once per venue and not once per GPS twitch. */
+const seaCell=(lat,lon)=>Math.round(lat*4)+'/'+Math.round(lon*4);
+/* Equirectangular, same approximation trackStats uses. Over the 60 km
+   that matters here the error is metres. */
+function seaKm(la1,lo1,la2,lo2){
+  const kx=111.32*Math.cos(la1*Math.PI/180);
+  return Math.hypot((lo2-lo1)*kx,(la2-la1)*111.32);
+}
+
+/* NOAA publishes 3499 tide-prediction stations and no way to ask which
+   is nearest - the only list is two megabytes of pretty-printed JSON.
+   JSON.parse on that peaks at many times the wire size, on a Pi with a
+   gigabyte, while a map is open. So the body is read as it arrives and
+   only the winner is kept; the tail is what a record straddling two
+   chunks needs, and it is capped because a format change must not turn
+   this into a two-megabyte string. The answer goes to localStorage, so
+   the download happens once per venue and never again. */
+async function tideStation(lat,lon){
+  const key='helm.tide.'+seaCell(lat,lon);
+  try{ const c=localStorage.getItem(key); if(c) return JSON.parse(c); }catch(e){}
+  const res=await fetchT(SAIL.idx, 30000);
+  if(!res.ok) throw new Error('http '+res.status);
+  const rd=res.body.getReader(), dec=new TextDecoder();
+  const RX=/"id":\s*"(\d+)",\s*"name":\s*"((?:[^"\\]|\\.)*)",\s*"lat":\s*(-?[\d.]+),\s*"lng":\s*(-?[\d.]+)/g;
+  let tail='', best=null;
+  for(;;){
+    const {done,value}=await rd.read();
+    const buf=tail+(done?dec.decode():dec.decode(value,{stream:true}));
+    RX.lastIndex=0;
+    let m, end=0;
+    while((m=RX.exec(buf))){
+      end=RX.lastIndex;
+      const km=seaKm(lat,lon,+m[3],+m[4]);
+      if(!best||km<best.km) best={id:m[1], name:m[2], km:km};
+    }
+    tail=buf.slice(end);
+    if(tail.length>8192) tail=tail.slice(-8192);
+    if(done) break;
+  }
+  if(best) try{ localStorage.setItem(key,JSON.stringify(best)); }catch(e){}
+  return best;
+}
+
+const seaYmd=d=>d.getUTCFullYear()
+  +String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
+
+/* GMT on the wire, not the station's local time. lst_ldt would come
+   back as "2026-08-27 03:05" with no zone on it, and Date would read
+   that as the BROWSER's local time - right only while the boat and the
+   gauge share an offset, and silently an hour out when they do not. */
+async function tideLoad(lat,lon){
+  const st=await tideStation(lat,lon);
+  if(!st) return {err:'NO TIDE STATION FOUND'};
+  if(st.km>SAIL.NEAR_KM)
+    return {err:'NEAREST GAUGE '+Math.round(st.km)+' KM AWAY', station:st};
+  const u=SAIL.pred+'?product=predictions&application=confluence-helm'
+    +'&begin_date='+seaYmd(new Date(Date.now()-864e5))+'&range=72'
+    +'&datum=MLLW&station='+st.id+'&time_zone=gmt&units=english'
+    +'&interval=hilo&format=json';
+  const r=await fetchT(u, 12000);
+  if(!r.ok) throw new Error('http '+r.status);
+  const j=await r.json();
+  if(j.error) return {err:'NO PREDICTIONS FOR THIS GAUGE', station:st};
+  const ev=(j.predictions||[]).map(x=>({
+    t:new Date(x.t.replace(' ','T')+'Z'), hi:x.type==='H', ft:+x.v }));
+  return {station:st, ev:ev};
+}
+
+async function windLoad(lat,lon){
+  const u=SAIL.wind+'?latitude='+lat.toFixed(4)+'&longitude='+lon.toFixed(4)
+    +'&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m'
+    +'&wind_speed_unit=kn&timezone=UTC&forecast_days=3';
+  const r=await fetchT(u, 12000);
+  if(!r.ok) throw new Error('http '+r.status);
+  const j=await r.json(), h=j.hourly||{};
+  const t=(h.time||[]).map(x=>new Date(x+'Z'));
+  return {t:t, spd:h.wind_speed_10m||[], gst:h.wind_gusts_10m||[],
+          dir:h.wind_direction_10m||[]};
+}
+
+/* The window itself. An hour counts if it is between sunrise and sunset
+   AND inside the band - and the run reported is the LONGEST one in the
+   next day, not the first: a fine two hours at dawn is not the answer
+   when the afternoon has five. */
+/* sunTimes works off the INSTANT, so asking it at breakfast and again
+   at dusk gives sunsets half a minute apart - which shows up as a
+   window that ends a minute before the sunset printed underneath it.
+   Anchor every question about a day to that day's local noon and the
+   three readings agree. */
+function sunOf(d){
+  const noon=new Date(d); noon.setHours(12,0,0,0);
+  return sunTimes(noon, CFG.lat, CFG.lon);
+}
+const PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW',
+           'W','WNW','NW','NNW'];
+const pt16=d=>PTS[Math.round(((d%360)+360)%360/22.5)%16];
+function sailHours(W){
+  const now=Date.now(), out=[];
+  for(let i=0;i<W.t.length;i++){
+    const d=W.t[i];
+    if(d.getTime()<now-36e5) continue;
+    if(out.length>=SAIL.HOURS) break;
+    const sun=sunOf(d);
+    const day=sun.sunrise && !isNaN(sun.sunrise) && d>=sun.sunrise && d<=sun.sunset;
+    const s=W.spd[i], g=W.gst[i];
+    out.push({t:d, s:s, g:g, dir:W.dir[i], day:day,
+              ok: day && s>=SAIL.MIN && s<=SAIL.MAX && g<=SAIL.GUST});
+  }
+  return out;
+}
+function sailBest(H){
+  let best=null, run=null;
+  for(let i=0;i<=H.length;i++){
+    if(i<H.length && H[i].ok){ if(!run) run={a:i,b:i}; else run.b=i; continue; }
+    if(run){ if(!best || run.b-run.a > best.b-best.a) best=run; run=null; }
+  }
+  return best;
+}
+/* Why there is no window is more use than the fact that there is not. */
+function sailWhy(H){
+  const day=H.filter(h=>h.day);
+  if(!day.length) return 'NO DAYLIGHT LEFT TODAY';
+  if(day.every(h=>h.s<SAIL.MIN)) return 'TOO LIGHT — UNDER '+SAIL.MIN+' KT ALL DAY';
+  if(day.every(h=>h.s>SAIL.MAX||h.g>SAIL.GUST)) return 'TOO MUCH — BLOWING THROUGH';
+  return 'NOTHING CLEAN IN THE NEXT '+SAIL.HOURS+' H';
+}
+
+/* ---- drawing it ---------------------------------------------------- */
+const hhmm=d=>d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+
+function drawTide(){
+  const el=$('rad-tide'), at=$('rad-tide-at'); if(!el) return;
+  const T=SEA.tide;
+  if(!T){ el.textContent='…'; return; }
+  if(at) at.textContent = T.station
+    ? T.station.name.toUpperCase()+' · '+Math.round(T.station.km)+' KM' : '';
+  if(T.err){ el.innerHTML='<div class="tid dim">'+T.err+'</div>'; return; }
+  /* The one before now is worth a row: whether it is going out or
+     coming in is the thing you actually want, and two future highs do
+     not tell you that. */
+  const now=Date.now();
+  let i=T.ev.findIndex(e=>e.t.getTime()>now);
+  if(i<0) i=T.ev.length;
+  const rows=T.ev.slice(Math.max(0,i-1), Math.max(0,i-1)+4);
+  el.innerHTML=rows.map(e=>{
+    const past=e.t.getTime()<=now;
+    return '<div class="tid'+(past?' past':'')+'">'
+      +'<b>'+(e.hi?'HIGH':'LOW')+'</b>'
+      +'<span>'+hhmm(e.t)+'</span>'
+      +'<i>'+e.ft.toFixed(1)+' ft</i></div>'; }).join('');
+}
+
+function drawWind(){
+  const el=$('rad-win'), sub=$('rad-winsub'), sun=$('rad-sun');
+  if(!el) return;
+  const W=SEA.wind;
+  if(!W){ el.textContent='…'; el.className=''; if(sub) sub.textContent='';
+          drawStrip(null,null); return; }
+  if(W.err){ el.textContent=W.err; el.className='none';
+             if(sub) sub.textContent=''; drawStrip(null,null); return; }
+  const H=W.hours, b=sailBest(H);
+  if(!b){ el.textContent=sailWhy(H); el.className='none';
+          if(sub) sub.textContent=''; }
+  else{
+    const run=H.slice(b.a,b.b+1);
+    const lo=Math.round(Math.min(...run.map(h=>h.s)));
+    const hi=Math.round(Math.max(...run.map(h=>h.s)));
+    const gust=Math.round(Math.max(...run.map(h=>h.g)));
+    /* The end of the window is the end of its last HOUR, not the hour's
+       own stamp: a run of 12:00 and 13:00 is good until 14:00. Capped at
+       sunset, because the 20:00 hour of a day that ends at 20:14 is not
+       an hour of sailing until 21:00. */
+    const last=run[run.length-1].t;
+    const set=sunOf(last).sunset;
+    let end=new Date(last.getTime()+36e5);
+    if(set && !isNaN(set) && set<end) end=set;
+    el.textContent=hhmm(run[0].t)+' – '+hhmm(end);
+    el.className='';
+    if(sub) sub.textContent=pt16(run[0].dir)+' '+(lo===hi?lo:lo+'–'+hi)
+      +' kt · gusts '+gust;
+  }
+  if(sun){
+    const t=sunOf(new Date());
+    sun.textContent = (t.sunrise&&!isNaN(t.sunrise))
+      ? 'SUN '+hhmm(t.sunrise)+' – '+hhmm(t.sunset) : '';
+  }
+  drawStrip(H,b);
+}
+
+/* The window, drawn. A bar per hour: grey under the band, accent in it,
+   amber over the top, red where the gust alone would end the day - and
+   dimmed after dark, so the shape of the day reads before any of the
+   numbers do.
+
+   The scale follows the data rather than sitting at a fixed 34 kt. A
+   six-knot afternoon drawn against 34 is four rows of stubs that say
+   nothing; against its own maximum it says "light, and steady". The
+   floor stops the flattery: a drifter cannot be stretched to look like
+   a breeze, and the two dashed guides are the band itself, so a bar's
+   height means the same thing at either end of the scale. */
+const STRIP={w:420, h:76, base:58, top:8};
+function drawStrip(H,b){
+  const g=$('rad-strip'); if(!g) return;
+  if(!H||!H.length){ g.innerHTML=''; return; }
+  const n=Math.min(H.length, SAIL.HOURS), hh=H.slice(0,n);
+  const step=STRIP.w/n, bw=Math.max(4, step-3.5);
+  const top=Math.max(SAIL.MIN+8,
+    Math.max(...hh.map(h=>Math.max(h.s||0, h.g||0)))*1.06);
+  const y=v=>STRIP.base-Math.max(0,Math.min(1,v/top))*(STRIP.base-STRIP.top);
+  let out='';
+  if(b) out+='<rect x="'+(b.a*step).toFixed(1)+'" y="0" width="'
+    +((b.b-b.a+1)*step).toFixed(1)+'" height="'+STRIP.base
+    +'" rx="4" fill="rgba(74,158,255,.15)"/>';
+  const guide=(v,lbl)=>{
+    if(v>=top) return '';
+    return '<line x1="0" y1="'+y(v).toFixed(1)+'" x2="'+(STRIP.w-22)
+      +'" y2="'+y(v).toFixed(1)+'" stroke="rgba(255,255,255,.16)"'
+      +' stroke-width="1" stroke-dasharray="3 4"/>'
+      +'<text x="'+STRIP.w+'" y="'+(y(v)+3.5).toFixed(1)+'" fill="#6C757C"'
+      +' font-size="11" font-weight="600" text-anchor="end">'+lbl+'</text>'; };
+  out+=guide(SAIL.MIN,SAIL.MIN)+guide(SAIL.MAX,SAIL.MAX);
+  for(let i=0;i<n;i++){
+    const h=hh[i];
+    const bt=y(h.s), bh=Math.max(2, STRIP.base-bt);
+    const col = h.g>SAIL.GUST ? '#FF6B4A'
+              : h.s>SAIL.MAX  ? '#E8B23A'
+              : h.s<SAIL.MIN  ? '#4C555C' : '#4A9EFF';
+    const x=i*step+(step-bw)/2, dim=h.day?'':' opacity=".38"';
+    out+='<rect x="'+x.toFixed(1)+'" y="'+(STRIP.base-bh).toFixed(1)
+      +'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="2" fill="'
+      +col+'"'+dim+'/>';
+    /* The gust as a cap above the bar. It is the number that actually
+       ends an afternoon, and an hourly average hides it completely. */
+    if(h.g>h.s+1) out+='<line x1="'+x.toFixed(1)+'" y1="'+y(h.g).toFixed(1)
+      +'" x2="'+(x+bw).toFixed(1)+'" y2="'+y(h.g).toFixed(1)
+      +'" stroke="'+col+'" stroke-width="1.6" opacity="'+(h.day?'.55':'.24')+'"/>';
+  }
+  out+='<line x1="0" y1="'+STRIP.base+'" x2="'+STRIP.w+'" y2="'+STRIP.base
+    +'" stroke="rgba(255,255,255,.18)" stroke-width="1"/>';
+  /* Four stamps is all a 420px strip can carry without them touching. */
+  for(let i=0;i<n;i+=6)
+    out+='<text x="'+(i*step+step/2).toFixed(1)+'" y="'+(STRIP.h-2)
+      +'" fill="#6C757C" font-size="12" font-weight="600" text-anchor="middle">'
+      +String(hh[i].t.getHours()).padStart(2,'0')+'</text>';
+  g.innerHTML=out;
+}
+
+/* ---- the tap ------------------------------------------------------- */
+function radMore(open){
+  const hud=$('rad-hud'); if(!hud) return;
+  const want = open===undefined ? !hud.classList.contains('open') : !!open;
+  hud.classList.toggle('open', want);
+  if(want) radDetails();
+}
+
+/* Draw whatever is already known first, then go and get what is stale.
+   The second tap on a session should show a tide table instantly, not
+   an ellipsis while the network decides. */
+function radDetails(){
+  drawTide(); drawWind();
+  if(SEA.busy) return;
+  const lat=CFG.lat, lon=CFG.lon, cell=seaCell(lat,lon), now=Date.now();
+  const needTide=!SEA.tide||SEA.tide.cell!==cell||now-SEA.tide.at>SAIL.TIDE_TTL;
+  const needWind=!SEA.wind||SEA.wind.cell!==cell||now-SEA.wind.at>SAIL.WIND_TTL;
+  if(!needTide&&!needWind) return;
+  SEA.busy=true;
+  const done=()=>{ SEA.busy=false; };
+  const jobs=[];
+  if(needTide) jobs.push(tideLoad(lat,lon)
+    .catch(e=>({err:/abort/i.test(e&&e.message||'')?'TIDE TIMED OUT':'NO TIDE — NO NETWORK'}))
+    .then(r=>{ SEA.tide=Object.assign({cell:cell, at:Date.now()}, r); drawTide(); }));
+  if(needWind) jobs.push(windLoad(lat,lon)
+    .then(W=>({hours:sailHours(W)}))
+    .catch(e=>({err:/abort/i.test(e&&e.message||'')?'FORECAST TIMED OUT':'NO FORECAST — NO NETWORK'}))
+    .then(r=>{ SEA.wind=Object.assign({cell:cell, at:Date.now()}, r); drawWind(); }));
+  Promise.all(jobs).then(done, done);
+}
+
 /* A new view: everything composited is now for the wrong place, so the
    generation moves and anything still in flight for the old one lands on
    a closed door. */
@@ -5437,10 +5788,20 @@ function radOpen(host){
   const base=document.createElement('canvas'); base.width=W; base.height=H;
   host.appendChild(cv);
   host.insertAdjacentHTML('beforeend',
-    '<div id="rad-hud"><span id="rad-time">—</span>'
+    '<div id="rad-hud">'
+    +'<div id="rad-head"><span id="rad-time">—</span>'
     +'<div id="rad-note"></div>'
     +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer · Tomorrow.io</div>'
+    +'<svg id="rad-chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>'
     +'</div>'
+    +'<div id="rad-more">'
+    +'<div class="rad-sec">TIDE<span id="rad-tide-at"></span></div>'
+    +'<div id="rad-tide">…</div>'
+    +'<div class="rad-sec">SAILING WINDOW</div>'
+    +'<div id="rad-win">…</div><div id="rad-winsub"></div>'
+    +'<svg id="rad-strip" viewBox="0 0 420 76" preserveAspectRatio="none"></svg>'
+    +'<div id="rad-sun"></div>'
+    +'</div></div>'
     +'<div id="rad-tools">'
     +'<div id="rad-scrub">'
     +'<button id="rad-play" aria-label="play or pause">'
@@ -5463,6 +5824,9 @@ function radOpen(host){
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
+  /* The clock is the handle. gClaim keeps the tap from also reading as
+     the swipe that closes the app. */
+  $('rad-head').addEventListener('click',()=>{ gClaim(); radMore(); });
   $('rad-home').addEventListener('click',()=>{
     R.view.lat=CFG.lat; R.view.lon=CFG.lon; radReview(); });
   $('rad-play').addEventListener('click',()=>radPlay(!R.playing));

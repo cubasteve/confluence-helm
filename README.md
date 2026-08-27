@@ -1069,6 +1069,114 @@ back on is instant: the frames stay in memory, which is the whole point
 of keeping them there. The clock says `RAIN OFF` rather than going
 blank — an empty map and a stopped layer look identical otherwise.
 
+### Tap the clock
+
+The HUD is a handle. Tapping it drops the rest of it down: the tide
+table for the nearest gauge, and the hours it is actually worth going
+out in.
+
+```
+            11:43 PM · FORECAST
+       Esri · OpenSeaMap · RainViewer · Tomorrow.io
+                      ⌄
+  TIDE            PACKWOOD PLACE, MOSQUITO LAGOON · 54 KM
+  HIGH  12:38 AM                              2.7 ft
+  LOW   07:05 AM                              0.3 ft
+  HIGH  12:53 PM                              2.3 ft
+  LOW   07:08 PM                              0.1 ft
+
+  SAILING WINDOW
+  05:00 PM – 09:00 PM
+  SW 6–7 kt · gusts 11
+  ▁▁▁▁▂▂▂▃▃▃▃▂▂▁▁  ← a bar an hour, the window behind them
+  SUN 11:02 AM – 11:54 PM
+```
+
+**Nothing is fetched until that first tap.** Somebody who only ever
+wants the radar pays exactly what they paid before — measured against
+the previous commit on the same machine, 9.5% CPU open before and 9.2%
+after. Both answers are then held outside `R`, which dies with the app,
+so closing and reopening the map does not re-download a tide table.
+
+The row *before* now stays on the list, dimmed. Whether the water is
+going out or coming in is the thing you actually want, and two future
+highs cannot tell you that.
+
+### Two megabytes of tide stations, read as they arrive
+
+NOAA publishes 3499 tide-prediction stations and **no way to ask which
+is nearest** — `mdapi` ignores `lat`/`lon`/`radius` and hands back the
+entire list, two megabytes of pretty-printed JSON. `JSON.parse` on that
+peaks at many times the wire size, on a Pi with a gigabyte, while a map
+is open.
+
+So the body is read as it arrives and only the winner is kept:
+
+```js
+const rd=res.body.getReader(), dec=new TextDecoder();
+let tail='', best=null;
+for(;;){
+  const {done,value}=await rd.read();
+  const buf=tail+(done?dec.decode():dec.decode(value,{stream:true}));
+  while((m=RX.exec(buf))){ …keep the nearest… }
+  tail=buf.slice(end);
+  if(tail.length>8192) tail=tail.slice(-8192);
+  if(done) break;
+}
+```
+
+`id`, `name`, `lat` and `lng` are consecutive in every record, so one
+regex takes them; the tail is what a record straddling two chunks needs,
+and it is **capped** because a format change must not quietly turn this
+into a two-megabyte string. Peak memory is one chunk. The answer goes to
+`localStorage` keyed to a quarter-degree cell — about 28 km — so the
+download happens once per venue and not once per GPS twitch. Measured
+against the real list: 0.2 s, right answer.
+
+**Past 60 km the nearest gauge is telling you about somebody else's
+water.** An inland lake gets told `NEAREST GAUGE 140 KM AWAY` instead of
+being handed a tide, and no prediction call is made at all.
+
+Times go over the wire as **GMT**, not the station's local time.
+`lst_ldt` comes back as `"2026-08-27 03:05"` with no zone on it, and
+`Date` reads that as the *browser's* local time — right only while the
+boat and the gauge share an offset, and silently an hour out when they
+do not.
+
+### The sailing window
+
+Wind comes from **Open-Meteo**: no key, and it sends CORS headers, which
+is the whole reason it is here rather than another Tomorrow.io route —
+the panel asks it directly and the Worker stays a tile proxy.
+
+An hour counts if it is between sunrise and sunset **and** inside the
+band: `MIN 6` to `MAX 20` knots, with a separate `GUST 28` ceiling.
+The gust is the number that actually ends an afternoon — the hourly
+average can look perfectly reasonable straight through one — so it is
+its own limit and its own mark on the chart, a cap above each bar.
+
+The run reported is the **longest** one in the next 24 h, not the first:
+a fine two hours at dawn is not the answer when the afternoon has five.
+Its end is the end of its last *hour*, capped at sunset, because the
+20:00 hour of a day that ends at 20:14 is not sailing until 21:00.
+
+When there is no window the panel says **why** — `TOO LIGHT — UNDER 6 KT
+ALL DAY`, `TOO MUCH — BLOWING THROUGH`, `NO DAYLIGHT LEFT TODAY` — which
+is more use than an empty range.
+
+`sunTimes` works off the *instant*, so asking it at breakfast and again
+at dusk gives sunsets half a minute apart, which showed up as a window
+ending one minute before the sunset printed under it. Every question
+about a day is now anchored to that day's local noon and the three
+readings agree.
+
+The strip's scale **follows the data**, floored at `MIN + 8`. A
+six-knot afternoon drawn against a fixed 34 kt is four rows of stubs
+that say nothing; against its own maximum it says "light, and steady".
+The floor stops the flattery — a drifter cannot be stretched to look
+like a breeze — and the two dashed guides are the band itself, so a
+bar's height means the same thing at either end of the scale.
+
 ### There are no zoom buttons
 
 On a touch panel the glass **is** the zoom control. Two fingers pinch;
