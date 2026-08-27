@@ -2693,23 +2693,45 @@ let G=null;
    counter can never go out of step. Written to work whichever order the
    listeners run in: at the target this fires BEFORE #stage's handler
    creates G, so it creates it. */
-const gClaim=()=>{
+/* One place a gesture is born, so the watchdog below cannot be skipped.
+   A contact can vanish without a pointerup - the rim does it, the
+   finger simply stops being reported - and G.live then never comes back
+   to zero, which used to leave every later gesture dead with no way
+   back but a power cycle. Any new contact long enough after the last
+   one started is treated as a fresh gesture rather than joining a
+   wreck. Time, not live count: gClaim makes G with no fingers in it and
+   the pointerdown adds one a moment later, and a live-count test would
+   throw the claim away in between. */
+const GESTURE_MAX=4000;
+function gStart(){
+  if(G && Date.now()-G.t0>GESTURE_MAX) G=null;
   if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
-  G.claimed=true;
-};
+  return G;
+}
+const gClaim=()=>{ gStart().claimed=true; };
 /* On WINDOW, not #stage. #stage is border-radius:50%, and a rounded box
    does not hit-test outside its own shape - so a touch that lands on the
    rim, or on the digitizer's report of it a pixel or two proud of the
    glass, missed the element entirely and never became a gesture. Window
    catches everything, and still runs after the target's own listeners,
    which is what gClaim depends on. */
-addEventListener('pointerdown',e=>{
-  if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
-  G.p.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
-  G.live++; G.max=Math.max(G.max,G.live);
-});
+const gAdd=(e)=>{
+  const g=gStart();
+  g.p.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
+  g.live++; g.max=Math.max(g.max,g.live);
+  return g.p.get(e.pointerId);
+};
+addEventListener('pointerdown',gAdd);
 addEventListener('pointermove',e=>{
-  const q=G&&G.p.get(e.pointerId);
+  let q=G&&G.p.get(e.pointerId);
+  /* A finger coming in over the bezel is already moving when the
+     digitizer first sees it, and the pointerdown that should have
+     started it can be swallowed by the controller's edge rejection - or
+     never fire at all, because the contact began off the glass. The
+     first MOVE is then the only thing we are given, so it seeds the
+     gesture. `buttons` because a mouse merely hovering across the panel
+     must not: for touch it is set for as long as there is contact. */
+  if(!q && e.buttons) q=gAdd(e);
   if(!q) return;
   q.x=e.clientX; q.y=e.clientY;
   /* A hold control claims the gesture the moment it is touched, so that

@@ -1026,6 +1026,36 @@ showed. Nothing inside the stage scrolls or pinches, so nothing is given
 up. What is asserted in the test is the computed property itself, since
 the failure it prevents cannot be reproduced.
 
+### A finger that arrives already moving
+
+Coming in over the **bezel**, the contact begins off the glass. The
+digitizer first sees it mid-motion, and the `pointerdown` that should
+start the gesture is swallowed by the controller's edge rejection — or
+never fires at all, because there was nothing to press down on. The page
+is given moves and nothing else, and a tracker keyed on `pointerdown`
+never learns the finger exists.
+
+So the first **move** seeds the gesture:
+
+```js
+if(!q && e.buttons) q = gAdd(e);
+```
+
+`buttons`, because a mouse merely hovering across the panel must not
+open anything; for touch it is set for as long as there is contact.
+
+That cuts both ways, though. If a gesture can begin without a
+`pointerdown`, a contact can also end without a `pointerup` — the rim
+does exactly that, the finger simply stops being reported — and
+`G.live` would never come back to zero, leaving every later gesture dead
+with no way out but a power cycle. That failure has bitten this file
+before. So every gesture is now born in one place, `gStart()`, which
+discards a wreck older than `GESTURE_MAX` rather than joining it.
+
+Time, not live count: `gClaim` makes a `G` with no fingers in it and the
+pointerdown adds one a moment later, so a live-count test would throw
+the claim away in between.
+
 The listeners also moved from `#stage` to **window**. `#stage` is
 `border-radius:50%`, and a rounded box does not hit-test outside its own
 shape — so a touch that landed on the rim, or on the digitizer's report
