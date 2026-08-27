@@ -167,8 +167,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #app-run.failed #app-msg{display:block}
 /* --- the radar app --- */
 #rad-cv{position:absolute;inset:0;touch-action:none}
-/* Both HUD and controls sit on the centre line and inside the glass: at
-   y=108 the circle is 648px across, at y=948 it is 708. */
+/* HUD and toolbar both sit on the centre line and inside the glass: at
+   y=104 the circle is 640px across, at y=950 it is 703. */
 /* Its own scrim. The map underneath is dark whatever the panel's theme
    is, so a HUD in --ink over --chip is white on white by day and gone;
    this reads on either. */
@@ -176,19 +176,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   width:440px;text-align:center;pointer-events:none;
   padding:10px 20px 14px;border-radius:20px;background:rgba(0,0,0,.55)}
 #rad-time{font-size:26px;font-weight:600;letter-spacing:.12em;color:#F2F4F6}
-/* The band you can actually hit. The bar inside it is 8px because that
-   is what reads; this is 50 because that is what a thumb needs. */
-#rad-scrub{pointer-events:auto;padding:22px 0 20px;margin-bottom:-18px;
-  touch-action:none}
-#rad-track{width:100%;height:8px;border-radius:4px;background:rgba(255,255,255,.18);
-  overflow:hidden}
-#rad-bar{height:100%;width:0;background:var(--accent);border-radius:4px;
-  transition:width .2s linear}
-/* Where the present is on the timeline. Left of it is what happened,
-   right of it is what a model thinks will. */
-#rad-now{position:absolute;top:-3px;width:2px;height:14px;
-  background:#F2F4F6;opacity:.85}
-#rad-track{position:relative;overflow:visible}
 #rad-note{margin-top:12px;font-size:22px;font-weight:600;color:#9AA2A9;
   letter-spacing:.06em}
 /* The credits Esri's unkeyed service asks for, inside the HUD rather
@@ -199,13 +186,53 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    already sits on makes it read over any map. */
 #rad-cred{margin-top:8px;font-size:15px;font-weight:600;letter-spacing:.07em;
   color:#6C757C;opacity:.9;white-space:nowrap}
-#rad-ctl{position:absolute;bottom:132px;left:50%;transform:translateX(-50%);
-  display:flex;gap:20px;align-items:center;z-index:2}
-.radb{width:88px;height:88px;border-radius:44px;border:2px solid var(--hairline);
-  background:var(--panel);color:var(--ink);font-family:var(--font);
-  font-size:34px;font-weight:600;opacity:.94;padding:0}
-.radb.wide{width:150px;font-size:22px;letter-spacing:.16em}
-.radb:active{background:var(--chip)}
+/* The toolbar, in the keel app's idiom: a transport row - play, the
+   two ends of the timeline named, the track between them - and under it
+   a row of pills for the layers. Both sit on one scrim, so the map
+   cannot show through the gap between the rows.
+   There are no zoom buttons. On a touch panel the glass IS the zoom
+   control, and the row those two buttons used to occupy is worth more
+   as the transport. */
+#rad-tools{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);
+  width:660px;z-index:2;padding:16px 26px 18px;border-radius:26px;
+  background:rgba(0,0,0,.55);--rad-hi:#4A9EFF}
+#rad-scrub{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+/* The play button leads the row, the way it does in the keel app: the
+   control pressed most often is the one the thumb should find first. */
+#rad-play{width:64px;height:64px;flex:0 0 64px;border-radius:32px;
+  border:2px solid var(--rad-hi);background:rgba(74,158,255,.14);
+  color:var(--rad-hi);padding:0;display:flex;align-items:center;
+  justify-content:center}
+#rad-play svg{width:34px;height:34px;display:block;fill:currentColor}
+#rad-play:active{background:rgba(74,158,255,.32)}
+.rad-end{flex:0 0 auto;font-size:19px;font-weight:600;letter-spacing:.06em;
+  color:#9AA2A9;font-variant-numeric:tabular-nums}
+.rad-end.fut{color:var(--rad-hi)}
+/* The band you can actually hit. The track inside it is 8px because
+   that is what reads; this is 52 because that is what a thumb needs. */
+#rad-slide{flex:1;padding:22px 0;touch-action:none}
+/* Grey behind, accent at the present, amber out into the forecast - the
+   track says which third of it you are in before you read the clock.
+   70% is where the present falls with twelve past frames, the nowcast
+   and three cast hours; #rad-now marks it exactly. */
+#rad-track{position:relative;height:8px;border-radius:4px;
+  background:linear-gradient(90deg,#6C757C 0%,var(--rad-hi) 70%,#E8B23A 100%)}
+#rad-knob{position:absolute;top:50%;left:0;width:30px;height:30px;
+  margin:-15px 0 0 -15px;border-radius:15px;background:#F2F4F6;
+  border:2px solid rgba(0,0,0,.45);transition:left .2s linear}
+/* Where the present is on the timeline. Left of it is what happened,
+   right of it is what a model thinks will. */
+#rad-now{position:absolute;top:-7px;width:2px;height:22px;
+  background:#F2F4F6;opacity:.85}
+#rad-pills{display:flex;align-items:center;gap:14px}
+.radt{height:60px;padding:0 22px;border-radius:30px;
+  border:2px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);
+  color:#9AA2A9;font-family:var(--font);font-size:21px;font-weight:600;
+  letter-spacing:.14em}
+.radt.on{color:var(--rad-hi);border-color:var(--rad-hi);
+  background:rgba(74,158,255,.14)}
+.radt:active{background:rgba(255,255,255,.2)}
+#rad-sp{flex:1}
 #apps-empty{width:600px;text-align:center;font-size:24px;font-weight:600;
   color:var(--label);letter-spacing:.06em;line-height:1.5;padding-top:20px}
 /* Layer promotion only while a slide is actually running. Holding three
@@ -5111,6 +5138,11 @@ let R=null;
 const wx=(lon,z)=>(lon+180)/360*256*Math.pow(2,z);
 const wy=(lat,z)=>{ const r=Math.max(-85.05,Math.min(85.05,lat))*Math.PI/180;
   return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z); };
+/* and back again - pinch and pan both need to turn a screen point into a
+   place, which is the same maths read the other way. */
+const unwx=(px,z)=>px/(256*Math.pow(2,z))*360-180;
+const unwy=(py,z)=>{ const t=Math.PI-2*Math.PI*py/(256*Math.pow(2,z));
+  return 180/Math.PI*Math.atan(0.5*(Math.exp(t)-Math.exp(-t))); };
 
 /* One image, or null. Never rejects: a missing tile is a hole in the
    picture, not a reason for the app to stop. */
@@ -5141,13 +5173,18 @@ const radUrl=(t,tpl)=>tpl.replace('{z}',t.z).replace('{x}',t.x).replace('{y}',t.
 
 /* The base: drawn once per view, then it is one drawImage a tick. */
 async function radBuildBase(){
-  const gen=R.gen, c=R.base, g=c.getContext('2d');
+  const gen=R.gen, bg=++R.bgen, c=R.base, g=c.getContext('2d');
   g.fillStyle=getComputedStyle(document.body).getPropertyValue('--bg')||'#0b0c0e';
   g.fillRect(0,0,c.width,c.height);
-  for(const tpl of [RAD.base, RAD.sea]){
+  const layers=R.seaOn ? [RAD.base, RAD.sea] : [RAD.base];
+  for(const tpl of layers){
     const ts=radTiles(R.view.z, c.width, c.height);
     const ims=await Promise.all(ts.map(t=>radImg(radUrl(t,tpl),gen)));
-    if(!R||R.gen!==gen) return;
+    /* bgen as well as gen: turning the seamarks off starts a new base
+       build, and the old one must not paint its layer over the top of it
+       a second later. gen is not the right lever - bumping that would
+       throw away the radar frames, which have not changed at all. */
+    if(!R||R.gen!==gen||R.bgen!==bg) return;
     ims.forEach((im,i)=>{ if(im) g.drawImage(im, ts[i].px, ts[i].py, 256,256); });
     radPaint();
   }
@@ -5297,8 +5334,14 @@ function radPaint(){
   if(!R) return;
   const c=R.cv, g=c.getContext('2d');
   g.clearRect(0,0,c.width,c.height);
+  /* A pinch in progress is drawn as a transform of what is already
+     composited. Rebuilding tiles per pointermove would be dozens of
+     fetches for a gesture that has not finished saying what it wants;
+     this is one setTransform and it tracks the fingers exactly. */
+  const pz=R.pinch;
+  if(pz) g.setTransform(pz.s,0,0,pz.s, pz.cx*(1-pz.s), pz.cy*(1-pz.s));
   g.drawImage(R.base,0,0);
-  const n=R.frames.length;
+  const n=R.rainOn ? R.frames.length : 0;
   if(n){
     const i=Math.min(Math.floor(R.p), n-1), f=R.p-i;
     const draw=(k,w)=>{ const fc=R.frames[k];
@@ -5316,8 +5359,11 @@ function radPaint(){
       R.el.time.textContent=new Date(R.times[i]).toLocaleTimeString([],
         {hour:'2-digit',minute:'2-digit'}) + kind;
     }
-    if(R.el.bar) R.el.bar.style.width=(n>1?(i/(n-1)*100):0)+'%';
+    if(R.el.bar) R.el.bar.style.left=(n>1?(i/(n-1)*100):0)+'%';
+  }else if(R.el.time){
+    R.el.time.textContent = R.rainOn ? '—' : 'RAIN OFF';
   }
+  if(pz) g.setTransform(1,0,0,1,0,0);
   /* The boat, if the GPS has ever answered. */
   const px=R.cv.width/2, py=R.cv.height/2;
   g.strokeStyle=getComputedStyle(document.body).getPropertyValue('--accent')||'#4A9EFF';
@@ -5328,7 +5374,7 @@ function radPaint(){
 function radTick(){
   if(!R) return;
   R.timer=setTimeout(radTick, RAD.TICK);
-  const n=R.frames.length; if(!n||!R.playing) return;
+  const n=R.frames.length; if(!n||!R.playing||!R.rainOn) return;
   /* Paused costs a timer that returns immediately - no advance, no
      paint, no compositing. Keeping it running is what makes resuming
      instant, and it is three lines of nothing every 80 ms. */
@@ -5387,33 +5433,47 @@ function radOpen(host){
   host.appendChild(cv);
   host.insertAdjacentHTML('beforeend',
     '<div id="rad-hud"><span id="rad-time">—</span>'
-    +'<div id="rad-scrub"><div id="rad-track"><div id="rad-bar"></div>'
-    +'<div id="rad-now" style="display:none"></div></div></div>'
     +'<div id="rad-note"></div>'
     +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer · Tomorrow.io</div>'
     +'</div>'
-    +'<div id="rad-ctl">'
-    +'<button class="radb" id="rad-out">–</button>'
-    +'<button class="radb wide" id="rad-home">BOAT</button>'
-    +'<button class="radb" id="rad-in">+</button>'
-    +'<button class="radb" id="rad-play" aria-label="play or pause">'
-    +'<svg viewBox="0 0 24 24"><path id="rad-playico" d=""/></svg>'
-    +'</button></div>');
-  R={ ac:new AbortController(), gen:1, cv:cv, base:base,
+    +'<div id="rad-tools">'
+    +'<div id="rad-scrub">'
+    +'<button id="rad-play" aria-label="play or pause">'
+    +'<svg viewBox="0 0 24 24"><path id="rad-playico" d=""/></svg></button>'
+    +'<span class="rad-end">−2h</span>'
+    +'<div id="rad-slide"><div id="rad-track"><div id="rad-knob"></div>'
+    +'<div id="rad-now" style="display:none"></div></div></div>'
+    +'<span class="rad-end fut">+3h</span>'
+    +'</div>'
+    +'<div id="rad-pills">'
+    +'<button class="radt on" id="rad-sea">SEA</button>'
+    +'<button class="radt on" id="rad-rain">RAIN</button>'
+    +'<span id="rad-sp"></span>'
+    +'<button class="radt" id="rad-home">BOAT</button>'
+    +'</div></div>');
+  R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
       frames:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
+      seaOn:true, rainOn:true, pinch:null,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
-      el:{time:$('rad-time'), bar:$('rad-bar'), note:$('rad-note'),
+      el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
-  const zoom=d=>{ R.view.z=Math.max(RAD.MIN_Z,Math.min(RAD.MAX_Z,R.view.z+d));
-                  radReview(); };
-  $('rad-in') .addEventListener('click',()=>zoom(1));
-  $('rad-out').addEventListener('click',()=>zoom(-1));
   $('rad-home').addEventListener('click',()=>{
     R.view.lat=CFG.lat; R.view.lon=CFG.lon; radReview(); });
   $('rad-play').addEventListener('click',()=>radPlay(!R.playing));
+  /* The two layer pills. Seamarks are a base layer, so dropping them
+     rebuilds the base - cheap, and the radar frames are untouched.
+     Rain is drawn on top of it, so turning that off is one repaint and
+     turning it back on is instant: the frames stay in memory, which is
+     the whole point of keeping them there. */
+  $('rad-sea').addEventListener('click',e=>{
+    R.seaOn=!R.seaOn; e.currentTarget.classList.toggle('on',R.seaOn);
+    radBuildBase(); });
+  $('rad-rain').addEventListener('click',e=>{
+    R.rainOn=!R.rainOn; e.currentTarget.classList.toggle('on',R.rainOn);
+    radPaint(); });
   let scrub=false;
-  const sc=$('rad-scrub');
+  const sc=$('rad-slide');
   sc.addEventListener('pointerdown',e=>{ gClaim(); scrub=true;
     try{ sc.setPointerCapture(e.pointerId); }catch(err){}
     radScrubTo(e.clientX); });
@@ -5424,11 +5484,51 @@ function radOpen(host){
   /* Drag to pan. The radar is hidden while the finger is down and
      rebuilt when it lifts: recompositing fifteen frames per pointermove
      would be the one expensive thing in here. */
-  let drag=null;
+  const ptrs=new Map();
+  let drag=null, pin=null, lock=false;
+  const two=()=>{ const a=[...ptrs.values()];
+    return {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2,
+            d:Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y)}; };
+  /* Committing the pinch. The preview is a continuous scale; the map
+     only has integer zooms, so the nearest one wins - and the ground
+     under the midpoint of the two fingers has to end up back under the
+     midpoint of the two fingers. A pinch that walks the chart away from
+     the thing you pinched is the one thing everybody notices. */
+  const endPinch=()=>{
+    const q=R.pinch; R.pinch=null; pin=null;
+    if(!q){ radPaint(); return; }
+    const z=R.view.z;
+    const zn=Math.max(RAD.MIN_Z, Math.min(RAD.MAX_Z,
+              Math.round(z+Math.log(q.s)/Math.LN2)));
+    const k=Math.pow(2, zn-z), ox=q.cx-R.cv.width/2, oy=q.cy-R.cv.height/2;
+    const gx=(wx(R.view.lon,z)+ox)*k-ox, gy=(wy(R.view.lat,z)+oy)*k-oy;
+    R.view.z=zn; R.view.lon=unwx(gx,zn); R.view.lat=unwy(gy,zn);
+    radReview();
+  };
   cv.addEventListener('pointerdown',e=>{ gClaim();
-    drag={x:e.clientX,y:e.clientY,lat:R.view.lat,lon:R.view.lon};
-    try{ cv.setPointerCapture(e.pointerId); }catch(err){} });
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+    if(ptrs.size===2){
+      /* A second finger turns a pan into a zoom. lock keeps the finger
+         still down when the pinch ends from starting a fresh pan from
+         wherever it happens to be, which reads as a jump. */
+      drag=null; lock=true;
+      const m=two(), r=cv.getBoundingClientRect();
+      pin={d0:m.d||1, cx:m.x-r.left, cy:m.y-r.top};
+      R.pinch={s:1, cx:pin.cx, cy:pin.cy};
+    }else if(ptrs.size===1 && !lock){
+      drag={x:e.clientX,y:e.clientY,lat:R.view.lat,lon:R.view.lon};
+    }
+  });
   cv.addEventListener('pointermove',e=>{
+    if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pin && ptrs.size>=2){
+      const m=two();
+      const lo=Math.pow(2, RAD.MIN_Z-R.view.z), hi=Math.pow(2, RAD.MAX_Z-R.view.z);
+      R.pinch={s:Math.max(lo, Math.min(hi, m.d/pin.d0)), cx:pin.cx, cy:pin.cy};
+      radPaint();
+      return;
+    }
     if(!drag) return;
     const z=R.view.z, s=256*Math.pow(2,z);
     const nx=wx(drag.lon,z)-(e.clientX-drag.x), ny=wy(drag.lat,z)-(e.clientY-drag.y);
@@ -5437,7 +5537,14 @@ function radOpen(host){
     R.view.lat=180/Math.PI*Math.atan(0.5*(Math.exp(t)-Math.exp(-t)));
     radPaintBaseOnly();
   });
-  const up=()=>{ if(!drag) return; drag=null; radReview(); };
+  const up=e=>{
+    ptrs.delete(e.pointerId);
+    if(pin && ptrs.size<2) endPinch();
+    if(ptrs.size===0){
+      lock=false;
+      if(drag){ drag=null; radReview(); }
+    }
+  };
   cv.addEventListener('pointerup',up);
   cv.addEventListener('pointercancel',up);
   radReview();

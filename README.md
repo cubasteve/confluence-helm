@@ -958,9 +958,9 @@ Measured, same machine, closing and reopening:
 
 | | CPU @1x | JS heap | image memory |
 |---|---|---|---|
-| closed | 2.8% | 1.9 MB | **0** |
-| radar open | 6.0% | 2.7 MB | **24.9 MB** |
-| closed again | 3.8% | 2.3 MB | **0** |
+| closed | 1.8% | 1.9 MB | **0** |
+| radar open | 4.0% | 2.7 MB | **24.9 MB** |
+| closed again | 2.4% | 2.4 MB | **0** |
 
 For comparison, `sail-weather.html` measured **34.8%** at the same
 throttle. Most of that difference is not the map — it is a 323-particle
@@ -1035,22 +1035,81 @@ The timeline marks where **now** is, so past and forecast are told apart
 at a glance rather than by reading the clock, and the label distinguishes
 all three: `10:15 PM`, `· NOWCAST`, `· FORECAST`.
 
+### The toolbar
+
+Built in the keel app's idiom: a transport row — play, the two ends of
+the timeline named, the track between them — and under it a row of pills
+for the layers. Both rows share one scrim, so the map cannot show
+through the gap between them.
+
+```
+[▶]  −2h  ━━━━━━━━━━┃━━●━━━━  +3h
+[ SEA ] [ RAIN ]            [ BOAT ]
+```
+
+The track carries the shape of the timeline in its own colour: grey
+behind, accent at the present, amber out into the forecast — which third
+you are in reads before the clock does. 70% is where the present falls
+with twelve past frames, the nowcast and three cast hours; `#rad-now`
+marks it exactly rather than by the gradient's guess.
+
+`SEA` is a base layer, so dropping it rebuilds the base — cheap, and the
+radar frames are untouched, which is why the base carries its **own**
+generation counter (`bgen`) alongside `gen`. Bumping `gen` would throw
+away fifteen composited frames that have not changed at all.
+
+`RAIN` is drawn on top, so turning it off is one repaint and turning it
+back on is instant: the frames stay in memory, which is the whole point
+of keeping them there. The clock says `RAIN OFF` rather than going
+blank — an empty map and a stopped layer look identical otherwise.
+
+### There are no zoom buttons
+
+On a touch panel the glass **is** the zoom control. Two fingers pinch;
+the row those two buttons used to occupy is worth more as the transport.
+
+The preview is a continuous scale — one `setTransform` on what is
+already composited, tracking the fingers exactly. Rebuilding tiles per
+`pointermove` would be dozens of fetches for a gesture that has not
+finished saying what it wants.
+
+On release the nearest **integer** zoom wins, and the ground under the
+midpoint of the two fingers has to end up back under the midpoint of the
+two fingers — a pinch that walks the chart away from the thing you
+pinched is the one thing everybody notices. That is what `unwx`/`unwy`,
+the inverse of the Mercator projection, are for:
+
+```js
+const k=Math.pow(2, zn-z), ox=q.cx-W/2, oy=q.cy-H/2;
+const gx=(wx(lon,z)+ox)*k-ox, gy=(wy(lat,z)+oy)*k-oy;
+lon=unwx(gx,zn); lat=unwy(gy,zn);
+```
+
+`MIN_Z`/`MAX_Z` used to be enforced by the buttons. The preview scale is
+now clamped to `2^(MIN_Z−z) … 2^(MAX_Z−z)`, so the picture stops where
+the tiles do instead of committing to a zoom that has none.
+
+A second finger turns a pan into a zoom, and a `lock` flag keeps the
+finger still down when the pinch ends from starting a fresh pan from
+wherever it happens to be — which reads as a jump.
+
 ### Play, pause, scrub
 
-It plays on its own; the fourth button holds it. The glyph is the
-**action, not the state** — a triangle means "this will play" — the same
-rule the music page's transport follows, and for the same reason: a
-button that shows what it will do needs no legend.
+It plays on its own; the button at the head of the row holds it. The
+glyph is the **action, not the state** — a triangle means "this will
+play" — the same rule the music page's transport follows, and for the
+same reason: a button that shows what it will do needs no legend.
 
 Paused, the timer keeps running and returns immediately. No advance, no
 paint, no compositing. That is what makes resuming instant, and it is
 three lines of nothing every 80 ms.
 
 Touching the timeline scrubs to that frame **and pauses**, because a
-timeline that keeps running under your thumb fights you. The bar is 8px
-because that is what reads; the hit band around it is **50px** because
-that is what a thumb needs. Changing the view resumes playing — that is a
-new look, not a held frame.
+timeline that keeps running under your thumb fights you. The track is
+8px because that is what reads; the band around it is **52px** because
+that is what a thumb needs, and the play button is outside that band so
+pressing it does not also scrub. Changing the view resumes playing —
+that is a new look, not a held frame.
 
 ### Everything is checked against the circle, not the viewport
 
@@ -1058,9 +1117,10 @@ The credit line sat along the foot and was **outside the glass**: a 274px
 line at y=1070 has its corners 547px from the centre and the panel stops
 at 540. It looked deliberate in the screenshot and was simply clipped.
 It lives in the HUD now, inside by construction. The test asserts all
-four corners of every control are within 540px of the centre — the
-fourth button widened the control row, and that is exactly the kind of
-change that quietly pushes something off a round panel.
+four corners of every control are within 540px of the centre. The
+toolbar is 660px wide with its foot at y=950, which puts its lowest
+corners 526px out — inside, but that is the sort of margin a single
+extra pill would spend without anyone noticing.
 
 **Not Carto**, which `sail-weather.html` uses. `basemaps.cartocdn.com`
 now returns a tile with **API KEY REQUIRED** stamped across the middle of
