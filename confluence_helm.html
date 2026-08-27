@@ -142,28 +142,20 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   transform:translateY(100%);
   transition:transform .42s cubic-bezier(.16,1,.3,1);
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
-  color:var(--ink);
+  padding-bottom:126px;color:var(--ink);
 }
 #apps.open{transform:translateY(0)}
-/* Flush with the rim, not floating above it. #stage is border-radius:50%
-   with overflow:hidden, so the dock can simply run off the bottom and
-   the glass cuts it - which is why the bottom corners are square: their
-   rounding would never be seen, and a rounded card sitting short of the
-   edge is the thing that looked wrong.
-   760 wide is full width down to y=923, where the circle narrows to
-   meet it; below that the rim does the shaping. What has to stay inside
-   is the ROW, and 110px of foot is what holds it above the arc: it ends
-   at y=970, where the glass is still 653 across for a 606 row. */
-#apps-dock{width:760px;background:var(--panel);
-  border:1px solid var(--hairline);border-bottom:none;
-  border-radius:34px 34px 0 0;padding:16px 26px 110px;
+/* 660 wide with its foot at y=954 puts the lowest corners 529 out, the
+   same geometry the radar toolbar sits on and the same 11px of margin
+   inside the 540 the glass stops at. */
+#apps-dock{width:660px;background:var(--panel);border:1px solid var(--hairline);
+  border-radius:34px;padding:16px 26px 18px;
   box-shadow:0 -12px 44px rgba(0,0,0,.32)}
 #apps-dock .grab{position:static;margin:0 auto 12px}
 /* One row. More apps than fit scroll sideways rather than growing the
    dock into the drawer it just stopped being - and the row is held to
-   600 rather than the dock's full inner width, because at y=970 the
-   glass is 653 across and a row free to fill 708 would put its ends
-   through the rim the moment a second app arrived. */
+   600 rather than the dock's full inner width, so its ends cannot reach
+   the rim when a second app arrives. */
 .approw{display:flex;align-items:flex-start;justify-content:center;gap:26px;
   flex-wrap:nowrap;overflow-x:auto;padding:0;width:600px;max-width:100%;
   margin:0 auto}
@@ -2628,6 +2620,14 @@ const openApps  =()=>{ if(APP.on) return; closePanel();
                        drawApps(); markSlide('apps-open');
                        apps.classList.add('open'); };
 const closeApps =()=>{ markSlide('apps-close'); apps.classList.remove('open'); };
+/* Within reach of the dock: on it, or the width of a thumb around it. */
+const DOCK_REACH=110;
+const nearDock=(x,y)=>{
+  const d=$('apps-dock'); if(!d) return true;
+  const r=d.getBoundingClientRect();
+  return y>=r.top-DOCK_REACH && y<=r.bottom+DOCK_REACH
+      && x>=r.left-DOCK_REACH && x<=r.right+DOCK_REACH;
+};
 /* Anywhere off the dock closes it. The dock itself swallows the tap so
    that reaching for an app is not also a way to dismiss the thing you
    are reaching into. */
@@ -2688,7 +2688,19 @@ $('stage').addEventListener('pointerdown',e=>{
 });
 $('stage').addEventListener('pointermove',e=>{
   const q=G&&G.p.get(e.pointerId);
-  if(q){ q.x=e.clientX; q.y=e.clientY; }
+  if(!q) return;
+  q.x=e.clientX; q.y=e.clientY;
+  /* A hold control claims the gesture the moment it is touched, so that
+     holding it cannot also fire the dial's own hold-to-reset. But a
+     finger that STARTS on one and then travels is a swipe, and the
+     claim has to give way - otherwise every hold control is a patch of
+     glass you cannot swipe from, and the lock sits at the bottom centre
+     of the dial, right where a thumb reaches to pull the dock up.
+     Opt-in, because the claims that are NOT holds - the radar scrub,
+     the volume ring - drag on purpose and must keep theirs. */
+  if(G.releaseOnDrag && Math.hypot(q.x-q.x0,q.y-q.y0)>24){
+    G.claimed=false; G.releaseOnDrag=false; holdCancel();
+  }
 });
 const endGesture=e=>{
   if(!G) return;
@@ -2720,6 +2732,9 @@ function judgeGesture(g){
   const down  = quick && dy> 70 && Math.abs(dy)>Math.abs(dx);
   const swipeL= quick && dx<-70 && Math.abs(dx)>Math.abs(dy);
   const swipeR= quick && dx> 70 && Math.abs(dx)>Math.abs(dy);
+  /* Where the gesture STARTED, averaged the same way its travel is. */
+  let sx=0, sy=0; g.p.forEach(q=>{ sx+=q.x0; sy+=q.y0; });
+  sx/=g.p.size; sy/=g.p.size;
   const left  = swipeL && n>=FINGERS;
   const right = swipeR && n>=FINGERS;
 
@@ -2734,8 +2749,14 @@ function judgeGesture(g){
   if(panel.classList.contains('open')){
     if(up){ if(netsheet.classList.contains('on')) closeNet(); else closePanel(); }
     return; }
-  /* The drawer came UP from the bottom, so DOWN sends it back. */
-  if(apps.classList.contains('open')){ if(down) closeApps(); return; }
+  /* The dock came UP from the bottom, so DOWN sends it back - but only
+     from the dock's own patch of glass. It covers a strip at the foot
+     and leaves the dial in plain sight; a flick anywhere on that dial
+     should not dismiss a thing sitting somewhere else entirely. Reach
+     is generous rather than exact, because a thumb aiming at a card is
+     not aiming at its border. A tap off the dock still closes it. */
+  if(apps.classList.contains('open')){ if(down && nearDock(sx,sy)) closeApps();
+                                       return; }
   /* The race library is a sheet over the map page and owns the gesture
      while it is up - paging out from underneath it would strand it. */
   if($('qr-sheet').classList.contains('on')){ if(swipeL||swipeR) hideQR(); return; }
@@ -3588,13 +3609,25 @@ function holdStart(fn){
   };
   holdRaf=requestAnimationFrame(step);
 }
-/* stopPropagation everywhere: these sit on top of the gesture handler,
-   and without it a hold that wanders a few pixels reads as a swipe. */
+/* These sit on top of the gesture handler and used to stopPropagation
+   the pointerdown, so a hold that wandered a few pixels could not read
+   as a swipe. It also meant #stage never saw the touch at all, and the
+   lock - at the bottom centre of the dial, exactly where a thumb goes
+   to pull the dock up - was a dead band no swipe could start in.
+   So the touch is claimed instead of swallowed, and the claim is marked
+   as one that gives way: travel past the tap threshold releases it and
+   cancels the hold, and the swipe is judged normally. A finger that
+   stays put still holds, and still owns the gesture.
+   pointerup no longer stops propagation either, and never needed to:
+   endGesture listens on window in the CAPTURE phase, which runs before
+   any of this. */
 function holdBind(el,fn){
   el.addEventListener('pointerdown',e=>{
-    e.preventDefault(); e.stopPropagation(); holdStart(fn); });
+    e.preventDefault();
+    gClaim(); G.releaseOnDrag=true;
+    holdStart(fn); });
   ['pointerup','pointercancel','pointerleave'].forEach(ev=>
-    el.addEventListener(ev,e=>{ e.stopPropagation(); holdCancel(); }));
+    el.addEventListener(ev,()=>holdCancel()));
 }
 
 /* No badge. A HOLD TO UNLOCK card that appeared on every touch was one

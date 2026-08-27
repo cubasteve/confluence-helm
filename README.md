@@ -945,19 +945,50 @@ whole glass because it is somewhere you go. The dock is a **dock**: one
 row tall, and the dial keeps drawing behind it, because reaching for an
 app should not feel like leaving the page.
 
-It sits **flush with the rim**, not floating above it. `#stage` is
-`border-radius:50%` with `overflow:hidden`, so the card can simply run
-off the bottom of the glass and be cut by it — which is why its bottom
-corners are square, since their rounding would never be seen, and why
-its lower corners measure 660 from the centre on purpose.
+660 wide with its foot at y=954 puts its lowest corners 529 out — the
+same geometry the radar toolbar sits on, and the same 11px of margin
+inside the 540 the glass stops at. The row is held to 600 rather than
+the dock's full inner width, so its ends cannot reach the rim when a
+second app arrives.
 
-What must stay inside 540 is anything you can read or press. 760 wide is
-full width down to y=923, where the circle narrows to meet it; below
-that the rim does the shaping. 110px of foot is what holds the row above
-the arc — it ends at y=970, where the glass is still 653 across. The row
-itself is held to 600 rather than the dock's full 708 of inner width,
-because a row free to fill that would put its ends through the rim the
-moment a second app arrived.
+### The dead band at the foot of the dial
+
+A swipe up could not *start* at the bottom of the glass, which is
+exactly where a thumb reaches to pull the dock. The dial's lock sits at
+`translate(540 950)` and `holdBind` used to `stopPropagation()` its
+pointerdown — so `#stage` never saw the touch, no gesture was ever
+created, and y≈940–990 was dead. Measured: a 220px flick up opened the
+dock from every height **except** 950 and 980.
+
+Swallowing was the wrong tool. The touch is **claimed** instead, and the
+claim is marked as one that gives way:
+
+```js
+if(G.releaseOnDrag && Math.hypot(q.x-q.x0, q.y-q.y0) > 24){
+  G.claimed = false; G.releaseOnDrag = false; holdCancel();
+}
+```
+
+A finger that stays put still holds, and still owns the gesture, so a
+hold on the lock cannot also fire the dial's hold-to-reset. A finger
+that travels releases the claim and cancels the hold, and the swipe is
+judged normally. Opt-in via `releaseOnDrag`, because the claims that are
+*not* holds — the radar scrub, the volume ring — drag on purpose and
+must keep theirs.
+
+`pointerup` no longer stops propagation either, and never needed to:
+`endGesture` listens on window in the **capture** phase, which runs
+before any of it.
+
+### The dismiss swipe is local
+
+The dock covers a strip at the foot and leaves the dial in plain sight,
+so a flick anywhere on that dial should not dismiss a thing sitting
+somewhere else. A downward swipe closes it only if it **started** within
+`DOCK_REACH` (110px) of the card — measured from where the fingers went
+down, averaged the same way their travel is. Generous rather than exact,
+because a thumb aiming at a card is not aiming at its border. A tap off
+the dock still closes it from anywhere.
 
 A tap anywhere off the dock closes it; a tap on it does not. The
 full-height surface is still there for that, just transparent — which is
