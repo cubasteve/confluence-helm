@@ -5175,6 +5175,27 @@ const RAD={
      burst dozens of requests and spend the day's quota on one look. */
   tmr:'https://keel-ics.keel-app.workers.dev/tile/',
   TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7,
+  /* Universal Blue, so the forecast is drawn in the same language as the
+     radar it follows on the timeline.
+     RainViewer's tile URL carries a colour-scheme segment and their
+     server IGNORES IT: /256/{z}/{x}/{y}/{scheme}/1_1.png returns the
+     same bytes for 0, 4 and 8 - checked on tiles never fetched before,
+     so it is not the CDN - and grayscale for anything unparseable. The
+     2 in that path is decoration; what actually arrives is Universal
+     Blue, whose dBZ table is at rainviewer.com/api/color-schemes.html.
+     So the match has to be made from this end. Tomorrow.io takes a
+     `gradient` query - "position:RRGGBBAA" pairs - and these are their
+     ramp read off that table at the rain rate each dBZ implies, by
+     Marshall-Palmer (Z = 200 R^1.6).
+     UNVERIFIED against a live tile: the key was over quota (upstream
+     429) throughout. It cannot regress the picture - if the Worker does
+     not forward query strings this is inert, and if it forwards them
+     with positions meaning something other than mm/h the ramp is still
+     the same blue-yellow-red family, just stretched. To check it once
+     quota is back, fetch one tile with and without and compare. */
+  tmrGrad:'1:0088bfff,2:006295ff,3:005180ff,5:004768ff,8:ffd200ff,'
+         +'12:ffaa00ff,16:ff9500ff,24:ff4400ff,32:e62800ff,50:c10000ff,'
+         +'75:760000ff,100:ffaaffff',
   NATIVE_Z:7,        /* radar is real to here and upscaled above it */
   FRAME:512,         /* per-frame composite, see above */
   PAST:12,           /* how much of the last hour to keep */
@@ -5333,7 +5354,8 @@ function radCastTimes(){
 async function radBuildCast(){
   const gen=R.gen;
   for(const t of radCastTimes()){
-    const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
+    const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png'
+                    +(RAD.tmrGrad?'?gradient='+encodeURIComponent(RAD.tmrGrad):''),
               opt:{serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
     const view={lat:R.view.lat, lon:R.view.lon, z:R.view.z};
     const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));

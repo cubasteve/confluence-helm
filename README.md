@@ -1002,6 +1002,93 @@ about.
 | radar | RainViewer, last hour + nowcast | none |
 | forecast | Tomorrow.io via the `keel-ics` Worker | `TOMORROW_KEY`, a Worker secret |
 
+### Two sources, and why both
+
+| | RainViewer | Tomorrow.io |
+|---|---|---|
+| what it is | a radar **mosaic** — measurement | a **model** field |
+| span | past 2 h at 10 min, plus a nowcast | **−7 days to +14 days** |
+| key | none | yes, and a quota |
+| cost | free, unlimited | free tier is a trickle |
+
+**Could one of them do the job alone?**
+
+Tomorrow.io could: its map tiles cover the last seven days as well as
+the next fourteen, so one source could draw the whole timeline in one
+palette with no seam at all. What stops it is quota. This app's timeline
+is sixteen frames; at the six-tile budget the free tier needs, one view
+change would be ~96 tile requests. That is why only three forecast hours
+come from it, one tile at a time. On a paid plan, Tomorrow.io alone is
+the simpler design and the colour question below disappears.
+
+RainViewer could not: two hours of past is not a forecast. Its nowcast
+is also **not always published** — the index read while writing this had
+`nowcast: []`, zero frames, so on that afternoon RainViewer offered no
+future at all.
+
+So the split is doing real work: measurement where measurement exists,
+model where it does not, and free where free will do. The seam between
+them is labelled rather than hidden — `· NOWCAST`, `· FORECAST` — because
+the two halves are different *kinds* of claim, not just different hours.
+
+### RainViewer ignores its own colour-scheme parameter
+
+Their tile URL is `/{size}/{z}/{x}/{y}/{scheme}/{smooth}_{snow}.png`, and
+the scheme segment **does nothing**:
+
+```
+/256/7/36/53/0/1_1.png  ─┐
+/256/7/36/53/4/1_1.png  ─┼─ byte-identical, 710 bytes
+/256/7/36/53/6/1_1.png  ─┘
+/256/7/36/53/99/1_1.png ─── different: grayscale
+```
+
+Checked on tiles never fetched before, so it is not the CDN. Valid
+numbers all return **Universal Blue**; anything unparseable returns
+black-and-white. The `2` in this app's URL is decoration — and a typo
+there would silently hand back a grayscale radar.
+
+Universal Blue's ramp, from their published dBZ table:
+
+```
+ 15 dBZ  #88ddee   0.3 mm/h    light
+ 20      #00a3e0   0.6
+ 25      #0077aa   1.3
+ 30      #005588   2.7
+ 35      #ffee00   5.6         yellow starts here
+ 40      #ffaa00  11.5
+ 45      #ff4400  23.7
+ 50      #c10000  48.6
+ 55      #ffaaff  99.9         magenta, and you are not sailing
+```
+
+### Matching the forecast to it
+
+The match has to be made from the Tomorrow.io end, since RainViewer's
+palette cannot be chosen. Tomorrow.io takes a `gradient` query —
+`position:RRGGBBAA` pairs — so the forecast now asks for Universal Blue,
+read off that table at the rain rate each dBZ implies by Marshall-Palmer
+(`Z = 200 R^1.6`):
+
+```
+1:0088bf  2:006295  3:005180  5:004768  8:ffd200  12:ffaa00
+16:ff9500  24:ff4400  32:e62800  50:c10000  75:760000  100:ffaaff
+```
+
+**Unverified against a live tile.** The key was over quota — `upstream
+429` — for every attempt while this was written, so the futurecast was
+returning nothing at all to compare against. It cannot regress the
+picture: if the Worker does not forward query strings it is inert, and
+if it forwards them with positions meaning something other than mm/h the
+ramp is still the same blue-yellow-red family, only stretched. To settle
+it once quota is back, fetch one tile each way and compare.
+
+One difference this does **not** fix: at a z8 view the forecast frames
+back off to z6 to stay inside the six-tile budget while the radar frames
+composite at z7, so the forecast is drawn at half the radar's linear
+resolution. Closing that costs 50% more quota per frame, which is the
+wrong direction on a tier that is already exhausted.
+
 ### The futurecast
 
 Three frames at +1h, +2h and +3h, appended after the radar so the
