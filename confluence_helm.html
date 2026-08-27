@@ -6563,15 +6563,18 @@ const APPS=[
    ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
       +'<path d="M12 12l6.4-6.4"/>',
    open:radarOpen, close:radarClose},
-  /* The route running away up the glass with the boat riding it, the way
-     Tesla draws the road under the car. Two edges rather than a filled
-     band, and a notched arrowhead rather than a plain triangle, because
-     everything else on this panel is an open stroke and a solid shape
-     would sit outside the family. */
+  /* The route cutting across the glass with the boat riding it, the way
+     Tesla draws the road under the car. The band is its two edges rather
+     than a fill, because everything else on this panel is an open
+     stroke - but the marker IS filled, and has to be: at stroke-width
+     1.9 in a 24 box, three diagonal outlines have nowhere to be, and a
+     stroked arrow fuses with the band it sits on into a monogram. Solid,
+     it needs no internal gap and keeps 1.5 units of clear glass either
+     side of it. */
   {id:'tracks', name:'Tracks',
-   ico:'<path d="M6 22L10 5"/><path d="M18 22L14 5"/>'
+   ico:'<path d="M3 17.4L11.5 1.5"/><path d="M12.5 22.5L21 6.6"/>'
       +'<path fill="currentColor" stroke="none"'
-      +' d="M12 10L8.7 18.8L12 16.2L15.3 18.8Z"/>',
+      +' d="M14.6 7.1L8 13.2L11.2 13.5L13.2 16.1Z"/>',
    open:tracksOpen, close:tracksClose},
 ];
 

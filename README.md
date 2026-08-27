@@ -974,15 +974,20 @@ outlines have nowhere to be. A stroked arrow on a stroked band merged
 into a monogram every time; the first two attempts read as **W** and
 then as **A**.
 
-Two things fixed it. The marker is **filled** rather than stroked, so it
-needs no internal gap and cannot fuse with what it sits on. And the road
-is drawn in **perspective** rather than as the reference's parallel
-diagonal band — a straight diagonal reads as a slashed letter at 46px
-and loses the arrow entirely, while convergence says *route* on its own.
+What fixed it was the **filled** marker. Solid, it needs no internal gap
+and cannot fuse with what it sits on, and it keeps 1.5 units of clear
+glass either side of it inside the band.
 
-Rendered both ways side by side to pick, at dock size as well as large,
-because the version that looks better at 132px is not reliably the one
-that survives at 46.
+The first diagonal attempt failed for a different reason than I read at
+the time: I blamed the diagonal, tried a perspective road instead, and
+shipped that. The diagonal was fine — the band was simply too narrow and
+the arrow too small. Widened to 10.8 units with a longer, narrower
+marker, it holds at 46px as well as large, and it is the reference's
+geometry rather than a substitute for it.
+
+Rendered every version side by side at both sizes to pick, because the
+one that looks better at 132px is not reliably the one that survives
+at 46.
 
 The one gate that had to change is the QR sheet's. It lives inside
 `#tmap`, and raising it while Tracks is shut would put it somewhere
