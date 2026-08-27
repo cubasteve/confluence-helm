@@ -5178,6 +5178,10 @@ const RAD={
   NATIVE_Z:7,        /* radar is real to here and upscaled above it */
   FRAME:512,         /* per-frame composite, see above */
   PAST:12,           /* how much of the last hour to keep */
+  /* The BOAT tour: dive to TOUR_IN over the boat, hold while the close
+     tiles are sharp, then pull back to TOUR_MID - a working height you
+     can actually read weather at. */
+  TOUR_IN:11, TOUR_MID:9, TOUR_DIVE:1500, TOUR_HOLD:850, TOUR_RISE:1200,
   MIN_Z:4, MAX_Z:11, DWELL:900, TICK:80, ALPHA:0.72,
 };
 let R=null;
@@ -5204,8 +5208,8 @@ function radImg(url, gen){
 }
 
 /* Every tile covering the view, with where to put it. */
-function radTiles(z, W, H){
-  const v=R.view, n=Math.pow(2,z);
+function radTiles(z, W, H, view){
+  const v=view||R.view, n=Math.pow(2,z);
   const cx=wx(v.lon,z), cy=wy(v.lat,z);
   const x0=Math.floor((cx-W/2)/256), x1=Math.floor((cx+W/2)/256);
   const y0=Math.floor((cy-H/2)/256), y1=Math.floor((cy+H/2)/256);
@@ -5219,23 +5223,37 @@ function radTiles(z, W, H){
 }
 const radUrl=(t,tpl)=>tpl.replace('{z}',t.z).replace('{x}',t.x).replace('{y}',t.y);
 
-/* The base: drawn once per view, then it is one drawImage a tick. */
-async function radBuildBase(){
-  const gen=R.gen, bg=++R.bgen, c=R.base, g=c.getContext('2d');
+/* The base layers for `view`, painted into `c`. Any canvas and any
+   view, because the tour builds its destination OFF SCREEN while it is
+   still flying there - the snap at the end of a leg is then a blit and
+   not a wait. `live` says whether the answer is still wanted; `after`
+   runs once per layer, for the in-place build that wants to show its
+   working. */
+async function radBaseInto(c, view, live, after){
+  const gen=R.gen, g=c.getContext('2d');
+  g.setTransform(1,0,0,1,0,0);
   g.fillStyle=getComputedStyle(document.body).getPropertyValue('--bg')||'#0b0c0e';
   g.fillRect(0,0,c.width,c.height);
   const layers=R.seaOn ? [RAD.base, RAD.sea] : [RAD.base];
   for(const tpl of layers){
-    const ts=radTiles(R.view.z, c.width, c.height);
+    const ts=radTiles(view.z, c.width, c.height, view);
     const ims=await Promise.all(ts.map(t=>radImg(radUrl(t,tpl),gen)));
-    /* bgen as well as gen: turning the seamarks off starts a new base
-       build, and the old one must not paint its layer over the top of it
-       a second later. gen is not the right lever - bumping that would
-       throw away the radar frames, which have not changed at all. */
-    if(!R||R.gen!==gen||R.bgen!==bg) return;
+    if(!live()) return false;
     ims.forEach((im,i)=>{ if(im) g.drawImage(im, ts[i].px, ts[i].py, 256,256); });
-    radPaint();
+    if(after) after();
   }
+  return true;
+}
+
+/* The base: drawn once per view, then it is one drawImage a tick. */
+function radBuildBase(){
+  /* bgen as well as gen: turning the seamarks off starts a new base
+     build, and the old one must not paint its layer over the top of it
+     a second later. gen is not the right lever - bumping that would
+     throw away the radar frames, which have not changed at all. */
+  const gen=R.gen, bg=++R.bgen;
+  return radBaseInto(R.base, R.view,
+    ()=>!!R && R.gen===gen && R.bgen===bg, radPaint);
 }
 
 /* One radar frame, composited into its own small canvas. The tiles that
@@ -5382,12 +5400,21 @@ function radPaint(){
   if(!R) return;
   const c=R.cv, g=c.getContext('2d');
   g.clearRect(0,0,c.width,c.height);
-  /* A pinch in progress is drawn as a transform of what is already
-     composited. Rebuilding tiles per pointermove would be dozens of
-     fetches for a gesture that has not finished saying what it wants;
-     this is one setTransform and it tracks the fingers exactly. */
-  const pz=R.pinch;
-  if(pz) g.setTransform(pz.s,0,0,pz.s, pz.cx*(1-pz.s), pz.cy*(1-pz.s));
+  /* The camera: one transform of what is already composited, used by
+     both the pinch and the tour. Rebuilding tiles per animation frame
+     would be dozens of fetches for a move that has not finished saying
+     where it is going; this is one setTransform and it tracks exactly.
+     A pinch leaves tx/ty at zero and scales about the fingers; a tour
+     leg scales about the middle and pans as well. */
+  const m=R.cam;
+  if(m){
+    /* Anything the transform does not cover is the map's own ground,
+       not the black behind the page - a scale under 1 uncovers the
+       edges, and a picture floating in void reads as a bug. */
+    g.fillStyle=getComputedStyle(document.body).getPropertyValue('--bg')||'#0b0c0e';
+    g.fillRect(0,0,c.width,c.height);
+    g.setTransform(m.s,0,0,m.s, m.cx*(1-m.s)+m.tx, m.cy*(1-m.s)+m.ty);
+  }
   g.drawImage(R.base,0,0);
   const n=R.rainOn ? R.frames.length : 0;
   if(n){
@@ -5408,10 +5435,13 @@ function radPaint(){
         {hour:'2-digit',minute:'2-digit'}) + kind;
     }
     if(R.el.bar) R.el.bar.style.left=(n>1?(i/(n-1)*100):0)+'%';
-  }else if(R.el.time){
+  }else if(R.el.time && !R.tour){
+    /* Not during a tour: the frames really are gone, but a clock that
+       blanks for three seconds every time you press BOAT reads as a
+       fault. The note line says what is happening instead. */
     R.el.time.textContent = R.rainOn ? '—' : 'RAIN OFF';
   }
-  if(pz) g.setTransform(1,0,0,1,0,0);
+  if(m) g.setTransform(1,0,0,1,0,0);
   /* The boat, if the GPS has ever answered. */
   const px=R.cv.width/2, py=R.cv.height/2;
   g.strokeStyle=getComputedStyle(document.body).getPropertyValue('--accent')||'#4A9EFF';
@@ -5770,15 +5800,155 @@ function radDetails(){
 /* A new view: everything composited is now for the wrong place, so the
    generation moves and anything still in flight for the old one lands on
    a closed door. */
-function radReview(){
+function radReview(keepBase){
   if(!R) return;
   R.gen++;
   R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
   radPlay(true);            /* a new view is a new look, not a held frame */
   radMarkNow();
-  radBuildBase();
+  /* The tour has just blitted a freshly built base for exactly this
+     view; rebuilding it would be thirty-six cache hits and a flicker. */
+  if(!keepBase) radBuildBase();
   radBuildFrames();
+}
+
+/* ---- the BOAT tour -------------------------------------------------
+   BOAT used to be a jump cut: the view was somewhere else and then it
+   was over the boat, and nothing about the picture told you which way
+   it had moved or how far. It flies now - down onto the boat, a beat
+   while the close tiles land, then back out to a height you can read
+   weather at.
+
+   Each leg glides the camera over what is ALREADY composited while the
+   destination's tiles load into a canvas of their own. At the end of a
+   leg the two agree - same ground, same screen scale - so swapping the
+   sharp one in and dropping the transform is invisible. It is the same
+   trick every slippy map uses for a fly-to, and the reason a leg costs
+   one base build rather than one per animation frame.
+
+   The radar layer is composited for the view it was built in, so it
+   rides the transform correctly while a leg is flying and is dropped at
+   the first swap. radReview brings it back at the end, over the base
+   the last leg already built.                                       */
+const ease=u=>u<0.5 ? 4*u*u*u : 1-Math.pow(-2*u+2,3)/2;
+
+/* One animation, in the coordinates of whichever base is composited.
+   A ground point sitting at pB in that base belongs on screen at
+   k*pB + (W/2)(1-k) + k*(cB - cV), where k is 2^(zView-zBase) - which
+   is the transform radPaint already applies. So the whole leg is a
+   walk of zView and cV, and nothing is re-tiled. */
+function radAnim(t, ms, zB, cB, cF, cT, zF, zT){
+  return new Promise(res=>{
+    const W=R.cv.width, H=R.cv.height, t0=performance.now();
+    const step=()=>{
+      if(!R||R.tour!==t){ res(); return; }
+      let u=Math.min(1,(performance.now()-t0)/ms);
+      if(t.skip) u=1;
+      const e=ease(u);
+      /* Linear in ZOOM LEVELS, not in scale: interpolating the scale
+         itself spends most of the leg crawling across the last zoom. */
+      const k=Math.pow(2,(zF+(zT-zF)*e)-zB);
+      const vx=cF.x+(cT.x-cF.x)*e, vy=cF.y+(cT.y-cF.y)*e;
+      R.cam={s:k, cx:W/2, cy:H/2, tx:k*(cB.x-vx), ty:k*(cB.y-vy)};
+      radPaint();
+      if(u<1){ requestAnimationFrame(step); return; }
+      res();
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/* A leg. Which base it flies over depends on which way it is going, and
+   that is the whole trick:
+
+     IN   the base we already have, blown up, then swapped for the sharp
+          close one at the end. Scaling up never uncovers an edge.
+     OUT  the WIDE base first, blown up and shrinking into place. Doing
+          it the other way - shrinking the close base - leaves the map
+          as a postage stamp in the middle of an empty screen, because
+          the ground around it was never composited. This way the glass
+          is full the whole way.
+
+   Either way the swap is invisible: at that moment the two agree on
+   ground and on screen scale, so it is a blit and a dropped transform.  */
+async function radLeg(t, to, ms){
+  const from={lat:R.view.lat, lon:R.view.lon, z:R.view.z};
+  const inward=to.z>=from.z, W=R.cv.width, H=R.cv.height;
+  const live=()=>!!R && R.tour===t;
+  const nxt=document.createElement('canvas'); nxt.width=W; nxt.height=H;
+  /* Started now, not at the end of the leg: a second of flying is most
+     of a tile round trip on marina wifi, and spending it is the whole
+     point of animating rather than cutting. */
+  const build=radBaseInto(nxt, to, live);
+  const zB=inward ? from.z : to.z;
+  const cF={x:wx(from.lon,zB), y:wy(from.lat,zB)};
+  const cT={x:wx(to.lon,zB),   y:wy(to.lat,zB)};
+  const cB=inward ? cF : cT;
+  const swap=async()=>{
+    let okd=false;
+    try{ okd=await build; }catch(e){}
+    if(!live()){ nxt.width=nxt.height=0; return; }
+    R.view={lat:to.lat, lon:to.lon, z:to.z};
+    /* Frames belong to the view they were composited in. They ride the
+       transform correctly all the way down; over a new base they would
+       be weather in the wrong place. radReview brings them back. */
+    R.gen++;
+    R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
+    R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
+    const g=R.base.getContext('2d');
+    g.setTransform(1,0,0,1,0,0);
+    if(okd){ g.clearRect(0,0,W,H); g.drawImage(nxt,0,0); }
+    nxt.width=nxt.height=0;
+    /* Tiles that never arrived would leave the old base under a cleared
+       transform, which is the wrong ground. Rebuild in place. */
+    if(!okd) radBuildBase();
+  };
+  if(inward){
+    await radAnim(t, ms, zB, cB, cF, cT, from.z, to.z);
+    await swap();
+  }else{
+    await swap();
+    if(!live()) return;
+    await radAnim(t, ms, zB, cB, cF, cT, from.z, to.z);
+  }
+  if(R&&R.tour===t){ R.cam=null; radPaint(); }
+}
+const radHold=(t,ms)=>new Promise(r=>setTimeout(r,t.skip?0:ms));
+
+async function radTour(){
+  if(!R) return;
+  /* A second press, or a hand on the chart, ends it where it is rather
+     than fighting whoever wants to look at something. */
+  if(R.tour){ R.tour.skip=true; return; }
+  const t={skip:false};
+  R.tour=t;
+  const alive=()=>!!R && R.tour===t && !t.skip;
+  /* Two zoom levels a leg on the way down. One leg from 8 to 11 is an
+     eightfold blow-up of the tiles you started with, and for half a
+     second that is all anybody can see; capped at fourfold it reads as
+     a dive rather than a smear, and the extra base build is thirty-odd
+     tiles the browser has mostly cached already. */
+  const legs=[];
+  for(let z=R.view.z; z<RAD.TOUR_IN; ){
+    z=Math.min(RAD.TOUR_IN, z+2); legs.push(z); }
+  if(!legs.length) legs.push(RAD.TOUR_IN);
+  const each=RAD.TOUR_DIVE/legs.length;
+  try{
+    radSay('OVER THE BOAT');
+    for(const z of legs){
+      if(!alive()) break;
+      await radLeg(t, {lat:CFG.lat, lon:CFG.lon, z:z}, each);
+    }
+    if(alive()) await radHold(t, RAD.TOUR_HOLD);
+    if(alive()) await radLeg(t, {lat:CFG.lat, lon:CFG.lon, z:RAD.TOUR_MID},
+                             RAD.TOUR_RISE);
+  }catch(e){}
+  if(R && R.tour===t){
+    R.tour=null; R.cam=null;
+    radSay('');
+    radReview(true);        /* the last leg's base is the right one */
+  }
 }
 
 function radOpen(host){
@@ -5820,15 +5990,14 @@ function radOpen(host){
   R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
       frames:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
-      seaOn:true, rainOn:true, pinch:null,
+      seaOn:true, rainOn:true, cam:null, tour:null,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
   /* The clock is the handle. gClaim keeps the tap from also reading as
      the swipe that closes the app. */
   $('rad-head').addEventListener('click',()=>{ gClaim(); radMore(); });
-  $('rad-home').addEventListener('click',()=>{
-    R.view.lat=CFG.lat; R.view.lon=CFG.lon; radReview(); });
+  $('rad-home').addEventListener('click',()=>radTour());
   $('rad-play').addEventListener('click',()=>radPlay(!R.playing));
   /* The two layer pills. Seamarks are a base layer, so dropping them
      rebuilds the base - cheap, and the radar frames are untouched.
@@ -5864,7 +6033,7 @@ function radOpen(host){
      midpoint of the two fingers. A pinch that walks the chart away from
      the thing you pinched is the one thing everybody notices. */
   const endPinch=()=>{
-    const q=R.pinch; R.pinch=null; pin=null;
+    const q=R.cam; R.cam=null; pin=null;
     if(!q){ radPaint(); return; }
     const z=R.view.z;
     const zn=Math.max(RAD.MIN_Z, Math.min(RAD.MAX_Z,
@@ -5875,6 +6044,7 @@ function radOpen(host){
     radReview();
   };
   cv.addEventListener('pointerdown',e=>{ gClaim();
+    if(R.tour) R.tour.skip=true;
     ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
     try{ cv.setPointerCapture(e.pointerId); }catch(err){}
     if(ptrs.size===2){
@@ -5884,7 +6054,7 @@ function radOpen(host){
       drag=null; lock=true;
       const m=two(), r=cv.getBoundingClientRect();
       pin={d0:m.d||1, cx:m.x-r.left, cy:m.y-r.top};
-      R.pinch={s:1, cx:pin.cx, cy:pin.cy};
+      R.cam={s:1, cx:pin.cx, cy:pin.cy, tx:0, ty:0};
     }else if(ptrs.size===1 && !lock){
       drag={x:e.clientX,y:e.clientY,lat:R.view.lat,lon:R.view.lon};
     }
@@ -5894,7 +6064,7 @@ function radOpen(host){
     if(pin && ptrs.size>=2){
       const m=two();
       const lo=Math.pow(2, RAD.MIN_Z-R.view.z), hi=Math.pow(2, RAD.MAX_Z-R.view.z);
-      R.pinch={s:Math.max(lo, Math.min(hi, m.d/pin.d0)), cx:pin.cx, cy:pin.cy};
+      R.cam={s:Math.max(lo, Math.min(hi, m.d/pin.d0)), cx:pin.cx, cy:pin.cy, tx:0, ty:0};
       radPaint();
       return;
     }

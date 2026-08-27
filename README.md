@@ -1069,6 +1069,64 @@ back on is instant: the frames stay in memory, which is the whole point
 of keeping them there. The clock says `RAIN OFF` rather than going
 blank — an empty map and a stopped layer look identical otherwise.
 
+### BOAT flies there
+
+BOAT used to be a jump cut: the view was somewhere else and then it was
+over the boat, and nothing about the picture told you which way it had
+moved or how far. It flies now — down onto the boat, a beat while the
+close tiles land, then back out to a height you can read weather at.
+
+```
+z8 ──► z10 ──► z11        hold        z11 ──► z9
+   dive, 1.5 s total      0.85 s      rise, 1.2 s
+```
+
+Each leg glides **one transform** over what is already composited while
+the destination's tiles load into a canvas of their own. At the end of
+a leg the two agree — same ground, same screen scale — so swapping the
+sharp one in and dropping the transform is invisible. A leg therefore
+costs **one base build**, not one per animation frame: the whole tour
+measured 85 tile requests, where re-tiling per frame would be thousands.
+
+**Which base a leg flies over depends on which way it is going**, and
+that is the trick worth keeping:
+
+| | base composited | why |
+|---|---|---|
+| in | the one you already have, blown up | scaling up never uncovers an edge |
+| out | the **wide** one, blown up and shrinking into place | shrinking the close base leaves the map as a postage stamp in an empty screen — the ground around it was never composited |
+
+The first version did the obvious thing in both directions and the
+pull-out was a picture floating in void. `radPaint` now also fills with
+the map's own `--bg` under any transform, so a scale below 1 uncovers
+map-coloured ground rather than the black behind the page.
+
+The dive is capped at **two zoom levels a leg**. One leg from 8 to 11 is
+an eightfold blow-up of the tiles you started with, and for half a
+second that is all anybody can see; at fourfold it reads as a dive
+rather than a smear, and the extra base build is thirty-odd tiles the
+browser has mostly cached.
+
+Radar frames belong to the view they were composited in. They ride the
+transform correctly all the way down and are dropped at the first swap —
+over a new base they would be weather in the wrong place — and
+`radReview(true)` brings them back at the end, over the base the last
+leg already built rather than rebuilding it.
+
+A second press of BOAT, or a hand anywhere on the chart, ends the tour
+at the waypoint it was flying to. It does not fight you.
+
+**What it costs.** Idle over the chart is unchanged. The tour itself
+measured 21% CPU averaged across a 7 s window containing it, back to
+3.5% the moment it lands — a transient you asked for by pressing a
+button. Memory is one extra 1080² canvas, 4.7 MB, for the length of a
+leg, zeroed on every path out including the app closing mid-flight.
+
+The clock does not blank while a tour is in the air. The frames really
+are gone, but three seconds of `—` every time you press BOAT reads as a
+fault, so the note line says `OVER THE BOAT` instead and the clock is
+left alone.
+
 ### Tap the clock
 
 The HUD is a handle. Tapping it drops the rest of it down: the tide
