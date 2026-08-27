@@ -965,6 +965,25 @@ dial in a dozen places and `PAGE_I===2` the music; renumbering to save
 one unused integer would have been a dozen chances to get it wrong for
 nothing. Pages now run 1..2 and `PAGE_MIN` says so.
 
+### The icon
+
+Tesla's FSD glyph, translated: the route running away up the glass with
+the boat riding it. Three drafts died on the way there, and all for the
+same reason — at `stroke-width:1.9` in a 24-unit box, three diagonal
+outlines have nowhere to be. A stroked arrow on a stroked band merged
+into a monogram every time; the first two attempts read as **W** and
+then as **A**.
+
+Two things fixed it. The marker is **filled** rather than stroked, so it
+needs no internal gap and cannot fuse with what it sits on. And the road
+is drawn in **perspective** rather than as the reference's parallel
+diagonal band — a straight diagonal reads as a slashed letter at 46px
+and loses the arrow entirely, while convergence says *route* on its own.
+
+Rendered both ways side by side to pick, at dock size as well as large,
+because the version that looks better at 132px is not reliably the one
+that survives at 46.
+
 The one gate that had to change is the QR sheet's. It lives inside
 `#tmap`, and raising it while Tracks is shut would put it somewhere
 nobody can see or tap — and `judgeGesture` hands whichever surface is

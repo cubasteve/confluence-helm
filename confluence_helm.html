@@ -6563,13 +6563,15 @@ const APPS=[
    ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
       +'<path d="M12 12l6.4-6.4"/>',
    open:radarOpen, close:radarClose},
-  /* A hull seen from above - the shape a boat actually is on a chart -
-     between two runs of water. Drawn in the same open stroke as every
-     other glyph on the panel, so it reads as one family. */
+  /* The route running away up the glass with the boat riding it, the way
+     Tesla draws the road under the car. Two edges rather than a filled
+     band, and a notched arrowhead rather than a plain triangle, because
+     everything else on this panel is an open stroke and a solid shape
+     would sit outside the family. */
   {id:'tracks', name:'Tracks',
-   ico:'<path d="M2.6 4.9q2.35-1.6 4.7 0t4.7 0 4.7 0 4.7 0"/>'
-      +'<path d="M12 7.4l3.1 9.2H8.9z"/>'
-      +'<path d="M2.6 19.5q2.35-1.6 4.7 0t4.7 0 4.7 0 4.7 0"/>',
+   ico:'<path d="M6 22L10 5"/><path d="M18 22L14 5"/>'
+      +'<path fill="currentColor" stroke="none"'
+      +' d="M12 10L8.7 18.8L12 16.2L15.3 18.8Z"/>',
    open:tracksOpen, close:tracksClose},
 ];
 
