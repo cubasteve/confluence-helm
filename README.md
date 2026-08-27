@@ -980,6 +980,35 @@ must keep theirs.
 `endGesture` listens on window in the **capture** phase, which runs
 before any of it.
 
+### Swiping off the bezel
+
+A swipe that begins at the **rim** is not the same gesture as one that
+begins in the middle, and asking the same of it is why it never felt
+like you could start on the bezel. The thumb is already at the edge of
+the glass when it lands, so there is less panel to travel over; it
+arrives rolling in off the bezel, so it arrives diagonally; and it is a
+deliberate reach rather than a flick, so it is slower.
+
+Outside 78% of the radius, all three get their own allowance:
+
+| | middle | rim |
+|---|---|---|
+| travel | 70px | **40px** |
+| time | 700ms | **900ms** |
+| off-axis | must dominate | may lean 25% |
+
+40 is still well clear of the 24px that separates a tap from a drag, so
+a touch at the rim does not become a swipe by accident — measured, a
+30px movement out there is still a tap, and a 50px one in the middle is
+still not a swipe. The dial does not become twitchy to pay for the rim.
+
+The listeners also moved from `#stage` to **window**. `#stage` is
+`border-radius:50%`, and a rounded box does not hit-test outside its own
+shape — so a touch that landed on the rim, or on the digitizer's report
+of it a pixel or two proud of the glass, missed the element entirely and
+never became a gesture at all. Window catches everything, and still runs
+after the target's own listeners, which is what `gClaim` depends on.
+
 ### The dismiss swipe is local
 
 The dock covers a strip at the foot and leaves the dial in plain sight,

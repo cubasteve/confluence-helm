@@ -2681,12 +2681,18 @@ const gClaim=()=>{
   if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
   G.claimed=true;
 };
-$('stage').addEventListener('pointerdown',e=>{
+/* On WINDOW, not #stage. #stage is border-radius:50%, and a rounded box
+   does not hit-test outside its own shape - so a touch that lands on the
+   rim, or on the digitizer's report of it a pixel or two proud of the
+   glass, missed the element entirely and never became a gesture. Window
+   catches everything, and still runs after the target's own listeners,
+   which is what gClaim depends on. */
+addEventListener('pointerdown',e=>{
   if(!G) G={p:new Map(), live:0, max:0, t0:Date.now(), claimed:false};
   G.p.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
   G.live++; G.max=Math.max(G.max,G.live);
 });
-$('stage').addEventListener('pointermove',e=>{
+addEventListener('pointermove',e=>{
   const q=G&&G.p.get(e.pointerId);
   if(!q) return;
   q.x=e.clientX; q.y=e.clientY;
@@ -2718,6 +2724,16 @@ const endGesture=e=>{
 addEventListener('pointerup',endGesture,true);
 addEventListener('pointercancel',endGesture,true);
 
+/* Did this gesture start out at the rim? The stage is 100vmin and a
+   desktop window can be resized under it, so the circle is measured
+   rather than assumed. */
+const RIM_FRAC=0.78;
+function rimStart(x,y){
+  const r=$('stage').getBoundingClientRect();
+  const rad=Math.min(r.width,r.height)/2;
+  return Math.hypot(x-(r.left+r.width/2), y-(r.top+r.height/2)) > rad*RIM_FRAC;
+}
+
 function judgeGesture(g){
   /* The average of every finger's travel. One finger that slips while
      the other two hold still is not a swipe, and averaging says so. */
@@ -2725,16 +2741,26 @@ function judgeGesture(g){
   g.p.forEach(q=>{ dx+=q.x-q.x0; dy+=q.y-q.y0; });
   dx/=g.p.size; dy/=g.p.size;
   const dt=Date.now()-g.t0, n=g.max;
-  const moved=Math.hypot(dx,dy), quick=dt<700;
-  /* One finger is enough to raise or dismiss something; only paging
-     between the dials asks for the whole hand. See FINGERS above. */
-  const up    = quick && dy<-70 && Math.abs(dy)>Math.abs(dx);
-  const down  = quick && dy> 70 && Math.abs(dy)>Math.abs(dx);
-  const swipeL= quick && dx<-70 && Math.abs(dx)>Math.abs(dy);
-  const swipeR= quick && dx> 70 && Math.abs(dx)>Math.abs(dy);
+  const moved=Math.hypot(dx,dy);
   /* Where the gesture STARTED, averaged the same way its travel is. */
   let sx=0, sy=0; g.p.forEach(q=>{ sx+=q.x0; sy+=q.y0; });
   sx/=g.p.size; sy/=g.p.size;
+  /* A swipe that begins at the rim is not the same gesture as one that
+     begins in the middle, and asking the same of it is why it never
+     felt like you could start on the bezel. The thumb is already at the
+     edge of the glass when it lands, so there is less panel to travel
+     over; it arrives rolling in off the bezel, so it arrives diagonally;
+     and it is a deliberate reach rather than a flick, so it is slower.
+     All three get their own allowance out there. 40 is still well clear
+     of the 24 that separates a tap from a drag. */
+  const rim  = rimStart(sx,sy);
+  const quick= dt < (rim?900:700);
+  const NEED = rim?40:70;              /* px of travel */
+  const AXIS = rim?0.75:1;             /* how far off-axis it may lean */
+  const up    = quick && dy<-NEED && Math.abs(dy)>Math.abs(dx)*AXIS;
+  const down  = quick && dy> NEED && Math.abs(dy)>Math.abs(dx)*AXIS;
+  const swipeL= quick && dx<-NEED && Math.abs(dx)>Math.abs(dy)*AXIS;
+  const swipeR= quick && dx> NEED && Math.abs(dx)>Math.abs(dy)*AXIS;
   const left  = swipeL && n>=FINGERS;
   const right = swipeR && n>=FINGERS;
 
