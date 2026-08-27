@@ -1002,6 +1002,30 @@ a touch at the rim does not become a swipe by accident — measured, a
 30px movement out there is still a tap, and a 50px one in the middle is
 still not a swipe. The dial does not become twitchy to pay for the rim.
 
+### touch-action does not inherit
+
+This is the one that actually killed edge swipes on the hardware, and no
+headless test could ever have caught it: synthetic `PointerEvent`s never
+go near the browser's touch pipeline.
+
+`html, body { touch-action: none }` was set, and it changed **nothing**
+for anything inside the stage — the property is not inherited, so every
+tick, dial and button computed to `auto`. On a real touchscreen `auto`
+hands Chromium the right to decide a touch is a pan of its own and fire
+`pointercancel` part way through, which is a swipe that dies silently.
+The browser is keenest to claim exactly at the edges.
+
+```css
+#stage, #stage * { touch-action: none }
+```
+
+The radar canvas and the scrub band already carried their own copy of
+this, for exactly that reason. The dial never got one — and the bottom
+centre, the major tick you reach for to pull the dock, is where it
+showed. Nothing inside the stage scrolls or pinches, so nothing is given
+up. What is asserted in the test is the computed property itself, since
+the failure it prevents cannot be reproduced.
+
 The listeners also moved from `#stage` to **window**. `#stage` is
 `border-radius:50%`, and a rounded box does not hit-test outside its own
 shape — so a touch that landed on the rim, or on the digitizer's report

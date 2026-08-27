@@ -42,6 +42,20 @@ html,body{width:100%;height:100%;background:#000;font-family:var(--font);
 body{display:flex;align-items:center;justify-content:center}
 #stage{width:100vmin;height:100vmin;margin:0 auto;position:relative;
   border-radius:50%;overflow:hidden;background:var(--bg);flex:none}
+/* touch-action is NOT inherited, and html,body having it changes nothing
+   for anything inside the stage: every tick, every dial, every button
+   computed to `auto`. On a real touchscreen that hands the browser the
+   right to decide the touch is a pan of its own and fire pointercancel
+   part way through - which is a swipe that dies silently, most often
+   the ones from the edge where the browser is keenest to claim. The
+   radar canvas and the scrub band already carried their own copy of
+   this for exactly that reason; the dial never got one, and the bottom
+   centre - the major tick you reach for to pull the dock - is the
+   place it showed.
+   Nothing here scrolls or pinches, so nothing is given up. And it
+   cannot be reproduced in a headless test: synthetic PointerEvents
+   never go near the browser's touch pipeline. */
+#stage,#stage *{touch-action:none}
 
 /* --- pages ---
    Three places rather than three overlays: track map, dial, music side by
@@ -496,9 +510,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .pw-tile.danger{border-color:var(--alarm)}
 .pw-tile.danger svg, .pw-tile.danger b{color:var(--alarm)}
 
-/* Paged rather than scrolled. html and body carry touch-action:none, so
-   a flick inside an overflow:auto box is not reliably a pan here - and
-   a page you can hit with a wet glove beats a list you have to nudge. */
+/* Paged rather than scrolled. Everything inside the stage now carries
+   touch-action:none - html and body alone never covered it, since the
+   property does not inherit - so a flick inside an overflow:auto box is
+   not a pan here at all, and a page you can hit with a wet glove beats
+   a list you have to nudge. */
 .ns-pager{display:flex;align-items:center;gap:14px;margin-top:16px}
 .ns-count{flex:1;text-align:center;font-size:21px;font-weight:600;
   letter-spacing:.14em;color:var(--label)}
