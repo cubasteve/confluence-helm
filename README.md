@@ -1064,37 +1064,51 @@ Universal Blue's ramp, from their published dBZ table:
 
 ### Matching the forecast to it
 
-The match has to be made from the Tomorrow.io end, since RainViewer's
-palette cannot be chosen. Tomorrow.io takes a `gradient` query —
-`position:RRGGBBAA` pairs — so the forecast now asks for Universal Blue,
-read off that table at the rain rate each dBZ implies by Marshall-Palmer
-(`Z = 200 R^1.6`):
-
-```
-1:0088bf  2:006295  3:005180  5:004768  8:ffd200  12:ffaa00
-16:ff9500  24:ff4400  32:e62800  50:c10000  75:760000  100:ffaaff
-```
-
-**Verified, and inert today.** Fetched gradient-first on a tile never
-requested before, the answer is still Tomorrow.io's default — and that
-default is a **green** ramp (`#6efd00` bright, `#298a01` dark) against
-RainViewer's blue. So the Worker is not passing the query upstream, and
-that green is exactly the mismatch you see when the timeline crosses
-from radar into forecast.
-
-The parameter is left in place: it costs nothing and starts working the
-moment the Worker forwards it, which is one line where it builds the
-upstream URL:
+Neither source will do it. RainViewer's palette cannot be chosen, and
+the `keel-ics` Worker builds its upstream URL as
 
 ```js
-url.search = new URL(request.url).search
+"https://api.tomorrow.io/v4/map/tile/" + z+"/"+x+"/"+y +
+  "/precipitationIntensity/" + iso + ".png?apikey=" + env.TOMORROW_KEY
 ```
 
-One difference this does **not** fix: at a z8 view the forecast frames
-back off to z6 to stay inside the six-tile budget while the radar frames
-composite at z7, so the forecast is drawn at half the radar's linear
-resolution. Closing that costs 50% more quota per frame, which is the
-wrong direction on a tier that is already exhausted.
+— path plus key, dropping whatever query the panel sent, so
+Tomorrow.io's own `gradient` parameter never arrives. A gradient was
+tried here and **measured inert** against a live tile.
+
+So it is done on the way in, the way `sail-weather.html` in the keel app
+already did it: the Worker sends `access-control-allow-origin`, so the
+forecast tiles can be loaded `crossOrigin` and **read back and
+repainted**. `crossOrigin` is asked for on those tiles *only* — the
+basemap and radar are drawn and never read, which is why they have never
+needed a CORS handshake, and that is not worth giving up to recolour
+layers that already match.
+
+**Hue alone is not enough**, which is where a first attempt went wrong.
+Tomorrow.io spends green across a wide range of intensity — pale washed
+green, vivid green, dark green — so sorting on hue puts all three in one
+band and a whole tile comes out the single sand colour at the bottom of
+the ramp. Inside the greens it is saturation and value that carry it:
+washed out is lightest, vivid next, dark heavier. Yellow, orange and red
+then follow on hue as normal.
+
+| Tomorrow.io | | Universal Blue |
+|---|---|---|
+| green, washed out | → | sand `#d6c88f` · 12 dBZ |
+| green, vivid | → | pale cyan `#88ddee` · 15 |
+| green, dark | → | cyan `#00a3e0` · 20 |
+| yellow | → | blue `#005588` · 30 |
+| orange | → | gold `#ffd200` · 37 |
+| red / violet | → | red `#d91b00` · 48 |
+
+The recolour is cached on the image, so a tile is repainted once however
+many frames draw it, and a tainted canvas falls back to the original
+colours rather than to nothing.
+
+One difference from the keel app worth noting: its top band goes to deep
+blue, so the heaviest forecast cell reads as merely wet. Universal
+Blue's own scale puts red at the top, and this follows it — on both
+halves of the timeline, red now means the same thing.
 
 ### What the forecast costs, and what it used to
 

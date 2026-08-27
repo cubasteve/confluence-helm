@@ -5184,29 +5184,40 @@ const RAD={
      free. The forecast is drawn a step coarser for it, which is a fair
      trade for a smooth model field on a tier this thin. */
   TMR_PAD:1,
-  /* Universal Blue, so the forecast is drawn in the same language as the
-     radar it follows on the timeline.
-     RainViewer's tile URL carries a colour-scheme segment and their
-     server IGNORES IT: /256/{z}/{x}/{y}/{scheme}/1_1.png returns the
-     same bytes for 0, 4 and 8 - checked on tiles never fetched before,
-     so it is not the CDN - and grayscale for anything unparseable. The
-     2 in that path is decoration; what actually arrives is Universal
-     Blue, whose dBZ table is at rainviewer.com/api/color-schemes.html.
-     So the match has to be made from this end. Tomorrow.io takes a
-     `gradient` query - "position:RRGGBBAA" pairs - and these are their
-     ramp read off that table at the rain rate each dBZ implies, by
-     Marshall-Palmer (Z = 200 R^1.6).
-     VERIFIED, and INERT TODAY: fetched gradient-first on a tile never
-     requested before, the answer is still Tomorrow.io's default, which
-     is a GREEN ramp (#6efd00 bright, #298a01 dark) against RainViewer's
-     blue. So the Worker is not passing the query upstream. Left in
-     place because it costs nothing and starts working the moment the
-     Worker forwards it - one line, where it builds the upstream URL:
-         url.search = new URL(request.url).search
-     Until then the forecast frames are green and the radar is blue. */
-  tmrGrad:'1:0088bfff,2:006295ff,3:005180ff,5:004768ff,8:ffd200ff,'
-         +'12:ffaa00ff,16:ff9500ff,24:ff4400ff,32:e62800ff,50:c10000ff,'
-         +'75:760000ff,100:ffaaffff',
+  /* Tomorrow.io's default precipitation palette is GREEN - #6efd00
+     bright, #298a01 dark - and RainViewer's is Universal Blue. That is
+     the seam you see when the timeline crosses from radar into
+     forecast, and it cannot be fixed at either source: RainViewer's
+     tile server ignores the colour-scheme segment in its own URL
+     (/256/{z}/{x}/{y}/{scheme}/1_1.png returns identical bytes for 0, 4
+     and 6, checked on tiles never fetched before), and the keel-ics
+     Worker builds its upstream URL as
+       "https://api.tomorrow.io/v4/map/tile/.../" + iso + ".png?apikey=" + key
+     which drops whatever query the panel sent, so Tomorrow.io's own
+     `gradient` parameter never arrives. A gradient was tried here and
+     measured inert.
+     So it is done on the way in, the way the keel app does it: the
+     Worker sends access-control-allow-origin, which means the tiles can
+     be read back and repainted.
+
+     Hue alone is not enough, which is where a first attempt went wrong.
+     Tomorrow.io spends GREEN across a wide range of intensity - pale
+     washed green, vivid green, dark green - and sorting on hue puts all
+     three in one band, so a whole tile came out the single sand colour
+     at the bottom of the ramp. Inside the greens it is saturation and
+     value that carry it: washed out is lightest, vivid is next, dark is
+     heavier. Yellow, orange and red then follow on hue as normal.
+     The colours are Universal Blue's own, at the dBZ each band implies,
+     read off RainViewer's published table rather than eyeballed. */
+  TMR_RAMP:[
+    /* greens, split on how washed out they are */
+    {h0:75, h1:170, s1:0.45,          c:[214,200,143], a:170}, /* sand  12 */
+    {h0:75, h1:170, v0:0.75,          c:[136,221,238], a:225}, /* pale cyan 15 */
+    {h0:75, h1:170,                   c:[  0,163,224], a:240}, /* cyan  20 */
+    {h0:45, h1:75,                    c:[  0, 85,136], a:250}, /* blue  30 */
+    {h0:15, h1:45,                    c:[255,210,  0], a:255}, /* gold  37 */
+    {h0:300, h1:15,                   c:[217, 27,  0], a:255}, /* red   48 */
+  ],
   NATIVE_Z:7,        /* radar is real to here and upscaled above it */
   FRAME:512,         /* per-frame composite, see above */
   PAST:12,           /* how much of the last hour to keep */
@@ -5235,13 +5246,61 @@ const unwy=(py,z)=>{ const t=Math.PI-2*Math.PI*py/(256*Math.pow(2,z));
 
 /* One image, or null. Never rejects: a missing tile is a hole in the
    picture, not a reason for the app to stop. */
-function radImg(url, gen){
+/* cors is asked for ONLY on the forecast tiles. The basemap and radar
+   are drawn and never read back, which is why no CORS handshake has
+   ever been needed for them - one whole class of failure avoided, and
+   not worth giving up to recolour layers that already match. */
+function radImg(url, gen, cors){
   return new Promise(res=>{
     const im=new Image();
+    if(cors) im.crossOrigin='anonymous';
     im.onload =()=>res(R && R.gen===gen ? im : null);
     im.onerror=()=>res(null);
     im.src=url;
   });
+}
+
+/* Tomorrow.io's green ramp, repainted in RainViewer's. Hue is what
+   carries the intensity in their palette - pale green through yellow
+   and orange to red - so hue is what picks the band, and the tile's own
+   alpha is kept where it is thinner than the band's, so light drizzle
+   stays light. Cached on the image: a tile is recoloured once however
+   many frames draw it. */
+function radRecolor(img){
+  if(img._rc) return img._rc;
+  try{
+    const cv=document.createElement('canvas');
+    cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+    const cx=cv.getContext('2d', {willReadFrequently:true});
+    cx.drawImage(img,0,0);
+    const im=cx.getImageData(0,0,cv.width,cv.height), d=im.data;
+    for(let i=0;i<d.length;i+=4){
+      const a=d[i+3]; if(!a) continue;
+      const r=d[i], g=d[i+1], b=d[i+2];
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      let hue=0;
+      if(mx>mn){
+        if(mx===r)      hue=((g-b)/(mx-mn)+6)%6;
+        else if(mx===g) hue=(b-r)/(mx-mn)+2;
+        else            hue=(r-g)/(mx-mn)+4;
+        hue*=60;
+      }
+      const val=mx/255, sat=mx?(mx-mn)/mx:0;
+      let band=RAD.TMR_RAMP[RAD.TMR_RAMP.length-1];
+      for(const t of RAD.TMR_RAMP){
+        /* the last band wraps through 0 - red on one side, violet on
+           the other - so it is tested as an OR, not a range */
+        const inH = t.h0>t.h1 ? (hue>=t.h0||hue<t.h1) : (hue>=t.h0&&hue<t.h1);
+        if(inH && (t.s1===undefined || sat<t.s1)
+               && (t.v0===undefined || val>=t.v0)){ band=t; break; }
+      }
+      d[i]=band.c[0]; d[i+1]=band.c[1]; d[i+2]=band.c[2];
+      d[i+3]=Math.min(a, band.a);
+    }
+    cx.putImageData(im,0,0);
+    img._rc=cv;
+  }catch(e){ img._rc=img; }   /* tainted: the original beats nothing */
+  return img._rc;
 }
 
 /* Every tile covering the view, with where to put it. */
@@ -5332,17 +5391,18 @@ async function radBuildFrame(urlFor, opt){
   if(opt.serial){
     ims=[];
     for(const t of ts){
-      ims.push(await radImg(urlFor(t), gen));
+      ims.push(await radImg(urlFor(t), gen, opt.cors));
       if(!R||R.gen!==gen) return null;
     }
   }else{
-    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen)));
+    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen, opt.cors)));
   }
   if(!R||R.gen!==gen) return null;
   const sc=N/gw;                             /* that ground into N px */
   g.save(); g.scale(sc, sc);
   let hits=0;
-  ims.forEach((im,i)=>{ if(im){ hits++; g.drawImage(im, ts[i].px, ts[i].py, 256,256); } });
+  ims.forEach((im,i)=>{ if(im){ hits++;
+    g.drawImage(opt.recolor?radRecolor(im):im, ts[i].px, ts[i].py, 256,256); } });
   g.restore();
   return {c:c, hits:hits};
 }
@@ -5431,9 +5491,9 @@ async function radBuildCast(){
   radCastDrop();
   const keep={hour:hour, frames:[], fv:[], mk:[], times:[]};
   for(const t of radCastTimes()){
-    const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png'
-                    +(RAD.tmrGrad?'?gradient='+encodeURIComponent(RAD.tmrGrad):''),
-              opt:{serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
+    const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
+              opt:{serial:true, cors:true, recolor:true,
+                   maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
     const view={lat:R.view.lat, lon:R.view.lon,
                 z:Math.max(RAD.MIN_Z, R.view.z-RAD.TMR_PAD)};
     const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
