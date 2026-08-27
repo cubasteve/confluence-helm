@@ -337,6 +337,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   border:2px solid var(--hairline);font-family:var(--font);
   display:flex;align-items:center;justify-content:center}
 .mini:active{background:var(--chip)}
+/* Armed, the bin stops being round and says so. SURE? does not fit in
+   86px of circle, and a control that changes shape when it is about to
+   do something that does not come back is doing its job. */
+#lib-list .bin.arm{width:150px;border-radius:43px;font-size:21px;
+  font-weight:600;letter-spacing:.1em;
+  color:var(--alarm);border-color:var(--alarm)}
 /* .numv is defined further down, next to .steprow that uses it. A second
    copy lived here and lost on cascade order, so edits made to it did
    nothing at all - the same trap .mini fell into two lines below the
@@ -672,7 +678,9 @@ a.lib-row{text-decoration:none;color:inherit}
    narrowest part of the circle - 637 px of text into a 491 px chord, so
    73 px fell off each end. Lift it to where the chord is 629 px and set
    a smaller face, which leaves ~100 px of clearance.                  */
-#lib-hint{bottom:88px;font-size:19px;letter-spacing:.12em}
+/* Clear of the app's CLOSE button, which now stands where this used to
+   have the foot of the glass to itself. */
+#lib-hint{bottom:176px;font-size:19px;letter-spacing:.12em}
 .t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
 .t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
 .t-hint{position:absolute;bottom:104px;left:0;right:0;text-align:center;
@@ -980,7 +988,10 @@ a.lib-row{text-decoration:none;color:inherit}
 /* The same place on every page, just above the dots. The dial's copy is
    drawn in the SVG at the matching y - the face is a 1080 viewBox over a
    1080 stage, so the coordinates line up exactly. */
-#m-lock,#t-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
+/* The track map had one of these too, back when it was a page you could
+   be locked on. It is an app now and wears the app's CLOSE button in
+   that exact spot, so a second control there was one too many. */
+#m-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
 
 /* the dial's lives in the SVG, so it scales with the face */
 #dial-lock{color:var(--label)}
@@ -1403,7 +1414,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <div id="tmap">
   <div class="t-title" id="t-title">Race track</div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
-    <defs><clipPath id="t-clip"><circle cx="540" cy="430" r="235"/></clipPath></defs>
+    <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <g id="t-tiles"></g>       <!-- satellite basemap slots in here -->
       <g id="t-path"></g>
@@ -1431,15 +1442,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <button class="rbtn" id="trk-clr"><svg viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
   </div>
-  <button class="lockbtn" id="t-lock">
-    <svg viewBox="0 0 24 24"><path d="M8 11V8a4 4 0 0 1 7.5-1.9"/>
-      <rect x="6" y="11" width="12" height="9" rx="2"/></svg>
-  </button>
-
   <div id="t-lib">
     <div class="t-title">Library</div>
     <div class="lib-list" id="lib-list"></div>
-    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · TAP OUTSIDE TO CLOSE</div>
+    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
   </div>
 
   <!-- Outside the library on purpose: publishing a track raises this
@@ -2912,18 +2918,46 @@ $('lib-list').addEventListener('click',e=>{
      and the file downloads. On the helm that same tap would drop it in
      the Pi's own downloads folder, where nothing can reach it, so here
      it becomes a QR code for the phone to shoot instead. */
-  const link=e.target.closest('a.lib-row');
-  if(link && ((NET.st&&NET.st.gpx)||{}).available){
-    e.preventDefault();
-    return void showQR(link.dataset.title, link.getAttribute('href'));
-  }
   e.stopPropagation();
+  /* Asked before the row itself, so the bin does not also open the QR
+     code for the file it is deleting. */
+  const rm=e.target.closest('[data-rm]');
+  if(rm) return void libRemove(rm.dataset.rm, rm);
+  const link=e.target.closest('.lib-link');
+  if(link){
+    e.preventDefault();
+    return void showQR(link.dataset.title, link.dataset.href);
+  }
   const del=e.target.closest('[data-del]'), exp=e.target.closest('[data-exp]');
   if(del) return void dbDel(del.dataset.del).then(renderLib);
   if(exp) return void dbGet(exp.dataset.exp).then(r=>{ if(r) exportGPX(r.pts); });
   const row=e.target.closest('.lib-row');
   if(row && row.dataset.id) loadRace(row.dataset.id);   /* links are not races */
 });
+/* Deleting a track off the BOAT, which is a different thing from
+   deleting one off this device: the file is in the folder AvNav serves,
+   so it takes netd, and every device on the boat wifi loses it at once.
+   Two taps, because it does not come back - the first arms the bin and
+   says so, the second does it, and anything else disarms. */
+let libArmed=null;
+function libRemove(name, btn){
+  if(libArmed!==name){
+    libArmed=name;
+    [...document.querySelectorAll('#lib-list .bin')].forEach(b=>{
+      b.classList.remove('arm'); b.textContent='✕'; });
+    btn.classList.add('arm'); btn.textContent='SURE?';
+    setTimeout(()=>{ if(libArmed===name){ libArmed=null;
+      btn.classList.remove('arm'); btn.textContent='✕'; } }, 4000);
+    return;
+  }
+  libArmed=null;
+  btn.textContent='…';
+  netApi('/gpx/delete',{name:name}).then(r=>{
+    if(!r||!r.ok){ btn.textContent='FAILED'; return; }
+    renderLib();
+  }).catch(()=>{ btn.textContent='FAILED'; });
+}
+
 /* tapping the backdrop, not a row, backs out */
 $('t-lib').addEventListener('click',e=>{ if(e.target===$('t-lib')) closeLib(); });
 
@@ -3717,7 +3751,7 @@ const PAD_SHUT='<path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
               +'<rect x="6" y="11" width="12" height="9" rx="2"/>';
 function paintLocks(){
   const on=locked(), g=on?PAD_SHUT:PAD_OPEN;
-  ['m-lock','t-lock'].forEach(id=>{
+  ['m-lock'].forEach(id=>{
     $(id).querySelector('svg').innerHTML=g;
     $(id).classList.toggle('on',on);
   });
@@ -3730,7 +3764,6 @@ function paintLocks(){
 /* One button per page, always at the foot of it. */
 holdBind($('dial-lock'),lockOn);
 holdBind($('m-lock'),lockOn);
-holdBind($('t-lock'),lockOn);
 holdBind($('lock'),lockOff);
 paintLocks();
 
@@ -4414,7 +4447,10 @@ pollMusic(); musicTick();
    stretch rather than needing a separate graph.
    ================================================================== */
 const tmap=$('tmap');
-const MAP_CX=540, MAP_CY=430, MAP_R=250;
+/* The circle used to reach y=665 with the stats row starting at 640 -
+   the chart ran into the numbers. Up a little and in a little clears
+   both it and the credit line above. */
+const MAP_CX=540, MAP_CY=404, MAP_R=232;
 
 /* When the plugin owns recording, the points live on the boat and TRK
    stays empty here - trackSample() returns immediately in that mode. So
@@ -5111,14 +5147,20 @@ function renderLib(){
       o+=files.map(f=>{
         const d=new Date((f.at||0)*1000);
         const nice=esc(f.name.replace(/\.gpx$/,''));
-        return `<a class="lib-row" href="gpx/${encodeURIComponent(f.name)}"
-                   data-title="${nice}" download>
+        /* The row is a link so a phone can just tap it and get the
+           file. The bin is a BUTTON inside it, which is why the click
+           handler checks for it before it checks for the link - a tap
+           on the bin must not also start a download. */
+        return `<div class="lib-row lib-link" data-href="gpx/${encodeURIComponent(f.name)}"
+                     data-title="${nice}">
            <div class="lib-main">
              <div class="lib-name">${nice}</div>
              <div class="lib-sub">${kb(f.size||0)} · `
           +`${d.toLocaleDateString()} ${String(d.getHours()).padStart(2,'0')}:`
           +`${String(d.getMinutes()).padStart(2,'0')}</div>
-           </div><span class="mini">⤓</span></a>`;
+           </div>
+           <span class="mini">⤓</span>
+           <button class="mini bin" data-rm="${esc(f.name)}">✕</button></div>`;
       }).join('');
     }
     if(rows===null) o+='<div class="lib-empty">LIBRARY UNAVAILABLE</div>';

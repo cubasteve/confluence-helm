@@ -1347,6 +1347,38 @@ def gpx_save(name, xml):
     return {'ok': True, 'name': name, 'url': 'gpx/' + name}
 
 
+def gpx_delete(name):
+    """Remove one track from the folder AvNav serves.
+
+    The listing IS the authority here. A name has to be exactly one of
+    the files this folder reports, and gpx_list only ever reports
+    basenames ending .gpx that it found in the folder itself - so a
+    traversal is not refused by cleaning it up, it is refused by not
+    being there.
+
+    gpx_save sanitises instead, and it has to: it is inventing a
+    filename from a race title someone typed. Doing the same here would
+    be wrong in both directions. It cannot make an unsafe name safe that
+    membership would not already refuse, and it mangles the legitimate
+    ones - a file called "Race one.gpx", which is what you get if
+    anybody ever drops a track into the folder by hand, would become
+    "Race-one.gpx" and could never be deleted at all."""
+    d = gpx_dir()
+    if not d:
+        return {'ok': False, 'error': 'NO GPX FOLDER'}
+    name = (name or '').strip()
+    if not name or name != os.path.basename(name) or not name.endswith('.gpx'):
+        return {'ok': False, 'error': 'NOT A GPX'}
+    if name not in [f['name'] for f in gpx_list()]:
+        return {'ok': False, 'error': 'NO SUCH TRACK'}
+    try:
+        os.remove(os.path.join(d, name))
+    except OSError as e:
+        return {'ok': False, 'error': str(e)[:80]}
+    gpx_write_index()
+    return {'ok': True, 'name': name}
+
+
 def gpx_status():
     return {'available': gpx_dir() is not None, 'count': len(gpx_list())}
 
@@ -1454,6 +1486,8 @@ def route(path, body):
         return later(go_kiosk if body.get('mode') == 'kiosk' else go_windowed)
     if path == '/gpx/list':
         return {'ok': True, 'files': gpx_list()}
+    if path == '/gpx/delete':
+        return gpx_delete((body or {}).get('name'))
     if path == '/gpx/save':
         return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
     if path == '/backlight':

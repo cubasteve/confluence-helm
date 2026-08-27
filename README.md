@@ -989,6 +989,46 @@ Rendered every version side by side at both sizes to pick, because the
 one that looks better at 132px is not reliably the one that survives
 at 46.
 
+### Deleting a track off the boat
+
+The library has two lists and they were not equal. **Saved here** is
+IndexedDB, per device, and has always had a `✕`. **On the boat** is the
+`gpx` folder AvNav serves, which every device on the boat WiFi can see
+— and it offered download and a QR code and no way to get rid of
+anything. That is the half you cannot clean up from a phone *or* from
+the helm, because the file is on the Pi.
+
+So netd gained `/gpx/delete`, and the row gained a bin. The delete asks
+first: one tap arms it and the button stops being round and says
+`SURE?` in the alarm colour, a second does it, and four seconds or a tap
+elsewhere disarms. It does not come back — every device on the boat
+loses that track at once.
+
+**The listing is the authority** on which names are legal, not a
+sanitiser. `gpx_save` sanitises because it is inventing a filename from
+a race title someone typed; doing the same on delete would be wrong in
+both directions. It cannot make an unsafe name safe that membership
+would not already refuse, and it mangles the legitimate ones — a file
+called `Race one.gpx`, which is what you get if anyone drops a track in
+by hand, would become `Race-one.gpx` and could never be deleted at all.
+That was not a theory: the first version did exactly that and its own
+test caught it refusing a file sitting right there.
+
+Two things that came with the page becoming an app, both of them the
+same mistake — furniture that belonged to a page still standing where
+the app's own chrome now goes:
+
+- **the map's lock button**, which sat at the foot of the glass exactly
+  where `CLOSE` does now. A page you could be locked on needed it; an
+  app does not.
+- **the library's hint line**, which had the foot to itself and was
+  underneath `CLOSE`. It has moved up, and now says what the two row
+  buttons do rather than repeating how to close a sheet.
+
+The chart also ran into the numbers: the clip circle reached y=665 with
+the stats row starting at 640. Up and in a little — `MAP_CY 430→404`,
+`MAP_R 250→232` — clears both it and the credit line above it.
+
 The one gate that had to change is the QR sheet's. It lives inside
 `#tmap`, and raising it while Tracks is shut would put it somewhere
 nobody can see or tap — and `judgeGesture` hands whichever surface is
