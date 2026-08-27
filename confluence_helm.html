@@ -142,20 +142,31 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   transform:translateY(100%);
   transition:transform .42s cubic-bezier(.16,1,.3,1);
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
-  padding-bottom:126px;color:var(--ink);
+  color:var(--ink);
 }
 #apps.open{transform:translateY(0)}
-/* 660 wide with its foot at y=954 puts the lowest corners 529 out, the
-   same geometry the radar toolbar sits on and the same 11px of margin
-   inside the 540 the glass stops at. */
-#apps-dock{width:660px;background:var(--panel);border:1px solid var(--hairline);
-  border-radius:34px;padding:16px 26px 18px;
+/* Flush with the rim, not floating above it. #stage is border-radius:50%
+   with overflow:hidden, so the dock can simply run off the bottom and
+   the glass cuts it - which is why the bottom corners are square: their
+   rounding would never be seen, and a rounded card sitting short of the
+   edge is the thing that looked wrong.
+   760 wide is full width down to y=923, where the circle narrows to
+   meet it; below that the rim does the shaping. What has to stay inside
+   is the ROW, and 110px of foot is what holds it above the arc: it ends
+   at y=970, where the glass is still 653 across for a 606 row. */
+#apps-dock{width:760px;background:var(--panel);
+  border:1px solid var(--hairline);border-bottom:none;
+  border-radius:34px 34px 0 0;padding:16px 26px 110px;
   box-shadow:0 -12px 44px rgba(0,0,0,.32)}
 #apps-dock .grab{position:static;margin:0 auto 12px}
 /* One row. More apps than fit scroll sideways rather than growing the
-   dock into the drawer it just stopped being. */
+   dock into the drawer it just stopped being - and the row is held to
+   600 rather than the dock's full inner width, because at y=970 the
+   glass is 653 across and a row free to fill 708 would put its ends
+   through the rim the moment a second app arrived. */
 .approw{display:flex;align-items:flex-start;justify-content:center;gap:26px;
-  flex-wrap:nowrap;overflow-x:auto;padding:0}
+  flex-wrap:nowrap;overflow-x:auto;padding:0;width:600px;max-width:100%;
+  margin:0 auto}
 .approw .tile{width:150px;flex:0 0 150px}
 /* A launched app. */
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}

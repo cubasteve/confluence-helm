@@ -943,10 +943,21 @@ allocated.
 The two are not the same shape, and should not be. The panel takes the
 whole glass because it is somewhere you go. The dock is a **dock**: one
 row tall, and the dial keeps drawing behind it, because reaching for an
-app should not feel like leaving the page. 660 wide with its foot at
-y=954 puts its lowest corners 529 out — the same geometry the radar
-toolbar sits on, and the same 11px of margin inside the 540 the glass
-stops at.
+app should not feel like leaving the page.
+
+It sits **flush with the rim**, not floating above it. `#stage` is
+`border-radius:50%` with `overflow:hidden`, so the card can simply run
+off the bottom of the glass and be cut by it — which is why its bottom
+corners are square, since their rounding would never be seen, and why
+its lower corners measure 660 from the centre on purpose.
+
+What must stay inside 540 is anything you can read or press. 760 wide is
+full width down to y=923, where the circle narrows to meet it; below
+that the rim does the shaping. 110px of foot is what holds the row above
+the arc — it ends at y=970, where the glass is still 653 across. The row
+itself is held to 600 rather than the dock's full 708 of inner width,
+because a row free to fill that would put its ends through the rim the
+moment a second app arrived.
 
 A tap anywhere off the dock closes it; a tap on it does not. The
 full-height surface is still there for that, just transparent — which is
