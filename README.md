@@ -262,7 +262,7 @@ Two answers, because the two gestures are not the same risk.
 
 | Gesture | Fingers |
 |---|---|
-| Page left/right between the three dials | **three** |
+| Page left/right between the two dials | **three** |
 | Control panel up / down | **one** |
 | Dismiss the picker, the library, the QR sheet | **one** |
 | Taps, holds, every button on every page | one, as always |
@@ -925,6 +925,52 @@ The list is paged rather than scrolled. `html`/`body` carry
 `touch-action:none`, so a flick inside an `overflow:auto` box is not
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
+
+## Tracks
+
+The race track map used to be page 0 of the carousel. It is an app now,
+which leaves the dial and the music as the two pages and the dock as the
+way to everything else.
+
+It is the **same markup and the same listeners**: `#tmap` is *moved*
+into the app body rather than rebuilt, so a hundred-odd ids and
+everything bound to them at boot keep working without being re-wired. It
+goes back to its parking place on close — before `closeApp` empties the
+body, or the whole page would be thrown away with it. Parked, it is
+`display:none` and costs layout nothing.
+
+What it gives back is what it actually costs while it is up:
+
+| | closed | open | closed again |
+|---|---|---|---|
+| DOM nodes | 1014 | 1899 | **920** |
+| satellite tiles | 0 | 16 | **0** |
+| track segments | 0 | 859 | **0** |
+| JS heap | 1.9 MB | 2.2 MB | 1.8 MB |
+
+Detaching the subtree does **not** free those. It only makes them
+eligible, and a hidden page full of decoded tile bitmaps is exactly the
+sort of thing that sits in a Pi's heap until something else needs the
+room. Emptying `#t-tiles` and `#t-path` by hand is what frees them, along
+with `MAPVIEW`, a race loaded out of the library, and the cached server
+track. The redraw loop stops on its own: it was already gated on
+`#tmap.open`, which goes with the app.
+
+CPU while it is open measures *lower* than at rest — 1.0% against 1.8%
+— because `dialVisible()` is false with any app up, so the dial stops
+drawing. The map costs less than the instrument it replaces.
+
+The numbering deliberately did not shift down. `PAGE_I===1` means the
+dial in a dozen places and `PAGE_I===2` the music; renumbering to save
+one unused integer would have been a dozen chances to get it wrong for
+nothing. Pages now run 1..2 and `PAGE_MIN` says so.
+
+The one gate that had to change is the QR sheet's. It lives inside
+`#tmap`, and raising it while Tracks is shut would put it somewhere
+nobody can see or tap — and `judgeGesture` hands whichever surface is
+showing ownership of every gesture, so a sheet stranded off a closed app
+silently ate the dial's. It asks whether the map is up now, rather than
+which page is.
 
 ## A panel and a dock
 
