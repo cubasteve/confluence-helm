@@ -1077,9 +1077,12 @@ moved or how far. It flies now — down onto the boat, a beat while the
 close tiles land, then back out to a height you can read weather at.
 
 ```
-z8 ──► z10 ──► z11        hold        z11 ──► z9
-   dive, 1.5 s total      0.85 s      rise, 1.2 s
+z8 ──► z10 ──► z11         hold        z11 ──► z9
+  2.4 s    2.4 s           2.0 s       2.8 s        ≈ 9.6 s in all
 ```
+
+Slow on purpose: it is a tour, not a jump, and the point is to have
+time to read what is under you on the way past.
 
 Each leg glides **one transform** over what is already composited while
 the destination's tiles load into a canvas of their own. At the end of
@@ -1107,20 +1110,60 @@ second that is all anybody can see; at fourfold it reads as a dive
 rather than a smear, and the extra base build is thirty-odd tiles the
 browser has mostly cached.
 
-Radar frames belong to the view they were composited in. They ride the
-transform correctly all the way down and are dropped at the first swap —
-over a new base they would be weather in the wrong place — and
-`radReview(true)` brings them back at the end, over the base the last
-leg already built rather than rebuilding it.
+### The radar stays on the glass
+
+A frame is 512 px standing for **the ground its own view covered** — not
+for whatever the canvas covers now. Every frame carries that view, so
+`radPaint` places it rather than assuming it fills the canvas:
+
+```js
+const kk=Math.pow(2, R.view.z-fv.z);
+const dx=(wx(fv.lon,fv.z)-W/2)*kk - cv.x + W/2;
+g.drawImage(fc, 0,0,fc.width,fc.height, dx,dy, W*kk, H*kk);
+```
+
+When the two views agree this is the identity it always was. When they
+do not — mid-tour, mid-drag — the weather is still in the right place
+instead of being thrown away. Dragging the chart no longer blanks the
+radar either; it slides under your finger with the base.
+
+The tour then re-composites the timeline **once**, aimed at where it
+will land, and every frame that arrives replaces its own index while the
+one it replaces keeps drawing. There is no moment with no radar.
+
+Once, not once per waypoint, because the extra builds bought nothing.
+RainViewer's free radar is real only to **z7**: a frame built for a z9
+view and a frame built for a z11 view fetch the same z7 tiles, and on
+the glass at z11 both work out at a sixteenfold upscale of the same
+pixels. Re-compositing at every waypoint cost three times the work for
+an identical picture — 46% CPU across the tour against 20%.
+
+That also means `gen` must **not** move at a waypoint. `radBuildFrame`
+reads it when it starts and `radImg` nulls any tile that lands after it
+changed, so a bump mid-flight hands back empty frames. The tour bumps it
+once, at the start; the base builds are guarded by `bgen` and the tour
+token instead.
 
 A second press of BOAT, or a hand anywhere on the chart, ends the tour
 at the waypoint it was flying to. It does not fight you.
 
-**What it costs.** Idle over the chart is unchanged. The tour itself
-measured 21% CPU averaged across a 7 s window containing it, back to
-3.5% the moment it lands — a transient you asked for by pressing a
-button. Memory is one extra 1080² canvas, 4.7 MB, for the length of a
-leg, zeroed on every path out including the app closing mid-flight.
+**What it costs.** Idle over the chart is unchanged. The tour measured
+**15.8%** CPU averaged across a 13 s window containing it, back to 3.6%
+the moment it lands — less than the old three-second version cost, while
+being nearly three times as long and drawing the radar the whole way.
+
+Two things got it there. The single re-composite above, and a **30 fps
+cap** on the animation: a tick is a full-canvas fill, a 1080 base blit
+and a scaled radar blit, which at 60 is the most expensive thing the
+panel ever does. On a slow ease over two and a half seconds nobody can
+tell which they are watching, and the last frame of a leg always draws
+whatever the clock says — it is the one the swap has to line up with.
+The cross-fade between frames is also off while the camera moves: two
+scaled blits a tick instead of one, for a 200 ms dissolve nobody has
+ever seen through a dive.
+
+Memory is one extra 1080² canvas, 4.7 MB, for the length of a leg,
+zeroed on every path out including the app closing mid-flight.
 
 The clock does not blank while a tour is in the air. The frames really
 are gone, but three seconds of `—` every time you press BOAT reads as a

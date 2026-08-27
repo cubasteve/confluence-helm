@@ -5181,7 +5181,12 @@ const RAD={
   /* The BOAT tour: dive to TOUR_IN over the boat, hold while the close
      tiles are sharp, then pull back to TOUR_MID - a working height you
      can actually read weather at. */
-  TOUR_IN:11, TOUR_MID:9, TOUR_DIVE:1500, TOUR_HOLD:850, TOUR_RISE:1200,
+  TOUR_IN:11, TOUR_MID:9, TOUR_LEG:2400, TOUR_HOLD:2000, TOUR_RISE:2800,
+  /* A tick of the tour is a full-canvas fill, a 1080 base blit and a
+     scaled radar blit. At 60 that is the most expensive thing the panel
+     ever does; at 30 it is half of it, and on a slow ease over two and
+     a half seconds nobody can tell which they are watching. */
+  TOUR_FPS:30,
   MIN_Z:4, MAX_Z:11, DWELL:900, TICK:80, ALPHA:0.72,
 };
 let R=null;
@@ -5265,9 +5270,9 @@ function radBuildBase(){
    futurecast frame that got nothing draws as empty, and empty is exactly
    how "no rain forecast" draws. One is a quota refusal and the other is
    a fine afternoon, and they must not look alike. */
-async function radBuildFrame(fr, urlFor, opt){
+async function radBuildFrame(urlFor, opt){
   opt=opt||{};
-  const gen=R.gen, N=RAD.FRAME;
+  const gen=R.gen, N=RAD.FRAME, v=opt.view||R.view;
   const c=document.createElement('canvas'); c.width=c.height=N;
   const g=c.getContext('2d');
   /* The frame canvas stands for exactly the view, so the tiles fetched
@@ -5279,14 +5284,12 @@ async function radBuildFrame(fr, urlFor, opt){
      One zoom below the view, capped at the radar's native 7, is also
      self-consistent with a 512 canvas over a 1080 one - the frame is
      half the view's linear resolution either way. */
-  let z=Math.max(0, Math.min(R.view.z-1, opt.maxZ||RAD.NATIVE_Z));
+  let z=Math.max(0, Math.min(v.z-1, opt.maxZ||RAD.NATIVE_Z));
   let k, gw, gh, ts;
   for(;;){
-    k=Math.pow(2, z-R.view.z);               /* view px -> tile px at z */
+    k=Math.pow(2, z-v.z);                    /* view px -> tile px at z */
     gw=R.cv.width*k; gh=R.cv.height*k;
-    const save=R.view.z; R.view.z=z;
-    ts=radTiles(z, gw, gh);
-    R.view.z=save;
+    ts=radTiles(z, gw, gh, {lat:v.lat, lon:v.lon, z:z});
     /* Back off a zoom until the view fits the budget. Only the
        futurecast sets one, and for it the budget IS the feature: six
        tiles an hour is a quota that lasts, sixty is one that does not. */
@@ -5330,16 +5333,18 @@ function radCastTimes(){
 async function radBuildCast(){
   const gen=R.gen;
   for(const t of radCastTimes()){
-    const r=await radBuildFrame(t,
-      tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
-      {serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z});
+    const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
+              opt:{serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
+    const view={lat:R.view.lat, lon:R.view.lon, z:R.view.z};
+    const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
     if(!r || !r.hits){
       if(r&&r.c) r.c.width=r.c.height=0;
       radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
       return;
     }
-    R.frames.push(r.c); R.times.push(t.ms); R.kinds.push('cast');
+    R.frames.push(r.c); R.fv.push(view); R.mk.push(mk);
+    R.times.push(t.ms); R.kinds.push('cast');
     radMarkNow();
     radPaint();
   }
@@ -5367,10 +5372,16 @@ async function radBuildFrames(){
      the only one anybody sees immediately - arrives last. */
   for(let i=0;i<list.length;i++){
     const fr=list[i];
-    const r=await radBuildFrame(fr,
-      t=>data.host+fr.path+'/256/'+t.z+'/'+t.x+'/'+t.y+'/2/1_1.png');
+    /* The url builder is kept, not just used: the tour re-composites
+       every frame for the ground it has flown to, and it cannot go back
+       to the index to ask how. */
+    const mk={url:t=>data.host+fr.path+'/256/'+t.z+'/'+t.x+'/'+t.y+'/2/1_1.png',
+              opt:{}};
+    const view={lat:R.view.lat, lon:R.view.lon, z:R.view.z};
+    const r=await radBuildFrame(mk.url, {view:view});
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
-    if(r){ R.frames[i]=r.c; R.kinds[i]=fr.time*1000>Date.now()?'nowcast':'radar'; }
+    if(r){ R.frames[i]=r.c; R.fv[i]=view; R.mk[i]=mk;
+           R.kinds[i]=fr.time*1000>Date.now()?'nowcast':'radar'; }
     radPaint();                       /* fill in as they land */
   }
   radMarkNow();
@@ -5419,12 +5430,24 @@ function radPaint(){
   const n=R.rainOn ? R.frames.length : 0;
   if(n){
     const i=Math.min(Math.floor(R.p), n-1), f=R.p-i;
-    const draw=(k,w)=>{ const fc=R.frames[k];
-      if(!fc||w<0.02) return;
+    /* A frame is 512 px standing for the ground its own view covered -
+       not for whatever the canvas covers now. Placing it from that view
+       is what lets the radar ride a pan, or a whole tour, instead of
+       being thrown away every time the chart moves. When the two views
+       are the same this is the identity it used to be. */
+    const cv={x:wx(R.view.lon,R.view.z), y:wy(R.view.lat,R.view.z)};
+    const draw=(k,w)=>{ const fc=R.frames[k], fv=R.fv[k];
+      if(!fc||!fv||w<0.02) return;
+      const kk=Math.pow(2, R.view.z-fv.z);
+      const dx=(wx(fv.lon,fv.z)-c.width/2)*kk  - cv.x + c.width/2;
+      const dy=(wy(fv.lat,fv.z)-c.height/2)*kk - cv.y + c.height/2;
       g.globalAlpha=RAD.ALPHA*w;
-      g.drawImage(fc,0,0,fc.width,fc.height,0,0,c.width,c.height);
+      g.drawImage(fc,0,0,fc.width,fc.height, dx,dy, c.width*kk, c.height*kk);
       g.globalAlpha=1; };
-    if(i+1<n && f>0.02){ draw(i,1-f); draw(i+1,f); } else draw(i,1);
+    /* No cross-fade while the camera is moving: it is two scaled
+       blits a tick instead of one, and nobody has ever seen a 200 ms
+       dissolve through a dive. */
+    if(i+1<n && f>0.02 && !R.tour){ draw(i,1-f); draw(i+1,f); } else draw(i,1);
     if(R.el.time && R.times[i]){
       /* Three different things, and calling them all "the time" would
          hide the only distinction that matters: what has happened,
@@ -5797,14 +5820,45 @@ function radDetails(){
   Promise.all(jobs).then(done, done);
 }
 
+function radDropFrames(){
+  R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
+  R.frames=[]; R.fv=[]; R.mk=[]; R.times=[]; R.kinds=[]; R.p=0;
+}
+
+/* Re-composite what is already on the timeline for new ground, ONE AT
+   A TIME and in place. Each frame carries its own view, so the old one
+   keeps drawing - in the right place - until the new one lands: the
+   radar never blinks out, which is the whole point of doing it this way
+   rather than dropping the lot and rebuilding.
+
+   No detail is lost by reusing the timeline instead of re-reading the
+   index. RainViewer's free radar is real only to z7; a frame built for
+   a z11 view fetches those same z7 tiles and upscales them into 512 px,
+   exactly as a frame built for z8 does. What changes is WHICH ground
+   the 512 px covers, and that is what this fixes. */
+async function radRefresh(view){
+  if(!R||!R.frames.length) return;
+  const gen=R.gen;
+  for(let i=0;i<R.frames.length;i++){
+    const mk=R.mk[i]; if(!mk) continue;
+    const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
+    if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
+    if(r && (r.hits || !mk.opt.maxTiles)){
+      const old=R.frames[i];
+      R.frames[i]=r.c; R.fv[i]=view;
+      if(old) old.width=old.height=0;
+      radPaint();
+    }else if(r&&r.c) r.c.width=r.c.height=0;
+  }
+}
+
 /* A new view: everything composited is now for the wrong place, so the
    generation moves and anything still in flight for the old one lands on
    a closed door. */
 function radReview(keepBase){
   if(!R) return;
   R.gen++;
-  R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
-  R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
+  radDropFrames();
   radPlay(true);            /* a new view is a new look, not a held frame */
   radMarkNow();
   /* The tour has just blitted a freshly built base for exactly this
@@ -5841,10 +5895,17 @@ const ease=u=>u<0.5 ? 4*u*u*u : 1-Math.pow(-2*u+2,3)/2;
 function radAnim(t, ms, zB, cB, cF, cT, zF, zT){
   return new Promise(res=>{
     const W=R.cv.width, H=R.cv.height, t0=performance.now();
+    const gap=1000/RAD.TOUR_FPS;
+    let last=-1e9;
     const step=()=>{
       if(!R||R.tour!==t){ res(); return; }
-      let u=Math.min(1,(performance.now()-t0)/ms);
+      const now=performance.now();
+      let u=Math.min(1,(now-t0)/ms);
       if(t.skip) u=1;
+      /* The last frame always draws, whatever the clock says: it is the
+         one the swap has to line up with. */
+      if(u<1 && now-last<gap){ requestAnimationFrame(step); return; }
+      last=now;
       const e=ease(u);
       /* Linear in ZOOM LEVELS, not in scale: interpolating the scale
          itself spends most of the leg crawling across the last zoom. */
@@ -5890,12 +5951,12 @@ async function radLeg(t, to, ms){
     try{ okd=await build; }catch(e){}
     if(!live()){ nxt.width=nxt.height=0; return; }
     R.view={lat:to.lat, lon:to.lon, z:to.z};
-    /* Frames belong to the view they were composited in. They ride the
-       transform correctly all the way down; over a new base they would
-       be weather in the wrong place. radReview brings them back. */
-    R.gen++;
-    R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
-    R.frames=[]; R.times=[]; R.kinds=[]; R.p=0;
+    /* gen deliberately does NOT move here. The tour bumps it once, at
+       the start, and the re-composite it then launches has to survive
+       every waypoint - radBuildFrame reads gen when it starts and
+       radImg nulls any tile that lands after it changed, so a bump
+       mid-flight would hand back empty frames. Nothing here needs it:
+       the base build is guarded by bgen and by the tour token. */
     const g=R.base.getContext('2d');
     g.setTransform(1,0,0,1,0,0);
     if(okd){ g.clearRect(0,0,W,H); g.drawImage(nxt,0,0); }
@@ -5924,6 +5985,17 @@ async function radTour(){
   const t={skip:false};
   R.tour=t;
   const alive=()=>!!R && R.tour===t && !t.skip;
+  /* One re-composite for the whole tour, aimed at where it will LAND -
+     and it is no blurrier at the top of the dive for being built at the
+     bottom. RainViewer's free radar is real only to z7, so a frame for
+     a z9 view and a frame for a z11 view fetch the same z7 tiles; on
+     the glass at z11 both work out at a sixteenfold upscale of the same
+     pixels. Re-compositing at every waypoint bought nothing and cost
+     three times the work - 46% CPU across the tour against 20%.
+     Not awaited: each frame replaces its own index as it lands, and the
+     one it replaces keeps drawing in the right place until it does. */
+  R.gen++;
+  radRefresh({lat:CFG.lat, lon:CFG.lon, z:RAD.TOUR_MID});
   /* Two zoom levels a leg on the way down. One leg from 8 to 11 is an
      eightfold blow-up of the tiles you started with, and for half a
      second that is all anybody can see; capped at fourfold it reads as
@@ -5933,12 +6005,11 @@ async function radTour(){
   for(let z=R.view.z; z<RAD.TOUR_IN; ){
     z=Math.min(RAD.TOUR_IN, z+2); legs.push(z); }
   if(!legs.length) legs.push(RAD.TOUR_IN);
-  const each=RAD.TOUR_DIVE/legs.length;
   try{
     radSay('OVER THE BOAT');
     for(const z of legs){
       if(!alive()) break;
-      await radLeg(t, {lat:CFG.lat, lon:CFG.lon, z:z}, each);
+      await radLeg(t, {lat:CFG.lat, lon:CFG.lon, z:z}, RAD.TOUR_LEG);
     }
     if(alive()) await radHold(t, RAD.TOUR_HOLD);
     if(alive()) await radLeg(t, {lat:CFG.lat, lon:CFG.lon, z:RAD.TOUR_MID},
@@ -5947,7 +6018,11 @@ async function radTour(){
   if(R && R.tour===t){
     R.tour=null; R.cam=null;
     radSay('');
-    radReview(true);        /* the last leg's base is the right one */
+    radPlay(true);
+    /* The last leg already built the base and started re-compositing
+       the timeline for it, so there is nothing left to rebuild - only
+       the case where the app opened with no radar at all. */
+    if(!R.frames.length) radReview(true); else radPaint();
   }
 }
 
@@ -5988,7 +6063,7 @@ function radOpen(host){
     +'<button class="radt" id="rad-home">BOAT</button>'
     +'</div></div>');
   R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
-      frames:[], times:[], kinds:[],
+      frames:[], fv:[], mk:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
       seaOn:true, rainOn:true, cam:null, tour:null,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
@@ -6092,9 +6167,12 @@ function radOpen(host){
 /* While the finger is down: move the base under it, no radar. */
 function radPaintBaseOnly(){
   if(!R) return;
-  R.gen++;                       /* the composites are for the old centre */
-  R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
-  R.frames=[];
+  /* gen still moves - a frame build half way through is for the centre
+     the chart has just left. What does NOT happen any more is throwing
+     away the finished ones: every frame carries the view it was built
+     for, so they slide under the finger with the base instead of the
+     weather vanishing the moment you touch the chart. */
+  R.gen++;
   radBuildBase();
 }
 
@@ -6108,6 +6186,7 @@ function radClose(){
   clearTimeout(r.timer);
   r.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   r.frames.length=0; r.times.length=0; r.kinds.length=0;
+  r.fv.length=0; r.mk.length=0;
   if(r.base) r.base.width=r.base.height=0;
   if(r.cv)   r.cv.width=r.cv.height=0;
 }
