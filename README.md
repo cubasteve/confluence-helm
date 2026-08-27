@@ -1075,19 +1075,83 @@ read off that table at the rain rate each dBZ implies by Marshall-Palmer
 16:ff9500  24:ff4400  32:e62800  50:c10000  75:760000  100:ffaaff
 ```
 
-**Unverified against a live tile.** The key was over quota — `upstream
-429` — for every attempt while this was written, so the futurecast was
-returning nothing at all to compare against. It cannot regress the
-picture: if the Worker does not forward query strings it is inert, and
-if it forwards them with positions meaning something other than mm/h the
-ramp is still the same blue-yellow-red family, only stretched. To settle
-it once quota is back, fetch one tile each way and compare.
+**Verified, and inert today.** Fetched gradient-first on a tile never
+requested before, the answer is still Tomorrow.io's default — and that
+default is a **green** ramp (`#6efd00` bright, `#298a01` dark) against
+RainViewer's blue. So the Worker is not passing the query upstream, and
+that green is exactly the mismatch you see when the timeline crosses
+from radar into forecast.
+
+The parameter is left in place: it costs nothing and starts working the
+moment the Worker forwards it, which is one line where it builds the
+upstream URL:
+
+```js
+url.search = new URL(request.url).search
+```
 
 One difference this does **not** fix: at a z8 view the forecast frames
 back off to z6 to stay inside the six-tile budget while the radar frames
 composite at z7, so the forecast is drawn at half the radar's linear
 resolution. Closing that costs 50% more quota per frame, which is the
 wrong direction on a tier that is already exhausted.
+
+### What the forecast costs, and what it used to
+
+Tomorrow.io's free plan, from their own support docs:
+
+| limit | value | resets |
+|---|---|---|
+| daily | 500 requests | 00:00 UTC |
+| hourly | **25 requests** | top of each hour |
+| per second | 3 | automatic |
+
+And: *"Each API request — whether for weather data or a **visual map
+tile** — counts toward your usage."* Every tile is a call. Measured
+against a live key, the 429 this app was getting was the **hourly** cap,
+not the daily one — it cleared at 03:02 UTC.
+
+One forecast build is three frames at four tiles: **twelve calls**. It
+used to happen on app open, on every pan, on every pinch and on every
+BOAT tour, which is **two view changes an hour** before 429 for the rest
+of it. Two changes fixed that.
+
+**The forecast hour is anchored to the top of the clock hour**, not
+rounded down to the quarter. That sounds cosmetic and is not: at the
+quarter hour the tile URL changed every 15 minutes and the Worker's edge
+cache also expired every 15 minutes, so the two windows lined up exactly
+and no tile was ever served from cache twice. Anchored to the hour, one
+URL is good for a whole hour and every device aboard shares it. The cost
+is that the horizon shrinks through the hour — at 14:05 the frames are
++55m/+1h55/+2h55, by 14:55 they are +5m/+1h05/+2h05 — so the timeline's
+right-hand label is computed rather than printed.
+
+**The frames are kept across view changes.** They are only rebuilt when
+the hour rolls over or the chart moves off them, which is safe now that
+every frame carries the view it was composited for. They are also built
+with **one zoom level of margin**: fitted exactly to the canvas, a frame
+was uncovered by *any* pan at all — one pixel off and it had to be bought
+again. One level out covers four times the area for the same four tiles,
+because the composite backs off a zoom too.
+
+What the tests hold to:
+
+| | cost |
+|---|---|
+| open the app | 12 |
+| pan an eighth of the glass | **0** |
+| zoom in | **0** |
+| a whole BOAT tour | **0** |
+| zoom out past the margin | 12 |
+| pan right off them | 12 |
+| the hour rolls over | 12 |
+
+So ordinary use is about **twelve calls an hour against a limit of
+twenty-five**, where it used to be twelve per pan.
+
+A refusal is also remembered for the rest of the hour. Without that, a
+panel with no quota left asks again on every single pan — which is how
+you stay refused.
 
 ### The futurecast
 

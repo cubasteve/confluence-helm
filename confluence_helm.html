@@ -5175,6 +5175,15 @@ const RAD={
      burst dozens of requests and spend the day's quota on one look. */
   tmr:'https://keel-ics.keel-app.workers.dev/tile/',
   TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7,
+  /* Zoom levels of margin on a forecast frame. Built to fit the canvas
+     exactly, a frame is uncovered by ANY pan at all - one pixel off and
+     it has to be bought again, which is how twelve metered calls became
+     the price of nudging the chart. One level out covers four times the
+     area for the same four tiles, because the composite backs off a
+     zoom too: a quarter-screen pan and any amount of zooming IN are then
+     free. The forecast is drawn a step coarser for it, which is a fair
+     trade for a smooth model field on a tier this thin. */
+  TMR_PAD:1,
   /* Universal Blue, so the forecast is drawn in the same language as the
      radar it follows on the timeline.
      RainViewer's tile URL carries a colour-scheme segment and their
@@ -5187,12 +5196,14 @@ const RAD={
      `gradient` query - "position:RRGGBBAA" pairs - and these are their
      ramp read off that table at the rain rate each dBZ implies, by
      Marshall-Palmer (Z = 200 R^1.6).
-     UNVERIFIED against a live tile: the key was over quota (upstream
-     429) throughout. It cannot regress the picture - if the Worker does
-     not forward query strings this is inert, and if it forwards them
-     with positions meaning something other than mm/h the ramp is still
-     the same blue-yellow-red family, just stretched. To check it once
-     quota is back, fetch one tile with and without and compare. */
+     VERIFIED, and INERT TODAY: fetched gradient-first on a tile never
+     requested before, the answer is still Tomorrow.io's default, which
+     is a GREEN ramp (#6efd00 bright, #298a01 dark) against RainViewer's
+     blue. So the Worker is not passing the query upstream. Left in
+     place because it costs nothing and starts working the moment the
+     Worker forwards it - one line, where it builds the upstream URL:
+         url.search = new URL(request.url).search
+     Until then the forecast frames are green and the radar is blue. */
   tmrGrad:'1:0088bfff,2:006295ff,3:005180ff,5:004768ff,8:ffd200ff,'
          +'12:ffaa00ff,16:ff9500ff,24:ff4400ff,32:e62800ff,50:c10000ff,'
          +'75:760000ff,100:ffaaffff',
@@ -5338,12 +5349,50 @@ async function radBuildFrame(urlFor, opt){
 
 /* +1h, +2h, +3h, each rounded DOWN to the quarter hour Tomorrow.io
    publishes on - asking for 14:07 gets nothing at all. */
+/* The top of the current UTC hour. Every forecast time is measured from
+   here rather than from now, and that one change is what lets the cache
+   work at all: rounded to the quarter hour, the tile URL changed every
+   15 minutes and the Worker's edge cache also expired every 15 minutes,
+   so the two windows lined up exactly and nothing was ever served twice.
+   Anchored to the hour, one URL is good for a whole hour and every
+   device on the boat shares the same cached tile.
+   The cost is that the horizon shrinks through the hour - at 14:05 the
+   frames are +55m/+1h55/+2h55, by 14:55 they are +5m/+1h05/+2h05 - so
+   the timeline's end label is computed rather than printed. */
+const castHour=()=>{ const d=new Date(); d.setUTCMinutes(0,0,0); return d.getTime(); };
+
 function radCastTimes(){
+  const base=castHour();
   return RAD.TMR_HOURS.map(h=>{
-    const t=new Date(Date.now()+h*3600000);
-    t.setUTCMinutes(Math.floor(t.getUTCMinutes()/15)*15, 0, 0);
+    const t=new Date(base+h*3600000);
     return {ms:t.getTime(), iso:t.toISOString().slice(0,19)+'Z'};
   });
+}
+
+/* Says how far the timeline actually reaches, rather than the +3h that
+   used to be printed into the markup and was only true on the hour. */
+function radCastLabel(){
+  const e=document.querySelector('.rad-end.fut');
+  if(!e||!R||!R.times.length) return;
+  const h=Math.round((R.times[R.times.length-1]-Date.now())/3600000);
+  e.textContent = h>0 ? '+'+h+'h' : 'NOW';
+}
+
+/* Does a frame composited for `fv` still cover the whole canvas at
+   `view`? Zoomed in, yes - it covers more ground than is asked for.
+   Panned off, or zoomed out, no. */
+function radCovers(fv, view, W, H){
+  if(!fv) return false;
+  const k=Math.pow(2, fv.z-view.z);          /* view px -> fv px */
+  const dx=Math.abs(wx(view.lon,fv.z)-wx(fv.lon,fv.z));
+  const dy=Math.abs(wy(view.lat,fv.z)-wy(fv.lat,fv.z));
+  return dx+W*k/2 <= W/2+0.5 && dy+H*k/2 <= H/2+0.5;
+}
+
+function radCastDrop(){
+  if(!R||!R.cast) return;
+  R.cast.frames.forEach(c=>{ if(c) c.width=c.height=0; });
+  R.cast=null;
 }
 
 /* Built after the radar, never alongside it: the radar is what you came
@@ -5352,24 +5401,58 @@ function radCastTimes(){
    +2h, and three empty frames in the loop would read as three hours of
    clear sky. */
 async function radBuildCast(){
-  const gen=R.gen;
+  const gen=R.gen, hour=castHour();
+  /* Every forecast tile is a metered API call - the free tier is 25 an
+     hour and 500 a day, and a tile counts the same as a data call - so
+     rebuilding these on every pan and pinch is what empties it. Three
+     frames at four tiles is twelve calls, which is two view changes an
+     hour and then 429 for the rest of it.
+     They are rebuilt only when the hour has rolled over or the chart has
+     moved off them. That is safe now because every frame carries the
+     view it was built for: one composited for a wider view draws in
+     exactly the right place at a closer one. */
+  const c=R.cast;
+  if(c && c.hour===hour && c.frames.length &&
+     c.fv.every(v=>radCovers(v, R.view, R.cv.width, R.cv.height))){
+    for(let i=0;i<c.frames.length;i++){
+      R.frames.push(c.frames[i]); R.fv.push(c.fv[i]); R.mk.push(c.mk[i]);
+      R.times.push(c.times[i]);   R.kinds.push('cast');
+    }
+    radMarkNow(); radPaint();
+    return;
+  }
+  /* A refusal is remembered for the rest of the hour. Without this, a
+     panel with no quota left asks again on every single pan - which is
+     how you stay refused. */
+  if(R.castFail===hour){
+    radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
+    return;
+  }
+  radCastDrop();
+  const keep={hour:hour, frames:[], fv:[], mk:[], times:[]};
   for(const t of radCastTimes()){
     const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png'
                     +(RAD.tmrGrad?'?gradient='+encodeURIComponent(RAD.tmrGrad):''),
               opt:{serial:true, maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
-    const view={lat:R.view.lat, lon:R.view.lon, z:R.view.z};
+    const view={lat:R.view.lat, lon:R.view.lon,
+                z:Math.max(RAD.MIN_Z, R.view.z-RAD.TMR_PAD)};
     const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
     if(!r || !r.hits){
       if(r&&r.c) r.c.width=r.c.height=0;
+      R.castFail=hour;
       radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
+      keep.frames.forEach(x=>{ if(x) x.width=x.height=0; });
       return;
     }
     R.frames.push(r.c); R.fv.push(view); R.mk.push(mk);
     R.times.push(t.ms); R.kinds.push('cast');
+    keep.frames.push(r.c); keep.fv.push(view);
+    keep.mk.push(mk); keep.times.push(t.ms);
     radMarkNow();
     radPaint();
   }
+  R.cast=keep;
 }
 
 async function radBuildFrames(){
@@ -5408,6 +5491,7 @@ async function radBuildFrames(){
   }
   radMarkNow();
   await radBuildCast();
+  radCastLabel();
 }
 
 /* Where the present sits on the track, so past and forecast are told
@@ -5843,7 +5927,12 @@ function radDetails(){
 }
 
 function radDropFrames(){
-  R.frames.forEach(c=>{ if(c) c.width=c.height=0; });
+  /* The forecast canvases belong to R.cast and outlive the timeline
+     they are lent to. Zeroing one here would free a canvas the cache
+     still hands out, and the next view change would draw nothing where
+     the forecast should be. */
+  const own=R.cast ? R.cast.frames : [];
+  R.frames.forEach(c=>{ if(c && own.indexOf(c)<0) c.width=c.height=0; });
   R.frames=[]; R.fv=[]; R.mk=[]; R.times=[]; R.kinds=[]; R.p=0;
 }
 
@@ -5863,11 +5952,22 @@ async function radRefresh(view){
   const gen=R.gen;
   for(let i=0;i<R.frames.length;i++){
     const mk=R.mk[i]; if(!mk) continue;
+    /* Radar tiles are free and worth re-compositing; forecast tiles are
+       metered. If the one we have still covers where we are going,
+       rebuilding it would spend an API call to redraw the same pixels. */
+    if(R.kinds[i]==='cast' &&
+       radCovers(R.fv[i], view, R.cv.width, R.cv.height)) continue;
     const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
     if(r && (r.hits || !mk.opt.maxTiles)){
       const old=R.frames[i];
       R.frames[i]=r.c; R.fv[i]=view;
+      /* The cache lent this canvas out; it has to be told which one it
+         holds now, or it would keep handing back the freed one. */
+      if(R.kinds[i]==='cast' && R.cast){
+        const j=R.cast.frames.indexOf(old);
+        if(j>=0){ R.cast.frames[j]=r.c; R.cast.fv[j]=view; }
+      }
       if(old) old.width=old.height=0;
       radPaint();
     }else if(r&&r.c) r.c.width=r.c.height=0;
@@ -6087,7 +6187,7 @@ function radOpen(host){
   R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
       frames:[], fv:[], mk:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
-      seaOn:true, rainOn:true, cam:null, tour:null,
+      seaOn:true, rainOn:true, cam:null, tour:null, cast:null, castFail:0,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
@@ -6209,6 +6309,7 @@ function radClose(){
   r.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   r.frames.length=0; r.times.length=0; r.kinds.length=0;
   r.fv.length=0; r.mk.length=0;
+  if(r.cast) r.cast.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   if(r.base) r.base.width=r.base.height=0;
   if(r.cv)   r.cv.width=r.cv.height=0;
 }
