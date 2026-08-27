@@ -130,20 +130,33 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   color:var(--ink);
 }
 #panel.open{transform:translateY(0)}
-/* Up from the bottom, the opposite edge and the opposite gesture. Same
-   surface, same easing, same layer-promotion rule. */
+/* Up from the bottom, the opposite edge and the opposite gesture - but
+   a DOCK, not a drawer. It only ever holds one row, so it is only ever
+   one row tall, and the chart stays visible behind it. That is the whole
+   difference between reaching for an app and leaving the page.
+   The full-height surface is still here, transparent: it catches a tap
+   anywhere off the dock and closes it, which is what a dock should do
+   and what a scrim would otherwise be needed for. */
 #apps{
-  position:absolute;inset:0;background:var(--panel);z-index:20;
+  position:absolute;inset:0;background:transparent;z-index:20;
   transform:translateY(100%);
   transition:transform .42s cubic-bezier(.16,1,.3,1);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  color:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  padding-bottom:126px;color:var(--ink);
 }
 #apps.open{transform:translateY(0)}
-#apps .slab{width:600px}
+/* 660 wide with its foot at y=954 puts the lowest corners 529 out, the
+   same geometry the radar toolbar sits on and the same 11px of margin
+   inside the 540 the glass stops at. */
+#apps-dock{width:660px;background:var(--panel);border:1px solid var(--hairline);
+  border-radius:34px;padding:16px 26px 18px;
+  box-shadow:0 -12px 44px rgba(0,0,0,.32)}
+#apps-dock .grab{position:static;margin:0 auto 12px}
+/* One row. More apps than fit scroll sideways rather than growing the
+   dock into the drawer it just stopped being. */
 .approw{display:flex;align-items:flex-start;justify-content:center;gap:26px;
-  flex-wrap:wrap;width:600px;padding-top:16px}
-.approw .tile{width:150px}
+  flex-wrap:nowrap;overflow-x:auto;padding:0}
+.approw .tile{width:150px;flex:0 0 150px}
 /* A launched app. */
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
 #app-run.on{display:block}
@@ -281,7 +294,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   background:rgba(74,158,255,.14)}
 .radt:active{background:rgba(255,255,255,.2)}
 #rad-sp{flex:1}
-#apps-empty{width:600px;text-align:center;font-size:24px;font-weight:600;
+#apps-empty{width:100%;text-align:center;font-size:24px;font-weight:600;
   color:var(--label);letter-spacing:.06em;line-height:1.5;padding-top:20px}
 /* Layer promotion only while a slide is actually running. Holding three
    1080x1080 layers on the GPU permanently costs real texture memory, and
@@ -290,8 +303,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    slide starts and drops it once the transition has had time to finish. */
 #panel.sliding,#tmap.sliding,#music.sliding{will-change:transform}
 .sheet{width:600px;display:flex;flex-direction:column;align-items:stretch}
+/* The mark on the overlay's leading edge - the edge that travels, and
+   the one your thumb pulls. The panel comes DOWN from the top now, so
+   its leading edge is the bottom; this sat at the top for as long as the
+   panel came up, and stayed there when the gesture was flipped. */
 .grab{width:120px;height:8px;border-radius:4px;background:var(--label);
-  opacity:.45;position:absolute;top:70px;left:50%;margin-left:-60px}
+  opacity:.45;position:absolute;bottom:70px;left:50%;margin-left:-60px}
 /* .p-title, the .row family and .chev used to live here: the panel was a
    list of label/value rows with a heading and a chevron. It is tiles and
    .slab sections now, and none of those class names appears anywhere in
@@ -1117,9 +1134,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      That is the whole reason it lives here rather than as a fourth page:
      a page is always loaded and always costing something. -->
 <div id="apps">
-  <div class="slab">Apps</div>
-  <div class="approw" id="app-row"></div>
-  <div id="apps-empty" style="display:none">Nothing installed</div>
+  <div id="apps-dock">
+    <div class="grab"></div>
+    <div class="approw" id="app-row"></div>
+    <div id="apps-empty" style="display:none">Nothing installed</div>
+  </div>
 </div>
 
 <!-- A launched app. It gets the whole circle; its chrome floats over it
@@ -1809,9 +1828,11 @@ const wAttr=(id,a,v)=>{const k=id+'|a|'+a; if(_w.get(k)===v)return; _w.set(k,v);
 const wText=(id,v)  =>{const k=id+'|t';    if(_w.get(k)===v)return; _w.set(k,v); $(id).textContent=v;};
 const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o); $(id).classList.toggle(c,o);};
 
+/* The app dock is NOT on this list. The panel covers the glass and a
+   running app replaces it, but a dock leaves the dial in plain sight -
+   and a dial frozen in plain sight reads as a crash. */
 const dialVisible=()=>PAGE_I===1
                    && !panel.classList.contains('open')
-                   && !apps.classList.contains('open')
                    && !APP.on
                    && !ssOn;
 
@@ -2596,6 +2617,10 @@ const openApps  =()=>{ if(APP.on) return; closePanel();
                        drawApps(); markSlide('apps-open');
                        apps.classList.add('open'); };
 const closeApps =()=>{ markSlide('apps-close'); apps.classList.remove('open'); };
+/* Anywhere off the dock closes it. The dock itself swallows the tap so
+   that reaching for an app is not also a way to dismiss the thing you
+   are reaching into. */
+apps.addEventListener('click', e=>{ if(e.target===apps) closeApps(); });
 const showMusic =()=>goPage(2);
 const hideMusic =()=>goPage(1);
 const hideMap   =()=>goPage(1);

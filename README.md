@@ -926,9 +926,9 @@ The list is paged rather than scrolled. `html`/`body` carry
 reliably a pan here - and a page you can hit with a wet glove beats a list
 you have to nudge.
 
-## Two drawers, and apps
+## A panel and a dock
 
-Swipe **down** for the control panel, **up** for the app drawer. Opposite
+Swipe **down** for the control panel, **up** for the app dock. Opposite
 edges, opposite gestures, each going back the way it came — the panel
 used to come up from the bottom, which is where the drawer lives now, and
 two surfaces sharing an edge and an animation would have been two things
@@ -939,6 +939,27 @@ something; an app exists between the tap that launches it and the tap
 that closes it, and then it is torn down. Each entry in `APPS` carries
 its own `open(host)` and `close()`, because only the app knows what it
 allocated.
+
+The two are not the same shape, and should not be. The panel takes the
+whole glass because it is somewhere you go. The dock is a **dock**: one
+row tall, and the dial keeps drawing behind it, because reaching for an
+app should not feel like leaving the page. 660 wide with its foot at
+y=954 puts its lowest corners 529 out — the same geometry the radar
+toolbar sits on, and the same 11px of margin inside the 540 the glass
+stops at.
+
+A tap anywhere off the dock closes it; a tap on it does not. The
+full-height surface is still there for that, just transparent — which is
+what a scrim would otherwise be for.
+
+`dialVisible()` deliberately does **not** list the dock. The panel covers
+the glass and a running app replaces it, but a dock leaves the dial in
+plain sight, and a dial frozen in plain sight reads as a crash.
+
+The `.grab` mark sits on whichever edge the overlay travels from — the
+edge your thumb pulls. The panel comes down from the top now, so its
+grab belongs at the bottom; it sat at the top for as long as the panel
+came up, and stayed there when the gesture was flipped.
 
 ## Radar
 
