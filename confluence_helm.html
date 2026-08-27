@@ -168,24 +168,27 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* --- the radar app --- */
 #rad-cv{position:absolute;inset:0;touch-action:none}
 /* HUD and toolbar both sit on the centre line and inside the glass: at
-   y=104 the circle is 640px across, at y=950 it is 703. */
+   y=104 the circle is 640px across, at y=950 it is 703. Both are as
+   short as their contents allow - on a round panel every row of padding
+   is chart you cannot see, and the chart is the point. */
 /* Its own scrim. The map underneath is dark whatever the panel's theme
    is, so a HUD in --ink over --chip is white on white by day and gone;
    this reads on either. */
 #rad-hud{position:absolute;top:104px;left:50%;transform:translateX(-50%);
   width:440px;text-align:center;pointer-events:none;
-  padding:10px 20px 14px;border-radius:20px;background:rgba(0,0,0,.55)}
-#rad-time{font-size:26px;font-weight:600;letter-spacing:.12em;color:#F2F4F6}
-#rad-note{margin-top:12px;font-size:22px;font-weight:600;color:#9AA2A9;
-  letter-spacing:.06em}
+  padding:6px 20px 8px;border-radius:18px;background:rgba(0,0,0,.55)}
+#rad-time{font-size:23px;font-weight:600;letter-spacing:.12em;color:#F2F4F6;
+  line-height:1.25}
+#rad-note{margin-top:7px;font-size:20px;font-weight:600;color:#9AA2A9;
+  letter-spacing:.06em;line-height:1.2}
 /* The credits Esri's unkeyed service asks for, inside the HUD rather
    than along the foot. At the foot they were OUTSIDE THE GLASS: a 274px
    line at y=1070 has its corners 547px from the centre, and the panel
    stops at 540. It looked deliberate in the screenshot and was simply
    clipped. Up here it is inside by construction, and the scrim it
    already sits on makes it read over any map. */
-#rad-cred{margin-top:8px;font-size:15px;font-weight:600;letter-spacing:.07em;
-  color:#6C757C;opacity:.9;white-space:nowrap}
+#rad-cred{margin-top:4px;font-size:14px;font-weight:600;letter-spacing:.07em;
+  color:#6C757C;opacity:.9;white-space:nowrap;line-height:1.2}
 /* The toolbar, in the keel app's idiom: a transport row - play, the
    two ends of the timeline named, the track between them - and under it
    a row of pills for the layers. Both sit on one scrim, so the map
@@ -194,22 +197,24 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    control, and the row those two buttons used to occupy is worth more
    as the transport. */
 #rad-tools{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);
-  width:660px;z-index:2;padding:16px 26px 18px;border-radius:26px;
+  width:660px;z-index:2;padding:8px 24px 10px;border-radius:24px;
   background:rgba(0,0,0,.55);--rad-hi:#4A9EFF}
-#rad-scrub{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+#rad-scrub{display:flex;align-items:center;gap:14px;margin-bottom:8px}
 /* The play button leads the row, the way it does in the keel app: the
    control pressed most often is the one the thumb should find first. */
-#rad-play{width:64px;height:64px;flex:0 0 64px;border-radius:32px;
+#rad-play{width:54px;height:54px;flex:0 0 54px;border-radius:27px;
   border:2px solid var(--rad-hi);background:rgba(74,158,255,.14);
   color:var(--rad-hi);padding:0;display:flex;align-items:center;
   justify-content:center}
-#rad-play svg{width:34px;height:34px;display:block;fill:currentColor}
+#rad-play svg{width:29px;height:29px;display:block;fill:currentColor}
 #rad-play:active{background:rgba(74,158,255,.32)}
-.rad-end{flex:0 0 auto;font-size:19px;font-weight:600;letter-spacing:.06em;
+.rad-end{flex:0 0 auto;font-size:18px;font-weight:600;letter-spacing:.06em;
   color:#9AA2A9;font-variant-numeric:tabular-nums}
 .rad-end.fut{color:var(--rad-hi)}
 /* The band you can actually hit. The track inside it is 8px because
-   that is what reads; this is 52 because that is what a thumb needs. */
+   that is what reads; this is 52 because that is what a thumb needs -
+   and it did NOT shrink when the rest of the toolbar did. It is the
+   tallest thing in the row now; everything else trimmed around it. */
 #rad-slide{flex:1;padding:22px 0;touch-action:none}
 /* Grey behind, accent at the present, amber out into the forecast - the
    track says which third of it you are in before you read the clock.
@@ -225,9 +230,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #rad-now{position:absolute;top:-7px;width:2px;height:22px;
   background:#F2F4F6;opacity:.85}
 #rad-pills{display:flex;align-items:center;gap:14px}
-.radt{height:60px;padding:0 22px;border-radius:30px;
+.radt{height:50px;padding:0 20px;border-radius:25px;
   border:2px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);
-  color:#9AA2A9;font-family:var(--font);font-size:21px;font-weight:600;
+  color:#9AA2A9;font-family:var(--font);font-size:20px;font-weight:600;
   letter-spacing:.14em}
 .radt.on{color:var(--rad-hi);border-color:var(--rad-hi);
   background:rgba(74,158,255,.14)}

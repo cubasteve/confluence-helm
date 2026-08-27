@@ -1042,6 +1042,12 @@ the timeline named, the track between them — and under it a row of pills
 for the layers. Both rows share one scrim, so the map cannot show
 through the gap between them.
 
+Both scrims are as short as their contents allow — the HUD is 67px and
+the toolbar 130px. On a round panel every row of padding is chart you
+cannot see, and the chart is the point. The one thing that did **not**
+shrink is the 52px scrub band: it is the tallest thing in the transport
+row now, and everything else trimmed around it.
+
 ```
 [▶]  −2h  ━━━━━━━━━━┃━━●━━━━  +3h
 [ SEA ] [ RAIN ]            [ BOAT ]
