@@ -1359,6 +1359,7 @@ about.
 | base | Esri World Dark Gray Canvas | none |
 | radar | RainViewer, last hour + nowcast | none |
 | forecast | Tomorrow.io via the `keel-ics` Worker | `TOMORROW_KEY`, a Worker secret |
+| forecast, fallback | Open-Meteo 15-minute precipitation grid | none |
 
 ### Two sources, and why both
 
@@ -1552,6 +1553,29 @@ A refusal is also remembered for the rest of the hour. Without that, a
 panel with no quota left asks again on every single pan — which is how
 you stay refused.
 
+### Bought once, and not faster than three a second
+
+Two more things `sail-weather` does that this did not.
+
+**A session cache keyed by URL.** It keeps a `url -> Image` map for the
+life of the page, which is why panning back over ground you have already
+looked at costs nothing - the frames are re-composited, but not one tile
+is bought twice. The helm cached *composited frames* only, so a pan past
+the margin re-bought every tile underneath them. `CAST_TILES` is that
+map, bounded at 24 - two builds' worth, at 256 KB decoded apiece - with
+the least-recently-used going when a 25th arrives, and the whole thing
+emptied in `radClose` alongside the canvases. **Successes only**: a
+refusal is a 429 window that clears in minutes, and remembering it for
+the session would be the one way to make sure it never cleared.
+
+**450 ms between tile loads.** Tomorrow.io allows three requests a second
+as well as 25 an hour, and off a warm edge cache twelve tiles come back
+fast enough to trip it - a self-inflicted 429 on top of a quota that was
+fine. `RAD.TMR_GAP` is a floor on the gap, not a queue; the fetch was
+already serial. Only the forecast asks for either: the basemap and the
+radar are unmetered and fetched in bulk, and putting them behind a 450 ms
+gap would make the map crawl in for no reason.
+
 ### One bad tile used to cost the whole futurecast
 
 Three failures compounded, and together they are why the panel could sit
@@ -1579,6 +1603,39 @@ hour of clear sky, which is the one thing it must not look like.
 before the panel can say `NO FORECAST` is half a minute of nothing. If
 the first tile will not come after its retries, the rest are refused
 too, so `opt.bail` stops there — three requests, not eighteen.
+
+### A model, when the measurement is refused
+
+Tomorrow.io's free tier is a trickle and it does run out. The panel used
+to answer that with `NO FORECAST` and a blank hour. It answers with a
+**model** now - the same fallback `sail-weather` makes.
+
+Open-Meteo's 15-minute precipitation grid needs no key, sends CORS
+headers and has limits a boat cannot reach. An 8x8 grid over the frame's
+ground is **64 coordinates in one request**, smoothed up into the same
+512 frame canvas the tiles composite into, so playback, the scrub, the
+tour and `radCovers` cannot tell the two apart.
+
+It is a **model, not a measurement**, and the panel says so rather than
+passing one off as the other:
+
+```
+              11:00 PM . FORECAST
+          MODEL FORECAST - NO TOMORROW.IO
+```
+
+Eight cells across the glass is a smear however it is coloured, so the
+ramp is the same one the radar and the recoloured tiles use - mm/h onto
+the ramp's own dBZ stops through Marshall-Palmer, `R = (Z/200)^0.625`,
+which puts 12 dBZ at 0.20 mm/h, 20 at 0.65, 30 at 2.7 and 48 at 37 - but
+at **thinner alphas**. At the tiles' opacity a coarse field paints the
+chart out completely, which is a model claiming the solidity of a
+measurement. Under it the coastline stays readable.
+
+`mk` is null on these frames, because there is no per-frame URL to
+rebuild from. The BOAT tour already skips frames without one: it leaves
+them composited rather than dropping them, and the next settled view
+rebuilds them through `radCovers` like everything else.
 
 ### Two services, two failures
 

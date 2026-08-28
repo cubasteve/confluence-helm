@@ -5450,7 +5450,37 @@ const RAD={
      zoom chosen so the view fits in six tiles: a normal tile layer would
      burst dozens of requests and spend the day's quota on one look. */
   tmr:'https://keel-ics.keel-app.workers.dev/tile/',
-  TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7, TMR_TRIES:3,
+  TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7, TMR_TRIES:3, TMR_GAP:450,
+  /* And when that trickle runs out, a model instead of nothing.
+     Open-Meteo's 15-minute precipitation grid needs no key, sends CORS
+     headers and has limits a boat cannot reach - the same answer
+     sail-weather falls back to. It is a MODEL, not a measurement: an
+     8x8 grid smoothed across the view rather than km-scale imagery, so
+     it is the right shape of weather in the right place at the right
+     time and no more than that. The note line says which one is up.
+     8x8 is 64 coordinates in ONE request, and Open-Meteo counts each
+     coordinate against its per-IP limit - which is why this is built
+     once an hour on the same schedule as the tiles, and not per pan. */
+  met:'https://api.open-meteo.com/v1/forecast',
+  MET_N:8,
+  /* mm/h onto the same ramp the radar and the recoloured tiles use, so
+     a fallback frame reads as the same product. The thresholds are the
+     ramp's own dBZ stops through Marshall-Palmer (R = (Z/200)^0.625):
+     12 dBZ is 0.20 mm/h, 15 is 0.32, 20 is 0.65, 30 is 2.7, 37 is 7.6,
+     48 is 37. Heaviest first - the first band that fits wins. */
+  /* Thinner than the tile ramp on purpose. Eight cells across the whole
+     glass is a smear however it is coloured, and at the tiles' alpha it
+     paints the chart out completely - a model claiming the solidity of a
+     measurement. Under it, the coastline stays readable and the wash
+     reads as what it is. */
+  MET_RAMP:[
+    {mm:36.6, c:[217, 27,  0], a:190},
+    {mm: 7.6, c:[255,210,  0], a:180},
+    {mm: 2.72,c:[  0, 85,136], a:165},
+    {mm: 0.65,c:[  0,163,224], a:150},
+    {mm: 0.32,c:[136,221,238], a:130},
+    {mm: 0.20,c:[214,200,143], a:100},
+  ],
   /* Zoom levels of margin on a forecast frame. Built to fit the canvas
      exactly, a frame is uncovered by ANY pan at all - one pixel off and
      it has to be bought again, which is how twelve metered calls became
@@ -5526,6 +5556,61 @@ const unwy=(py,z)=>{ const t=Math.PI-2*Math.PI*py/(256*Math.pow(2,z));
    are drawn and never read back, which is why no CORS handshake has
    ever been needed for them - one whole class of failure avoided, and
    not worth giving up to recolour layers that already match. */
+/* Every forecast tile bought this session, keyed by its URL. sail-weather
+   keeps one of these for the life of the page and it is the reason a pan
+   back over ground you have already looked at costs nothing: the frames
+   are re-composited, but not one tile is bought twice.
+   Bounded, because this app frees its pixels on purpose - 24 tiles is
+   two whole builds' worth at 256KB decoded apiece, and the oldest goes
+   when a 25th arrives. Emptied with the app, in radCastDrop. */
+const CAST_TILE_KEEP=24;
+let CAST_TILES=new Map();
+function castTileGet(url){
+  const im=CAST_TILES.get(url);
+  if(im===undefined) return undefined;
+  CAST_TILES.delete(url); CAST_TILES.set(url, im);   /* touch: least-recent goes first */
+  return im;
+}
+function castTilePut(url, im){
+  CAST_TILES.set(url, im);
+  while(CAST_TILES.size>CAST_TILE_KEEP){
+    const k=CAST_TILES.keys().next().value;
+    CAST_TILES.delete(k);
+  }
+}
+const castTilesDrop=()=>{ CAST_TILES=new Map(); };
+
+/* Tomorrow.io allows three requests a second as well as 25 an hour, and
+   off a warm edge cache twelve tiles come back fast enough to trip it -
+   a self-inflicted 429 on top of a quota that was fine. sail-weather
+   leaves 450ms between tile loads for exactly this. Serial already, so
+   this is a floor on the gap and not a queue. */
+let castTileAt=0;
+function castTileWait(ms){
+  const now=Date.now(), due=Math.max(now, castTileAt+ms);
+  castTileAt=due;
+  return due>now ? new Promise(r=>setTimeout(r, due-now)) : Promise.resolve();
+}
+
+/* One tile, through the session cache and the rate floor. Only the
+   forecast asks for either: the basemap and the radar are unmetered and
+   fetched in bulk, and putting them through a 450ms gap would make the
+   map crawl in for no reason at all. */
+async function radTile(url, gen, opt){
+  if(opt.cache){
+    const hit=castTileGet(url);
+    if(hit!==undefined) return hit;
+  }
+  if(opt.gap) await castTileWait(opt.gap);
+  if(!R || R.gen!==gen) return null;
+  const im=await radImg(url, gen, opt.cors, opt.tries);
+  /* Successes only. A refusal is a 429 window that clears in minutes,
+     and remembering it for the session would be the one way to make
+     sure it never cleared. */
+  if(opt.cache && im) castTilePut(url, im);
+  return im;
+}
+
 function radImg(url, gen, cors, tries){
   return new Promise(res=>{
     let n=0;
@@ -5684,7 +5769,7 @@ async function radBuildFrame(urlFor, opt){
   if(opt.serial){
     ims=[];
     for(const t of ts){
-      ims.push(await radImg(urlFor(t), gen, opt.cors, opt.tries));
+      ims.push(await radTile(urlFor(t), gen, opt));
       if(!R||R.gen!==gen) return null;
       /* If the very first tile will not come, after its retries, the
          service is refusing rather than dropping - a quota window, or the
@@ -5694,7 +5779,7 @@ async function radBuildFrame(urlFor, opt){
       if(opt.bail && ims.length===1 && !ims[0]) break;
     }
   }else{
-    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen, opt.cors, opt.tries)));
+    ims=await Promise.all(ts.map(t=>radTile(urlFor(t), gen, opt)));
   }
   if(!R||R.gen!==gen) return null;
   const sc=N/gw;                             /* that ground into N px */
@@ -5794,10 +5879,7 @@ async function radBuildCast(){
   /* A refusal is remembered for the rest of the hour. Without this, a
      panel with no quota left asks again on every single pan - which is
      how you stay refused. */
-  if(R.castFail===hour){
-    radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
-    return;
-  }
+  if(R.castFail===hour) return radBuildCastMet(gen, hour);
   radCastDrop();
   const keep={hour:hour, frames:[], fv:[], mk:[], times:[]};
   const want=radCastTimes();
@@ -5805,7 +5887,7 @@ async function radBuildCast(){
     const t=want[fi];
     const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
               opt:{serial:true, cors:true, recolor:true, tries:RAD.TMR_TRIES,
-                   bail:true,
+                   bail:true, cache:true, gap:RAD.TMR_GAP,
                    maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
     const view={lat:R.view.lat, lon:R.view.lon,
                 z:Math.max(RAD.MIN_Z, R.view.z-RAD.TMR_PAD)};
@@ -5838,10 +5920,125 @@ async function radBuildCast(){
      is not: the missing hour is worth another try on the next view. */
   if(!keep.frames.length){
     R.castFail=hour;
-    radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
-    return;
+    return radBuildCastMet(gen, hour);
   }
   R.cast=keep;
+}
+
+/* ---- the model, when the measurement is refused -------------------- */
+
+/* The ground a frame built for `v` stands on. Independent of the zoom
+   the tiles were fetched at: the canvas is R.cv wide at v.z whichever
+   level the compositor backed off to. */
+function radViewBox(v){
+  const cx=wx(v.lon, v.z), cy=wy(v.lat, v.z);
+  return {w:unwx(cx-R.cv.width/2,  v.z), e:unwx(cx+R.cv.width/2,  v.z),
+          n:unwy(cy-R.cv.height/2, v.z), s:unwy(cy+R.cv.height/2, v.z)};
+}
+
+/* One request, 64 coordinates, no key. Returns null on any trouble at
+   all - the caller's answer to null is the same as its answer to a
+   refused tile, which is to say so rather than draw nothing and let it
+   read as clear sky. */
+async function radMetGrid(v, gen){
+  const N=RAD.MET_N, b=radViewBox(v), lats=[], lons=[];
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    lats.push((b.n+(b.s-b.n)*r/(N-1)).toFixed(3));
+    lons.push((b.w+(b.e-b.w)*c/(N-1)).toFixed(3));
+  }
+  /* Far enough to cover +3h measured from an anchor up to an hour old,
+     plus slack for the block we are standing in. */
+  const steps=Math.ceil((Math.max.apply(null,RAD.TMR_HOURS)+1)*4)+2;
+  const url=RAD.met+'?latitude='+lats.join(',')+'&longitude='+lons.join(',')
+    +'&minutely_15=precipitation&forecast_minutely_15='+steps
+    +'&timeformat=unixtime';
+  try{
+    const res=await fetch(url,{signal:R.ac.signal});
+    if(!res.ok) throw new Error('http '+res.status);
+    let arr=await res.json();
+    if(!Array.isArray(arr)) arr=[arr];          /* one point comes back bare */
+    if(!R||R.gen!==gen) return null;
+    const times=arr[0].minutely_15.time;
+    if(!times||!times.length||arr.length!==N*N) return null;
+    const out=[];
+    for(let t=0;t<times.length;t++){
+      const cells=new Float32Array(N*N);
+      for(let i=0;i<arr.length;i++)
+        cells[i]=arr[i].minutely_15.precipitation[t]||0;
+      out.push({ms:times[t]*1000, cells:cells});
+    }
+    return {box:b, n:N, steps:out};
+  }catch(e){ return null; }
+}
+
+/* The 15-minute block nearest the hour we want, and only if it really is
+   near: an empty tail from the API must not put the +3h frame's label on
+   a +40m block. */
+function radMetStep(g, ms){
+  let best=null, bd=Infinity;
+  for(const s of g.steps){
+    const d=Math.abs(s.ms-ms);
+    if(d<bd){ bd=d; best=s; }
+  }
+  return bd<=15*60e3 ? best : null;
+}
+
+/* An N x N image smoothed up to the frame canvas. Small on purpose - it
+   IS an 8x8 model field, and drawing it sharp would claim a resolution
+   it does not have. */
+function radMetFrame(g, step, v){
+  const N=g.n, c=document.createElement('canvas');
+  c.width=c.height=RAD.FRAME;
+  const off=document.createElement('canvas');
+  off.width=off.height=N;
+  const oc=off.getContext('2d'), im=oc.createImageData(N,N), d=im.data;
+  for(let i=0;i<N*N;i++){
+    const mmh=step.cells[i]*4;                  /* mm per 15 min -> mm/h */
+    let band=null;
+    for(const t of RAD.MET_RAMP){ if(mmh>=t.mm){ band=t; break; } }
+    if(!band){ d[i*4+3]=0; continue; }
+    d[i*4]=band.c[0]; d[i*4+1]=band.c[1]; d[i*4+2]=band.c[2]; d[i*4+3]=band.a;
+  }
+  oc.putImageData(im,0,0);
+  const gx=c.getContext('2d');
+  gx.imageSmoothingEnabled=true;
+  gx.imageSmoothingQuality='high';
+  gx.drawImage(off, 0, 0, RAD.FRAME, RAD.FRAME);
+  return c;
+}
+
+/* Same shape as the Tomorrow.io build, so playback, the scrub, the tour
+   and radCovers cannot tell the two apart - only the note line does.
+   mk is null because there is no per-frame url to rebuild from, and the
+   tour already skips frames without one: it leaves them as composited
+   rather than dropping them. */
+async function radBuildCastMet(gen, hour){
+  const refuse=()=>radSay(R.frames.length ? 'NO FORECAST — quota or upstream'
+                                          : R.note);
+  if(R.metFail===hour) return refuse();
+  const v={lat:R.view.lat, lon:R.view.lon,
+           z:Math.max(RAD.MIN_Z, R.view.z-RAD.TMR_PAD)};
+  const g=await radMetGrid(v, gen);
+  if(!R||R.gen!==gen) return;
+  if(!g){ R.metFail=hour; return refuse(); }
+  radCastDrop();
+  const keep={hour:hour, src:'met', frames:[], fv:[], mk:[], times:[]};
+  for(const t of radCastTimes()){
+    const step=radMetStep(g, t.ms);
+    if(!step) continue;
+    const c=radMetFrame(g, step, v);
+    R.frames.push(c); R.fv.push(v); R.mk.push(null);
+    R.times.push(t.ms); R.kinds.push('cast');
+    keep.frames.push(c); keep.fv.push(v);
+    keep.mk.push(null); keep.times.push(t.ms);
+  }
+  if(!keep.frames.length){ R.metFail=hour; return refuse(); }
+  R.cast=keep;
+  /* Said plainly, because a model and a measurement are not the same
+     claim and the panel must not pass one off as the other. */
+  radSay('MODEL FORECAST — NO TOMORROW.IO');
+  radMarkNow(); radPaint();
+  radCastLabel();
 }
 
 async function radBuildFrames(){
@@ -6581,7 +6778,7 @@ function radOpen(host){
     '<div id="rad-hud">'
     +'<div id="rad-head"><span id="rad-time">—</span>'
     +'<div id="rad-note"></div>'
-    +'<div id="rad-cred">Esri · RainViewer · Tomorrow.io</div>'
+    +'<div id="rad-cred">Esri · RainViewer · Tomorrow.io · Open-Meteo</div>'
     +'<svg id="rad-chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>'
     +'</div>'
     +'<div id="rad-more">'
@@ -6609,7 +6806,7 @@ function radOpen(host){
   R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
       frames:[], fv:[], mk:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
-      rainOn:true, cam:null, tour:null, cast:null, castFail:0,
+      rainOn:true, cam:null, tour:null, cast:null, castFail:0, metFail:0,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
@@ -6729,6 +6926,10 @@ function radClose(){
   if(r.cast) r.cast.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   if(r.base) r.base.width=r.base.height=0;
   if(r.cv)   r.cv.width=r.cv.height=0;
+  /* The tile cache goes with the app, not with a rebuild: its whole
+     point is surviving a pan, and it is the one thing here holding
+     decoded image data after the canvases are zeroed. */
+  castTilesDrop();
 }
 function radarOpen(host){ radOpen(host); }
 function radarClose(){ radClose(); }
