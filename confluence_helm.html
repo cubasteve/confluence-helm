@@ -275,6 +275,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #rad-win{margin-top:7px;font-size:22px;font-weight:600;color:#F2F4F6;
   letter-spacing:.04em;font-variant-numeric:tabular-nums}
 #rad-win.none{color:#9AA2A9;font-size:17px;letter-spacing:.08em}
+/* The day only appears when it is not today, and it defers to the times
+   when it does - they are what you came for. */
+#rad-win .wday{color:#9AA2A9;font-size:16px;letter-spacing:.08em;
+  margin-right:4px;vertical-align:1px}
 #rad-winsub{font-size:16px;font-weight:600;color:#9AA2A9;letter-spacing:.05em;
   margin-top:1px}
 #rad-strip{display:block;width:100%;height:76px;margin-top:10px}
@@ -6100,13 +6104,25 @@ function sailHours(W){
   }
   return out;
 }
+/* The longest clean run - but TODAY beats longer. The horizon is 24
+   hours, so from mid-afternoon on it always contains the whole of
+   tomorrow's daylight, and the longest run in it is tomorrow's every
+   time. This is a helm display and you are standing on the boat: three
+   good hours left this afternoon is the answer you want, not eight
+   better ones you cannot use yet. Tomorrow is what you get when today
+   has nothing left, and then the line says so - sailWhy's NO DAYLIGHT
+   LEFT TODAY says which day this was always about. */
 function sailBest(H){
-  let best=null, run=null;
+  const runs=[]; let run=null;
   for(let i=0;i<=H.length;i++){
     if(i<H.length && H[i].ok){ if(!run) run={a:i,b:i}; else run.b=i; continue; }
-    if(run){ if(!best || run.b-run.a > best.b-best.a) best=run; run=null; }
+    if(run){ runs.push(run); run=null; }
   }
-  return best;
+  if(!runs.length) return null;
+  const midnight=new Date(); midnight.setHours(23,59,59,999);
+  const longest=list=>list.reduce(
+    (best,r)=>(!best || r.b-r.a > best.b-best.a) ? r : best, null);
+  return longest(runs.filter(r=>H[r.a].t<=midnight)) || longest(runs);
 }
 /* Why there is no window is more use than the fact that there is not. */
 function sailWhy(H){
@@ -6119,6 +6135,18 @@ function sailWhy(H){
 
 /* ---- drawing it ---------------------------------------------------- */
 const hhmm=d=>d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+/* '' for today, so the common case carries no furniture at all. The
+   horizon is 24 hours, so TOMORROW is as far as this can ever reach -
+   the weekday is there for the hour either side of midnight, where
+   "tomorrow" and the day the clock shows stop agreeing. */
+function dayTag(d){
+  const a=new Date(); a.setHours(0,0,0,0);
+  const n=Math.round((new Date(d).setHours(0,0,0,0)-a)/864e5);
+  if(n<=0) return '';
+  const w=n===1 ? 'TOMORROW'
+                : d.toLocaleDateString([],{weekday:'short'}).toUpperCase();
+  return '<span class="wday">'+w+'</span> ';
+}
 
 function drawTide(){
   const el=$('rad-tide'), at=$('rad-tide-at'); if(!el) return;
@@ -6166,7 +6194,11 @@ function drawWind(){
     const set=sunOf(last).sunset;
     let end=new Date(last.getTime()+36e5);
     if(set && !isNaN(set) && set<end) end=set;
-    el.textContent=hhmm(run[0].t)+' – '+hhmm(end);
+    /* Which day, when it is not this one. Without this the line read
+       12:00 PM - 08:00 PM at five in the afternoon and looked like the
+       whole afternoon was still ahead of you. Quiet and small, because
+       the times are the thing you came for. */
+    el.innerHTML=dayTag(run[0].t)+hhmm(run[0].t)+' – '+hhmm(end);
     el.className='';
     if(sub) sub.textContent=pt16(run[0].dir)+' '+(lo===hi?lo:lo+'–'+hi)
       +' kt · gusts '+gust;

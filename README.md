@@ -1780,6 +1780,28 @@ The row *before* now stays on the list, dimmed. Whether the water is
 going out or coming in is the thing you actually want, and two future
 highs cannot tell you that.
 
+**Today beats longer.** The window is the longest unbroken run of hours
+that are daylight, 6–20 kt and gusting under 28 — but the horizon is 24
+hours, so from mid-afternoon on it always contains the whole of
+tomorrow's daylight, and the longest run in it is tomorrow's every time.
+Picked purely by length, the line read `12:00 PM – 08:00 PM` at five in
+the afternoon, with nothing to say those were tomorrow's hours. You are
+standing on the boat: three good hours left this afternoon is the answer
+you want, not eight better ones you cannot use yet. `sailBest` now takes
+the longest run that *starts today*, and falls through to tomorrow only
+when today has nothing left — which is what `sailWhy`'s
+`NO DAYLIGHT LEFT TODAY` always implied the feature was about.
+
+When it does fall through, it says so, small and dim ahead of the times:
+
+```
+  SAILING WINDOW
+  TOMORROW 07:12 AM – 07:53 PM
+```
+
+No tag at all on today's window, which is the common case and should
+carry no furniture.
+
 ### Two megabytes of tide stations, read as they arrive
 
 NOAA publishes 3499 tide-prediction stations and **no way to ask which
