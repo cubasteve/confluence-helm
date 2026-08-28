@@ -1036,6 +1036,66 @@ showing ownership of every gesture, so a sheet stranded off a closed app
 silently ate the dial's. It asks whether the map is up now, rather than
 which page is.
 
+## Golden hour
+
+Where the sun is in the day, drawn rather than listed. The curve is
+today's altitude from midnight to midnight, the disc is now, and the
+whole glass is washed in the colour the sky is at that altitude — so the
+thing you opened it to check is answered before you read a word of it.
+Under it: what is happening, what is next and how long, and the four
+times a sailor asks for.
+
+**The palette is keyed on altitude, not on the clock.** That is the only
+way it is right in December as well as June, and right at 60° north as
+well as 28. Stops are the light a sailor names — night, the three
+twilights, the horizon, golden, day — and everything between is
+interpolated.
+
+### One altitude became six
+
+`sunTimes` had always answered for exactly one: **-0.833°**, the
+horizon, which is sunrise and sunset. Golden hour and the three
+twilights are the *same calculation* asked for a different altitude, and
+an arc of the day also wants where the sun is right now — so the orbit
+came out into a core the three of them share rather than a second copy
+of maths that is hard to check by eye.
+
+`sunTimes` keeps its exact old answer, and that is asserted rather than
+assumed: the test runs the pre-refactor implementation beside the new
+one across six latitudes from Orlando to Svalbard, every seventh day of
+a year, and requires **0 ms** of difference — including agreeing on the
+35 sampled days where the sun never reaches the altitude at all, which
+is not a hypothetical once you sail far enough north.
+
+One honest limit it also pins down: the event solver and the altitude
+formula are two different approximations of the same orbit and do not
+share every simplification, so the altitude at the moment `sunset` says
+is about **-1.0°** rather than exactly -0.833. A fifth of a degree near
+the horizon is about forty-five seconds. The test asserts that bound
+rather than pretending they agree.
+
+### The bug worth remembering
+
+A leftover gradient from an earlier draft mixed a colour out of `sky.b`,
+which is an `rgb()` string the moment the altitude falls *between* two
+stops — so it parsed as `NaN` and `addColorStop` threw. It therefore
+threw **only at the interpolated altitudes**: at noon and at midnight,
+where the altitude clamps to a palette stop and the colour is still hex,
+everything worked. Which is to say it was broken at golden hour and blue
+hour, and nowhere else — the two states the app exists for.
+
+Rendering it at four moments of one day is what found it, and the suite
+now walks every altitude from -40 to +60 through both the palette and a
+full repaint.
+
+### What it costs
+
+4.4 MB of canvas while open, nothing when shut — `width = height = 0` on
+close, and the ticker cleared. CPU is **1.5% open against 2.4% at rest**,
+lower than the dial it replaces for the same reason Tracks is: with an
+app up the dial stops drawing. The curve is redrawn once a minute; only
+the countdown ticks every second, and that is four lines of text.
+
 ## A panel and a dock
 
 Swipe **down** for the control panel, **up** for the app dock. Opposite
