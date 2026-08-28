@@ -312,7 +312,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #rad-play:active{background:rgba(74,158,255,.32)}
 .rad-end{flex:0 0 auto;font-size:18px;font-weight:600;letter-spacing:.06em;
   color:#9AA2A9;font-variant-numeric:tabular-nums}
-.rad-end.fut{color:var(--rad-hi)}
+.rad-end.fut{color:var(--rad-hi);min-width:44px;text-align:right}
 /* The band you can actually hit. The track inside it is 8px because
    that is what reads; this is 52 because that is what a thumb needs -
    and it did NOT shrink when the rest of the toolbar did. It is the
@@ -5659,30 +5659,38 @@ async function radBuildFrame(urlFor, opt){
   return {c:c, hits:hits};
 }
 
-/* +1h, +2h, +3h, each rounded DOWN to the quarter hour Tomorrow.io
-   publishes on - asking for 14:07 gets nothing at all. */
-/* The top of the current UTC hour. Every forecast time is measured from
-   here rather than from now, and that one change is what lets the cache
-   work at all: rounded to the quarter hour, the tile URL changed every
-   15 minutes and the Worker's edge cache also expired every 15 minutes,
-   so the two windows lined up exactly and nothing was ever served twice.
-   Anchored to the hour, one URL is good for a whole hour and every
-   device on the boat shares the same cached tile.
-   The cost is that the horizon shrinks through the hour - at 14:05 the
-   frames are +55m/+1h55/+2h55, by 14:55 they are +5m/+1h05/+2h05 - so
-   the timeline's end label is computed rather than printed. */
-const castHour=()=>{ const d=new Date(); d.setUTCMinutes(0,0,0); return d.getTime(); };
+/* The current half hour, in UTC. Every forecast time is measured from
+   this slot rather than from now, and that anchoring is what lets the
+   cache work at all: rounded to the quarter hour, the tile URL turned
+   over every 15 minutes and the Worker's edge cache also expired every
+   15 minutes, so the two windows lined up exactly and nothing was ever
+   served twice. On a slot, one URL is good until the slot rolls and
+   every device on the boat shares the same cached tile.
+   The slot was the whole hour first, which was cheaper still but let
+   the horizon shrink through it: at 14:05 the frames were +55m/+1h55/
+   +2h55, by 14:55 only +5m/+1h05/+2h05, so the end label read +2h for
+   half of every hour and looked like the forecast had been cut short.
+   Half an hour holds the last frame between 2h30 and 3h00 - always +3h
+   once rounded - and turns the URL over twice an hour rather than four
+   times, so a rebuild in each slot is 24 calls against the 25/hour cap.
+   Tomorrow.io publishes on the quarter hour, and :00/:30 are quarter
+   hours, so these times are always ones it will answer for; asking for
+   14:07 gets nothing at all. */
+const castSlot=()=>{ const d=new Date();
+  d.setUTCMinutes(d.getUTCMinutes()<30 ? 0 : 30, 0, 0); return d.getTime(); };
 
 function radCastTimes(){
-  const base=castHour();
+  const base=castSlot();
   return RAD.TMR_HOURS.map(h=>{
     const t=new Date(base+h*3600000);
     return {ms:t.getTime(), iso:t.toISOString().slice(0,19)+'Z'};
   });
 }
 
-/* Says how far the timeline actually reaches, rather than the +3h that
-   used to be printed into the markup and was only true on the hour. */
+/* Says how far the timeline actually reaches. Nothing is printed into
+   the markup - a number there would render before the forecast frames
+   exist and then change under you - so the slot is left blank until
+   there is a real horizon to name. */
 function radCastLabel(){
   const e=document.querySelector('.rad-end.fut');
   if(!e||!R||!R.times.length) return;
@@ -5713,18 +5721,18 @@ function radCastDrop(){
    +2h, and three empty frames in the loop would read as three hours of
    clear sky. */
 async function radBuildCast(){
-  const gen=R.gen, hour=castHour();
+  const gen=R.gen, slot=castSlot();
   /* Every forecast tile is a metered API call - the free tier is 25 an
      hour and 500 a day, and a tile counts the same as a data call - so
      rebuilding these on every pan and pinch is what empties it. Three
      frames at four tiles is twelve calls, which is two view changes an
      hour and then 429 for the rest of it.
-     They are rebuilt only when the hour has rolled over or the chart has
+     They are rebuilt only when the slot has rolled over or the chart has
      moved off them. That is safe now because every frame carries the
      view it was built for: one composited for a wider view draws in
      exactly the right place at a closer one. */
   const c=R.cast;
-  if(c && c.hour===hour && c.frames.length &&
+  if(c && c.slot===slot && c.frames.length &&
      c.fv.every(v=>radCovers(v, R.view, R.cv.width, R.cv.height))){
     for(let i=0;i<c.frames.length;i++){
       R.frames.push(c.frames[i]); R.fv.push(c.fv[i]); R.mk.push(c.mk[i]);
@@ -5733,15 +5741,15 @@ async function radBuildCast(){
     radMarkNow(); radPaint();
     return;
   }
-  /* A refusal is remembered for the rest of the hour. Without this, a
+  /* A refusal is remembered for the rest of the slot. Without this, a
      panel with no quota left asks again on every single pan - which is
      how you stay refused. */
-  if(R.castFail===hour){
+  if(R.castFail===slot){
     radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
     return;
   }
   radCastDrop();
-  const keep={hour:hour, frames:[], fv:[], mk:[], times:[]};
+  const keep={slot:slot, frames:[], fv:[], mk:[], times:[]};
   for(const t of radCastTimes()){
     const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
               opt:{serial:true, cors:true, recolor:true,
@@ -5752,7 +5760,7 @@ async function radBuildCast(){
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
     if(!r || !r.hits){
       if(r&&r.c) r.c.width=r.c.height=0;
-      R.castFail=hour;
+      R.castFail=slot;
       radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
       keep.frames.forEach(x=>{ if(x) x.width=x.height=0; });
       return;
@@ -6488,7 +6496,7 @@ function radOpen(host){
     +'<span class="rad-end">−2h</span>'
     +'<div id="rad-slide"><div id="rad-track"><div id="rad-knob"></div>'
     +'<div id="rad-now" style="display:none"></div></div></div>'
-    +'<span class="rad-end fut">+3h</span>'
+    +'<span class="rad-end fut"></span>'
     +'</div>'
     +'<div id="rad-pills">'
     +'<button class="radt on" id="rad-sea">SEA</button>'

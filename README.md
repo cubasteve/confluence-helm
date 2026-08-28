@@ -1469,18 +1469,31 @@ used to happen on app open, on every pan, on every pinch and on every
 BOAT tour, which is **two view changes an hour** before 429 for the rest
 of it. Two changes fixed that.
 
-**The forecast hour is anchored to the top of the clock hour**, not
+**The forecast times are anchored to the current half hour**, not
 rounded down to the quarter. That sounds cosmetic and is not: at the
 quarter hour the tile URL changed every 15 minutes and the Worker's edge
 cache also expired every 15 minutes, so the two windows lined up exactly
-and no tile was ever served from cache twice. Anchored to the hour, one
-URL is good for a whole hour and every device aboard shares it. The cost
-is that the horizon shrinks through the hour — at 14:05 the frames are
-+55m/+1h55/+2h55, by 14:55 they are +5m/+1h05/+2h05 — so the timeline's
-right-hand label is computed rather than printed.
+and no tile was ever served from cache twice. On a half-hour slot one
+URL is good for 30 minutes and every device aboard shares it.
+
+The slot was the whole clock hour first, which was cheaper still — one
+build an hour — but it let the horizon decay as the hour ran on: at
+14:05 the frames were +55m/+1h55/+2h55, by 14:55 only +5m/+1h05/+2h05.
+The right-hand label rounds, so it read `+3h` for the first half of
+every hour and `+2h` for the second, which looked like the forecast had
+been cut short. Half an hour holds the last frame between 2h30 and 3h00
+— always `+3h` — and turns the URL over twice an hour rather than four
+times, so a rebuild in each slot is **24 calls against the 25/hour cap**
+in the worst case. `:00` and `:30` are both quarter hours, so these are
+still times Tomorrow.io will answer for.
+
+The right-hand label is also **not printed into the markup**. A number
+there would render in the second before the forecast frames exist and
+then change under you; it stays blank until there is a real horizon to
+name, in a box wide enough that nothing shifts when it arrives.
 
 **The frames are kept across view changes.** They are only rebuilt when
-the hour rolls over or the chart moves off them, which is safe now that
+the slot rolls over or the chart moves off them, which is safe now that
 every frame carries the view it was composited for. They are also built
 with **one zoom level of margin**: fitted exactly to the canvas, a frame
 was uncovered by *any* pan at all — one pixel off and it had to be bought
@@ -1497,21 +1510,23 @@ What the tests hold to:
 | a whole BOAT tour | **0** |
 | zoom out past the margin | 12 |
 | pan right off them | 12 |
-| the hour rolls over | 12 |
+| the half-hour slot rolls over | 12 |
 
-So ordinary use is about **twelve calls an hour against a limit of
-twenty-five**, where it used to be twelve per pan.
+So ordinary use is **twelve to twenty-four calls an hour against a limit
+of twenty-five**, where it used to be twelve per pan. (The headroom above
+that comes from outside this repo: raising the `keel-ics` Worker's edge
+cache TTL from 15 to 60 minutes would let a whole fleet share one build.)
 
-A refusal is also remembered for the rest of the hour. Without that, a
+A refusal is also remembered for the rest of the slot. Without that, a
 panel with no quota left asks again on every single pan — which is how
 you stay refused.
 
 ### The futurecast
 
-Three frames at +1h, +2h and +3h, appended after the radar so the
-timeline runs past → nowcast → forecast in one pass. Each is rounded
-**down to the quarter hour** Tomorrow.io publishes on; asking for 14:07
-returns nothing at all.
+Three frames at +1h, +2h and +3h from the current half-hour slot,
+appended after the radar so the timeline runs past → nowcast → forecast
+in one pass. Tomorrow.io publishes on the quarter hour and `:00`/`:30`
+are quarter hours; asking for 14:07 returns nothing at all.
 
 The key never reaches the panel. It lives as a secret in the Worker,
 which proxies `/tile/{z}/{x}/{y}/{iso}.png` and caches every tile at the
