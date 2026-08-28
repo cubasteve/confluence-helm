@@ -5450,7 +5450,7 @@ const RAD={
      zoom chosen so the view fits in six tiles: a normal tile layer would
      burst dozens of requests and spend the day's quota on one look. */
   tmr:'https://keel-ics.keel-app.workers.dev/tile/',
-  TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7,
+  TMR_HOURS:[1,2,3], TMR_MAX_TILES:6, TMR_MAX_Z:7, TMR_TRIES:3,
   /* Zoom levels of margin on a forecast frame. Built to fit the canvas
      exactly, a frame is uncovered by ANY pan at all - one pixel off and
      it has to be bought again, which is how twelve metered calls became
@@ -5526,13 +5526,28 @@ const unwy=(py,z)=>{ const t=Math.PI-2*Math.PI*py/(256*Math.pow(2,z));
    are drawn and never read back, which is why no CORS handshake has
    ever been needed for them - one whole class of failure avoided, and
    not worth giving up to recolour layers that already match. */
-function radImg(url, gen, cors){
+function radImg(url, gen, cors, tries){
   return new Promise(res=>{
-    const im=new Image();
-    if(cors) im.crossOrigin='anonymous';
-    im.onload =()=>res(R && R.gen===gen ? im : null);
-    im.onerror=()=>res(null);
-    im.src=url;
+    let n=0;
+    const go=()=>{
+      const im=new Image();
+      if(cors) im.crossOrigin='anonymous';
+      im.onload =()=>res(R && R.gen===gen ? im : null);
+      /* A forecast tile is worth asking for twice. The free tier's 429
+         window is minutes wide and a marina's wifi drops one request in
+         ten, and until now either of those threw the whole futurecast
+         away for the rest of the hour. The basemap and the radar pass no
+         `tries` and behave exactly as before: they have dozens of tiles
+         and a hole in one of them is a hole in the picture, not a
+         feature that vanishes. */
+      im.onerror=()=>{
+        if(!R || R.gen!==gen) return res(null);
+        if(++n >= (tries||1)) return res(null);
+        setTimeout(()=>{ if(!R||R.gen!==gen) return res(null); go(); }, n*900);
+      };
+      im.src=url;
+    };
+    go();
   });
 }
 
@@ -5669,11 +5684,17 @@ async function radBuildFrame(urlFor, opt){
   if(opt.serial){
     ims=[];
     for(const t of ts){
-      ims.push(await radImg(urlFor(t), gen, opt.cors));
+      ims.push(await radImg(urlFor(t), gen, opt.cors, opt.tries));
       if(!R||R.gen!==gen) return null;
+      /* If the very first tile will not come, after its retries, the
+         service is refusing rather than dropping - a quota window, or the
+         Worker down - and the other five will be refused too. Asking
+         them costs six retry ladders and half a minute before the panel
+         can say so. One ladder is the whole answer. */
+      if(opt.bail && ims.length===1 && !ims[0]) break;
     }
   }else{
-    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen, opt.cors)));
+    ims=await Promise.all(ts.map(t=>radImg(urlFor(t), gen, opt.cors, opt.tries)));
   }
   if(!R||R.gen!==gen) return null;
   const sc=N/gw;                             /* that ground into N px */
@@ -5685,43 +5706,46 @@ async function radBuildFrame(urlFor, opt){
   return {c:c, hits:hits};
 }
 
-/* The current half hour, in UTC. Every forecast time is measured from
-   this slot rather than from now, and that anchoring is what lets the
-   cache work at all: rounded to the quarter hour, the tile URL turned
-   over every 15 minutes and the Worker's edge cache also expired every
-   15 minutes, so the two windows lined up exactly and nothing was ever
-   served twice. On a slot, one URL is good until the slot rolls and
-   every device on the boat shares the same cached tile.
-   The slot was the whole hour first, which was cheaper still but let
-   the horizon shrink through it: at 14:05 the frames were +55m/+1h55/
-   +2h55, by 14:55 only +5m/+1h05/+2h05, so the end label read +2h for
-   half of every hour and looked like the forecast had been cut short.
-   Half an hour holds the last frame between 2h30 and 3h00 - always +3h
-   once rounded - and turns the URL over twice an hour rather than four
-   times, so a rebuild in each slot is 24 calls against the 25/hour cap.
-   Tomorrow.io publishes on the quarter hour, and :00/:30 are quarter
-   hours, so these times are always ones it will answer for; asking for
-   14:07 gets nothing at all. */
-const castSlot=()=>{ const d=new Date();
-  d.setUTCMinutes(d.getUTCMinutes()<30 ? 0 : 30, 0, 0); return d.getTime(); };
+/* The top of the current UTC hour. Every forecast time is measured from
+   here rather than from now, and that anchoring is what lets the cache
+   work at all: rounded to the quarter hour the tile URL turned over
+   every 15 minutes, so nothing was ever served from cache twice.
+
+   This was the half hour for a day, to stop the end label decaying from
+   +3h to +2h through the hour. It cost too much. One build is three
+   frames at four tiles - twelve metered calls - and a half-hour slot
+   turns the URL over twice an hour: 24 calls against a cap of 25 an
+   hour and 576 a day against a cap of 500. It ran out, and a panel with
+   no quota shows no forecast at all, which is a worse answer than a
+   label that reads +2h. Back on the hour it is 12 an hour and 288 a
+   day, and the edge cache takes a third off that again.
+
+   The label is a clock time now rather than an offset, which is what
+   the half hour was really buying: 01:00 is true for the whole hour,
+   where +3h stops being true at 14 minutes past. */
+const castHour=()=>{ const d=new Date(); d.setUTCMinutes(0,0,0); return d.getTime(); };
 
 function radCastTimes(){
-  const base=castSlot();
+  const base=castHour();
   return RAD.TMR_HOURS.map(h=>{
     const t=new Date(base+h*3600000);
     return {ms:t.getTime(), iso:t.toISOString().slice(0,19)+'Z'};
   });
 }
 
-/* Says how far the timeline actually reaches. Nothing is printed into
-   the markup - a number there would render before the forecast frames
-   exist and then change under you - so the slot is left blank until
-   there is a real horizon to name. */
+/* When the timeline actually ends, as a time rather than an offset.
+   An offset from now decays: anchored to the hour, the last frame is
+   3h00 away at the top of the hour and 2h01 away at the end of it, so a
+   rounded +3h turned into +2h fourteen minutes in and read as a
+   forecast that had been cut short. The clock time does not move: the
+   last frame IS 01:00, all hour, and nothing changes under you. */
 function radCastLabel(){
   const e=document.querySelector('.rad-end.fut');
   if(!e||!R||!R.times.length) return;
-  const h=Math.round((R.times[R.times.length-1]-Date.now())/3600000);
-  e.textContent = h>0 ? '+'+h+'h' : 'NOW';
+  const last=R.times[R.times.length-1];
+  e.textContent = last>Date.now()
+    ? new Date(last).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})
+    : 'NOW';
 }
 
 /* Does a frame composited for `fv` still cover the whole canvas at
@@ -5742,23 +5766,23 @@ function radCastDrop(){
 }
 
 /* Built after the radar, never alongside it: the radar is what you came
-   for and must not queue behind a free tier. The first frame that comes
-   back empty ends the run - if the quota is gone for +1h it is gone for
-   +2h, and three empty frames in the loop would read as three hours of
-   clear sky. */
+   for and must not queue behind a free tier. But built even when the
+   radar could not be - see radBuildFrames. A dead RainViewer index used
+   to take the futurecast down with it, which is two products lost to one
+   outage. */
 async function radBuildCast(){
-  const gen=R.gen, slot=castSlot();
+  const gen=R.gen, hour=castHour();
   /* Every forecast tile is a metered API call - the free tier is 25 an
      hour and 500 a day, and a tile counts the same as a data call - so
      rebuilding these on every pan and pinch is what empties it. Three
      frames at four tiles is twelve calls, which is two view changes an
      hour and then 429 for the rest of it.
-     They are rebuilt only when the slot has rolled over or the chart has
+     They are rebuilt only when the hour has rolled over or the chart has
      moved off them. That is safe now because every frame carries the
      view it was built for: one composited for a wider view draws in
      exactly the right place at a closer one. */
   const c=R.cast;
-  if(c && c.slot===slot && c.frames.length &&
+  if(c && c.hour===hour && c.frames.length &&
      c.fv.every(v=>radCovers(v, R.view, R.cv.width, R.cv.height))){
     for(let i=0;i<c.frames.length;i++){
       R.frames.push(c.frames[i]); R.fv.push(c.fv[i]); R.mk.push(c.mk[i]);
@@ -5767,29 +5791,41 @@ async function radBuildCast(){
     radMarkNow(); radPaint();
     return;
   }
-  /* A refusal is remembered for the rest of the slot. Without this, a
+  /* A refusal is remembered for the rest of the hour. Without this, a
      panel with no quota left asks again on every single pan - which is
      how you stay refused. */
-  if(R.castFail===slot){
+  if(R.castFail===hour){
     radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
     return;
   }
   radCastDrop();
-  const keep={slot:slot, frames:[], fv:[], mk:[], times:[]};
-  for(const t of radCastTimes()){
+  const keep={hour:hour, frames:[], fv:[], mk:[], times:[]};
+  const want=radCastTimes();
+  for(let fi=0; fi<want.length; fi++){
+    const t=want[fi];
     const mk={url:tl=>RAD.tmr+tl.z+'/'+tl.x+'/'+tl.y+'/'+t.iso+'.png',
-              opt:{serial:true, cors:true, recolor:true,
+              opt:{serial:true, cors:true, recolor:true, tries:RAD.TMR_TRIES,
+                   bail:true,
                    maxTiles:RAD.TMR_MAX_TILES, maxZ:RAD.TMR_MAX_Z}};
     const view={lat:R.view.lat, lon:R.view.lon,
                 z:Math.max(RAD.MIN_Z, R.view.z-RAD.TMR_PAD)};
     const r=await radBuildFrame(mk.url, Object.assign({view:view}, mk.opt));
     if(!R||R.gen!==gen){ if(r&&r.c) r.c.width=r.c.height=0; return; }
+    /* Where the run gives up, and where it does not.
+       The FIRST frame coming back empty after its retries is the service
+       saying no - the quota is gone, or the Worker is down - and there is
+       nothing to be had by asking twice more. Stop, and remember it for
+       the hour.
+       A LATER frame coming back empty is just that hour: the +3h tile is
+       nearer the edge of what Tomorrow.io publishes, and losing it used
+       to cost the +1h and +2h frames as well, for the rest of the hour.
+       It is dropped rather than appended - an empty frame drawn on the
+       timeline reads as an hour of clear sky, which is the one thing it
+       must never look like - and the frames that did arrive stay. */
     if(!r || !r.hits){
       if(r&&r.c) r.c.width=r.c.height=0;
-      R.castFail=slot;
-      radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
-      keep.frames.forEach(x=>{ if(x) x.width=x.height=0; });
-      return;
+      if(fi===0) break;
+      continue;
     }
     R.frames.push(r.c); R.fv.push(view); R.mk.push(mk);
     R.times.push(t.ms); R.kinds.push('cast');
@@ -5797,6 +5833,13 @@ async function radBuildCast(){
     keep.mk.push(mk); keep.times.push(t.ms);
     radMarkNow();
     radPaint();
+  }
+  /* Nothing at all is the refusal worth remembering. A partial forecast
+     is not: the missing hour is worth another try on the next view. */
+  if(!keep.frames.length){
+    R.castFail=hour;
+    radSay(R.frames.length ? 'NO FORECAST — quota or upstream' : R.note);
+    return;
   }
   R.cast=keep;
 }
@@ -5809,13 +5852,19 @@ async function radBuildFrames(){
     if(!r.ok) throw new Error('http '+r.status);
     data=await r.json();
   }catch(e){
-    if(R&&R.gen===gen) radSay('NO RADAR — no internet');
+    /* The futurecast is a different service on a different host and it
+       used to die with this one: every early return here skipped
+       radBuildCast at the bottom, so one bad RainViewer index cost both
+       products. Two sources, two failures. */
+    if(R&&R.gen===gen){ radSay('NO RADAR — no internet'); await radBuildCast();
+                        radCastLabel(); }
     return;
   }
   if(!R||R.gen!==gen) return;
   const past=((data.radar&&data.radar.past)||[]).slice(-RAD.PAST);
   const list=past.concat((data.radar&&data.radar.nowcast)||[]);
-  if(!list.length){ radSay('NO RADAR — nothing published'); return; }
+  if(!list.length){ radSay('NO RADAR — nothing published');
+                    await radBuildCast(); radCastLabel(); return; }
   radSay('');
   R.times=list.map(f=>f.time*1000);
   /* One at a time on purpose. Fifteen frames fired at once is sixty-odd

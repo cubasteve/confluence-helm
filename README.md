@@ -1488,29 +1488,41 @@ used to happen on app open, on every pan, on every pinch and on every
 BOAT tour, which is **two view changes an hour** before 429 for the rest
 of it. Two changes fixed that.
 
-**The forecast times are anchored to the current half hour**, not
+**The forecast times are anchored to the top of the clock hour**, not
 rounded down to the quarter. That sounds cosmetic and is not: at the
 quarter hour the tile URL changed every 15 minutes, and the Worker's
 edge TTL was 15 minutes too, so the two windows lined up exactly and no
-tile was ever served from cache twice. On a half-hour slot one URL is
-good for 30 minutes and every device aboard shares it — and the TTL is
-65 minutes now, which is a separate fix described below.
+tile was ever served from cache twice. On the hour, one URL is good for
+the whole hour and every device aboard shares it.
 
-The slot was the whole clock hour first, which was cheaper still — one
-build an hour — but it let the horizon decay as the hour ran on: at
-14:05 the frames were +55m/+1h55/+2h55, by 14:55 only +5m/+1h05/+2h05.
-The right-hand label rounds, so it read `+3h` for the first half of
-every hour and `+2h` for the second, which looked like the forecast had
-been cut short. Half an hour holds the last frame between 2h30 and 3h00
-— always `+3h` — and turns the URL over twice an hour rather than four
-times, so a rebuild in each slot is **24 calls against the 25/hour cap**
-in the worst case. `:00` and `:30` are both quarter hours, so these are
-still times Tomorrow.io will answer for.
+**This was the half hour for a day, and it ran the tier dry.** Anchored
+to the hour the horizon decays as the hour goes on — at 14:05 the frames
+are +55m/+1h55/+2h55, by 14:55 only +5m/+1h05/+2h05 — so a rounded `+3h`
+label became `+2h` fourteen minutes in and read as a forecast that had
+been cut short. Half-hour slots fixed the label by turning the URL over
+twice an hour instead of once. The arithmetic:
 
-The right-hand label is also **not printed into the markup**. A number
-there would render in the second before the forecast frames exist and
-then change under you; it stays blank until there is a real horizon to
-name, in a box wide enough that nothing shifts when it arrives.
+| anchor | URL sets/hour | calls/hour | calls/day |
+|---|---|---|---|
+| quarter hour | 4 | 48 | 1152 |
+| **half hour** | 2 | 24 | 576 |
+| **hour** | 1 | **12** | **288** |
+| the caps | | 25 | 500 |
+
+24 against a cap of 25 leaves room for nothing — one pan past the frame
+margin, one app reopen, and the next build is a 429. 576 a day is over
+the daily cap on its own. It duly ran out, and a panel with no quota
+shows **no forecast at all**, which is a far worse answer than a label
+that decays. Back on the hour it is 12 and 288, and the Worker's edge
+cache takes about a third off both.
+
+**So the label is a clock time, not an offset.** `01:00` is true for the
+whole hour; `+3h` stops being true fourteen minutes in. That is what the
+half hour was really buying, and a time buys it for free. It is also
+**not printed into the markup** — a number there would render in the
+second before the forecast frames exist and then change under you — so
+it stays blank until there is a real horizon to name, in a box wide
+enough that nothing shifts when it arrives.
 
 **The frames are kept across view changes.** They are only rebuilt when
 the slot rolls over or the chart moves off them, which is safe now that
@@ -1530,23 +1542,61 @@ What the tests hold to:
 | a whole BOAT tour | **0** |
 | zoom out past the margin | 12 |
 | pan right off them | 12 |
-| the half-hour slot rolls over | 12 |
+| the hour rolls over | 12 |
 
-So ordinary use is **sixteen calls an hour against a limit of
-twenty-five**, where it used to be twelve per pan. Twenty-four of those
-builds' worth of tiles are asked for; the edge answers a third of them
-(see below), which is where the last third of the bill went.
+So ordinary use is **twelve calls an hour against a limit of
+twenty-five**, where it used to be twelve per pan — and the edge cache
+answers a share of those, so the billed figure is lower again.
 
-A refusal is also remembered for the rest of the slot. Without that, a
+A refusal is also remembered for the rest of the hour. Without that, a
 panel with no quota left asks again on every single pan — which is how
 you stay refused.
 
+### One bad tile used to cost the whole futurecast
+
+Three failures compounded, and together they are why the panel could sit
+there saying `NO FORECAST` with a perfectly healthy Worker:
+
+**No tile was ever asked for twice.** `radImg` resolved `null` on the
+first `onerror` and that was that. Tomorrow.io's 429 window is minutes
+wide and a marina's wifi drops a request now and then; either one threw
+the futurecast away. Forecast tiles now retry **three times** with a
+900 ms/1.8 s backoff (`RAD.TMR_TRIES`). The basemap and radar pass no
+`tries` and behave exactly as before — they have dozens of tiles, and a
+hole in one of them is a hole in the picture, not a feature that
+vanishes.
+
+**One empty frame ended the run and stuck for the hour.** Losing the
+`+3h` tile — the one nearest the edge of what Tomorrow.io publishes —
+cost the `+1h` and `+2h` frames too, and set `castFail` so nothing was
+retried until the hour rolled. Now only the **first** frame coming back
+empty stops the run, because a service refusing `+1h` is refusing `+2h`;
+a later empty frame is dropped and the ones that arrived stay. An empty
+frame is never *appended*: an empty frame on the timeline reads as an
+hour of clear sky, which is the one thing it must not look like.
+
+**A refused frame is detected on its first tile.** Six retry ladders
+before the panel can say `NO FORECAST` is half a minute of nothing. If
+the first tile will not come after its retries, the rest are refused
+too, so `opt.bail` stops there — three requests, not eighteen.
+
+### Two services, two failures
+
+`radBuildCast()` used to be the last line of `radBuildFrames()`, so
+**every early return skipped it**: a dead RainViewer index, or an index
+with nothing published, took Tomorrow.io down with it. They are
+different products from different companies on different hosts, and a
+boat that has lost one has usually not lost the other. The forecast is
+now built on those paths too — you get the futurecast on an empty
+timeline, with `NO RADAR` still on the glass saying which half is
+missing.
+
 ### The futurecast
 
-Three frames at +1h, +2h and +3h from the current half-hour slot,
+Three frames at +1h, +2h and +3h from the top of the clock hour,
 appended after the radar so the timeline runs past → nowcast → forecast
-in one pass. Tomorrow.io publishes on the quarter hour and `:00`/`:30`
-are quarter hours; asking for 14:07 returns nothing at all.
+in one pass. Tomorrow.io publishes on the quarter hour, and the hour is
+one; asking for 14:07 returns nothing at all.
 
 The key never reaches the panel. It lives as a secret in the Worker,
 which proxies `/tile/{z}/{x}/{y}/{iso}.png` and caches every tile at the
