@@ -258,13 +258,14 @@ swipe it away.
 
 ### How many fingers
 
-Two answers, because the two gestures are not the same risk.
+Three answers, because the three gestures are not the same risk.
 
 | Gesture | Fingers |
 |---|---|
 | Page left/right between the two dials | **three** |
-| Control panel up / down | **one** |
-| Dismiss the picker, the library, the QR sheet | **one** |
+| Control panel down / up | **two** |
+| App dock up / down | **two** |
+| Dismiss a launched app, the library, the QR sheet | **one** |
 | Taps, holds, every button on every page | one, as always |
 
 **Paging takes the whole hand.** Changing which instrument you are
@@ -272,26 +273,37 @@ looking at mid-race because a wave put a wrist on the glass is the
 failure worth designing against, and one finger is what rain, spray and
 a sleeve produce.
 
-**Raising and dismissing takes one.** Those are all visibly reversible:
-whatever appeared is on screen and a swipe puts it away, so a stray
-touch costs a second rather than your instruments. The control panel is
-also the thing you reach for most, and it was the most annoying to need
-a whole hand for.
+**The two drawers take two.** One was too easy for the boat itself to
+press: a wave across the glass, a sleeve dragged over it, a palm
+steadying against the panel on a heel, and the settings are sitting over
+the instruments. Two fingers is something a hand does on purpose and
+weather does not, and it is still the cheapest gesture here to undo.
+Both directions, so each drawer goes back the way it came — two down to
+pull the panel, two up to send it back.
 
-`FINGERS` clamps `CFG.swipeFingers` - now the **paging** count only - to
-what the touchscreen can actually report, so a panel that tracks fewer
-touches still has paging rather than none. A mouse reports zero touch
-points, so a desktop browser and the windowed copy fall back to one
-finger for everything.
+**Everything layered on top takes one.** A launched app, the race
+library, the QR sheet: all visibly reversible, so a stray touch costs a
+second rather than your instruments. A tap anywhere off the dock also
+still closes it, which is the one-finger way out of the drawer.
 
-`swipeFingers` is a source constant, not a panel control - there is no
-tile for it, and the clamp means no setting could rescue a one-point
-panel anyway. Change it in `CFG` and deploy.
+`FINGERS` clamps `CFG.swipeFingers` — the **paging** count — and
+`DRAWERS` clamps `CFG.drawerFingers` the same way, both against what the
+touchscreen can actually report. The second clamp matters more than the
+first: a panel that cannot report two touches would otherwise have no
+way *into* the control panel, which is where the setting that would fix
+that lives. A mouse reports zero touch points, so a desktop browser and
+the windowed copy fall back to one finger for everything.
+
+Both are source constants, not panel controls — there is no tile for
+them, and the clamp means no setting could rescue a one-point panel
+anyway. Change them in `CFG` and deploy.
 
 The overlay branches in `judgeGesture()` deliberately use the
 finger-count-free `swipeL`/`swipeR` rather than `left`/`right`: an
-overlay that took three fingers to close while one finger opened the
-panel would be the odd one out.
+overlay that took three fingers to close while two opened the panel
+would be the odd one out. The drawer branches take the other road and
+ask for `DRAWERS` explicitly, through `drawUp`/`drawDown`, because a
+drawer's dismissal should cost exactly what raising it did.
 
 A gesture is every finger down between the first touch and the last
 lift, and the direction is the average of their travel: one finger that
@@ -1121,8 +1133,8 @@ the countdown ticks every second, and that is four lines of text.
 
 ## A panel and a dock
 
-Swipe **down** for the control panel, **up** for the app dock. Opposite
-edges, opposite gestures, each going back the way it came — the panel
+**Two fingers down** for the control panel, **two up** for the app dock.
+Opposite edges, opposite gestures, each going back the way it came — the panel
 used to come up from the bottom, which is where the drawer lives now, and
 two surfaces sharing an edge and an animation would have been two things
 that felt like one.
@@ -1194,6 +1206,12 @@ Outside 78% of the radius, all three get their own allowance:
 a touch at the rim does not become a swipe by accident — measured, a
 30px movement out there is still a tap, and a 50px one in the middle is
 still not a swipe. The dial does not become twitchy to pay for the rim.
+
+Rim or middle is decided from the **average** start point, the same way
+the travel is averaged, so two fingers landing abreast on the bottom
+bezel get the rim's allowance exactly as one thumb did. Both fingers
+still have to be seeded, and off the bezel that means two `pointermove`s
+with no `pointerdown` behind them (below) — which is tested.
 
 ### touch-action does not inherit
 
