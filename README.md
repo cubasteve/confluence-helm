@@ -1038,6 +1038,14 @@ which page is.
 
 ## Golden hour
 
+The icon is a half sun on the horizon with its light on the water — half
+a disc rather than a whole one, because a sun *on* the horizon is the
+subject and a full circle would read as "weather". Five alternatives
+were drawn and rejected, three of them for the reason that keeps coming
+up at this stroke weight: shapes that crowd, fuse. An arc with the sun
+as a dot on it came out a snail; stacked reflection lines came out a
+hamburger; longer rays came out a crown.
+
 Where the sun is in the day, drawn rather than listed. The curve is
 today's altitude from midnight to midnight, the disc is now, and the
 whole glass is washed in the colour the sky is at that altitude — so the
