@@ -1337,7 +1337,6 @@ about.
 | | source | key |
 |---|---|---|
 | base | Esri World Dark Gray Canvas | none |
-| seamarks | OpenSeaMap | none |
 | radar | RainViewer, last hour + nowcast | none |
 | forecast | Tomorrow.io via the `keel-ics` Worker | `TOMORROW_KEY`, a Worker secret |
 
@@ -1569,7 +1568,7 @@ row now, and everything else trimmed around it.
 
 ```
 [▶]  −2h  ━━━━━━━━━━┃━━●━━━━  +3h
-[ SEA ] [ RAIN ]            [ BOAT ]
+[ RAIN ]                    [ BOAT ]
 ```
 
 The track carries the shape of the timeline in its own colour: grey
@@ -1578,10 +1577,18 @@ you are in reads before the clock does. 70% is where the present falls
 with twelve past frames, the nowcast and three cast hours; `#rad-now`
 marks it exactly rather than by the gradient's guess.
 
-`SEA` is a base layer, so dropping it rebuilds the base — cheap, and the
-radar frames are untouched, which is why the base carries its **own**
-generation counter (`bgen`) alongside `gen`. Bumping `gen` would throw
-away fifteen composited frames that have not changed at all.
+There was a third pill, `SEA`, over an OpenSeaMap seamark layer. It is
+gone: those tiles come back as 334-byte **fully transparent** PNGs at
+every zoom the radar can reach — the seamark icons only start rendering
+around z12 and `MAX_Z` is 11 — so the pill toggled a second round of
+tile fetches per view that painted nothing at all. Verified by decoding
+the tiles at z8, z10 and z11 over Confluence's home water: zero of 65536
+pixels inked in each.
+
+The base still carries its **own** generation counter (`bgen`) alongside
+`gen`, for the pan that starts a second base build while the first is
+still awaiting tiles. Bumping `gen` would throw away fifteen composited
+frames that have not changed at all.
 
 `RAIN` is drawn on top, so turning it off is one repaint and turning it
 back on is instant: the frames stay in memory, which is the whole point
@@ -1697,7 +1704,7 @@ out in.
 
 ```
             11:43 PM · FORECAST
-       Esri · OpenSeaMap · RainViewer · Tomorrow.io
+          Esri · RainViewer · Tomorrow.io
                       ⌄
   TIDE            PACKWOOD PLACE, MOSQUITO LAGOON · 54 KM
   HIGH  12:38 AM                              2.7 ft

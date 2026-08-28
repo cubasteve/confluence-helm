@@ -5400,7 +5400,6 @@ function drawAmbient(){
 
    Sources, none of which need a key:
      base      Esri World Dark Gray Canvas
-     seamarks  OpenSeaMap
      radar     RainViewer, last hour plus nowcast
 
    NOT Carto, which sail-weather uses. basemaps.cartocdn.com now returns
@@ -5415,7 +5414,6 @@ const RAD={
      the template is the order on the wire. */
   base:'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/'
       +'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-  sea:'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
   index:'https://api.rainviewer.com/public/weather-maps.json',
   /* The futurecast. Tomorrow.io's real km-scale precipitation forecast,
      proxied by the keel-ics Worker so the API key stays a Worker secret
@@ -5571,34 +5569,36 @@ function radTiles(z, W, H, view){
 }
 const radUrl=(t,tpl)=>tpl.replace('{z}',t.z).replace('{x}',t.x).replace('{y}',t.y);
 
-/* The base layers for `view`, painted into `c`. Any canvas and any
-   view, because the tour builds its destination OFF SCREEN while it is
-   still flying there - the snap at the end of a leg is then a blit and
-   not a wait. `live` says whether the answer is still wanted; `after`
-   runs once per layer, for the in-place build that wants to show its
-   working. */
+/* The base for `view`, painted into `c`. Any canvas and any view,
+   because the tour builds its destination OFF SCREEN while it is still
+   flying there - the snap at the end of a leg is then a blit and not a
+   wait. `live` says whether the answer is still wanted; `after` is for
+   the in-place build that wants to show its working.
+   There was an OpenSeaMap seamark layer over this once, behind a SEA
+   pill. Its tiles come back 334-byte fully transparent PNGs at every
+   zoom the radar can reach - the icons only start rendering around z12
+   and MAX_Z is 11 - so the pill toggled a second round of tile fetches
+   that painted nothing at all. */
 async function radBaseInto(c, view, live, after){
   const gen=R.gen, g=c.getContext('2d');
   g.setTransform(1,0,0,1,0,0);
   g.fillStyle=getComputedStyle(document.body).getPropertyValue('--bg')||'#0b0c0e';
   g.fillRect(0,0,c.width,c.height);
-  const layers=R.seaOn ? [RAD.base, RAD.sea] : [RAD.base];
-  for(const tpl of layers){
-    const ts=radTiles(view.z, c.width, c.height, view);
-    const ims=await Promise.all(ts.map(t=>radImg(radUrl(t,tpl),gen)));
-    if(!live()) return false;
-    ims.forEach((im,i)=>{ if(im) g.drawImage(im, ts[i].px, ts[i].py, 256,256); });
-    if(after) after();
-  }
+  const ts=radTiles(view.z, c.width, c.height, view);
+  const ims=await Promise.all(ts.map(t=>radImg(radUrl(t,RAD.base),gen)));
+  if(!live()) return false;
+  ims.forEach((im,i)=>{ if(im) g.drawImage(im, ts[i].px, ts[i].py, 256,256); });
+  if(after) after();
   return true;
 }
 
 /* The base: drawn once per view, then it is one drawImage a tick. */
 function radBuildBase(){
-  /* bgen as well as gen: turning the seamarks off starts a new base
-     build, and the old one must not paint its layer over the top of it
-     a second later. gen is not the right lever - bumping that would
-     throw away the radar frames, which have not changed at all. */
+  /* bgen as well as gen: a pan or a pinch starts a new base build while
+     the last one is still awaiting tiles, and the stale one must not
+     paint over the top of it a second later. gen is not the right lever
+     - bumping that would throw away the radar frames, which have not
+     changed at all. */
   const gen=R.gen, bg=++R.bgen;
   return radBaseInto(R.base, R.view,
     ()=>!!R && R.gen===gen && R.bgen===bg, radPaint);
@@ -6478,7 +6478,7 @@ function radOpen(host){
     '<div id="rad-hud">'
     +'<div id="rad-head"><span id="rad-time">—</span>'
     +'<div id="rad-note"></div>'
-    +'<div id="rad-cred">Esri · OpenSeaMap · RainViewer · Tomorrow.io</div>'
+    +'<div id="rad-cred">Esri · RainViewer · Tomorrow.io</div>'
     +'<svg id="rad-chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>'
     +'</div>'
     +'<div id="rad-more">'
@@ -6499,7 +6499,6 @@ function radOpen(host){
     +'<span class="rad-end fut"></span>'
     +'</div>'
     +'<div id="rad-pills">'
-    +'<button class="radt on" id="rad-sea">SEA</button>'
     +'<button class="radt on" id="rad-rain">RAIN</button>'
     +'<span id="rad-sp"></span>'
     +'<button class="radt" id="rad-home">BOAT</button>'
@@ -6507,7 +6506,7 @@ function radOpen(host){
   R={ ac:new AbortController(), gen:1, bgen:0, cv:cv, base:base,
       frames:[], fv:[], mk:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
-      seaOn:true, rainOn:true, cam:null, tour:null, cast:null, castFail:0,
+      rainOn:true, cam:null, tour:null, cast:null, castFail:0,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
@@ -6516,14 +6515,9 @@ function radOpen(host){
   $('rad-head').addEventListener('click',()=>{ gClaim(); radMore(); });
   $('rad-home').addEventListener('click',()=>radTour());
   $('rad-play').addEventListener('click',()=>radPlay(!R.playing));
-  /* The two layer pills. Seamarks are a base layer, so dropping them
-     rebuilds the base - cheap, and the radar frames are untouched.
-     Rain is drawn on top of it, so turning that off is one repaint and
+  /* Rain is drawn over the base, so turning it off is one repaint and
      turning it back on is instant: the frames stay in memory, which is
      the whole point of keeping them there. */
-  $('rad-sea').addEventListener('click',e=>{
-    R.seaOn=!R.seaOn; e.currentTarget.classList.toggle('on',R.seaOn);
-    radBuildBase(); });
   $('rad-rain').addEventListener('click',e=>{
     R.rainOn=!R.rainOn; e.currentTarget.classList.toggle('on',R.rainOn);
     radPaint(); });
