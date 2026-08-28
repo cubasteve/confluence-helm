@@ -7,7 +7,7 @@
 <style>
 /* ==================================================================
    CONFLUENCE HELM  ·  1080x1080 round panel  ·  Signal K
-   Two fingers DOWN -> control panel.  Two fingers UP -> app dock.
+   Swipe DOWN -> control panel.  Swipe UP -> app dock.
    Each goes back the way it came.  Three fingers sideways -> pages.
 
    Sizing is against the real glass: 178.15 mm across 1080 px, so
@@ -133,7 +133,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    Rows are hairline-separated rather than chunky chips: discreet, and
    the whole row is the touch target (600 x 112 = 99 x 18 mm).        */
 /* Down from the top, the way the quick settings on a phone do - and the
-   gesture matches: two fingers DOWN to pull it, two UP to send it back. It
+   gesture matches: swipe DOWN to pull it, swipe UP to send it back. It
    used to come up from the bottom, which is where the app drawer lives
    now; two surfaces sharing an edge and an animation would have been two
    things that felt like one. */
@@ -1190,7 +1190,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <!-- ============== CONTROL PANEL ============== -->
 <!-- ============== THE APP DRAWER ==============
      The opposite edge from the control panel and the opposite gesture:
-     two fingers UP for apps, two DOWN for settings.
+     swipe UP for apps, DOWN for settings.
 
      An app is not a page. It exists between the tap that launches it and
      the tap that closes it, and then it is torn down - timers cancelled,
@@ -1589,7 +1589,7 @@ const CFG={
      works every button. Clamped at runtime by what the touchscreen can
      actually report - see FINGERS and DRAWERS. */
   swipeFingers:3,                    /* PAGING only - see judgeGesture */
-  drawerFingers:2,                   /* the control panel and the dock */
+  drawerFingers:1,                   /* the control panel and the dock */
 
   depthAlarm:6, depthWarn:12, depthUnit:'ft',
   dim:100,                           /* brightness, 25-100 - see applyDim */
@@ -2578,9 +2578,9 @@ function tick(){
 
 /* ==================================================================
    GESTURES
-   Two fingers down -> control panel; two up -> app dock; each goes back
-   the way it came. Three fingers sideways pages. One finger taps, holds,
-   and dismisses whatever is layered on top - an app, a sheet.
+   Down -> control panel; up -> app dock; each goes back the way it came.
+   Three fingers sideways pages. One finger does everything else: taps,
+   holds, and dismissing whatever is layered on top - an app, a sheet.
    A tap is only a tap if the finger moved less than 24 px, so
    scrolling never fires the timer by accident.
    ================================================================== */
@@ -2740,30 +2740,32 @@ const hideMusic =()=>goPage(1);
    opened from the dock like any other app. */
 
 /* ---- how many fingers ----
-   Three answers, because the three gestures are not the same risk.
+   Two answers, because the two gestures are not the same risk.
 
    PAGING between the two dials takes the full hand. Changing which
    instrument you are looking at mid-race because a wave put a wrist on
    the glass is the failure worth designing against.
 
-   THE TWO DRAWERS - the control panel down from the top, the app dock up
-   from the bottom - take two. One was too easy for the boat itself to
-   press: a wave across the glass, a sleeve dragged over it, a palm
-   steadying against the panel on a heel, and the settings are sitting
-   over the instruments. Two fingers is something a hand does on purpose
-   and weather does not, and it is still the cheapest gesture here to
-   undo. Both directions, so each drawer goes back the way it came.
+   EVERYTHING ELSE takes one: raising and dismissing the control panel
+   and the app dock, dismissing a launched app, the QR sheet, the race
+   library, and every tap and hold on the panel. Those are all visibly
+   reversible - whatever appeared is on screen and a swipe puts it away,
+   so a stray touch costs a second rather than your instruments.
 
-   EVERYTHING ELSE takes one: dismissing a launched app, the QR sheet,
-   the race library, and every tap and hold on the panel. Those are all
-   visibly reversible - whatever appeared is on screen and a swipe puts
-   it away, so a stray touch costs a second rather than your instruments.
+   The drawers were two fingers for a while, on the theory that a wave or
+   a sleeve could raise them by accident. Sailed with, it was wrong: the
+   drawers are what you reach for most, usually with one hand already
+   busy, and making the commonest gesture on the panel the fiddliest is a
+   worse trade than the occasional stray open - which is one swipe to
+   undo. DRAWERS is the knob, and it still works: set CFG.drawerFingers
+   to 2 and both go back to needing two.
 
    Both counts are clamped by what the hardware can actually report. A
    panel that tracks fewer touches than asked for would otherwise have no
-   paging at all, and - worse - no way into the control panel, which is
-   where the setting that would fix that lives. A mouse reports zero
-   touch points, so a desktop browser falls back to one. */
+   paging at all, and - worse, if the drawers ever want two again - no way
+   into the control panel, which is where the setting that would fix that
+   lives. A mouse reports zero touch points, so a desktop browser falls
+   back to one. */
 const FINGERS=Math.max(1,Math.min(CFG.swipeFingers|0||1,
                                   navigator.maxTouchPoints||1));
 const DRAWERS=Math.max(1,Math.min(CFG.drawerFingers|0||1,
@@ -2897,9 +2899,10 @@ function judgeGesture(g){
   const swipeR= quick && dx> NEED && Math.abs(dx)>Math.abs(dy)*AXIS;
   const left  = swipeL && n>=FINGERS;
   const right = swipeR && n>=FINGERS;
-  /* The drawers ask for their own count. `up` and `down` stay as they
-     are, because the surfaces layered over them - a launched app, the
-     sheets - are still dismissed with one finger. */
+  /* The drawers ask for their own count, which ships at one - the same
+     as `up` and `down` themselves. It is a separate name because it is a
+     separate decision: the surfaces layered over them are dismissed with
+     one finger no matter what CFG.drawerFingers is set to. */
   const drawUp   = up   && n>=DRAWERS;
   const drawDown = down && n>=DRAWERS;
 
@@ -2929,10 +2932,10 @@ function judgeGesture(g){
 
   /* Two drawers, opposite edges, opposite gestures - the way a phone
      does it. DOWN pulls the control panel from the top, UP pulls the app
-     drawer from the bottom, and each goes back the way it came. Both
-     want two fingers; left and right move through the pages and want
-     three. A one-finger flick over the dial is neither, which is the
-     point - it leaves the instruments alone. */
+     drawer from the bottom, and each goes back the way it came. Both are
+     one finger: they are what you reach for most and the cheapest to
+     undo. Left and right move through the pages, and those are the
+     gestures that still want three fingers. */
   if(drawDown) return openPanel();
   if(drawUp)   return openApps();
   if(left)     return goPage(PAGE_I+1);
