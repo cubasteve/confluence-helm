@@ -1014,6 +1014,21 @@ by hand, would become `Race-one.gpx` and could never be deleted at all.
 That was not a theory: the first version did exactly that and its own
 test caught it refusing a file sitting right there.
 
+### Two-word names break at the space
+
+A dock label breaks where the name has a space, not where 150px runs
+out. `GOLDEN HOUR` fits on one line at 139 of 150 and would never wrap
+on its own, and a label that wraps only once it is a few pixels too long
+is a layout that changes shape the next time somebody renames an app.
+
+It is a newline with `white-space:pre-line`, **not** a `<br>`. The tag
+eats the space, so `textContent` came back as `GOLDENHOUR` — which is
+what anything reading the label rather than looking at it would get.
+
+The tiles stay top-aligned, so the icons still sit level across the row
+and only the dock grows: 149px to 175, with its lowest corners still
+529 from the centre.
+
 Two things that came with the page becoming an app, both of them the
 same mistake — furniture that belonged to a page still standing where
 the app's own chrome now goes:
