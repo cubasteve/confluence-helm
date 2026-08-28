@@ -1470,10 +1470,11 @@ of it. Two changes fixed that.
 
 **The forecast times are anchored to the current half hour**, not
 rounded down to the quarter. That sounds cosmetic and is not: at the
-quarter hour the tile URL changed every 15 minutes and the Worker's edge
-cache also expired every 15 minutes, so the two windows lined up exactly
-and no tile was ever served from cache twice. On a half-hour slot one
-URL is good for 30 minutes and every device aboard shares it.
+quarter hour the tile URL changed every 15 minutes, and the Worker's
+edge TTL was 15 minutes too, so the two windows lined up exactly and no
+tile was ever served from cache twice. On a half-hour slot one URL is
+good for 30 minutes and every device aboard shares it — and the TTL is
+65 minutes now, which is a separate fix described below.
 
 The slot was the whole clock hour first, which was cheaper still — one
 build an hour — but it let the horizon decay as the hour ran on: at
@@ -1511,10 +1512,10 @@ What the tests hold to:
 | pan right off them | 12 |
 | the half-hour slot rolls over | 12 |
 
-So ordinary use is **twelve to twenty-four calls an hour against a limit
-of twenty-five**, where it used to be twelve per pan. (The headroom above
-that comes from outside this repo: raising the `keel-ics` Worker's edge
-cache TTL from 15 to 60 minutes would let a whole fleet share one build.)
+So ordinary use is **sixteen calls an hour against a limit of
+twenty-five**, where it used to be twelve per pan. Twenty-four of those
+builds' worth of tiles are asked for; the edge answers a third of them
+(see below), which is where the last third of the bill went.
 
 A refusal is also remembered for the rest of the slot. Without that, a
 panel with no quota left asks again on every single pan — which is how
@@ -1529,11 +1530,41 @@ are quarter hours; asking for 14:07 returns nothing at all.
 
 The key never reaches the panel. It lives as a secret in the Worker,
 which proxies `/tile/{z}/{x}/{y}/{iso}.png` and caches every tile at the
-Cloudflare edge for 15 minutes — so the free tier is shared across every
-device instead of burned per browser:
+Cloudflare edge — so the free tier is shared across every device instead
+of burned per browser:
 
 ```bash
 cd ics-worker && npx wrangler secret put TOMORROW_KEY && npx wrangler deploy
+```
+
+**The edge TTL is 65 minutes**, set in `keel-app`'s `ics-worker/worker.js`
+as `Cache-Control: public, max-age=900, s-maxage=3900`. `s-maxage` is
+what the edge reads; `max-age` stays at 900 so a browser left on the page
+still comes back for a fresher tile.
+
+Sixty-five and not sixty, because every absolute forecast time is asked
+for three times an hour apart — the tile for 17:00 by the 14:00 slot, the
+15:00 slot and the 16:00 slot — and at exactly 3600 the entry expires as
+the next build starts, which is a coin flip. The five minutes of slack
+makes the hit deterministic and takes 24 calls an hour down to 16. 7800
+would catch the two-hour reuse too and land at 8, but it would serve the
+`+1h` frame from a model run two hours old, and the near hour is the one
+you are dodging squalls with.
+
+At the old 900 nothing was ever reused — not even between two devices
+looking at the same 30-minute slot, since the TTL was half the slot.
+
+To check it after a deploy, ask for a tile twice and read the `age`
+header: the Cache API sets it, and `cf-cache-status` does **not** report
+this — that header describes the CDN cache in front of a Worker, and a
+Worker doing its own `caches.default` lookups reads `DYNAMIC` either way.
+An `age` above 900 is the proof that `s-maxage` is being honoured rather
+than `max-age`.
+
+```powershell
+$T = (Get-Date).ToUniversalTime().AddHours(2).ToString("yyyy-MM-ddTHH:00:00Z")
+curl.exe -sI "https://keel-ics.keel-app.workers.dev/tile/7/36/48/$T.png" |
+  Select-String 'cache-control|^age:'
 ```
 
 That trickle of quota is why these frames are fetched **one tile at a
