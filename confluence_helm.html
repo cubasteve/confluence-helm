@@ -918,6 +918,9 @@ a.lib-row{text-decoration:none;color:inherit}
   font-variant-numeric:tabular-nums;line-height:1}
 .mcell em{font-style:normal;font-weight:600;color:var(--label);
   letter-spacing:.1em;line-height:1}
+/* A cell with no unit keeps no room for one - heading carries its degree
+   ring on the number itself. */
+.mcell em:empty{display:none}
 
 /* ---- TRI: the page exactly as it was - art centred, the stack under
    it - with three readings set around the art as a triangle. Apex above
@@ -957,8 +960,10 @@ a.lib-row{text-decoration:none;color:inherit}
 #music[data-mus="tri2"] .mcell em{font-size:34px;letter-spacing:.16em}
 #music[data-mus="tri2"] .mcell[data-k="sog"],
 #music[data-mus="tri2"] .mcell[data-k="tws"]{display:none}
+/* One line rather than two, so it hangs lower than the flanks do and
+   still clears the top of the volume ring. */
 #music[data-mus="tri2"] .mcell[data-k="hdg"]{left:50%;transform:translateX(-50%);
-  top:78px;align-items:center}
+  top:112px;align-items:center}
 #music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px;
   align-items:flex-start}
 #music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px;
@@ -4656,11 +4661,14 @@ const MUS_CELLS=[
      steering compass beside it shows; course over ground only if the
      boat has no compass at all, and it is not the same number - it is
      where you are going rather than where you are pointing. */
-  {k:'hdg', u:'HDG',
+/* No unit line: the degree ring IS the unit, and it belongs against the
+     number rather than under it. A label saying HDG under a three-digit
+     figure with a degree sign on it is telling you twice. */
+  {k:'hdg', u:'',
    v:()=>{let x=get('navigation.headingMagnetic');
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
-          return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0');}},
+          return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
   {k:'sog', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
