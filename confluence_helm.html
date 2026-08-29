@@ -922,160 +922,83 @@ a.lib-row{text-decoration:none;color:inherit}
    ring on the number itself. */
 .mcell em:empty{display:none}
 
-/* ---- TRI: the page exactly as it was - art centred, the stack under
-   it - with three readings set around the art as a triangle. Apex above
-   it, two on the flanks at its own height, where the round glass leaves
-   390px of nothing either side. The numbers are as large as that room
-   allows and no larger: they are measured against the volume ring, not
-   against the art, because the ring is 40px wider all round and it is a
-   control you must be able to find without looking. */
-#music[data-mus="tri"] .ms-head{position:absolute;inset:0;display:block;
-  pointer-events:none}
-#music[data-mus="tri"] .mcell{position:absolute}
-#music[data-mus="tri"] .mcell b{font-size:104px}
-#music[data-mus="tri"] .mcell em{font-size:34px}
-#music[data-mus="tri"] .mcell[data-k="tws"]{display:none}
-#music[data-mus="tri"] .mcell[data-k="sog"]{left:50%;transform:translateX(-50%);
-  top:110px}
-#music[data-mus="tri"] .mcell[data-k="aws"]{right:742px;top:356px;
-  flex-direction:row-reverse}
-#music[data-mus="tri"] .mcell[data-k="dpt"]{left:742px;top:356px}
+/* ---- the readout ---------------------------------------------------
+   Three readings set around the album art as a triangle: one above it,
+   two on the flanks at its own height, in the 390px of nothing the round
+   glass leaves either side. The unit sits UNDER the number rather than
+   beside it, so the cell is only as wide as the digits and all the room
+   that was going sideways goes into the number instead - 124px, against
+   the 32px this page used to carry.
 
-/* ---- TRI2: the triangle, with the unit UNDER the number rather than
-   beside it. The cell is then only as wide as the digits, and all the
-   room that was going sideways goes into the number instead: 124px
-   against 104. It is also how an instrument is labelled.
+   Each unit hangs off its cell's OUTER edge - left-aligned to port,
+   right-aligned to starboard - so the two labels sit out at the rim and
+   the three numbers make a triangle of their own without the labels
+   leaning inward into it.
 
-   HEADING at the apex, three digits, over the album art and directly
-   under the wind bezel that is measuring the same circle. Wind on the
-   left and depth on the right, and each unit hangs off the cell's OUTER
-   edge - left-aligned to port, right-aligned to starboard - so the two
-   labels sit at the rim and the three numbers make a triangle of their
-   own without the labels leaning into it. */
-#music[data-mus="tri2"] .ms-head{position:absolute;inset:0;display:block;
-  pointer-events:none}
-#music[data-mus="tri2"] .m-sheet{margin-top:36px}
-#music[data-mus="tri2"] .mcell{position:absolute;flex-direction:column;gap:0}
-#music[data-mus="tri2"] .mcell b{font-size:124px}
-#music[data-mus="tri2"] .mcell em{font-size:34px;letter-spacing:.16em}
-#music[data-mus="tri2"] .mcell[data-k="sog"],
-#music[data-mus="tri2"] .mcell[data-k="tws"]{display:none}
-/* Clear of the volume ring's topmost tick with room to spare rather
-   than by a hair - at 112 the descender of the degree sign sat right on
-   the twelve o'clock tick and the two read as one object. */
-#music[data-mus="tri2"] .mcell[data-k="hdg"]{left:50%;transform:translateX(-50%);
-  top:82px;align-items:center}
-#music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px;
-  align-items:flex-start}
-#music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px;
-  align-items:flex-end}
+   The POSITIONS are fixed; WHAT SITS IN THEM is not. Cells are placed by
+   their slot - a, p, s for apex, port, starboard - and the reading in
+   each slot is chosen by tapping it. That is why nothing here is keyed
+   to a sensor. */
+#ms-strip{position:absolute;inset:0;display:block;pointer-events:none}
+#music .m-sheet{margin-top:36px}
+.mcell{position:absolute;flex-direction:column;gap:0;pointer-events:auto}
+.mcell b{font-size:124px}
+.mcell em{font-size:34px;letter-spacing:.16em}
+/* Clear of the volume ring's topmost tick with room to spare rather than
+   by a hair: lower than this and the degree sign sits on the twelve
+   o'clock tick and the two read as one object. */
+.mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:82px;
+  align-items:center}
+.mcell[data-slot="p"]{right:742px;top:365px;align-items:flex-start}
+.mcell[data-slot="s"]{left:742px;top:365px;align-items:flex-end}
+/* Held while the picker under it is open, so it is obvious which of the
+   three you are changing. */
+.mcell.picking b{color:var(--accent)}
 
-/* ---- three ways to lay this page out ------------------------------
-   All three put the boat's numbers along the TOP, big, and turn the
-   music into a horizontal card underneath: art on the left, everything
-   you read or press about the track to the right of it. The art is the
-   only round thing on the page and it anchors the left edge; the words
-   get a straight left margin to run from, which is what makes a column
-   of text readable rather than a centred label.
-
-   They differ in how much of the glass the numbers take, and in whether
-   the seek bar belongs to the words or to the whole card. */
-#music[data-mus="row"] .m-sheet,
-#music[data-mus="quad"] .m-sheet,
-#music[data-mus="wide"] .m-sheet{
-  display:grid; width:880px; column-gap:34px;
-  grid-template-columns:auto minmax(0,1fr); justify-items:start}
-#music[data-mus="row"] .ms-head,
-#music[data-mus="quad"] .ms-head,
-#music[data-mus="wide"] .ms-head{grid-column:1/-1; grid-row:1;
-  justify-self:center}
-#music[data-mus="row"] .artwrap,
-#music[data-mus="quad"] .artwrap,
-#music[data-mus="wide"] .artwrap{grid-column:1; align-self:center;
-  margin-bottom:0}
-#music[data-mus="row"] .m-lbl,
-#music[data-mus="quad"] .m-lbl,
-#music[data-mus="wide"] .m-lbl{grid-column:2; grid-row:2; margin-bottom:4px}
-#music[data-mus="row"] .m-title,
-#music[data-mus="quad"] .m-title,
-#music[data-mus="wide"] .m-title{grid-column:2; grid-row:3;
-  text-align:left; max-width:100%; font-size:44px}
-#music[data-mus="row"] .m-artist,
-#music[data-mus="quad"] .m-artist,
-#music[data-mus="wide"] .m-artist{grid-column:2; grid-row:4;
-  text-align:left; max-width:100%; font-size:30px}
-#music[data-mus="row"] .m-ctl,
-#music[data-mus="quad"] .m-ctl,
-#music[data-mus="wide"] .m-ctl{grid-column:2; grid-row:7;
-  justify-content:flex-start}
-#music[data-mus="row"] .lockbtn,
-#music[data-mus="quad"] .lockbtn,
-#music[data-mus="wide"] .lockbtn{grid-column:1/-1; grid-row:8;
-  justify-self:center}
-/* The ring keeps its 40px annulus whatever the art does - that width is
-   what makes it a control you can find with a thumb, and it is not a
-   proportion of anything. The readout shrinks with the circle it sits
-   in, which is a proportion. */
-#music[data-mus="row"] .m-bar,  #music[data-mus="row"] .m-time,
-#music[data-mus="quad"] .m-bar, #music[data-mus="quad"] .m-time{
-  grid-column:2; width:100%}
-#music[data-mus="row"] .m-bar,
-#music[data-mus="quad"] .m-bar{grid-row:5; margin-top:18px}
-#music[data-mus="row"] .m-time,
-#music[data-mus="quad"] .m-time{grid-row:6}
-
-/* ---- ROW: one line of numbers across the top, and a card under it.
-   The most conservative of the three - nothing about the music changes
-   except that it lies down. */
-#music[data-mus="row"] .ms-head{gap:12px 40px; flex-wrap:wrap;
-  margin:0 0 30px; max-width:880px}
-#music[data-mus="row"] .mcell b{font-size:76px}
-#music[data-mus="row"] .mcell em{font-size:28px}
-#music[data-mus="row"] .artwrap,
-#music[data-mus="row"] .art{width:268px;height:268px}
-#music[data-mus="row"] .vring,
-#music[data-mus="row"] .vhit{width:348px;height:348px}
-#music[data-mus="row"] .artwrap{grid-row:2/8}
-#music[data-mus="row"] .vnum{font-size:58px}
-
-/* ---- QUAD: the numbers get the top third, two by two, as big as they
-   go. The music card is smaller to pay for it. */
-#music[data-mus="quad"] .ms-head{display:grid;
-  grid-template-columns:auto auto; gap:10px 56px; margin:0 0 26px}
-#music[data-mus="quad"] .mcell{width:252px}
-#music[data-mus="quad"] .mcell b{font-size:98px; flex:1; text-align:right}
-#music[data-mus="quad"] .mcell em{font-size:26px; width:62px}
-#music[data-mus="quad"] .artwrap,
-#music[data-mus="quad"] .art{width:178px;height:178px}
-#music[data-mus="quad"] .vring,
-#music[data-mus="quad"] .vhit{width:258px;height:258px}
-#music[data-mus="quad"] .artwrap{grid-row:2/8}
-#music[data-mus="quad"] .vnum{font-size:44px}
-#music[data-mus="quad"] .m-lbl{display:none}
-#music[data-mus="quad"] .m-title{font-size:36px; grid-row:2}
-#music[data-mus="quad"] .m-artist{font-size:26px; grid-row:3}
-#music[data-mus="quad"] .m-bar{grid-row:4; margin-top:14px}
-#music[data-mus="quad"] .m-time{grid-row:5}
-#music[data-mus="quad"] .m-ctl{grid-row:6}
-
-/* ---- WIDE: the seek bar belongs to the whole card rather than to the
-   words, so it runs the full width under the art as well. The longest
-   progress bar the glass will take, which is the one thing on this page
-   you read at a glance from six feet away. */
-#music[data-mus="wide"] .ms-head{gap:12px 44px; flex-wrap:wrap;
-  margin:0 0 26px; max-width:880px}
-#music[data-mus="wide"] .mcell b{font-size:68px}
-#music[data-mus="wide"] .mcell em{font-size:26px}
-#music[data-mus="wide"] .artwrap,
-#music[data-mus="wide"] .art{width:236px;height:236px}
-#music[data-mus="wide"] .vring,
-#music[data-mus="wide"] .vhit{width:316px;height:316px}
-#music[data-mus="wide"] .artwrap{grid-row:2/5}
-#music[data-mus="wide"] .vnum{font-size:52px}
-#music[data-mus="wide"] .m-ctl{grid-row:4; align-self:end; margin-top:0}
-#music[data-mus="wide"] .m-bar{grid-column:1/-1; grid-row:5; width:100%;
-  margin-top:24px}
-#music[data-mus="wide"] .m-time{grid-column:1/-1; grid-row:6; width:100%}
+/* ---- the picker ----
+   A reading is its own control: tap it and the list of what could be
+   there unrolls downward from it. Anchored under the cell it belongs to
+   rather than centred on the page, because which one you are changing
+   has to be unambiguous - three identical menus in the middle of the
+   glass would not be.
+   max-height rather than a transform: it unrolls, and scaling would
+   squash the type on the way. */
+/* --panel is the page's own colour, so a menu painted in it reads as a
+   hole rather than as something over the top. The hairline is what says
+   "this is in front", and the shadow only reinforces it - on the day
+   theme a shadow alone is nearly invisible. */
+#mus-pick{position:absolute;z-index:6;width:340px;max-height:0;overflow:hidden;
+  border-radius:26px;background:var(--panel);opacity:0;
+  border:2px solid var(--hairline);
+  box-shadow:0 20px 48px rgba(0,0,0,.30);
+  transition:max-height .26s cubic-bezier(.16,1,.3,1), opacity .16s}
+#mus-pick.on{max-height:300px;opacity:1}
+/* The scroller inside, because the rounded corners have to clip it and a
+   scrolling box cannot also be the animated one. touch-action is set
+   back to pan-y here: #stage turns it off everywhere so a swipe is never
+   stolen by a scroll, and this is the one place that has to scroll. */
+#mus-pick .pk{max-height:300px;overflow-y:auto;touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;padding:6px 0}
+#mus-pick .pk::-webkit-scrollbar{width:0}
+.pkrow{display:flex;align-items:baseline;gap:10px;width:100%;
+  padding:0 22px;height:78px;background:none;border:none;
+  font-family:var(--font);color:var(--ink);text-align:left}
+/* Never wraps: a two-line name would make one row twice the height of
+   the others and the list would stop reading as a list. */
+.pkrow i{flex:1;font-style:normal;font-size:19px;font-weight:600;
+  letter-spacing:.04em;color:var(--label);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.pkrow b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums}
+.pkrow s{text-decoration:none;font-size:17px;font-weight:600;
+  color:var(--label);letter-spacing:.08em}
+.pkrow.sel i,.pkrow.sel b,.pkrow.sel s{color:var(--accent)}
+/* A reading with nothing behind it is still worth choosing - the sensor
+   may wake up - but it should not look like a live one. */
+.pkrow.none b,.pkrow.none s{color:var(--label);opacity:.55}
+.pkrow:active{background:var(--chip)}
+/* Catches the tap that dismisses it, and nothing else. */
+#mus-veil{position:absolute;inset:0;z-index:5;display:none}
+#mus-veil.on{display:block}
 
 /* Above everything. This is the brightness control on hardware with no
    backlight to drive, so it has to behave like one and dim the whole
@@ -1446,18 +1369,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
 
-    <!-- Where the boat's numbers sit on the music page, and how big.
-         A tile rather than a page control: it is a thing you set once for
-         the boat, not a thing you reach for under way. -->
-    <div class="slab">Now playing</div>
-    <div class="dimrow">
-      <button class="tile" id="mus-btn">
-        <svg id="mus-ico" viewBox="0 0 24 24"></svg>
-        <span>READOUT</span>
-        <span class="sub" id="mus-sub">BAND</span>
-      </button>
-    </div>
-
     <div class="slab">Shallow alarm</div>
     <div class="depthwrap">
       <div class="bar">
@@ -1546,6 +1457,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </svg>
   <div class="m-sheet">
     <div class="ms-head" id="ms-strip"></div>
+    <div id="mus-veil"></div>
+    <div id="mus-pick"><div class="pk" id="mus-pk"></div></div>
     <!-- The art, and the volume bezel around it. The wrapper is exactly
          the size of the art, so adding the ring costs the page NO height
          - the ring and the hit ring both overflow it, and the layout
@@ -4653,9 +4566,10 @@ drawDemo();
    name - `sog` goes top left in every layout that has a top left - and
    because switching one off must not shuffle the rest around the glass.
 
-   MUS_LAYOUTS is the order they cycle in; MUS.layout is what is showing.
-   Both live in localStorage, so the panel comes back the way you left
-   it. */
+   `name` is what the picker calls it - the long form, because a menu is
+   where you have room to say APPARENT WIND rather than AWS. Adding a
+   reading is an entry here and nothing else: it appears in all three
+   pickers at once. */
 const MUS_CELLS=[
   /* Three digits, zero padded, the way a compass card is read: 007 is a
      heading and 7 is a typo. Magnetic first because that is what the
@@ -4665,96 +4579,174 @@ const MUS_CELLS=[
 /* No unit line: the degree ring IS the unit, and it belongs against the
      number rather than under it. A label saying HDG under a three-digit
      figure with a degree sign on it is telling you twice. */
-  {k:'hdg', u:'',
+  {k:'hdg', name:'HEADING', u:'',
    v:()=>{let x=get('navigation.headingMagnetic');
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
           return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
-  {k:'sog', u:'KT',
+  {k:'sog', name:'BOAT SPEED', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'aws', u:'AWS',
+  {k:'aws', name:'APPARENT WIND', u:'AWS',
    v:()=>{const x=get('environment.wind.speedApparent');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', u:'TWS',
+  {k:'tws', name:'TRUE WIND', u:'TWS',
    v:()=>{const x=get('environment.wind.speedTrue');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'dpt', u:()=>CFG.depthUnit==='m'?'M':'FT',
+  /* Signed either side of the bow, the way it is called on deck: 40
+     degrees to starboard is 40, not 320. The bezel shows the same angle
+     as a picture; this is for when you want the number. */
+  {k:'awa', name:'WIND ANGLE', u:'',
+   v:()=>{const x=get('environment.wind.angleApparent');
+          if(x===null) return null;
+          let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360;
+          return (d<0?'-':'')+Math.abs(d)+'°';}},
+  {k:'dpt', name:'DEPTH', u:()=>CFG.depthUnit==='m'?'M':'FT',
    v:()=>{let x=get('environment.depth.belowKeel');
           if(x===null) x=get('environment.depth.belowTransducer');
           return x===null?null
             : (CFG.depthUnit==='m' ? x.toFixed(1) : (x*M_TO_FT).toFixed(1));}},
 ];
-const MUS_LAYOUTS=['tri','tri2','row','quad','wide'];
-const MUS={layout:'row'};
-try{ const v=localStorage.getItem('musLayout');
-     if(MUS_LAYOUTS.indexOf(v)>=0) MUS.layout=v; }catch(e){}
+/* The three positions, and what is in them. Slots rather than a fixed
+   arrangement: the geometry is the layout's business and the reading is
+   yours, and the two should not be the same decision. */
+const MUS_SLOTS=['a','p','s'];                /* apex, port, starboard */
+const MUS={ slot:{a:'hdg', p:'aws', s:'dpt'} };
+try{ const v=JSON.parse(localStorage.getItem('musSlots')||'null');
+     if(v) for(const k of MUS_SLOTS)
+       if(MUS_CELLS.some(c=>c.k===v[k])) MUS.slot[k]=v[k]; }catch(e){}
+const musSave=()=>{ try{
+  localStorage.setItem('musSlots', JSON.stringify(MUS.slot)); }catch(e){} };
 
-function musLayout(name){
-  if(MUS_LAYOUTS.indexOf(name)<0) return;
-  MUS.layout=name;
-  const m=$('music'); if(m) m.dataset.mus=name;
-  try{ localStorage.setItem('musLayout', name); }catch(e){}
-  stripKey='';                            /* the cells are laid out afresh */
-  paintStrip();
-}
-
-/* Each glyph is the placement it names, drawn as the thing itself: a row
-   across the top, two columns down the sides, four at the diagonals, a
-   block of four in the middle. Faster to read than four words would be,
-   and the word is under it anyway. */
-const MUS_ICO={
-  /* One line of numbers on top, a round art and two lines of words. */
-  row:'<rect x="2" y="2.4" width="20" height="4.6" rx="1.5"/>'
-     +'<circle cx="6.4" cy="15.6" r="4.4" opacity=".45"/>'
-     +'<rect x="12.4" y="11.6" width="9.6" height="2.6" rx="1.3"/>'
-     +'<rect x="12.4" y="16.4" width="7" height="2.6" rx="1.3" opacity=".45"/>',
-  /* Four numbers two by two, and a smaller card under them. */
-  quad:'<rect x="2" y="2" width="9" height="5" rx="1.4"/>'
-      +'<rect x="13" y="2" width="9" height="5" rx="1.4"/>'
-      +'<rect x="2" y="8.6" width="9" height="5" rx="1.4"/>'
-      +'<rect x="13" y="8.6" width="9" height="5" rx="1.4"/>'
-      +'<circle cx="6" cy="18.8" r="3.4" opacity=".45"/>'
-      +'<rect x="12" y="17.4" width="10" height="2.6" rx="1.3" opacity=".45"/>',
-  /* The seek bar running the whole width, under the art as well. */
-  wide:'<rect x="2" y="2.4" width="20" height="4.2" rx="1.4"/>'
-      +'<circle cx="6.2" cy="13" r="3.9" opacity=".45"/>'
-      +'<rect x="12.2" y="9.6" width="9.8" height="2.4" rx="1.2"/>'
-      +'<rect x="12.2" y="14" width="6.6" height="2.4" rx="1.2" opacity=".45"/>'
-      +'<rect x="2" y="19.4" width="20" height="2.8" rx="1.4"/>',
-};
-function musPaint(){
-  const b=$('mus-btn'); if(!b) return;
-  $('mus-ico').innerHTML=MUS_ICO[MUS.layout]||'';
-  $('mus-sub').textContent=MUS.layout.toUpperCase();
-}
-$('mus-ico').setAttribute('fill','currentColor');
-$('mus-btn').addEventListener('click',()=>{
-  musLayout(MUS_LAYOUTS[(MUS_LAYOUTS.indexOf(MUS.layout)+1)%MUS_LAYOUTS.length]);
-  musPaint();
-});
-musPaint();
-
-/* Applied once at boot, before anything paints, so the page never shows
-   one layout and then jumps to another. */
-(function(){ const m=$('music'); if(m) m.dataset.mus=MUS.layout; })();
+const musCell=k=>MUS_CELLS.find(c=>c.k===k);
+const musUnit=c=>typeof c.u==='function' ? c.u() : c.u;
 
 let stripKey='';
 function paintStrip(){
   const box=$('ms-strip'); if(!box) return;
-  const cells=[];
-  for(const c of MUS_CELLS){
-    const v=c.v();
-    if(v!==null) cells.push([c.k, v, typeof c.u==='function'?c.u():c.u]);
-  }
-  const key=MUS.layout+'|'+cells.map(c=>c.join()).join('|');
+  const row=MUS_SLOTS.map(sl=>{
+    const c=musCell(MUS.slot[sl]);
+    return {sl:sl, k:c?c.k:'', v:c?c.v():null, u:c?musUnit(c):''};
+  });
+  const key=row.map(r=>r.sl+r.k+r.v+r.u).join('|');
   if(key===stripKey) return;              /* nothing moved - leave the DOM alone */
   stripKey=key;
-  box.innerHTML=cells.map(c=>
-    `<span class="mcell" data-k="${c[0]}"><b>${c[1]}</b><em>${c[2]}</em></span>`
-  ).join('');
-  box.style.display = cells.length ? '' : 'none';
+  /* A slot with no reading behind it shows nothing at all rather than a
+     dash: an empty corner reads as "not fitted", which is true, and a
+     dash reads as "broken", which usually is not. */
+  box.innerHTML=row.map(r=> r.v===null ? '' :
+    `<span class="mcell" data-slot="${r.sl}" data-k="${r.k}">`
+    +`<b>${r.v}</b><em>${r.u}</em></span>`).join('');
+  if(musPickAt) musPickPlace();
 }
+
+/* ---- tap a reading, choose another ---------------------------------
+   The list unrolls from the reading it belongs to. Anchored to the cell
+   rather than centred, because which of the three you are changing has
+   to be unambiguous.
+   Picking one that is already in another slot SWAPS them, which is what
+   you meant: you cannot have wanted the same number twice, and shuffling
+   the other two would move readings you did not touch. */
+let musPickAt=null;
+
+function musPickRows(){
+  const cur=MUS.slot[musPickAt];
+  return MUS_CELLS.map(c=>{
+    const v=c.v(), u=musUnit(c);
+    return `<button class="pkrow${c.k===cur?' sel':''}${v===null?' none':''}"`
+      +` data-k="${c.k}"><i>${c.name}</i>`
+      +`<b>${v===null?'—':v}</b><s>${v===null?'':u}</s></button>`;
+  }).join('');
+}
+
+/* Anchored under the cell, then pulled back inside the glass. On a round
+   panel a box that fits by its bounding rectangle can still have a
+   corner out in the bezel, so all four are tested against the radius
+   rather than against edges nobody has.
+   Below the cell first, above it if that will not go, and failing both -
+   the apex, where there is glass neither side of the art - straddling
+   the middle, which is the only band wide enough for anything. Each of
+   the three re-clamps x for its own y: a box that moved up is over a
+   different width of circle than the one that did not. */
+const PICK_W=344, PICK_H=300, PICK_GAP=14, PICK_R=536;
+function musPickPlace(){
+  const pk=$('mus-pick'), cell=document.querySelector(
+    `.mcell[data-slot="${musPickAt}"]`);
+  if(!pk || !cell) return musPickClose();
+  const host=$('music').getBoundingClientRect();
+  const r=cell.getBoundingClientRect();
+  /* Anchored to the cell's INWARD edge, not centred under it. Centred,
+     the starboard menu hung out over the rim, got pulled back by the
+     clamp, and landed on top of the very reading you were changing.
+     Hung inward it has the whole middle of the glass to fall into, and
+     it still points at the cell it belongs to. */
+  const L=r.left-host.left, R=r.right-host.left;
+  const want = musPickAt==='p' ? L
+             : musPickAt==='s' ? R-PICK_W
+             : L+r.width/2-PICK_W/2;
+  /* Half the chord at whichever of the box's two edges is further from
+     the middle - that edge runs out of circle first. */
+  const clampX=y=>{
+    const dy=Math.max(Math.abs(y-540), Math.abs(y+PICK_H-540));
+    const half=Math.sqrt(Math.max(0, PICK_R*PICK_R-dy*dy));
+    return Math.max(540-half, Math.min(540+half-PICK_W, want));
+  };
+  const fits=(x,y)=>[[x,y],[x+PICK_W,y],[x,y+PICK_H],[x+PICK_W,y+PICK_H]]
+    .every(([cx,cy])=>Math.hypot(cx-540,cy-540)<=PICK_R);
+  /* Below the cell, above it if that will not go, and failing both -
+     the apex, which has art either side and glass neither - straddling
+     the middle, the only band wide enough for anything. Each re-clamps x
+     for its own y: a box that moved is over a different width of circle
+     than the one that did not. */
+  const tries=[ r.bottom-host.top+PICK_GAP,
+                r.top-host.top-PICK_H-PICK_GAP,
+                540-PICK_H/2 ];
+  let x=clampX(tries[2]), y=tries[2];
+  for(const ty of tries){ const tx=clampX(ty); if(fits(tx,ty)){ x=tx; y=ty; break; } }
+  pk.style.left=Math.round(x)+'px';
+  pk.style.top =Math.round(y)+'px';
+}
+
+function musPickOpen(slot){
+  if(musPickAt===slot) return musPickClose();
+  musPickAt=slot;
+  $('mus-pk').innerHTML=musPickRows();
+  $('mus-pk').scrollTop=0;
+  musPickPlace();
+  $('mus-veil').classList.add('on');
+  $('mus-pick').classList.add('on');
+  document.querySelectorAll('.mcell').forEach(e=>
+    e.classList.toggle('picking', e.dataset.slot===slot));
+}
+function musPickClose(){
+  musPickAt=null;
+  const pk=$('mus-pick'); if(pk) pk.classList.remove('on');
+  const v=$('mus-veil'); if(v) v.classList.remove('on');
+  document.querySelectorAll('.mcell').forEach(e=>e.classList.remove('picking'));
+}
+function musPickChoose(k){
+  if(!musPickAt) return;
+  const from=MUS_SLOTS.find(sl=>sl!==musPickAt && MUS.slot[sl]===k);
+  if(from) MUS.slot[from]=MUS.slot[musPickAt];   /* swap, never duplicate */
+  MUS.slot[musPickAt]=k;
+  musSave();
+  musPickClose();
+  stripKey=''; paintStrip();
+}
+
+/* gClaim on every one of these: a tap on a reading is not a page swipe,
+   and a DRAG inside the list is a scroll rather than one either. */
+$('ms-strip').addEventListener('pointerdown',e=>{
+  if(e.target.closest('.mcell')) gClaim(); });
+$('ms-strip').addEventListener('click',e=>{
+  const c=e.target.closest('.mcell'); if(!c) return;
+  e.stopPropagation(); musPickOpen(c.dataset.slot); });
+$('mus-pick').addEventListener('pointerdown',()=>gClaim());
+$('mus-pick').addEventListener('click',e=>{
+  const b=e.target.closest('.pkrow'); if(!b) return;
+  e.stopPropagation(); musPickChoose(b.dataset.k); });
+$('mus-veil').addEventListener('pointerdown',()=>gClaim());
+$('mus-veil').addEventListener('click',e=>{ e.stopPropagation(); musPickClose(); });
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
