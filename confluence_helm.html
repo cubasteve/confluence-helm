@@ -960,10 +960,11 @@ a.lib-row{text-decoration:none;color:inherit}
 #music[data-mus="tri2"] .mcell em{font-size:34px;letter-spacing:.16em}
 #music[data-mus="tri2"] .mcell[data-k="sog"],
 #music[data-mus="tri2"] .mcell[data-k="tws"]{display:none}
-/* One line rather than two, so it hangs lower than the flanks do and
-   still clears the top of the volume ring. */
+/* Clear of the volume ring's topmost tick with room to spare rather
+   than by a hair - at 112 the descender of the degree sign sat right on
+   the twelve o'clock tick and the two read as one object. */
 #music[data-mus="tri2"] .mcell[data-k="hdg"]{left:50%;transform:translateX(-50%);
-  top:112px;align-items:center}
+  top:82px;align-items:center}
 #music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px;
   align-items:flex-start}
 #music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px;
