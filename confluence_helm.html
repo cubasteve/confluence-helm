@@ -103,6 +103,12 @@ svg{width:100%;height:100%;display:block}
 .huge{font-size:268px;font-weight:var(--w-huge);fill:var(--ink);letter-spacing:-.02em}
 .value{font-size:104px;font-weight:var(--w-val);fill:var(--ink)}
 .value-s{font-size:68px;font-weight:var(--w-val);fill:var(--ink-dim)}
+/* The middle cell is narrower than its neighbours because it has to be:
+   the three are 214px apart and only the outer two can overflow towards
+   the rim. Being SMALLER is geometry. Being dimmer was not - it read as
+   a lesser instrument, and now that any reading can land in any of the
+   three it should not. */
+#c2{fill:var(--ink)}
 .unit{font-size:34px;font-weight:600;fill:var(--label);letter-spacing:.14em}
 .label{font-size:32px;font-weight:var(--w-lbl);letter-spacing:.20em;
   fill:var(--label);text-transform:uppercase}
@@ -4591,10 +4597,18 @@ drawDemo();
 
    `name` is what the picker calls it - the long form, because a menu is
    where you have room to say APPARENT WIND rather than AWS.
-   `u` is the unit, abbreviated, and the same one on both pages. The dial
-   used to spell KNOTS and FEET out because it had the room; the room is
-   not the point - a unit is a tag on a number, and a tag reads faster
-   short. `sub` is a third line some readings have and most do not:
+   `u` is the tag under the number on the MUSIC page, where a cell is two
+   lines and the bottom one has to carry the identity: two cells both
+   reading 13.5 KT would not say which was apparent and which was true.
+
+   The dial has three lines and can separate the two, so it takes `hdr`
+   on top and `du` underneath - a real unit. Both default: `hdr` to the
+   long name, `du` to `u`, so a reading only names them when it wants
+   something else. An EMPTY hdr is a deliberate blank: a big number with
+   a degree ring on it is a heading and a number with KT under it is a
+   speed, and neither needs telling.
+
+   `sub` is a third line some readings have and most do not:
    which side the heel is on, which tack the wind is over. A cell that
    has no sub shows the long unit there instead, so all three lines are
    always used and no cell is short.
@@ -4609,30 +4623,24 @@ const MUS_CELLS=[
 /* No unit line: the degree ring IS the unit, and it belongs against the
      number rather than under it. A label saying HDG under a three-digit
      figure with a degree sign on it is telling you twice. */
-  {k:'hdg', name:'HEADING', u:'',
+  {k:'hdg', name:'HEADING', hdr:'', u:'',
    v:()=>{let x=get('navigation.headingMagnetic');
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
           return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
-  {k:'sog', name:'BOAT SPEED', u:'KT',
+  {k:'sog', name:'BOAT SPEED', hdr:'', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:readNum('sog',x*MS_TO_KT).toFixed(1);}},
-  /* Through the water rather than over the ground: what the sails are
-     doing, with the tide taken out. This was a tap on the big number -
-     a hidden toggle nobody could find - and it is a menu entry now. */
-  {k:'stw', name:'WATER SPEED', u:'KT',
-   v:()=>{const x=get('navigation.speedThroughWater');
-          return x===null?null:readNum('stw',x*MS_TO_KT).toFixed(1);}},
-  {k:'aws', name:'APPARENT WIND', u:'AWS',
+  {k:'aws', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
    v:()=>{const x=get('environment.wind.speedApparent');
           return x===null?null:readNum('aws',x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', name:'TRUE WIND', u:'TWS',
+  {k:'tws', name:'TRUE WIND SPEED', hdr:'TWS', u:'TWS', du:'KT',
    v:()=>{const x=get('environment.wind.speedTrue');
           return x===null?null:readNum('tws',x*MS_TO_KT).toFixed(1);}},
   /* Signed either side of the bow, the way it is called on deck: 40
      degrees to starboard is 40, not 320. The bezel shows the same angle
      as a picture; this is for when you want the number. */
-  {k:'awa', name:'WIND ANGLE', u:'',
+  {k:'awa', name:'WIND ANGLE', hdr:'AWA', u:'',
    v:()=>{const x=get('environment.wind.angleApparent');
           if(x===null) return null;
           let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360;
@@ -4650,7 +4658,7 @@ const MUS_CELLS=[
           return x===null?null:readNum('heel',Math.abs(x*DEG)).toFixed(0)+'°';},
    sub:()=>{const x=get('att.roll');
             return x===null?'':(x>0?'STBD':'PORT');}},
-  {k:'twa', name:'TRUE WIND ANGLE', u:'',
+  {k:'twa', name:'TRUE WIND ANGLE', hdr:'TWA', u:'',
    v:()=>{const x=get('environment.wind.angleTrueWater');
           return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
    sub:()=>{const x=get('environment.wind.angleTrueWater');
@@ -4667,7 +4675,11 @@ const MUS_CELLS=[
           return readNum('vmg',x*MS_TO_KT).toFixed(1);}},
 ];
 const musUnitOf=c=>typeof c.u==='function'?c.u():c.u;
-const musSub   =c=>c.sub?c.sub():'';
+/* The dial's own two, each falling back to the shared one. */
+const musHdr =c=>c.hdr!==undefined?c.hdr:c.name;
+const musDU  =c=>{ const v=c.du!==undefined?c.du:c.u;
+                   return typeof v==='function'?v():v; };
+const musSub =c=>c.sub?c.sub():'';
 
 /* Smoothed, and computed once a frame however many times it is asked
    for. The dial repaints far faster than the sensors publish, so a raw
@@ -4723,16 +4735,16 @@ const DIAL_EL={ c0:['spd-label','spd','spd-u'],
 let dialCellKey='';
 function paintDialCells(){
   const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
-    return sl+(c?c.k+c.v()+musSub(c)+musUnitOf(c):''); }).join('|');
+    return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c):''); }).join('|');
   if(key===dialCellKey) return;
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
     const [lbl,val,third]=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
     if(!c){ wText(lbl,''); wText(val,'––'); wText(third,''); continue; }
     const v=c.v(), sub=musSub(c);
-    wText(lbl, c.name);
+    wText(lbl, musHdr(c));
     wText(val, v===null?'––':v);
-    wText(third, v===null ? '' : (sub || musUnitOf(c)));
+    wText(third, v===null ? '' : (sub || musDU(c)));
     wCls(val,'stale', v===null);
     wCls(third,'stale', v===null);
     /* The shallow alarm follows the READING, not the cell. It used to be
