@@ -947,22 +947,36 @@ a.lib-row{text-decoration:none;color:inherit}
    to a sensor. */
 #ms-strip{position:absolute;inset:0;display:block;pointer-events:none}
 #music .m-sheet{margin-top:36px}
-.mcell{position:absolute;flex-direction:column;gap:0;pointer-events:auto}
-.mcell b{font-size:124px}
-.mcell em{font-size:34px;letter-spacing:.16em}
+/* Fixed width, and that is what makes the rest of it hold still. A cell
+   that shrink-wraps to its number moves everything else in it every
+   time the number changes width - a centred header wanders, and a unit
+   pinned to the far edge walks with it. Given a width, the header can be
+   centred and the unit pinned at once, and neither moves at all. */
+.mcell{position:absolute;flex-direction:column;gap:0;pointer-events:auto;
+  width:262px}
+/* The header is centred on every cell, on both pages. It is a title over
+   the number rather than part of it. */
+.mcell u{display:block;width:100%;text-align:center;text-decoration:none;
+  font-size:30px;font-weight:600;letter-spacing:.16em;color:var(--label);
+  line-height:1;margin-bottom:10px}
+.mcell u:empty{display:none}
+.mcell b{font-size:110px}
+.mcell em{font-size:32px;letter-spacing:.16em}
 /* Clear of the volume ring's topmost tick with room to spare rather than
    by a hair: lower than this and the degree sign sits on the twelve
    o'clock tick and the two read as one object. */
 .mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:82px;
   align-items:center}
-/* Pinned by the OUTER edge, not the inner one. The cell shrink-wraps to
-   its number, so anchoring the edge nearest the art meant the far edge -
-   and the unit sitting on it - slid about every time the number changed
-   width: 9.8 to 13.5 walked AWS sideways by half a digit. Anchored
-   outboard, the unit never moves at all and the number grows inward
-   towards the art, which has 22px of clearance to spare. */
-.mcell[data-slot="p"]{left:34px;top:365px;align-items:flex-start}
-.mcell[data-slot="s"]{right:34px;top:365px;align-items:flex-end}
+/* In off the rim. At 34 the numbers sat on the bezel's tick marks, whose
+   innermost radius is 496 - at this height that is x=93 to the left and
+   x=987 to the right. 98 clears them and still leaves the cell short of
+   the volume ring at 360.
+   The value and the unit keep their OUTBOARD alignment, port to the left
+   edge and starboard to the right, so they read outward from the art;
+   the header is centred over both. */
+.mcell[data-slot="p"]{left:98px;top:352px;align-items:flex-start}
+.mcell[data-slot="s"]{right:98px;top:352px;align-items:flex-end}
+.mcell[data-slot="a"]{width:340px}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
@@ -1287,8 +1301,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <text id="c3-lbl" class="label" x="754" y="758" text-anchor="middle">VMG</text>
   <text id="vmg" class="value" x="754" y="826" text-anchor="middle">––</text>
 
-  <!-- Tap targets over the three cells. Transparent rects rather than the
-       <text> itself, which hit-tests on its glyphs: a number is mostly
+
+  <text id="c2-lbl" class="label" x="540" y="762" text-anchor="middle">HEEL</text>
+  <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
+  <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
+
+  <!-- Tap targets over the four cells. LAST in the SVG, and that is not
+       cosmetic: SVG has no z-index, so painting order is hit-test order,
+       and while this group sat above #vmg the c2 texts declared after it
+       took the taps themselves. Half the middle cell was dead - the half
+       with the number in it, which is the half you aim at.
+       Transparent rects rather than the <text> itself, which hit-tests on its glyphs: a number is mostly
        the gaps between its strokes, and a target you have to hit a
        stroke of is not a target. 176 x 156 is 29 x 26 mm.
        Below y=734 there is no dial tap to collide with - the timer is
@@ -1306,10 +1329,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="740"
           width="176" height="156" fill="transparent"/>
   </g>
-
-  <text id="c2-lbl" class="label" x="540" y="762" text-anchor="middle">HEEL</text>
-  <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
-  <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
 
 
   <!-- Centred in the gap between the heel reading and the sensor glyphs.
@@ -4597,16 +4616,15 @@ drawDemo();
 
    `name` is what the picker calls it - the long form, because a menu is
    where you have room to say APPARENT WIND rather than AWS.
-   `u` is the tag under the number on the MUSIC page, where a cell is two
-   lines and the bottom one has to carry the identity: two cells both
-   reading 13.5 KT would not say which was apparent and which was true.
-
-   The dial has three lines and can separate the two, so it takes `hdr`
-   on top and `du` underneath - a real unit. Both default: `hdr` to the
-   long name, `du` to `u`, so a reading only names them when it wants
-   something else. An EMPTY hdr is a deliberate blank: a big number with
-   a degree ring on it is a heading and a number with KT under it is a
-   speed, and neither needs telling.
+   `hdr` is the header over the number and `du` the unit under it, on
+   BOTH pages now - three lines each, so a cell reads the same wherever
+   it is. They default: `hdr` to the long name, `du` to `u`, so a
+   reading only names them when it wants something else. An EMPTY hdr is
+   a deliberate blank: a big number with a degree ring on it is a
+   heading and a number with KT under it is a speed, and neither needs
+   telling.
+   `u` survives as what `du` falls back to, and as the tag the picker
+   prints beside each value in its list.
 
    `sub` is a third line some readings have and most do not:
    which side the heel is on, which tack the wind is over. A cell that
@@ -4760,16 +4778,20 @@ function paintDialCells(){
 }
 
 const musCell=k=>MUS_CELLS.find(c=>c.k===k);
-const musUnit=c=>typeof c.u==='function' ? c.u() : c.u;
 
 let stripKey='';
 function paintStrip(){
   const box=$('ms-strip'); if(!box) return;
+  /* Header, value, unit - the same three lines the dial's cells have.
+     They read as one instrument across the two pages now, which is the
+     point; where they differ is only in how they are aligned, and that
+     is the page's business. */
   const row=MUS_SLOTS.map(sl=>{
     const c=musCell(MUS.slot[sl]);
-    return {sl:sl, k:c?c.k:'', v:c?c.v():null, u:c?musUnit(c):''};
+    return {sl:sl, k:c?c.k:'', v:c?c.v():null,
+            h:c?musHdr(c):'', u:c?musDU(c):''};
   });
-  const key=row.map(r=>r.sl+r.k+r.v+r.u).join('|');
+  const key=row.map(r=>r.sl+r.k+r.v+r.h+r.u).join('|');
   if(key===stripKey) return;              /* nothing moved - leave the DOM alone */
   stripKey=key;
   /* A slot with no reading behind it shows nothing at all rather than a
@@ -4777,7 +4799,7 @@ function paintStrip(){
      dash reads as "broken", which usually is not. */
   box.innerHTML=row.map(r=> r.v===null ? '' :
     `<span class="mcell" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
-    +`<b>${r.v}</b><em>${r.u}</em></span>`).join('');
+    +`<u>${r.h}</u><b>${r.v}</b><em>${r.u}</em></span>`).join('');
   /* The cells are rebuilt, so the menu is anchored to an element that no
      longer exists - re-point it at the new one. */
   if(PICK && PICK.g==='mus'){
@@ -4827,7 +4849,13 @@ function musPickRows(){
   }).join('');
 }
 
-const PICK_W=360, PICK_H=300, PICK_GAP=14, PICK_R=536;
+/* PICK_R is the radius the box has to stay inside, and it was 536
+   against a 540 glass - four pixels of inset. That is a knife edge: the
+   starboard menu missed fitting BELOW its cell by three hundredths of a
+   pixel and flipped to the top of the glass instead, which is a large
+   visible jump caused by nothing. 539 leaves a pixel, and the box is
+   round-cornered anyway so its true corners are inside its bounds. */
+const PICK_W=360, PICK_H=300, PICK_GAP=14, PICK_R=539;
 function musPickPlace(){
   const pk=$('mus-pick');
   if(!pk || !PICK || !PICK.el || !PICK.el.isConnected) return musPickClose();
