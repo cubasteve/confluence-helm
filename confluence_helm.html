@@ -953,20 +953,26 @@ a.lib-row{text-decoration:none;color:inherit}
    pinned to the far edge walks with it. Given a width, the header can be
    centred and the unit pinned at once, and neither moves at all. */
 .mcell{position:absolute;flex-direction:column;gap:0;pointer-events:auto;
-  width:262px}
+  width:240px}
 /* The header is centred on every cell, on both pages. It is a title over
    the number rather than part of it. */
 .mcell u{display:block;width:100%;text-align:center;text-decoration:none;
-  font-size:30px;font-weight:600;letter-spacing:.16em;color:var(--label);
-  line-height:1;margin-bottom:10px}
+  font-size:26px;font-weight:600;letter-spacing:.16em;color:var(--label);
+  line-height:1;margin-bottom:8px}
 .mcell u:empty{display:none}
-.mcell b{font-size:110px}
-.mcell em{font-size:32px;letter-spacing:.16em}
+/* 84, not 110, and the apex is why. Three lines need 142px of height;
+   above the album art there are 127 between the rim and the volume ring,
+   and the glass narrows so fast up there that no width buys the rest -
+   at 340 wide a cell cannot start higher than y=74 without its corners
+   reaching the bezel ticks. The alternative was an apex smaller than its
+   flanks, and three readouts that are meant to look alike should. */
+.mcell b{font-size:84px}
+.mcell em{font-size:24px;letter-spacing:.16em}
 /* Clear of the volume ring's topmost tick with room to spare rather than
    by a hair: lower than this and the degree sign sits on the twelve
    o'clock tick and the two read as one object. */
-.mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:82px;
-  align-items:center}
+.mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:64px;
+  align-items:center;width:260px}
 /* In off the rim. At 34 the numbers sat on the bezel's tick marks, whose
    innermost radius is 496 - at this height that is x=93 to the left and
    x=987 to the right. 98 clears them and still leaves the cell short of
@@ -974,9 +980,8 @@ a.lib-row{text-decoration:none;color:inherit}
    The value and the unit keep their OUTBOARD alignment, port to the left
    edge and starboard to the right, so they read outward from the art;
    the header is centred over both. */
-.mcell[data-slot="p"]{left:98px;top:352px;align-items:flex-start}
-.mcell[data-slot="s"]{right:98px;top:352px;align-items:flex-end}
-.mcell[data-slot="a"]{width:340px}
+.mcell[data-slot="p"]{left:104px;top:310px;align-items:flex-start}
+.mcell[data-slot="s"]{right:104px;top:310px;align-items:flex-end}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
@@ -4646,7 +4651,11 @@ const MUS_CELLS=[
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
           return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
-  {k:'sog', name:'BOAT SPEED', hdr:'', u:'KT',
+  /* SOG rather than a blank: over the ground is not the only speed a
+     boat has, and now that every other cell carries a header an empty
+     one reads as a gap rather than as a decision. Heading keeps its
+     blank - a number with a degree ring on it is only ever one thing. */
+  {k:'sog', name:'BOAT SPEED', hdr:'SOG', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:readNum('sog',x*MS_TO_KT).toFixed(1);}},
   {k:'aws', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
