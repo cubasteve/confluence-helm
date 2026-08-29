@@ -909,11 +909,122 @@ a.lib-row{text-decoration:none;color:inherit}
    under the strip. Only the strip rises, into 28px of room that was
    doing nothing between it and the bezel at the rim. It buys clearance
    over the volume ring, whose topmost tick was 8px under it. */
-.ms-head{display:flex;align-items:center;justify-content:center;gap:20px;
-  min-height:40px;margin-top:-28px;margin-bottom:48px;line-height:1.43;
-  font-size:22px;font-weight:600;letter-spacing:.1em;color:var(--label)}
-.ms-head b{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:0}
-.ms-head i{width:2px;height:24px;background:var(--hairline);display:block;flex:none}
+.ms-head{display:flex;align-items:center;justify-content:center;
+  line-height:1;font-weight:600;color:var(--label)}
+/* One tile. The number carries the size, the unit stays out of its way,
+   and both sit on a shared baseline so a row of them reads as a row. */
+.mcell{display:flex;align-items:baseline;gap:.30em;white-space:nowrap}
+.mcell b{font-weight:600;color:var(--ink);letter-spacing:-.015em;
+  font-variant-numeric:tabular-nums;line-height:1}
+.mcell em{font-style:normal;font-weight:600;color:var(--label);
+  letter-spacing:.1em;line-height:1}
+
+/* ---- three ways to lay this page out ------------------------------
+   All three put the boat's numbers along the TOP, big, and turn the
+   music into a horizontal card underneath: art on the left, everything
+   you read or press about the track to the right of it. The art is the
+   only round thing on the page and it anchors the left edge; the words
+   get a straight left margin to run from, which is what makes a column
+   of text readable rather than a centred label.
+
+   They differ in how much of the glass the numbers take, and in whether
+   the seek bar belongs to the words or to the whole card. */
+#music[data-mus="row"] .m-sheet,
+#music[data-mus="quad"] .m-sheet,
+#music[data-mus="wide"] .m-sheet{
+  display:grid; width:880px; column-gap:34px;
+  grid-template-columns:auto minmax(0,1fr); justify-items:start}
+#music[data-mus="row"] .ms-head,
+#music[data-mus="quad"] .ms-head,
+#music[data-mus="wide"] .ms-head{grid-column:1/-1; grid-row:1;
+  justify-self:center}
+#music[data-mus="row"] .artwrap,
+#music[data-mus="quad"] .artwrap,
+#music[data-mus="wide"] .artwrap{grid-column:1; align-self:center;
+  margin-bottom:0}
+#music[data-mus="row"] .m-lbl,
+#music[data-mus="quad"] .m-lbl,
+#music[data-mus="wide"] .m-lbl{grid-column:2; grid-row:2; margin-bottom:4px}
+#music[data-mus="row"] .m-title,
+#music[data-mus="quad"] .m-title,
+#music[data-mus="wide"] .m-title{grid-column:2; grid-row:3;
+  text-align:left; max-width:100%; font-size:44px}
+#music[data-mus="row"] .m-artist,
+#music[data-mus="quad"] .m-artist,
+#music[data-mus="wide"] .m-artist{grid-column:2; grid-row:4;
+  text-align:left; max-width:100%; font-size:30px}
+#music[data-mus="row"] .m-ctl,
+#music[data-mus="quad"] .m-ctl,
+#music[data-mus="wide"] .m-ctl{grid-column:2; grid-row:7;
+  justify-content:flex-start}
+#music[data-mus="row"] .lockbtn,
+#music[data-mus="quad"] .lockbtn,
+#music[data-mus="wide"] .lockbtn{grid-column:1/-1; grid-row:8;
+  justify-self:center}
+/* The ring keeps its 40px annulus whatever the art does - that width is
+   what makes it a control you can find with a thumb, and it is not a
+   proportion of anything. The readout shrinks with the circle it sits
+   in, which is a proportion. */
+#music[data-mus="row"] .m-bar,  #music[data-mus="row"] .m-time,
+#music[data-mus="quad"] .m-bar, #music[data-mus="quad"] .m-time{
+  grid-column:2; width:100%}
+#music[data-mus="row"] .m-bar,
+#music[data-mus="quad"] .m-bar{grid-row:5; margin-top:18px}
+#music[data-mus="row"] .m-time,
+#music[data-mus="quad"] .m-time{grid-row:6}
+
+/* ---- ROW: one line of numbers across the top, and a card under it.
+   The most conservative of the three - nothing about the music changes
+   except that it lies down. */
+#music[data-mus="row"] .ms-head{gap:12px 40px; flex-wrap:wrap;
+  margin:0 0 30px; max-width:880px}
+#music[data-mus="row"] .mcell b{font-size:76px}
+#music[data-mus="row"] .mcell em{font-size:28px}
+#music[data-mus="row"] .artwrap,
+#music[data-mus="row"] .art{width:268px;height:268px}
+#music[data-mus="row"] .vring,
+#music[data-mus="row"] .vhit{width:348px;height:348px}
+#music[data-mus="row"] .artwrap{grid-row:2/8}
+#music[data-mus="row"] .vnum{font-size:58px}
+
+/* ---- QUAD: the numbers get the top third, two by two, as big as they
+   go. The music card is smaller to pay for it. */
+#music[data-mus="quad"] .ms-head{display:grid;
+  grid-template-columns:auto auto; gap:10px 56px; margin:0 0 26px}
+#music[data-mus="quad"] .mcell{width:252px}
+#music[data-mus="quad"] .mcell b{font-size:98px; flex:1; text-align:right}
+#music[data-mus="quad"] .mcell em{font-size:26px; width:62px}
+#music[data-mus="quad"] .artwrap,
+#music[data-mus="quad"] .art{width:178px;height:178px}
+#music[data-mus="quad"] .vring,
+#music[data-mus="quad"] .vhit{width:258px;height:258px}
+#music[data-mus="quad"] .artwrap{grid-row:2/8}
+#music[data-mus="quad"] .vnum{font-size:44px}
+#music[data-mus="quad"] .m-lbl{display:none}
+#music[data-mus="quad"] .m-title{font-size:36px; grid-row:2}
+#music[data-mus="quad"] .m-artist{font-size:26px; grid-row:3}
+#music[data-mus="quad"] .m-bar{grid-row:4; margin-top:14px}
+#music[data-mus="quad"] .m-time{grid-row:5}
+#music[data-mus="quad"] .m-ctl{grid-row:6}
+
+/* ---- WIDE: the seek bar belongs to the whole card rather than to the
+   words, so it runs the full width under the art as well. The longest
+   progress bar the glass will take, which is the one thing on this page
+   you read at a glance from six feet away. */
+#music[data-mus="wide"] .ms-head{gap:12px 44px; flex-wrap:wrap;
+  margin:0 0 26px; max-width:880px}
+#music[data-mus="wide"] .mcell b{font-size:68px}
+#music[data-mus="wide"] .mcell em{font-size:26px}
+#music[data-mus="wide"] .artwrap,
+#music[data-mus="wide"] .art{width:236px;height:236px}
+#music[data-mus="wide"] .vring,
+#music[data-mus="wide"] .vhit{width:316px;height:316px}
+#music[data-mus="wide"] .artwrap{grid-row:2/5}
+#music[data-mus="wide"] .vnum{font-size:52px}
+#music[data-mus="wide"] .m-ctl{grid-row:4; align-self:end; margin-top:0}
+#music[data-mus="wide"] .m-bar{grid-column:1/-1; grid-row:5; width:100%;
+  margin-top:24px}
+#music[data-mus="wide"] .m-time{grid-column:1/-1; grid-row:6; width:100%}
 
 /* Above everything. This is the brightness control on hardware with no
    backlight to drive, so it has to behave like one and dim the whole
@@ -1282,6 +1393,18 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <span class="sub" id="ss-sub">OFF</span>
       </button>
       <input id="dim" type="range" min="25" max="100" value="100">
+    </div>
+
+    <!-- Where the boat's numbers sit on the music page, and how big.
+         A tile rather than a page control: it is a thing you set once for
+         the boat, not a thing you reach for under way. -->
+    <div class="slab">Now playing</div>
+    <div class="dimrow">
+      <button class="tile" id="mus-btn">
+        <svg id="mus-ico" viewBox="0 0 24 24"></svg>
+        <span>READOUT</span>
+        <span class="sub" id="mus-sub">BAND</span>
+      </button>
     </div>
 
     <div class="slab">Shallow alarm</div>
@@ -4469,25 +4592,103 @@ setInterval(windDemoTick, 250);
 $('demo-btn').addEventListener('click',()=>demoSet(!CFG.windDemo));
 drawDemo();
 
+/* ---- the sensor readout on the music page --------------------------
+   It was one thin row of 32px numbers above the album art, which is
+   legible from a chair and not from the wheel. It is a set of TILES now,
+   each one keyed, and where they sit is a setting.
+
+   Keyed rather than ordered because the placements below address them by
+   name - `sog` goes top left in every layout that has a top left - and
+   because switching one off must not shuffle the rest around the glass.
+
+   MUS_LAYOUTS is the order they cycle in; MUS.layout is what is showing.
+   Both live in localStorage, so the panel comes back the way you left
+   it. */
+const MUS_CELLS=[
+  {k:'sog', u:'KT',
+   v:()=>{const x=get('navigation.speedOverGround');
+          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
+  {k:'aws', u:'AWS',
+   v:()=>{const x=get('environment.wind.speedApparent');
+          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
+  {k:'tws', u:'TWS',
+   v:()=>{const x=get('environment.wind.speedTrue');
+          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
+  {k:'dpt', u:()=>CFG.depthUnit==='m'?'M':'FT',
+   v:()=>{let x=get('environment.depth.belowKeel');
+          if(x===null) x=get('environment.depth.belowTransducer');
+          return x===null?null
+            : (CFG.depthUnit==='m' ? x.toFixed(1) : (x*M_TO_FT).toFixed(1));}},
+];
+const MUS_LAYOUTS=['row','quad','wide'];
+const MUS={layout:'row'};
+try{ const v=localStorage.getItem('musLayout');
+     if(MUS_LAYOUTS.indexOf(v)>=0) MUS.layout=v; }catch(e){}
+
+function musLayout(name){
+  if(MUS_LAYOUTS.indexOf(name)<0) return;
+  MUS.layout=name;
+  const m=$('music'); if(m) m.dataset.mus=name;
+  try{ localStorage.setItem('musLayout', name); }catch(e){}
+  stripKey='';                            /* the cells are laid out afresh */
+  paintStrip();
+}
+
+/* Each glyph is the placement it names, drawn as the thing itself: a row
+   across the top, two columns down the sides, four at the diagonals, a
+   block of four in the middle. Faster to read than four words would be,
+   and the word is under it anyway. */
+const MUS_ICO={
+  /* One line of numbers on top, a round art and two lines of words. */
+  row:'<rect x="2" y="2.4" width="20" height="4.6" rx="1.5"/>'
+     +'<circle cx="6.4" cy="15.6" r="4.4" opacity=".45"/>'
+     +'<rect x="12.4" y="11.6" width="9.6" height="2.6" rx="1.3"/>'
+     +'<rect x="12.4" y="16.4" width="7" height="2.6" rx="1.3" opacity=".45"/>',
+  /* Four numbers two by two, and a smaller card under them. */
+  quad:'<rect x="2" y="2" width="9" height="5" rx="1.4"/>'
+      +'<rect x="13" y="2" width="9" height="5" rx="1.4"/>'
+      +'<rect x="2" y="8.6" width="9" height="5" rx="1.4"/>'
+      +'<rect x="13" y="8.6" width="9" height="5" rx="1.4"/>'
+      +'<circle cx="6" cy="18.8" r="3.4" opacity=".45"/>'
+      +'<rect x="12" y="17.4" width="10" height="2.6" rx="1.3" opacity=".45"/>',
+  /* The seek bar running the whole width, under the art as well. */
+  wide:'<rect x="2" y="2.4" width="20" height="4.2" rx="1.4"/>'
+      +'<circle cx="6.2" cy="13" r="3.9" opacity=".45"/>'
+      +'<rect x="12.2" y="9.6" width="9.8" height="2.4" rx="1.2"/>'
+      +'<rect x="12.2" y="14" width="6.6" height="2.4" rx="1.2" opacity=".45"/>'
+      +'<rect x="2" y="19.4" width="20" height="2.8" rx="1.4"/>',
+};
+function musPaint(){
+  const b=$('mus-btn'); if(!b) return;
+  $('mus-ico').innerHTML=MUS_ICO[MUS.layout]||'';
+  $('mus-sub').textContent=MUS.layout.toUpperCase();
+}
+$('mus-ico').setAttribute('fill','currentColor');
+$('mus-btn').addEventListener('click',()=>{
+  musLayout(MUS_LAYOUTS[(MUS_LAYOUTS.indexOf(MUS.layout)+1)%MUS_LAYOUTS.length]);
+  musPaint();
+});
+musPaint();
+
+/* Applied once at boot, before anything paints, so the page never shows
+   one layout and then jumps to another. */
+(function(){ const m=$('music'); if(m) m.dataset.mus=MUS.layout; })();
+
 let stripKey='';
 function paintStrip(){
   const box=$('ms-strip'); if(!box) return;
-  const sog=get('navigation.speedOverGround');
-  const aws=get('environment.wind.speedApparent');
-  let dpt=get('environment.depth.belowKeel');
-  if(dpt===null) dpt=get('environment.depth.belowTransducer');
   const cells=[];
-  if(sog!==null) cells.push([(sog*MS_TO_KT).toFixed(1),'KT']);
-  if(aws!==null) cells.push([(aws*MS_TO_KT).toFixed(1),'AWS']);
-  if(dpt!==null) cells.push([
-    CFG.depthUnit==='m' ? dpt.toFixed(1) : (dpt*M_TO_FT).toFixed(1),
-    CFG.depthUnit==='m' ? 'M' : 'FT']);
-  const key=cells.map(c=>c.join()).join('|');
+  for(const c of MUS_CELLS){
+    const v=c.v();
+    if(v!==null) cells.push([c.k, v, typeof c.u==='function'?c.u():c.u]);
+  }
+  const key=MUS.layout+'|'+cells.map(c=>c.join()).join('|');
   if(key===stripKey) return;              /* nothing moved - leave the DOM alone */
   stripKey=key;
-  /* hairline separators between, never trailing */
-  box.innerHTML=cells.map(c=>`<span><b>${c[0]}</b> ${c[1]}</span>`).join('<i></i>');
-  box.style.display = cells.length ? 'flex' : 'none';
+  box.innerHTML=cells.map(c=>
+    `<span class="mcell" data-k="${c[0]}"><b>${c[1]}</b><em>${c[2]}</em></span>`
+  ).join('');
+  box.style.display = cells.length ? '' : 'none';
 }
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
