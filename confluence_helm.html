@@ -919,6 +919,42 @@ a.lib-row{text-decoration:none;color:inherit}
 .mcell em{font-style:normal;font-weight:600;color:var(--label);
   letter-spacing:.1em;line-height:1}
 
+/* ---- TRI: the page exactly as it was - art centred, the stack under
+   it - with three readings set around the art as a triangle. Apex above
+   it, two on the flanks at its own height, where the round glass leaves
+   390px of nothing either side. The numbers are as large as that room
+   allows and no larger: they are measured against the volume ring, not
+   against the art, because the ring is 40px wider all round and it is a
+   control you must be able to find without looking. */
+#music[data-mus="tri"] .ms-head{position:absolute;inset:0;display:block;
+  pointer-events:none}
+#music[data-mus="tri"] .mcell{position:absolute}
+#music[data-mus="tri"] .mcell b{font-size:104px}
+#music[data-mus="tri"] .mcell em{font-size:34px}
+#music[data-mus="tri"] .mcell[data-k="tws"]{display:none}
+#music[data-mus="tri"] .mcell[data-k="sog"]{left:50%;transform:translateX(-50%);
+  top:110px}
+#music[data-mus="tri"] .mcell[data-k="aws"]{right:742px;top:356px;
+  flex-direction:row-reverse}
+#music[data-mus="tri"] .mcell[data-k="dpt"]{left:742px;top:356px}
+
+/* ---- TRI2: the same triangle with the unit UNDER the number rather
+   than beside it. The cell is then only as wide as the digits, and all
+   the room that was going sideways goes into the number instead: 124px
+   against 104. It is also the way an instrument is labelled. */
+#music[data-mus="tri2"] .ms-head{position:absolute;inset:0;display:block;
+  pointer-events:none}
+#music[data-mus="tri2"] .m-sheet{margin-top:36px}
+#music[data-mus="tri2"] .mcell{position:absolute;flex-direction:column;
+  align-items:center;gap:0}
+#music[data-mus="tri2"] .mcell b{font-size:124px}
+#music[data-mus="tri2"] .mcell em{font-size:34px;letter-spacing:.16em}
+#music[data-mus="tri2"] .mcell[data-k="tws"]{display:none}
+#music[data-mus="tri2"] .mcell[data-k="sog"]{left:50%;transform:translateX(-50%);
+  top:78px}
+#music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px}
+#music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px}
+
 /* ---- three ways to lay this page out ------------------------------
    All three put the boat's numbers along the TOP, big, and turn the
    music into a horizontal card underneath: art on the left, everything
@@ -4620,7 +4656,7 @@ const MUS_CELLS=[
           return x===null?null
             : (CFG.depthUnit==='m' ? x.toFixed(1) : (x*M_TO_FT).toFixed(1));}},
 ];
-const MUS_LAYOUTS=['row','quad','wide'];
+const MUS_LAYOUTS=['tri','tri2','row','quad','wide'];
 const MUS={layout:'row'};
 try{ const v=localStorage.getItem('musLayout');
      if(MUS_LAYOUTS.indexOf(v)>=0) MUS.layout=v; }catch(e){}
