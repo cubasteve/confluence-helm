@@ -227,6 +227,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 
 /* --- the radar app --- */
 #rad-cv{position:absolute;inset:0;touch-action:none}
+/* Stretched from half size, and never a touch target - every gesture on
+   the glass belongs to the chart underneath it. */
+#rad-windcv{position:absolute;inset:0;width:100%;height:100%;
+  pointer-events:none}
 /* HUD and toolbar both sit on the centre line and inside the glass: at
    y=104 the circle is 640px across, at y=950 it is 703. Both are as
    short as their contents allow - on a round panel every row of padding
@@ -5537,6 +5541,44 @@ const RAD={
      a half seconds nobody can tell which they are watching. */
   TOUR_FPS:30,
   MIN_Z:4, MAX_Z:11, DWELL:900, TICK:80, ALPHA:0.72,
+
+  /* ---- the wind layer ----
+     sail-weather's particle field, ported. Air advected through a
+     bilinearly interpolated grid of current wind, leaving trails.
+     The numbers below are where a Pi driving a 1080 kiosk differs from
+     a phone looking at a map, and every one of them was measured:
+
+     WIND_FPS   the tour already runs at 30 for this reason - nobody can
+                tell a trail at 30 from one at 60, and it is half the work.
+     WIND_SCALE the layer is drawn at half linear resolution and stretched
+                by CSS. The per-frame fade is a full-canvas composite, and
+                at 1080 that is 1.2M pixels a frame; at 540 it is 291k.
+                Trails are soft edged - there is nothing there to sharpen.
+     WIND_MAX   sail-weather scales density with area and lands near 650
+                on a screen this size. Kept, because it is the density
+                that makes a flow field read as flow.
+     The strokes are BATCHED by colour band - four paths a frame instead
+     of 650 - which is the single biggest saving here and costs nothing
+     in the picture. */
+  WIND_N:6,            /* a side: 36 coordinates, one Open-Meteo request */
+  WIND_FPS:30,
+  WIND_SCALE:0.5,
+  WIND_MAX:650,
+  WIND_LIFE:1.6,       /* seconds before a particle is respawned */
+  WIND_PX_KN:4,        /* px per second, per knot, at WIND_SCALE 1 */
+  WIND_KEEP:0.013,     /* how much of a trail survives one second */
+  WIND_TTL:180000,     /* a grid that covers the view is good for 3 min */
+  /* On the sailing window's own thresholds, so the colour of the air
+     means the same thing here as it does in the HUD: too light, right,
+     getting on, too much. Written out rather than read from SAIL because
+     SAIL is defined further down the file - a test holds the two to each
+     other so they cannot drift apart in silence. */
+  WIND_BANDS:[
+    {kn:24, c:'rgba(255,83,112,.80)'},   /* over SAIL.MAX + a reef's grace */
+    {kn:20, c:'rgba(255,179,71,.75)'},   /* SAIL.MAX */
+    {kn: 6, c:'rgba(0,200,160,.70)'},    /* SAIL.MIN */
+    {kn:-1, c:'rgba(96,144,176,.50)'},
+  ],
 };
 let R=null;
 
@@ -6039,6 +6081,195 @@ async function radBuildCastMet(gen, hour){
   radSay('MODEL FORECAST — NO TOMORROW.IO');
   radMarkNow(); radPaint();
   radCastLabel();
+}
+
+/* ---- the wind, as air rather than as a number ---------------------
+   sail-weather's particle field. A 6x6 grid of current wind - 36
+   coordinates in one keyless Open-Meteo request - bilinearly
+   interpolated, with particles advected through it leaving trails that
+   fade. It says at a glance what an arrow and a number cannot: where the
+   shifts are, where it is dying, which side of the course is paying.
+
+   It is the only thing in this app that runs an animation loop while you
+   are just looking at the screen, which is why it is OFF until you ask
+   for it and why every number in RAD above it was measured rather than
+   guessed. */
+
+/* Screen point to grid cell, as two linear maps worked out once per view
+   rather than per particle. Longitude really is linear in x; latitude is
+   not, under Mercator, but over a view this size the error is a couple of
+   pixels of a field whose own cells are sixty kilometres across. */
+function windMap(g, W, H){
+  const z=R.view.z;
+  const w0=unwx(wx(R.view.lon,z)-W/2, z), w1=unwx(wx(R.view.lon,z)+W/2, z);
+  const n0=unwy(wy(R.view.lat,z)-H/2, z), n1=unwy(wy(R.view.lat,z)+H/2, z);
+  const N=RAD.WIND_N;
+  g.ax=(w1-w0)/W/(g.lon1-g.lon0)*(N-1);
+  g.bx=(w0-g.lon0)/(g.lon1-g.lon0)*(N-1);
+  g.ay=(n0-n1)/H/(g.lat0-g.lat1)*(N-1);
+  g.by=(g.lat0-n0)/(g.lat0-g.lat1)*(N-1);
+}
+
+function windAt(g, x, y, out){
+  const N=RAD.WIND_N, lim=N-1.001;
+  let fx=g.ax*x+g.bx, fy=g.ay*y+g.by;
+  fx = fx<0?0 : fx>lim?lim : fx;
+  fy = fy<0?0 : fy>lim?lim : fy;
+  const x0=fx|0, y0=fy|0, tx=fx-x0, ty=fy-y0, c=g.cells;
+  const a=(y0*N+x0)*3, b=a+3, d=((y0+1)*N+x0)*3, e=d+3;
+  out.u=(c[a  ]*(1-tx)+c[b  ]*tx)*(1-ty)+(c[d  ]*(1-tx)+c[e  ]*tx)*ty;
+  out.v=(c[a+1]*(1-tx)+c[b+1]*tx)*(1-ty)+(c[d+1]*(1-tx)+c[e+1]*tx)*ty;
+  out.s=(c[a+2]*(1-tx)+c[b+2]*tx)*(1-ty)+(c[d+2]*(1-tx)+c[e+2]*tx)*ty;
+}
+
+/* Does this grid still cover what we are looking at, and is it recent
+   enough to be called current? */
+function windCovers(g){
+  if(!g || Date.now()-g.at > RAD.WIND_TTL) return false;
+  const z=R.view.z, W=R.cv.width, H=R.cv.height;
+  const w=unwx(wx(R.view.lon,z)-W/2, z), e=unwx(wx(R.view.lon,z)+W/2, z);
+  const n=unwy(wy(R.view.lat,z)-H/2, z), s=unwy(wy(R.view.lat,z)+H/2, z);
+  return n<=g.lat0 && s>=g.lat1 && w>=g.lon0 && e<=g.lon1;
+}
+
+async function windFetch(){
+  if(!R || !R.windOn) return;
+  const gen=R.gen;
+  if(windCovers(R.windGrid)) return;
+  const N=RAD.WIND_N, z=R.view.z, W=R.cv.width, H=R.cv.height;
+  /* 15% of margin, so a small pan does not buy a new grid. */
+  const pw=W*0.15, ph=H*0.15;
+  const lon0=unwx(wx(R.view.lon,z)-W/2-pw, z), lon1=unwx(wx(R.view.lon,z)+W/2+pw, z);
+  const lat0=unwy(wy(R.view.lat,z)-H/2-ph, z), lat1=unwy(wy(R.view.lat,z)+H/2+ph, z);
+  const lats=[], lons=[];
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    lats.push((lat0+(lat1-lat0)*r/(N-1)).toFixed(3));
+    lons.push((lon0+(lon1-lon0)*c/(N-1)).toFixed(3));
+  }
+  try{
+    const res=await fetch(RAD.met+'?latitude='+lats.join(',')+'&longitude='+lons.join(',')
+      +'&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn',
+      {signal:R.ac.signal});
+    if(!res.ok) throw new Error('http '+res.status);
+    let arr=await res.json();
+    if(!Array.isArray(arr)) arr=[arr];
+    if(!R || R.gen!==gen || arr.length!==N*N) return;
+    /* u,v,speed flat in one Float32Array: the inner loop reads it 12
+       times a particle a frame and an array of objects would be twelve
+       pointer chases. */
+    const cells=new Float32Array(N*N*3);
+    for(let i=0;i<arr.length;i++){
+      const c=arr[i].current||{};
+      const spd=c.wind_speed_10m||0;
+      /* Direction is where it is coming FROM; the air goes the other way. */
+      const rad=((c.wind_direction_10m||0)+180)*Math.PI/180;
+      cells[i*3  ]= spd*Math.sin(rad);
+      cells[i*3+1]=-spd*Math.cos(rad);
+      cells[i*3+2]= spd;
+    }
+    const g={cells:cells, lat0:lat0, lat1:lat1, lon0:lon0, lon1:lon1, at:Date.now()};
+    windMap(g, R.cv.width, R.cv.height);
+    R.windGrid=g;
+    windSeed();
+  }catch(e){ /* keep the grid we had; the air just goes stale */ }
+}
+
+function windSeed(){
+  if(!R||!R.windCv) return;
+  /* Density is a property of the GLASS, not of the backing store. Off
+     the half-size canvas the area formula lands on its own floor and the
+     field comes out a third as dense as sail-weather's - a scattering of
+     streaks rather than air. Counted against the displayed size, the two
+     look the same and the drawing is still done at half resolution. */
+  const c=R.windCv, dw=c.width/RAD.WIND_SCALE, dh=c.height/RAD.WIND_SCALE;
+  const n=Math.min(RAD.WIND_MAX, Math.round(Math.max(250, dw*dh/1800)));
+  const p=new Float32Array(n*3);          /* x, y, age */
+  for(let i=0;i<n;i++){
+    p[i*3  ]=Math.random()*c.width;
+    p[i*3+1]=Math.random()*c.height;
+    p[i*3+2]=Math.random()*RAD.WIND_LIFE;
+  }
+  R.windP=p;
+}
+
+/* One frame. Capped at WIND_FPS, and idle while the camera is moving -
+   the particles live in screen space and a pan or a pinch would drag
+   them across ground they were never over. */
+function windTick(ts){
+  if(!R || !R.windOn){ return; }
+  R.windAnim=requestAnimationFrame(windTick);
+  const c=R.windCv, g=R.windGrid;
+  if(!c || !c.width) return;
+  const gap=1000/RAD.WIND_FPS;
+  if(ts-R.windLastDraw < gap-1) return;
+  const x=c.getContext('2d');
+  if(R.cam || R.tour || !g || !R.windP){
+    if(!R.windBlank){ x.clearRect(0,0,c.width,c.height); R.windBlank=true; }
+    R.windLastDraw=ts;
+    return;
+  }
+  R.windBlank=false;
+  let dt=(ts-R.windLast)/1000;
+  R.windLast=ts;
+  if(!(dt>0) || dt>0.25) dt=1/RAD.WIND_FPS;   /* first frame, or a stall */
+
+  /* Fade what is already there towards transparent. This is the one
+     full-canvas operation in the loop, and the reason the canvas is
+     drawn at half size and stretched. */
+  x.globalCompositeOperation='destination-in';
+  x.fillStyle='rgba(0,0,0,'+Math.pow(RAD.WIND_KEEP, dt).toFixed(4)+')';
+  x.fillRect(0,0,c.width,c.height);
+  x.globalCompositeOperation='source-over';
+
+  const P=R.windP, n=P.length/3, W=c.width, H=c.height;
+  const step=RAD.WIND_PX_KN*RAD.WIND_SCALE*dt;
+  const B=RAD.WIND_BANDS, nb=B.length;
+  /* One path per colour band, stroked once - not 650 stroke calls. */
+  const paths=[]; for(let b=0;b<nb;b++) paths.push(new Path2D());
+  const wv={u:0,v:0,s:0};
+  for(let i=0;i<n;i++){
+    const ix=i*3, px=P[ix], py=P[ix+1];
+    windAt(g, px, py, wv);
+    const nx=px+wv.u*step, ny=py+wv.v*step;
+    P[ix+2]+=dt;
+    if(P[ix+2]>RAD.WIND_LIFE || nx<0 || nx>W || ny<0 || ny>H){
+      P[ix]=Math.random()*W; P[ix+1]=Math.random()*H; P[ix+2]=0;
+      continue;
+    }
+    let b=nb-1;
+    for(let k=0;k<nb;k++) if(wv.s>=B[k].kn){ b=k; break; }
+    const pa=paths[b];
+    pa.moveTo(px,py); pa.lineTo(nx,ny);
+    P[ix]=nx; P[ix+1]=ny;
+  }
+  /* 1.3 on the glass, which is 0.65 here - too thin to survive the
+     stretch. One canvas pixel doubles to a clean two. */
+  x.lineWidth=1;
+  for(let b=0;b<nb;b++){ x.strokeStyle=B[b].c; x.stroke(paths[b]); }
+  R.windLastDraw=ts;
+}
+
+function windStart(){
+  if(!R || R.windAnim) return;
+  R.windLast=R.windLastDraw=performance.now();
+  R.windAnim=requestAnimationFrame(windTick);
+}
+function windStop(){
+  if(!R) return;
+  if(R.windAnim) cancelAnimationFrame(R.windAnim);
+  R.windAnim=null;
+  if(R.windCv) R.windCv.getContext('2d')
+    .clearRect(0,0,R.windCv.width,R.windCv.height);
+  R.windBlank=true;
+}
+function windToggle(on){
+  if(!R) return;
+  R.windOn=on;
+  const b=$('rad-wind'); if(b) b.classList.toggle('on', on);
+  if(!on){ windStop(); return; }
+  windSeed();
+  windStart();
+  windFetch();
 }
 
 async function radBuildFrames(){
@@ -6607,6 +6838,14 @@ function radReview(keepBase){
      view; rebuilding it would be thirty-six cache hits and a flicker. */
   if(!keepBase) radBuildBase();
   radBuildFrames();
+  /* The particles live in screen space, so a new view is new ground
+     under them: remap the grid we have, and buy another only if this one
+     no longer reaches. */
+  if(R.windOn){
+    if(R.windGrid) windMap(R.windGrid, R.cv.width, R.cv.height);
+    windSeed();
+    windFetch();
+  }
 }
 
 /* ---- the BOAT tour -------------------------------------------------
@@ -6774,6 +7013,13 @@ function radOpen(host){
   cv.width=W; cv.height=H; cv.id='rad-cv';
   const base=document.createElement('canvas'); base.width=W; base.height=H;
   host.appendChild(cv);
+  /* Over the radar, under the HUD. Half linear resolution and stretched:
+     the per-frame fade is a full-canvas composite and there is no detail
+     in a trail to lose. */
+  const wcv=document.createElement('canvas'); wcv.id='rad-windcv';
+  wcv.width =Math.round(W*RAD.WIND_SCALE);
+  wcv.height=Math.round(H*RAD.WIND_SCALE);
+  host.appendChild(wcv);
   host.insertAdjacentHTML('beforeend',
     '<div id="rad-hud">'
     +'<div id="rad-head"><span id="rad-time">—</span>'
@@ -6800,6 +7046,7 @@ function radOpen(host){
     +'</div>'
     +'<div id="rad-pills">'
     +'<button class="radt on" id="rad-rain">RAIN</button>'
+    +'<button class="radt" id="rad-wind">WIND</button>'
     +'<span id="rad-sp"></span>'
     +'<button class="radt" id="rad-home">BOAT</button>'
     +'</div></div>');
@@ -6807,6 +7054,12 @@ function radOpen(host){
       frames:[], fv:[], mk:[], times:[], kinds:[],
       p:0, timer:null, note:'', playing:true,
       rainOn:true, cam:null, tour:null, cast:null, castFail:0, metFail:0,
+      /* The wind layer starts OFF. It is the only thing here that runs
+         an animation loop while you are merely looking at the screen,
+         and on a panel that is on all day that is a choice, not a
+         default. One tap turns it on. */
+      windCv:wcv, windOn:false, windGrid:null, windP:null, windAnim:null,
+      windLast:0, windLastDraw:0, windBlank:true,
       view:{lat:CFG.lat, lon:CFG.lon, z:8},
       el:{time:$('rad-time'), bar:$('rad-knob'), note:$('rad-note'),
           now:$('rad-now')} };
@@ -6821,6 +7074,7 @@ function radOpen(host){
   $('rad-rain').addEventListener('click',e=>{
     R.rainOn=!R.rainOn; e.currentTarget.classList.toggle('on',R.rainOn);
     radPaint(); });
+  $('rad-wind').addEventListener('click',()=>windToggle(!R.windOn));
   let scrub=false;
   const sc=$('rad-slide');
   sc.addEventListener('pointerdown',e=>{ gClaim(); scrub=true;
@@ -6926,6 +7180,9 @@ function radClose(){
   if(r.cast) r.cast.frames.forEach(c=>{ if(c) c.width=c.height=0; });
   if(r.base) r.base.width=r.base.height=0;
   if(r.cv)   r.cv.width=r.cv.height=0;
+  if(r.windAnim) cancelAnimationFrame(r.windAnim);
+  if(r.windCv) r.windCv.width=r.windCv.height=0;
+  r.windP=null; r.windGrid=null;
   /* The tile cache goes with the app, not with a rebuild: its whole
      point is surviving a pan, and it is the one thing here holding
      decoded image data after the canvases are zeroed. */

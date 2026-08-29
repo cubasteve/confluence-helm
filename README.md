@@ -1360,6 +1360,7 @@ about.
 | radar | RainViewer, last hour + nowcast | none |
 | forecast | Tomorrow.io via the `keel-ics` Worker | `TOMORROW_KEY`, a Worker secret |
 | forecast, fallback | Open-Meteo 15-minute precipitation grid | none |
+| wind field | Open-Meteo current wind, 6x6 grid | none |
 
 ### Two sources, and why both
 
@@ -1604,6 +1605,60 @@ before the panel can say `NO FORECAST` is half a minute of nothing. If
 the first tile will not come after its retries, the rest are refused
 too, so `opt.bail` stops there — three requests, not eighteen.
 
+### The wind, as air rather than as a number
+
+`sail-weather`'s particle field, ported behind a `WIND` pill. A 6x6 grid
+of current wind - 36 coordinates in one keyless Open-Meteo request -
+bilinearly interpolated, with particles advected through it leaving
+trails that fade. It says at a glance what an arrow and a number cannot:
+where the shifts are, where it is dying, which side of the course is
+paying. Trail colour is the sailing window's own thresholds, so the
+colour of the air means the same thing here as it does in the HUD.
+
+**It is off until you ask for it.** It is the only thing in this app that
+runs an animation loop while you are merely looking at the screen, and on
+a panel that is on all day that is a choice, not a default. Measured on
+this machine, three runs, `Performance.TaskDuration` over 14-second
+windows:
+
+| | task | heap |
+|---|---|---|
+| radar running, wind off | 7.3-8.4% | 2.5 MB |
+| radar running, wind **on** | 17.6-18.1% | 2.7 MB |
+| wind off again | 8.9% | 2.7 MB |
+| app closed | ~4% | 2.2 MB |
+
+**About +10 points of one core, and 0.2 MB.** Under a 6x CPU throttle -
+roughly what a Pi feels like against this machine - it is +13 to +15
+points on top of 23%, so ~38% of a throttled core. It is affordable, and
+it is not free; the toggle is there because on some days it will not be.
+
+Three things make it that cheap rather than three times that:
+
+**The strokes are batched by colour band.** Four `Path2D`s a frame,
+stroked once each, instead of 650 `beginPath`/`stroke` pairs. This is the
+single biggest saving and it costs nothing in the picture - measured, 250
+particles and 648 particles land within 0.3 points of each other, which
+says the per-particle work is not what you are paying for.
+
+**The layer is drawn at half linear resolution and stretched by CSS.**
+The per-frame fade is a full-canvas composite: 1.2M pixels at 1080,
+291k at 540. Trails are soft edged and have nothing there to sharpen.
+Density is still counted against the *glass*, not the backing store -
+off the half-size canvas the area formula lands on its own floor and the
+field comes out a third as dense as sail-weather's.
+
+**30 fps, for the reason the BOAT tour is 30 fps.** Nobody can tell a
+trail at 30 from one at 60, and it is half the work.
+
+The particles live in screen space, so a pan, a pinch or a BOAT tour
+would drag them across ground they were never over: the loop blanks the
+layer while `R.cam` or `R.tour` is set and picks up again when the view
+settles. A new view remaps the grid it has and buys another only if the
+15% of margin no longer reaches. Turning it off cancels the loop and
+wipes the canvas; closing the app zeroes it and drops the particle array
+with everything else.
+
 ### A model, when the measurement is refused
 
 Tomorrow.io's free tier is a trickle and it does run out. The panel used
@@ -1725,8 +1780,8 @@ shrink is the 52px scrub band: it is the tallest thing in the transport
 row now, and everything else trimmed around it.
 
 ```
-[▶]  −2h  ━━━━━━━━━━┃━━●━━━━  +3h
-[ RAIN ]                    [ BOAT ]
+[▶]  −2h  ━━━━━━━━━━┃━━●━━━━  1:00 AM
+[ RAIN ] [ WIND ]           [ BOAT ]
 ```
 
 The track carries the shape of the timeline in its own colour: grey
