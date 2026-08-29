@@ -949,13 +949,20 @@ a.lib-row{text-decoration:none;color:inherit}
    o'clock tick and the two read as one object. */
 .mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:82px;
   align-items:center}
-.mcell[data-slot="p"]{right:742px;top:365px;align-items:flex-start}
-.mcell[data-slot="s"]{left:742px;top:365px;align-items:flex-end}
+/* Pinned by the OUTER edge, not the inner one. The cell shrink-wraps to
+   its number, so anchoring the edge nearest the art meant the far edge -
+   and the unit sitting on it - slid about every time the number changed
+   width: 9.8 to 13.5 walked AWS sideways by half a digit. Anchored
+   outboard, the unit never moves at all and the number grows inward
+   towards the art, which has 22px of clearance to spare. */
+.mcell[data-slot="p"]{left:34px;top:365px;align-items:flex-start}
+.mcell[data-slot="s"]{right:34px;top:365px;align-items:flex-end}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
 /* The dial's held state has to land on the TEXT, not on the invisible
    rect that caught the tap. */
+#svg.picking-c0 #spd-label, #svg.picking-c0 #spd, #svg.picking-c0 #spd-u,
 #svg.picking-c1 #c1-lbl, #svg.picking-c1 #dpt, #svg.picking-c1 #dpt-u,
 #svg.picking-c2 #c2-lbl, #svg.picking-c2 #c2,  #svg.picking-c2 #c2b,
 #svg.picking-c3 #c3-lbl, #svg.picking-c3 #vmg, #svg.picking-c3 #c3-u{
@@ -1239,9 +1246,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <rect x="700" y="263" width="48" height="10" rx="5"/>
   </g>
 
-  <text id="spd-label" class="label" x="540" y="432" text-anchor="middle">SOG</text>
+  <!-- 432 tucked this into the digits' negative space, which worked while
+       it said SOG and stopped working the moment it could say BOAT SPEED
+       or APPARENT WIND: the huge glyphs top out around 430. 386 clears
+       them, and clears the timer's +/- buttons at 314. -->
+  <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
   <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
-  <text class="unit" x="540" y="664" text-anchor="middle">KNOTS</text>
+  <text id="spd-u" class="unit" x="540" y="664" text-anchor="middle">KT</text>
 
   <!-- performance strip: hidden during the countdown, replaced by pings -->
   <g id="strip">
@@ -1278,6 +1289,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        above 0.33 and the speed toggle above 0.68 - and they clear the
        ping buttons at 738 and the lock at 914. -->
   <g id="dial-cells">
+    <!-- The big one. Wider and taller because it is: label at 432 to
+         unit at 664. -->
+    <rect class="dcell" data-g="dial" data-slot="c0" x="330" y="396"
+          width="420" height="290" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="740"
           width="176" height="156" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="740"
@@ -2039,7 +2054,6 @@ function applyTheme(){
 setInterval(()=>{ if(CFG.theme==='auto') applyTheme(); }, 60000);
 
 /* ---------------- render ---------------- */
-let showSTW=false;
 const fmt=(v,d)=>v===null?'––':v.toFixed(d);
 
 /* Is the dial actually on screen? Every slide-out is a full-bleed opaque
@@ -2087,9 +2101,7 @@ function render(){
      mid-sweep. This block touches no DOM at all - it is a dozen reads and
      seven exponential steps, which is nothing.                        */
   tickSmoothing();
-  const sogR=get('navigation.speedOverGround'),stwR=get('navigation.speedThroughWater');
-  const useS=showSTW&&stwR!==null,raw=useS?stwR:sogR;
-  const spd=smooth('spd',raw===null?null:raw*MS_TO_KT);
+  const sogR=get('navigation.speedOverGround');
 
   let d=get('environment.depth.belowKeel');
   if(d===null)d=get('environment.depth.belowTransducer');
@@ -2167,17 +2179,6 @@ function render(){
      if the marks ever look stepped. */
   if(dialVisible() && Date.now()-lastDraw>=DRAW_MS){
   lastDraw=Date.now();
-  $('spd').textContent=fmt(spd,1);
-  $('spd').classList.toggle('stale',spd===null);
-  wText('spd-label', useS?'STW':'SOG');
-
-  const de=$('dpt');
-  de.textContent=fmt(dv,dv!==null&&dv<100?1:0);
-  de.classList.toggle('stale',dv===null);
-  const alarmV=CFG.depthAlarm, warnV=CFG.depthWarn;   /* display units both - see above */
-  de.classList.toggle('alarm',dv!==null&&dv<alarmV);
-  de.classList.toggle('warn', dv!==null&&dv>=alarmV&&dv<warnV);
-
   const ag=$('awa-mark');
   if(awa===null)ag.setAttribute('opacity','0');
   else{ag.setAttribute('opacity','1');
@@ -2222,6 +2223,10 @@ function render(){
     wText('c2-lbl','BIAS');
     wText('c3-lbl','BURN');
     const dm = met ? L.dist : L.dist*M_TO_FT;
+    /* `de` was hoisted out of the depth block that used to live above
+       this; that block belongs to paintDialCells now, and #dpt is
+       whatever c1 is showing between countdowns. */
+    const de=$('dpt');
     de.textContent = Math.abs(dm)>999?'999':Math.round(dm);
     de.classList.toggle('alarm', L.dist<0);          // over early
     de.classList.remove('warn','stale');
@@ -3066,7 +3071,6 @@ function judgeGesture(g){
   const r=$('stage').getBoundingClientRect();
   const y=(one.y-r.top)/r.height;
   if(y<0.33)      timerTap();
-  else if(y<0.68) showSTW=!showSTW;
 }
 
 /* A single tap waits out one double-tap window so the first half of a
@@ -4587,9 +4591,10 @@ drawDemo();
 
    `name` is what the picker calls it - the long form, because a menu is
    where you have room to say APPARENT WIND rather than AWS.
-   `u` is the unit the music page prints under the number; `lu` the one
-   the dial prints, which is longer because it has the room - KNOTS
-   against KT. `sub` is a third line some readings have and most do not:
+   `u` is the unit, abbreviated, and the same one on both pages. The dial
+   used to spell KNOTS and FEET out because it had the room; the room is
+   not the point - a unit is a tag on a number, and a tag reads faster
+   short. `sub` is a third line some readings have and most do not:
    which side the heel is on, which tack the wind is over. A cell that
    has no sub shows the long unit there instead, so all three lines are
    always used and no cell is short.
@@ -4604,42 +4609,48 @@ const MUS_CELLS=[
 /* No unit line: the degree ring IS the unit, and it belongs against the
      number rather than under it. A label saying HDG under a three-digit
      figure with a degree sign on it is telling you twice. */
-  {k:'hdg', name:'HEADING', u:'', lu:'MAGNETIC',
+  {k:'hdg', name:'HEADING', u:'',
    v:()=>{let x=get('navigation.headingMagnetic');
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
           return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
-  {k:'sog', name:'BOAT SPEED', u:'KT', lu:'KNOTS',
+  {k:'sog', name:'BOAT SPEED', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
-          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'aws', name:'APPARENT WIND', u:'AWS', lu:'KNOTS APP',
+          return x===null?null:readNum('sog',x*MS_TO_KT).toFixed(1);}},
+  /* Through the water rather than over the ground: what the sails are
+     doing, with the tide taken out. This was a tap on the big number -
+     a hidden toggle nobody could find - and it is a menu entry now. */
+  {k:'stw', name:'WATER SPEED', u:'KT',
+   v:()=>{const x=get('navigation.speedThroughWater');
+          return x===null?null:readNum('stw',x*MS_TO_KT).toFixed(1);}},
+  {k:'aws', name:'APPARENT WIND', u:'AWS',
    v:()=>{const x=get('environment.wind.speedApparent');
-          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', name:'TRUE WIND', u:'TWS', lu:'KNOTS TRUE',
+          return x===null?null:readNum('aws',x*MS_TO_KT).toFixed(1);}},
+  {k:'tws', name:'TRUE WIND', u:'TWS',
    v:()=>{const x=get('environment.wind.speedTrue');
-          return x===null?null:(x*MS_TO_KT).toFixed(1);}},
+          return x===null?null:readNum('tws',x*MS_TO_KT).toFixed(1);}},
   /* Signed either side of the bow, the way it is called on deck: 40
      degrees to starboard is 40, not 320. The bezel shows the same angle
      as a picture; this is for when you want the number. */
-  {k:'awa', name:'WIND ANGLE', u:'', lu:'APPARENT',
+  {k:'awa', name:'WIND ANGLE', u:'',
    v:()=>{const x=get('environment.wind.angleApparent');
           if(x===null) return null;
           let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360;
           return (d<0?'-':'')+Math.abs(d)+'°';}},
   {k:'dpt', name:'DEPTH', u:()=>CFG.depthUnit==='m'?'M':'FT',
-   lu:()=>CFG.depthUnit==='m'?'METRES':'FEET',
    v:()=>{let x=get('environment.depth.belowKeel');
           if(x===null) x=get('environment.depth.belowTransducer');
-          return x===null?null
-            : (CFG.depthUnit==='m' ? x.toFixed(1) : (x*M_TO_FT).toFixed(1));}},
+          if(x===null) return null;
+          const d=readNum('dpt', CFG.depthUnit==='m'?x:x*M_TO_FT);
+          return d.toFixed(d<100?1:0);}},
   /* Heel is unsigned with the side spelled out under it: 12 STBD reads
      the way it is said, where -12 has to be decoded. */
-  {k:'heel', name:'HEEL', u:'', lu:'',
+  {k:'heel', name:'HEEL', u:'',
    v:()=>{const x=get('att.roll');
-          return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
+          return x===null?null:readNum('heel',Math.abs(x*DEG)).toFixed(0)+'°';},
    sub:()=>{const x=get('att.roll');
             return x===null?'':(x>0?'STBD':'PORT');}},
-  {k:'twa', name:'TRUE WIND ANGLE', u:'', lu:'',
+  {k:'twa', name:'TRUE WIND ANGLE', u:'',
    v:()=>{const x=get('environment.wind.angleTrueWater');
           return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
    sub:()=>{const x=get('environment.wind.angleTrueWater');
@@ -4647,19 +4658,32 @@ const MUS_CELLS=[
   /* Velocity made good: what the boat is doing towards where the wind is
      coming from. The plugin serves it when it can, and cos(TWA) times
      speed is the same number when it cannot. */
-  {k:'vmg', name:'VMG', u:'KT', lu:'KNOTS',
+  {k:'vmg', name:'VMG', u:'KT',
    v:()=>{let x=get('performance.velocityMadeGood');
           if(x===null){ const sog=get('navigation.speedOverGround'),
                               twa=get('environment.wind.angleTrueWater');
             if(sog===null||twa===null) return null;
             x=sog*Math.cos(twa); }
-          return (x*MS_TO_KT).toFixed(1);}},
+          return readNum('vmg',x*MS_TO_KT).toFixed(1);}},
 ];
-/* The long unit falls back to the short one, so a reading only has to
-   name the second if the two differ. */
-const musLong=c=>{ const v=c.lu!==undefined?c.lu:c.u;
-                   return typeof v==='function'?v():v; };
-const musSub =c=>c.sub?c.sub():'';
+const musUnitOf=c=>typeof c.u==='function'?c.u():c.u;
+const musSub   =c=>c.sub?c.sub():'';
+
+/* Smoothed, and computed once a frame however many times it is asked
+   for. The dial repaints far faster than the sensors publish, so a raw
+   value jitters in the last digit; and the picker asks all nine readings
+   for a value every time it opens, which without the cache would advance
+   nine filters nine times for one menu.
+   Its own `r_` keys: tick() runs filters of its own under the bare
+   names, and two callers sharing one EMA make it converge twice as fast
+   as either intended. */
+let readAt=-1, readCache={};
+function readNum(k, raw){
+  const t=Date.now();
+  if(t!==readAt){ readAt=t; readCache={}; }
+  if(k in readCache) return readCache[k];
+  return readCache[k]=smooth('r_'+k, raw);
+}
 /* The three positions, and what is in them. Slots rather than a fixed
    arrangement: the geometry is the layout's business and the reading is
    yours, and the two should not be the same decision. */
@@ -4679,8 +4703,8 @@ const musSave=()=>{ try{
    showing the same three things and never were.
    CFG.showHeel used to decide the middle one. It is a slot now - the
    setting could only ever say heel-or-TWA, and this says anything. */
-const DIAL_SLOTS=['c1','c2','c3'];
-const DIAL={ slot:{c1:'dpt', c2:'heel', c3:'vmg'} };
+const DIAL_SLOTS=['c0','c1','c2','c3'];
+const DIAL={ slot:{c0:'sog', c1:'dpt', c2:'heel', c3:'vmg'} };
 const dialSave=()=>{ try{
   localStorage.setItem('dialSlots', JSON.stringify(DIAL.slot)); }catch(e){} };
 
@@ -4692,13 +4716,14 @@ const dialSave=()=>{ try{
    into #dpt and #dpt-u because it used to be the depth cell and nothing
    else, and c3 into #vmg. Mapped here rather than renamed, because the
    ids are load-bearing in the tests and in the race override above. */
-const DIAL_EL={ c1:['c1-lbl','dpt','dpt-u'],
+const DIAL_EL={ c0:['spd-label','spd','spd-u'],
+                c1:['c1-lbl','dpt','dpt-u'],
                 c2:['c2-lbl','c2','c2b'],
                 c3:['c3-lbl','vmg','c3-u'] };
 let dialCellKey='';
 function paintDialCells(){
   const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
-    return sl+(c?c.k+c.v()+musSub(c)+musLong(c):''); }).join('|');
+    return sl+(c?c.k+c.v()+musSub(c)+musUnitOf(c):''); }).join('|');
   if(key===dialCellKey) return;
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
@@ -4707,10 +4732,18 @@ function paintDialCells(){
     const v=c.v(), sub=musSub(c);
     wText(lbl, c.name);
     wText(val, v===null?'––':v);
-    wText(third, v===null ? '' : (sub || musLong(c)));
+    wText(third, v===null ? '' : (sub || musUnitOf(c)));
     wCls(val,'stale', v===null);
     wCls(third,'stale', v===null);
-    $(val).classList.remove('alarm','warn');
+    /* The shallow alarm follows the READING, not the cell. It used to be
+       written straight at #dpt, which was the depth cell and nothing
+       else; now #dpt is whatever c1 is showing, and colouring true wind
+       red because the water is thin would be worse than not colouring
+       at all. */
+    const shallow = c.k==='dpt' && v!==null;
+    const dv = shallow ? parseFloat(v) : null;
+    wCls(val,'alarm', shallow && dv<CFG.depthAlarm);
+    wCls(val,'warn',  shallow && dv>=CFG.depthAlarm && dv<CFG.depthWarn);
   }
 }
 
@@ -4733,7 +4766,12 @@ function paintStrip(){
   box.innerHTML=row.map(r=> r.v===null ? '' :
     `<span class="mcell" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
     +`<b>${r.v}</b><em>${r.u}</em></span>`).join('');
-  if(musPickAt) musPickPlace();
+  /* The cells are rebuilt, so the menu is anchored to an element that no
+     longer exists - re-point it at the new one. */
+  if(PICK && PICK.g==='mus'){
+    PICK.el=document.querySelector(`.mcell[data-slot="${PICK.sl}"]`);
+    musPickPlace();
+  }
 }
 
 /* ---- tap a reading, choose another ---------------------------------
@@ -4863,11 +4901,12 @@ $('dial-cells').addEventListener('pointerdown',e=>{
   if(e.target.closest('.dcell')){ gClaim(); G.releaseOnDrag=true; } });
 $('dial-cells').addEventListener('click',e=>{
   const c=e.target.closest('.dcell'); if(!c) return;
-  /* TO LINE / BIAS / BURN own these three during a racePro COUNTDOWN -
-     the local up in tick() that decides it is called `racing`, which it
-     is not; it is the same condition spelled out. Offering a choice you
-     would not then see is worse than not offering. */
-  if(CFG.racePro && tState==='countdown') return;
+  /* TO LINE / BIAS / BURN own the three LOWER cells during a racePro
+     countdown - the local up in tick() that decides it is called
+     `racing`, which it is not; it is the same condition spelled out.
+     Offering a choice you would not then see is worse than not offering.
+     The big one is not overridden, so it stays yours throughout. */
+  if(c.dataset.slot!=='c0' && CFG.racePro && tState==='countdown') return;
   e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
 
 $('mus-pick').addEventListener('pointerdown',()=>gClaim());
