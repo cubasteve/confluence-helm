@@ -960,13 +960,21 @@ a.lib-row{text-decoration:none;color:inherit}
   font-size:26px;font-weight:600;letter-spacing:.16em;color:var(--label);
   line-height:1;margin-bottom:8px}
 .mcell u:empty{display:none}
-/* 84, not 110, and the apex is why. Three lines need 142px of height;
-   above the album art there are 127 between the rim and the volume ring,
-   and the glass narrows so fast up there that no width buys the rest -
-   at 340 wide a cell cannot start higher than y=74 without its corners
-   reaching the bezel ticks. The alternative was an apex smaller than its
-   flanks, and three readouts that are meant to look alike should. */
+/* 84 at the apex, and the apex is why it is 84: three lines need 142px
+   of height, above the album art there are 127 between the rim and the
+   volume ring, and the glass narrows so fast up there that no width buys
+   the rest - at 340 wide a cell cannot start higher than y=74 without
+   its corners reaching the bezel ticks. */
 .mcell b{font-size:84px}
+/* The FLANKS are not short of height, only of width, and the channel
+   they sit in is 284px across. Measured on the glyphs rather than on the
+   box they sit in - an overflowing number still centres on its cell, so
+   the cell's corners stop meaning anything once it does - 108 is the
+   last size that keeps ten pixels to the compass ticks on one side and
+   the volume ticks on the other. 116 leaves one pixel and 124 is
+   through both. */
+.mcell[data-slot="p"] b,
+.mcell[data-slot="s"] b{font-size:108px}
 .mcell em{font-size:24px;letter-spacing:.16em}
 /* Clear of the volume ring's topmost tick with room to spare rather than
    by a hair: lower than this and the degree sign sits on the twelve
@@ -983,8 +991,8 @@ a.lib-row{text-decoration:none;color:inherit}
    Everything inside is centred on that too, so the number sits under its
    header rather than beside it. Outboard alignment put the value and the
    unit against the rim and left the header floating over the gap. */
-.mcell[data-slot="p"]{left:116px;top:310px;align-items:center}
-.mcell[data-slot="s"]{right:116px;top:310px;align-items:center}
+.mcell[data-slot="p"]{left:116px;top:298px;align-items:center}
+.mcell[data-slot="s"]{right:116px;top:298px;align-items:center}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
