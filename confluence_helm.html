@@ -954,6 +954,12 @@ a.lib-row{text-decoration:none;color:inherit}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
+/* The dial's held state has to land on the TEXT, not on the invisible
+   rect that caught the tap. */
+#svg.picking-c1 #c1-lbl, #svg.picking-c1 #dpt, #svg.picking-c1 #dpt-u,
+#svg.picking-c2 #c2-lbl, #svg.picking-c2 #c2,  #svg.picking-c2 #c2b,
+#svg.picking-c3 #c3-lbl, #svg.picking-c3 #vmg, #svg.picking-c3 #c3-u{
+  fill:var(--accent)}
 
 /* ---- the picker ----
    A reading is its own control: tap it and the list of what could be
@@ -967,7 +973,7 @@ a.lib-row{text-decoration:none;color:inherit}
    hole rather than as something over the top. The hairline is what says
    "this is in front", and the shadow only reinforces it - on the day
    theme a shadow alone is nearly invisible. */
-#mus-pick{position:absolute;z-index:6;width:340px;max-height:0;overflow:hidden;
+#mus-pick{position:absolute;z-index:18;width:356px;max-height:0;overflow:hidden;
   border-radius:26px;background:var(--panel);opacity:0;
   border:2px solid var(--hairline);
   box-shadow:0 20px 48px rgba(0,0,0,.30);
@@ -981,23 +987,26 @@ a.lib-row{text-decoration:none;color:inherit}
   -webkit-overflow-scrolling:touch;padding:6px 0}
 #mus-pick .pk::-webkit-scrollbar{width:0}
 .pkrow{display:flex;align-items:baseline;gap:10px;width:100%;
-  padding:0 22px;height:78px;background:none;border:none;
+  padding:0 18px;height:78px;background:none;border:none;
   font-family:var(--font);color:var(--ink);text-align:left}
 /* Never wraps: a two-line name would make one row twice the height of
    the others and the list would stop reading as a list. */
-.pkrow i{flex:1;font-style:normal;font-size:19px;font-weight:600;
+.pkrow i{flex:1;font-style:normal;font-size:18px;font-weight:600;
   letter-spacing:.04em;color:var(--label);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-.pkrow b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums}
+/* Fixed columns, so nine readings of different widths make two straight
+   edges instead of a ragged middle. */
+.pkrow b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;
+  min-width:84px;text-align:right}
 .pkrow s{text-decoration:none;font-size:17px;font-weight:600;
-  color:var(--label);letter-spacing:.08em}
+  color:var(--label);letter-spacing:.08em;min-width:42px}
 .pkrow.sel i,.pkrow.sel b,.pkrow.sel s{color:var(--accent)}
 /* A reading with nothing behind it is still worth choosing - the sensor
    may wake up - but it should not look like a live one. */
 .pkrow.none b,.pkrow.none s{color:var(--label);opacity:.55}
 .pkrow:active{background:var(--chip)}
 /* Catches the tap that dismisses it, and nothing else. */
-#mus-veil{position:absolute;inset:0;z-index:5;display:none}
+#mus-veil{position:absolute;inset:0;z-index:17;display:none}
 #mus-veil.on{display:block}
 
 /* Above everything. This is the brightness control on hardware with no
@@ -1261,6 +1270,22 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <text id="c3-lbl" class="label" x="754" y="758" text-anchor="middle">VMG</text>
   <text id="vmg" class="value" x="754" y="826" text-anchor="middle">––</text>
 
+  <!-- Tap targets over the three cells. Transparent rects rather than the
+       <text> itself, which hit-tests on its glyphs: a number is mostly
+       the gaps between its strokes, and a target you have to hit a
+       stroke of is not a target. 176 x 156 is 29 x 26 mm.
+       Below y=734 there is no dial tap to collide with - the timer is
+       above 0.33 and the speed toggle above 0.68 - and they clear the
+       ping buttons at 738 and the lock at 914. -->
+  <g id="dial-cells">
+    <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="740"
+          width="176" height="156" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="740"
+          width="176" height="156" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="740"
+          width="176" height="156" fill="transparent"/>
+  </g>
+
   <text id="c2-lbl" class="label" x="540" y="762" text-anchor="middle">HEEL</text>
   <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
   <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
@@ -1279,6 +1304,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 </svg>
 
 <div id="dots"><i></i><i></i></div>
+
+<!-- The reading picker, shared by the dial and the music page. Outside
+     both of them: #music slides in on a transform, and a menu that slid
+     with it would be animating while you were reading it. It is only ever
+     open transiently, and it closes on a page change. -->
+<div id="mus-veil"></div>
+<div id="mus-pick"><div class="pk" id="mus-pk"></div></div>
 
 <!-- ============== CONTROL PANEL ============== -->
 <!-- ============== THE APP DRAWER ==============
@@ -1457,8 +1489,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </svg>
   <div class="m-sheet">
     <div class="ms-head" id="ms-strip"></div>
-    <div id="mus-veil"></div>
-    <div id="mus-pick"><div class="pk" id="mus-pk"></div></div>
     <!-- The art, and the volume bezel around it. The wrapper is exactly
          the size of the art, so adding the ring costs the page NO height
          - the ring and the hit ring both overflow it, and the layout
@@ -2202,29 +2232,14 @@ function render(){
     $('vmg').textContent = L.burn===null?'––':(L.burn>0?'+':'')+L.burn;
     $('vmg').classList.toggle('alarm', L.burn!==null&&L.burn<0);
     wText('c3-u','SECONDS');
+    /* The override has written over all three, so what paintDialCells
+       last put there is no longer what is on the glass. Without this its
+       cache would still match on the frame the countdown ends, and TO
+       LINE / BIAS / BURN would stay up over live readings. */
+    dialCellKey='';
   } else {
-    wText('c1-lbl','DEPTH');
-    wText('c3-lbl','VMG');
-    wText('c3-u','KNOTS');
-    wText('dpt-u', CFG.depthUnit==='m'?'METRES':'FEET');
-    if(CFG.showHeel){
-      wText('c2-lbl','HEEL');
-      $('c2').textContent  = heel===null?'––':heel.toFixed(0)+'°';
-      $('c2b').textContent = roll===null?'' : (roll>0?'STBD':'PORT');
-      $('c2').classList.toggle('stale',heel===null);
-      $('c2b').classList.toggle('stale',heel===null);
-    } else {
-      wText('c2-lbl','TWA');
-      $('c2').textContent  = twa===null?'––':Math.abs(twa).toFixed(0)+'°';
-      $('c2b').textContent = twa===null?'' : (twa>0?'STBD':'PORT');
-      $('c2').classList.toggle('stale',twa===null);
-      $('c2b').classList.toggle('stale',twa===null);
-    }
+    paintDialCells();
   }
-
-  if(!L){ $('vmg').textContent=fmt(vmg,1);
-          $('vmg').classList.toggle('stale',vmg===null);
-          $('vmg').classList.remove('alarm'); }
 
   }
   /* ================= end DRAW ========================================= */
@@ -2804,10 +2819,14 @@ function layoutPages(){
 function goPage(i){
   i=Math.max(PAGE_MIN,Math.min(PAGE_MAX,i));
   if(i===PAGE_I) return;
+  musPickClose();
   PAGE_I=i; markSlide('page-'+i); layoutPages();
 }
 
-const openPanel =()=>{ if(APP.on) return; closeApps();
+/* Anything that moves the glass out from under the picker closes it:
+   the menu is anchored to a cell, and a cell that has slid away or gone
+   behind the panel leaves it pointing at nothing. */
+const openPanel =()=>{ if(APP.on) return; closeApps(); musPickClose();
                        markSlide('panel-open');  panel.classList.add('open');
                        netPanelOpen();  };
 const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
@@ -4567,9 +4586,15 @@ drawDemo();
    because switching one off must not shuffle the rest around the glass.
 
    `name` is what the picker calls it - the long form, because a menu is
-   where you have room to say APPARENT WIND rather than AWS. Adding a
-   reading is an entry here and nothing else: it appears in all three
-   pickers at once. */
+   where you have room to say APPARENT WIND rather than AWS.
+   `u` is the unit the music page prints under the number; `lu` the one
+   the dial prints, which is longer because it has the room - KNOTS
+   against KT. `sub` is a third line some readings have and most do not:
+   which side the heel is on, which tack the wind is over. A cell that
+   has no sub shows the long unit there instead, so all three lines are
+   always used and no cell is short.
+   Adding a reading is an entry here and nothing else: it appears in
+   every picker on both pages at once. */
 const MUS_CELLS=[
   /* Three digits, zero padded, the way a compass card is read: 007 is a
      heading and 7 is a typo. Magnetic first because that is what the
@@ -4579,34 +4604,62 @@ const MUS_CELLS=[
 /* No unit line: the degree ring IS the unit, and it belongs against the
      number rather than under it. A label saying HDG under a three-digit
      figure with a degree sign on it is telling you twice. */
-  {k:'hdg', name:'HEADING', u:'',
+  {k:'hdg', name:'HEADING', u:'', lu:'MAGNETIC',
    v:()=>{let x=get('navigation.headingMagnetic');
           if(x===null) x=get('navigation.courseOverGroundTrue');
           if(x===null) return null;
           return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
-  {k:'sog', name:'BOAT SPEED', u:'KT',
+  {k:'sog', name:'BOAT SPEED', u:'KT', lu:'KNOTS',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'aws', name:'APPARENT WIND', u:'AWS',
+  {k:'aws', name:'APPARENT WIND', u:'AWS', lu:'KNOTS APP',
    v:()=>{const x=get('environment.wind.speedApparent');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', name:'TRUE WIND', u:'TWS',
+  {k:'tws', name:'TRUE WIND', u:'TWS', lu:'KNOTS TRUE',
    v:()=>{const x=get('environment.wind.speedTrue');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
   /* Signed either side of the bow, the way it is called on deck: 40
      degrees to starboard is 40, not 320. The bezel shows the same angle
      as a picture; this is for when you want the number. */
-  {k:'awa', name:'WIND ANGLE', u:'',
+  {k:'awa', name:'WIND ANGLE', u:'', lu:'APPARENT',
    v:()=>{const x=get('environment.wind.angleApparent');
           if(x===null) return null;
           let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360;
           return (d<0?'-':'')+Math.abs(d)+'°';}},
   {k:'dpt', name:'DEPTH', u:()=>CFG.depthUnit==='m'?'M':'FT',
+   lu:()=>CFG.depthUnit==='m'?'METRES':'FEET',
    v:()=>{let x=get('environment.depth.belowKeel');
           if(x===null) x=get('environment.depth.belowTransducer');
           return x===null?null
             : (CFG.depthUnit==='m' ? x.toFixed(1) : (x*M_TO_FT).toFixed(1));}},
+  /* Heel is unsigned with the side spelled out under it: 12 STBD reads
+     the way it is said, where -12 has to be decoded. */
+  {k:'heel', name:'HEEL', u:'', lu:'',
+   v:()=>{const x=get('att.roll');
+          return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
+   sub:()=>{const x=get('att.roll');
+            return x===null?'':(x>0?'STBD':'PORT');}},
+  {k:'twa', name:'TRUE WIND ANGLE', u:'', lu:'',
+   v:()=>{const x=get('environment.wind.angleTrueWater');
+          return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
+   sub:()=>{const x=get('environment.wind.angleTrueWater');
+            return x===null?'':(x>0?'STBD':'PORT');}},
+  /* Velocity made good: what the boat is doing towards where the wind is
+     coming from. The plugin serves it when it can, and cos(TWA) times
+     speed is the same number when it cannot. */
+  {k:'vmg', name:'VMG', u:'KT', lu:'KNOTS',
+   v:()=>{let x=get('performance.velocityMadeGood');
+          if(x===null){ const sog=get('navigation.speedOverGround'),
+                              twa=get('environment.wind.angleTrueWater');
+            if(sog===null||twa===null) return null;
+            x=sog*Math.cos(twa); }
+          return (x*MS_TO_KT).toFixed(1);}},
 ];
+/* The long unit falls back to the short one, so a reading only has to
+   name the second if the two differ. */
+const musLong=c=>{ const v=c.lu!==undefined?c.lu:c.u;
+                   return typeof v==='function'?v():v; };
+const musSub =c=>c.sub?c.sub():'';
 /* The three positions, and what is in them. Slots rather than a fixed
    arrangement: the geometry is the layout's business and the reading is
    yours, and the two should not be the same decision. */
@@ -4615,8 +4668,51 @@ const MUS={ slot:{a:'hdg', p:'aws', s:'dpt'} };
 try{ const v=JSON.parse(localStorage.getItem('musSlots')||'null');
      if(v) for(const k of MUS_SLOTS)
        if(MUS_CELLS.some(c=>c.k===v[k])) MUS.slot[k]=v[k]; }catch(e){}
+try{ const v=JSON.parse(localStorage.getItem('dialSlots')||'null');
+     if(v) for(const k of DIAL_SLOTS)
+       if(MUS_CELLS.some(c=>c.k===v[k])) DIAL.slot[k]=v[k]; }catch(e){}
 const musSave=()=>{ try{
   localStorage.setItem('musSlots', JSON.stringify(MUS.slot)); }catch(e){} };
+
+/* The dial's three cells, left to right under the speed. Its own slot
+   map and its own storage key: the dial and the music page are not
+   showing the same three things and never were.
+   CFG.showHeel used to decide the middle one. It is a slot now - the
+   setting could only ever say heel-or-TWA, and this says anything. */
+const DIAL_SLOTS=['c1','c2','c3'];
+const DIAL={ slot:{c1:'dpt', c2:'heel', c3:'vmg'} };
+const dialSave=()=>{ try{
+  localStorage.setItem('dialSlots', JSON.stringify(DIAL.slot)); }catch(e){} };
+
+/* Three lines each: label, value, and then the reading's own third line
+   - which side the heel is on, which tack the wind is over - or the long
+   unit when it has none. Written through the same wText cache the rest
+   of the dial uses, so a frame where nothing changed costs nothing.
+   The three ELEMENT ids are irregular for historical reasons: c1 writes
+   into #dpt and #dpt-u because it used to be the depth cell and nothing
+   else, and c3 into #vmg. Mapped here rather than renamed, because the
+   ids are load-bearing in the tests and in the race override above. */
+const DIAL_EL={ c1:['c1-lbl','dpt','dpt-u'],
+                c2:['c2-lbl','c2','c2b'],
+                c3:['c3-lbl','vmg','c3-u'] };
+let dialCellKey='';
+function paintDialCells(){
+  const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
+    return sl+(c?c.k+c.v()+musSub(c)+musLong(c):''); }).join('|');
+  if(key===dialCellKey) return;
+  dialCellKey=key;
+  for(const sl of DIAL_SLOTS){
+    const [lbl,val,third]=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
+    if(!c){ wText(lbl,''); wText(val,'––'); wText(third,''); continue; }
+    const v=c.v(), sub=musSub(c);
+    wText(lbl, c.name);
+    wText(val, v===null?'––':v);
+    wText(third, v===null ? '' : (sub || musLong(c)));
+    wCls(val,'stale', v===null);
+    wCls(third,'stale', v===null);
+    $(val).classList.remove('alarm','warn');
+  }
+}
 
 const musCell=k=>MUS_CELLS.find(c=>c.k===k);
 const musUnit=c=>typeof c.u==='function' ? c.u() : c.u;
@@ -4635,55 +4731,66 @@ function paintStrip(){
      dash: an empty corner reads as "not fitted", which is true, and a
      dash reads as "broken", which usually is not. */
   box.innerHTML=row.map(r=> r.v===null ? '' :
-    `<span class="mcell" data-slot="${r.sl}" data-k="${r.k}">`
+    `<span class="mcell" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
     +`<b>${r.v}</b><em>${r.u}</em></span>`).join('');
   if(musPickAt) musPickPlace();
 }
 
 /* ---- tap a reading, choose another ---------------------------------
-   The list unrolls from the reading it belongs to. Anchored to the cell
-   rather than centred, because which of the three you are changing has
-   to be unambiguous.
-   Picking one that is already in another slot SWAPS them, which is what
-   you meant: you cannot have wanted the same number twice, and shuffling
-   the other two would move readings you did not touch. */
-let musPickAt=null;
+   One picker, both pages. A reading is its own control: tap it and the
+   list of what could be there unrolls downward from it, anchored to the
+   cell it belongs to rather than centred on the page, because which one
+   you are changing has to be unambiguous.
+
+   PICK is which cell is open: a group ('mus' or 'dial') and a slot
+   inside it. The two groups keep their own slot maps and their own
+   localStorage key, because the dial and the music page are not showing
+   the same three things and never were.
+   Picking a reading already in another slot of the SAME group swaps
+   them. You cannot have wanted the same number twice on one page, and
+   shuffling the others would move readings you never touched. Across
+   groups nothing is swapped: the dial showing depth is no reason the
+   music page cannot. */
+let PICK=null;                       /* {g:'mus'|'dial', sl, el} */
+
+const PICK_G={
+  mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,
+         save:musSave,     after:()=>{ stripKey=''; paintStrip(); }},
+  /* Repaint the three cells rather than the whole dial: the dial is
+     redrawn on its own schedule anyway, and this is the one thing that
+     has to be right before the next frame. The race override cannot be
+     up here - the picker refuses to open while it is. */
+  dial: {slots:DIAL_SLOTS, map:()=>DIAL.slot,
+         save:dialSave,    after:()=>{ dialCellKey=''; paintDialCells(); }},
+};
 
 function musPickRows(){
-  const cur=MUS.slot[musPickAt];
+  const g=PICK_G[PICK.g], cur=g.map()[PICK.sl];
   return MUS_CELLS.map(c=>{
-    const v=c.v(), u=musUnit(c);
+    /* The SHORT unit here whichever page asked, because a menu row is
+       narrow and KNOTS APP squeezes APPARENT WIND out of it. The long
+       one is for the dial's own third line, which has the width. */
+    const v=c.v(), u=(typeof c.u==='function'?c.u():c.u);
     return `<button class="pkrow${c.k===cur?' sel':''}${v===null?' none':''}"`
       +` data-k="${c.k}"><i>${c.name}</i>`
       +`<b>${v===null?'—':v}</b><s>${v===null?'':u}</s></button>`;
   }).join('');
 }
 
-/* Anchored under the cell, then pulled back inside the glass. On a round
-   panel a box that fits by its bounding rectangle can still have a
-   corner out in the bezel, so all four are tested against the radius
-   rather than against edges nobody has.
-   Below the cell first, above it if that will not go, and failing both -
-   the apex, where there is glass neither side of the art - straddling
-   the middle, which is the only band wide enough for anything. Each of
-   the three re-clamps x for its own y: a box that moved up is over a
-   different width of circle than the one that did not. */
-const PICK_W=344, PICK_H=300, PICK_GAP=14, PICK_R=536;
+const PICK_W=360, PICK_H=300, PICK_GAP=14, PICK_R=536;
 function musPickPlace(){
-  const pk=$('mus-pick'), cell=document.querySelector(
-    `.mcell[data-slot="${musPickAt}"]`);
-  if(!pk || !cell) return musPickClose();
-  const host=$('music').getBoundingClientRect();
-  const r=cell.getBoundingClientRect();
+  const pk=$('mus-pick');
+  if(!pk || !PICK || !PICK.el || !PICK.el.isConnected) return musPickClose();
+  const host=$('stage').getBoundingClientRect();
+  const r=PICK.el.getBoundingClientRect();
   /* Anchored to the cell's INWARD edge, not centred under it. Centred,
-     the starboard menu hung out over the rim, got pulled back by the
-     clamp, and landed on top of the very reading you were changing.
-     Hung inward it has the whole middle of the glass to fall into, and
-     it still points at the cell it belongs to. */
+     the outboard menus hung over the rim, got pulled back by the clamp,
+     and landed on top of the very reading you were changing. Hung inward
+     they have the whole middle of the glass to fall into, and they still
+     point at the cell they belong to. */
   const L=r.left-host.left, R=r.right-host.left;
-  const want = musPickAt==='p' ? L
-             : musPickAt==='s' ? R-PICK_W
-             : L+r.width/2-PICK_W/2;
+  const mid=L+r.width/2;
+  const want = mid<440 ? L : mid>640 ? R-PICK_W : mid-PICK_W/2;
   /* Half the chord at whichever of the box's two edges is further from
      the middle - that edge runs out of circle first. */
   const clampX=y=>{
@@ -4694,10 +4801,10 @@ function musPickPlace(){
   const fits=(x,y)=>[[x,y],[x+PICK_W,y],[x,y+PICK_H],[x+PICK_W,y+PICK_H]]
     .every(([cx,cy])=>Math.hypot(cx-540,cy-540)<=PICK_R);
   /* Below the cell, above it if that will not go, and failing both -
-     the apex, which has art either side and glass neither - straddling
-     the middle, the only band wide enough for anything. Each re-clamps x
-     for its own y: a box that moved is over a different width of circle
-     than the one that did not. */
+     a cell low on the glass, or the apex with art either side and glass
+     neither - straddling the middle, the only band wide enough for
+     anything. Each re-clamps x for its own y: a box that moved is over a
+     different width of circle than the one that did not. */
   const tries=[ r.bottom-host.top+PICK_GAP,
                 r.top-host.top-PICK_H-PICK_GAP,
                 540-PICK_H/2 ];
@@ -4707,31 +4814,39 @@ function musPickPlace(){
   pk.style.top =Math.round(y)+'px';
 }
 
-function musPickOpen(slot){
-  if(musPickAt===slot) return musPickClose();
-  musPickAt=slot;
+function musPickOpen(group, slot, el){
+  if(PICK && PICK.g===group && PICK.sl===slot) return musPickClose();
+  PICK={g:group, sl:slot, el:el};
   $('mus-pk').innerHTML=musPickRows();
   $('mus-pk').scrollTop=0;
   musPickPlace();
   $('mus-veil').classList.add('on');
   $('mus-pick').classList.add('on');
+  musPickMark();
+}
+function musPickMark(){
   document.querySelectorAll('.mcell').forEach(e=>
-    e.classList.toggle('picking', e.dataset.slot===slot));
+    e.classList.toggle('picking',
+      !!PICK && PICK.g==='mus' && e.dataset.slot===PICK.sl));
+  const sv=$('svg');
+  if(sv) DIAL_SLOTS.forEach(sl=>sv.classList.toggle('picking-'+sl,
+    !!PICK && PICK.g==='dial' && PICK.sl===sl));
 }
 function musPickClose(){
-  musPickAt=null;
+  PICK=null;
   const pk=$('mus-pick'); if(pk) pk.classList.remove('on');
   const v=$('mus-veil'); if(v) v.classList.remove('on');
-  document.querySelectorAll('.mcell').forEach(e=>e.classList.remove('picking'));
+  musPickMark();
 }
 function musPickChoose(k){
-  if(!musPickAt) return;
-  const from=MUS_SLOTS.find(sl=>sl!==musPickAt && MUS.slot[sl]===k);
-  if(from) MUS.slot[from]=MUS.slot[musPickAt];   /* swap, never duplicate */
-  MUS.slot[musPickAt]=k;
-  musSave();
+  if(!PICK) return;
+  const g=PICK_G[PICK.g], map=g.map();
+  const from=g.slots.find(sl=>sl!==PICK.sl && map[sl]===k);
+  if(from) map[from]=map[PICK.sl];              /* swap, never duplicate */
+  map[PICK.sl]=k;
+  g.save();
   musPickClose();
-  stripKey=''; paintStrip();
+  g.after();
 }
 
 /* gClaim on every one of these: a tap on a reading is not a page swipe,
@@ -4740,7 +4855,21 @@ $('ms-strip').addEventListener('pointerdown',e=>{
   if(e.target.closest('.mcell')) gClaim(); });
 $('ms-strip').addEventListener('click',e=>{
   const c=e.target.closest('.mcell'); if(!c) return;
-  e.stopPropagation(); musPickOpen(c.dataset.slot); });
+  e.stopPropagation(); musPickOpen('mus', c.dataset.slot, c); });
+/* releaseOnDrag, the way the lock does it: a finger that STARTS on a
+   cell and then travels is a page swipe, and the three cells sit right
+   where a thumb reaches to make one. A finger that stays put is a tap. */
+$('dial-cells').addEventListener('pointerdown',e=>{
+  if(e.target.closest('.dcell')){ gClaim(); G.releaseOnDrag=true; } });
+$('dial-cells').addEventListener('click',e=>{
+  const c=e.target.closest('.dcell'); if(!c) return;
+  /* TO LINE / BIAS / BURN own these three during a racePro COUNTDOWN -
+     the local up in tick() that decides it is called `racing`, which it
+     is not; it is the same condition spelled out. Offering a choice you
+     would not then see is worse than not offering. */
+  if(CFG.racePro && tState==='countdown') return;
+  e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
+
 $('mus-pick').addEventListener('pointerdown',()=>gClaim());
 $('mus-pick').addEventListener('click',e=>{
   const b=e.target.closest('.pkrow'); if(!b) return;
