@@ -973,15 +973,18 @@ a.lib-row{text-decoration:none;color:inherit}
    o'clock tick and the two read as one object. */
 .mcell[data-slot="a"]{left:50%;transform:translateX(-50%);top:64px;
   align-items:center;width:260px}
-/* In off the rim. At 34 the numbers sat on the bezel's tick marks, whose
-   innermost radius is 496 - at this height that is x=93 to the left and
-   x=987 to the right. 98 clears them and still leaves the cell short of
-   the volume ring at 360.
-   The value and the unit keep their OUTBOARD alignment, port to the left
-   edge and starboard to the right, so they read outward from the art;
-   the header is centred over both. */
-.mcell[data-slot="p"]{left:104px;top:310px;align-items:flex-start}
-.mcell[data-slot="s"]{right:104px;top:310px;align-items:flex-end}
+/* Centred in the CHANNEL, and everything in the cell centred with it.
+   The flanks sit in the gap between two sets of tick marks - the compass
+   bezel outside and the volume ring inside - and that gap is what the
+   cell belongs to, not the rim and not the art. Measured across the
+   cell's own band: the compass ticks reach in to x=94 and the volume
+   ticks out to x=378, so the middle of the channel is 236 and a 240-wide
+   cell starts at 116.
+   Everything inside is centred on that too, so the number sits under its
+   header rather than beside it. Outboard alignment put the value and the
+   unit against the rim and left the header floating over the gap. */
+.mcell[data-slot="p"]{left:116px;top:310px;align-items:center}
+.mcell[data-slot="s"]{right:116px;top:310px;align-items:center}
 /* Held while the picker under it is open, so it is obvious which of the
    three you are changing. */
 .mcell.picking b{color:var(--accent)}
