@@ -938,22 +938,31 @@ a.lib-row{text-decoration:none;color:inherit}
   flex-direction:row-reverse}
 #music[data-mus="tri"] .mcell[data-k="dpt"]{left:742px;top:356px}
 
-/* ---- TRI2: the same triangle with the unit UNDER the number rather
-   than beside it. The cell is then only as wide as the digits, and all
-   the room that was going sideways goes into the number instead: 124px
-   against 104. It is also the way an instrument is labelled. */
+/* ---- TRI2: the triangle, with the unit UNDER the number rather than
+   beside it. The cell is then only as wide as the digits, and all the
+   room that was going sideways goes into the number instead: 124px
+   against 104. It is also how an instrument is labelled.
+
+   HEADING at the apex, three digits, over the album art and directly
+   under the wind bezel that is measuring the same circle. Wind on the
+   left and depth on the right, and each unit hangs off the cell's OUTER
+   edge - left-aligned to port, right-aligned to starboard - so the two
+   labels sit at the rim and the three numbers make a triangle of their
+   own without the labels leaning into it. */
 #music[data-mus="tri2"] .ms-head{position:absolute;inset:0;display:block;
   pointer-events:none}
 #music[data-mus="tri2"] .m-sheet{margin-top:36px}
-#music[data-mus="tri2"] .mcell{position:absolute;flex-direction:column;
-  align-items:center;gap:0}
+#music[data-mus="tri2"] .mcell{position:absolute;flex-direction:column;gap:0}
 #music[data-mus="tri2"] .mcell b{font-size:124px}
 #music[data-mus="tri2"] .mcell em{font-size:34px;letter-spacing:.16em}
+#music[data-mus="tri2"] .mcell[data-k="sog"],
 #music[data-mus="tri2"] .mcell[data-k="tws"]{display:none}
-#music[data-mus="tri2"] .mcell[data-k="sog"]{left:50%;transform:translateX(-50%);
-  top:78px}
-#music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px}
-#music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px}
+#music[data-mus="tri2"] .mcell[data-k="hdg"]{left:50%;transform:translateX(-50%);
+  top:78px;align-items:center}
+#music[data-mus="tri2"] .mcell[data-k="aws"]{right:742px;top:365px;
+  align-items:flex-start}
+#music[data-mus="tri2"] .mcell[data-k="dpt"]{left:742px;top:365px;
+  align-items:flex-end}
 
 /* ---- three ways to lay this page out ------------------------------
    All three put the boat's numbers along the TOP, big, and turn the
@@ -4618,6 +4627,7 @@ function windDemoTick(){
   put('environment.wind.speedApparent', (11+Math.sin(demoT/5)*3.2)/MS_TO_KT);
   put('environment.wind.speedTrue',     (9.5+Math.sin(demoT/6)*2.4)/MS_TO_KT);
   put('environment.depth.belowTransducer', (14+Math.sin(demoT/7)*5)/M_TO_FT);
+  put('navigation.headingMagnetic', ((247+Math.sin(demoT/9)*22)%360)/DEG);
   if(get('navigation.speedOverGround')===null)
     put('navigation.speedOverGround', (5.6+Math.sin(demoT/6)*0.9)/MS_TO_KT);
 }
@@ -4641,6 +4651,16 @@ drawDemo();
    Both live in localStorage, so the panel comes back the way you left
    it. */
 const MUS_CELLS=[
+  /* Three digits, zero padded, the way a compass card is read: 007 is a
+     heading and 7 is a typo. Magnetic first because that is what the
+     steering compass beside it shows; course over ground only if the
+     boat has no compass at all, and it is not the same number - it is
+     where you are going rather than where you are pointing. */
+  {k:'hdg', u:'HDG',
+   v:()=>{let x=get('navigation.headingMagnetic');
+          if(x===null) x=get('navigation.courseOverGroundTrue');
+          if(x===null) return null;
+          return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0');}},
   {k:'sog', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:(x*MS_TO_KT).toFixed(1);}},
