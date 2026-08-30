@@ -1018,7 +1018,8 @@ a.lib-row{text-decoration:none;color:inherit}
 #svg.picking-c0 #spd-label, #svg.picking-c0 #spd, #svg.picking-c0 #spd-u,
 #svg.picking-c1 #c1-lbl, #svg.picking-c1 #dpt, #svg.picking-c1 #dpt-u,
 #svg.picking-c2 #c2-lbl, #svg.picking-c2 #c2,  #svg.picking-c2 #c2b,
-#svg.picking-c3 #c3-lbl, #svg.picking-c3 #vmg, #svg.picking-c3 #c3-u{
+#svg.picking-c3 #c3-lbl, #svg.picking-c3 #vmg, #svg.picking-c3 #c3-u,
+#svg.picking-c4 #p-tws{
   fill:var(--accent)}
 
 /* ---- the picker ----
@@ -1078,8 +1079,15 @@ a.lib-row{text-decoration:none;color:inherit}
    the name, which is what set the budget the names have to fit. */
 .pkrow b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;
   min-width:78px;text-align:right}
+/* Right-aligned, so the units make a straight edge down the side of the
+   menu the way the numbers do. Left-aligned in a min-width box, KT and
+   °/M started at the same place and ended at different ones, which read
+   as a ragged margin rather than a column. The trailing letter-spacing
+   is trimmed off the right so the last glyph, not the gap after it,
+   lands on the edge. */
 .pkrow s{text-decoration:none;font-size:17px;font-weight:600;
-  color:var(--label);letter-spacing:.08em;min-width:36px}
+  color:var(--label);letter-spacing:.08em;min-width:36px;
+  text-align:right;margin-right:-.08em}
 .pkrow.sel i,.pkrow.sel b,.pkrow.sel s{color:var(--accent)}
 /* A reading with nothing behind it is still worth choosing - the sensor
    may wake up - but it should not look like a live one. */
@@ -1414,6 +1422,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
           width="176" height="188" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="716"
           width="176" height="188" fill="transparent"/>
+    <!-- The strip. x and width are set every frame, because the reading
+         slides left when racePro puts TGT and the shift beside it, and
+         the whole rect is hidden while the ping buttons are up. -->
+    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="420" y="652"
+          width="240" height="60" fill="transparent"/>
   </g>
 
 
@@ -2343,11 +2356,19 @@ function render(){
   const racing = CFG.racePro && tState==='countdown';
   wSty('strip','display', racing?'none':'');
   wSty('pings','display', racing?'':'none');
-  // with racePro off the strip carries TWS alone, centred
+  /* With racePro off the strip carries ONE reading, centred; with it on
+     that reading moves left to make room for TGT and the shift.
+     What the reading IS belongs to paintDialCells now - the strip is
+     slot c4 - so only the geometry is set here. The tap target follows
+     it, and goes away entirely while the pings are up: the rects are
+     declared after the ping buttons and would otherwise swallow their
+     taps. */
   wAttr('p-tws','x', CFG.racePro?322:540);
+  wAttr('dc4','x',     CFG.racePro?232:420);
+  wAttr('dc4','width', CFG.racePro?180:240);
+  wSty ('dc4','display', racing?'none':'');
   wSty('p-tgt','display', CFG.racePro?'':'none');
   wSty('p-shf','display', CFG.racePro?'':'none');
-  $('p-tws').textContent = 'TWS '+fmt(tws,1)+(CFG.racePro?'':' KT');
 
   let tgtPct=null;
   if(CFG.racePro && tws!==null && twa!==null && sogR!==null){
@@ -2361,10 +2382,15 @@ function render(){
   let twdDeg=get('environment.wind.directionTrue');
   twdDeg = twdDeg===null?null:twdDeg*DEG;
   const sh = CFG.racePro ? windShift(twdDeg, awa) : null;
-  const shEl=$('p-shf');
-  if(sh===null||sh.deg<2){ shEl.textContent='STEADY'; shEl.className='strip'; }
-  else { shEl.textContent=(sh.lift?'LIFT ':'HEADER ')+sh.deg.toFixed(0)+'°';
-         shEl.className='strip '+(sh.lift?'good':'bad'); }
+  /* Through wCls, not `el.className=`. On an SVG element className is a
+     read-only SVGAnimatedString, so assigning a string to it is a silent
+     no-op - this has been setting the text since it was written and
+     never once turned it green or red. */
+  const steady = sh===null||sh.deg<2;
+  wText('p-shf', steady ? 'STEADY'
+        : (sh.lift?'LIFT ':'HEADER ')+sh.deg.toFixed(0)+'°');
+  wCls('p-shf','good', !steady && sh.lift);
+  wCls('p-shf','bad',  !steady && !sh.lift);
 
   /* ---- three cells, contextual on race state ---- */
   const L = (CFG.racePro && racing) ? lineData() : null;
@@ -4954,8 +4980,10 @@ const musSave=()=>{ try{
    showing the same three things and never were.
    CFG.showHeel used to decide the middle one. It is a slot now - the
    setting could only ever say heel-or-TWA, and this says anything. */
-const DIAL_SLOTS=['c0','c1','c2','c3'];
-const DIAL={ slot:{c0:'sog', c1:'dpt', c2:'heel', c3:'vmg'} };
+/* c4 is the strip under the big number - one line rather than three,
+   but a reading like any other and picked the same way. */
+const DIAL_SLOTS=['c0','c1','c2','c3','c4'];
+const DIAL={ slot:{c0:'sog', c1:'dpt', c2:'heel', c3:'vmg', c4:'tws'} };
 const dialSave=()=>{ try{
   localStorage.setItem('dialSlots', JSON.stringify(DIAL.slot)); }catch(e){} };
 
@@ -4970,15 +4998,35 @@ const dialSave=()=>{ try{
 const DIAL_EL={ c0:['spd-label','spd','spd-u'],
                 c1:['c1-lbl','dpt','dpt-u'],
                 c2:['c2-lbl','c2','c2b'],
-                c3:['c3-lbl','vmg','c3-u'] };
+                c3:['c3-lbl','vmg','c3-u'],
+                /* ONE element, and that is how paintDialCells tells the
+                   strip apart: header, value and unit go into it as a
+                   single line. */
+                c4:['p-tws'] };
 let dialCellKey='';
 function paintDialCells(){
   const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
-    return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c):''); }).join('|');
+    return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c):''); })
+    .join('|')+(CFG.racePro?'|R':'');   /* the strip drops its unit in race mode */
   if(key===dialCellKey) return;
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
-    const [lbl,val,third]=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
+    const els=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
+    /* The strip: three lines' worth of text on one line, in the order it
+       would be read aloud - TWS 11.6 KT. With racePro on it shares the
+       row with TGT and the shift, so the unit is dropped for the width.
+       Plain text rather than wVal: at 32px a full-size degree ring is
+       not the fourth digit it becomes at 268, and a tspan inside a
+       composed line would have to be built child by child. */
+    if(els.length===1){
+      const v=c?c.v():null;
+      wText(els[0], !c ? '––' : v===null ? musHdr(c)+' ––'
+        : [musHdr(c), v, CFG.racePro ? '' : (musSub(c)||musDU(c))]
+            .filter(Boolean).join(' '));
+      wCls(els[0],'stale', v===null);
+      continue;
+    }
+    const [lbl,val,third]=els;
     if(!c){ wText(lbl,''); wVal(val,'––'); wText(third,''); continue; }
     const v=c.v(), sub=musSub(c);
     wText(lbl, musHdr(c));
