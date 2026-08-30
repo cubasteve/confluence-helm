@@ -1040,23 +1040,38 @@ a.lib-row{text-decoration:none;color:inherit}
    scrolling box cannot also be the animated one. touch-action is set
    back to pan-y here: #stage turns it off everywhere so a swipe is never
    stolen by a scroll, and this is the one place that has to scroll. */
+/* The first group heading brings its own top space, so the scroller
+   needs none of its own. */
 #mus-pick .pk{max-height:300px;overflow-y:auto;touch-action:pan-y;
-  -webkit-overflow-scrolling:touch;padding:6px 0}
+  -webkit-overflow-scrolling:touch;padding:0 0 6px}
 #mus-pick .pk::-webkit-scrollbar{width:0}
-.pkrow{display:flex;align-items:baseline;gap:10px;width:100%;
-  padding:0 18px;height:78px;background:none;border:none;
+/* In the flow, not stuck to the top of the scroller. Sticky was the
+   obvious thing and it did not work here: the rows scrolling underneath
+   painted THROUGH the heading - hit-testing agreed the heading was on
+   top, the compositor did not - and a group name with half a reading
+   showing through it is worse than no group name. The list opens on the
+   reading already in the cell, so you land inside your group rather
+   than needing one pinned. */
+.pkhd{padding:16px 14px 6px;font-size:15px;font-weight:700;
+  letter-spacing:.22em;color:var(--label);opacity:.85}
+.pkrow{display:flex;align-items:baseline;gap:8px;width:100%;
+  padding:0 14px;height:78px;background:none;border:none;
   font-family:var(--font);color:var(--ink);text-align:left}
 /* Never wraps: a two-line name would make one row twice the height of
-   the others and the list would stop reading as a list. */
-.pkrow i{flex:1;font-style:normal;font-size:18px;font-weight:600;
+   the others and the list would stop reading as a list. It ellipsises
+   instead, and a name that ellipsises is a name to shorten - COURSE
+   under a GPS heading says as much as COURSE OVER GROUND did. */
+.pkrow i{flex:1;font-style:normal;font-size:17px;font-weight:600;
   letter-spacing:.04em;color:var(--label);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-/* Fixed columns, so nine readings of different widths make two straight
-   edges instead of a ragged middle. */
+/* Fixed columns, so fourteen readings of different widths make two
+   straight edges instead of a ragged middle. These are MINIMA: the
+   number column grows to whatever -188 deg needs and takes it out of
+   the name, which is what set the budget the names have to fit. */
 .pkrow b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;
-  min-width:84px;text-align:right}
+  min-width:78px;text-align:right}
 .pkrow s{text-decoration:none;font-size:17px;font-weight:600;
-  color:var(--label);letter-spacing:.08em;min-width:42px}
+  color:var(--label);letter-spacing:.08em;min-width:36px}
 .pkrow.sel i,.pkrow.sel b,.pkrow.sel s{color:var(--accent)}
 /* A reading with nothing behind it is still worth choosing - the sensor
    may wake up - but it should not look like a live one. */
@@ -1960,6 +1975,10 @@ const PATHS=['navigation.speedOverGround','navigation.speedThroughWater',
  'navigation.position','navigation.headingMagnetic','navigation.courseOverGroundTrue',
  'navigation.attitude','navigation.rateOfTurn','environment.wind.directionTrue',
  'environment.depth.belowTransducer','environment.depth.belowKeel',
+ /* The DST's other half. Subscribing to it on a boat whose transducer
+    only sounds costs nothing - Signal K sends what it has - and the
+    reading dashes out, which is the honest answer. */
+ 'environment.water.temperature',
  'environment.wind.angleApparent','environment.wind.speedApparent',
  'environment.wind.angleTrueWater','environment.wind.speedTrue',
  'performance.velocityMadeGood',
@@ -2039,6 +2058,14 @@ function demo(){
     put('environment.wind.speedTrue',(9.5+Math.sin(t*.4)*1.5)/MS_TO_KT);
     put('environment.wind.directionTrue',(cog*DEG+52+Math.sin(t*.2)*6)/DEG);
     put('att.roll',(12+Math.sin(t*.8)*5)/DEG);
+    /* The rest of what a 9-axis and a DST put on the wire, so the
+       readings that come off them are exercisable with nothing plugged
+       in - a menu row that always reads a dash is a row nobody can
+       check. Rate of turn is the S the demo is already sailing, in
+       rad/s, so it agrees with the course it is steering. */
+    put('att.pitch',(3+Math.sin(t*.5)*4)/DEG);
+    put('navigation.rateOfTurn', Math.cos(t*0.09)*0.09*0.004/0.12);
+    put('environment.water.temperature', 295.6+Math.sin(t*.05)*1.4);
   },120);}
 
 /* ==================================================================
@@ -4734,79 +4761,146 @@ drawDemo();
    always used and no cell is short.
    Adding a reading is an entry here and nothing else: it appears in
    every picker on both pages at once. */
+/* Which instrument a reading comes off, and the order the picker lays
+   the groups out in. Sorting by sensor is not decoration: it is how you
+   answer "what else can this box tell me", and it makes an absent
+   sensor obvious - a whole group dashed out is a wire to check, where
+   one dashed row among fourteen is easy to read as normal. */
+const SENSORS=[
+  ['gps','GPS'],
+  ['dpt','DEPTH'],
+  ['wnd','WIND'],
+  ['mot','MOTION'],           /* the 9-axis: magnetometer, accelerometer, gyro */
+  ['perf','PERFORMANCE'],     /* not a sensor - arithmetic on the others */
+];
+
+/* Degrees, 0 to under 360, from a radian path. Used by every compass
+   reading here so they cannot disagree about the wrap. */
+const degOf=p=>{ const x=get(p);
+  return x===null?null:((x*DEG)%360+360)%360; };
 /* Read once and used twice - by the number and by the compass point
    under it - so the two can never disagree about which way the boat is
-   pointing. Degrees, 0 to under 360. */
-const hdgDeg=()=>{ let x=get('navigation.headingMagnetic');
-  if(x===null) x=get('navigation.courseOverGroundTrue');
-  return x===null?null:((x*DEG)%360+360)%360; };
+   pointing. */
+const hdgDeg=()=>{ let d=degOf('navigation.headingMagnetic');
+  if(d===null) d=degOf('navigation.courseOverGroundTrue');
+  return d; };
 const CARD=['N','NE','E','SE','S','SW','W','NW'];
+/* %360 AFTER the rounding as well as before it: 359.6 rounds up to 360,
+   and a compass card has no 360 on it. */
+const bearing=d=>d===null?null:String(Math.round(d)%360).padStart(3,'0')+'°';
+const point  =d=>d===null?'':CARD[Math.round(d/45)%8];
+/* Signed either side of the bow, the way it is called on deck: 40
+   degrees to starboard is 40, not 320. */
+const offBow=p=>{ const x=get(p); if(x===null) return null;
+  let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360; return d; };
+/* Unsigned with the side spelled out under it: 12 STBD reads the way it
+   is said, where -12 has to be decoded. */
+const sideOf=p=>{ const x=get(p); return x===null?'':(x>0?'STBD':'PORT'); };
+const metric=()=>CFG.depthUnit==='m';
 
 const MUS_CELLS=[
-  /* Three digits, zero padded, the way a compass card is read: 007 is a
-     heading and 7 is a typo. Magnetic first because that is what the
-     steering compass beside it shows; course over ground only if the
-     boat has no compass at all, and it is not the same number - it is
-     where you are going rather than where you are pointing. */
-/* The unit line is the COMPASS POINT, which is the one thing the three
-     figures do not tell you at a glance: 258 is a number you have to
-     decode and W is a direction you already know. A label saying HDG
-     there would be telling you twice - the degree ring against the
-     number has already said what it is.
-     Eight points rather than four, because four are wrong most of the
-     time: 258 is not west, it is west by a bit, and the eighth that
-     contains it is the smallest honest answer in two characters.
-     Magnetic, like the number above it and like the steering compass
-     beside it. */
-  {k:'hdg', name:'HEADING', hdr:'', u:()=>{const d=hdgDeg();
-     return d===null?'':CARD[Math.round(d/45)%8];},
-   v:()=>{const d=hdgDeg();
-          /* %360 AFTER the rounding as well as before it: 359.6 rounds
-             up to 360, and a compass card has no 360 on it. */
-          return d===null?null:String(Math.round(d)%360).padStart(3,'0')+'°';}},
-  /* SOG rather than a blank: over the ground is not the only speed a
-     boat has, and now that every other cell carries a header an empty
-     one reads as a gap rather than as a decision. Heading keeps its
-     blank - a number with a degree ring on it is only ever one thing. */
-  {k:'sog', name:'BOAT SPEED', hdr:'SOG', u:'KT',
+  /* ---- GPS ---------------------------------------------------------- */
+  /* SOG rather than a blank header: over the ground is not the only
+     speed a boat has, and now that every other cell carries a header an
+     empty one reads as a gap rather than as a decision. */
+  {k:'sog', sen:'gps', name:'BOAT SPEED', hdr:'SOG', u:'KT',
    v:()=>{const x=get('navigation.speedOverGround');
           return x===null?null:readNum('sog',x*MS_TO_KT).toFixed(1);}},
-  {k:'aws', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
-   v:()=>{const x=get('environment.wind.speedApparent');
-          return x===null?null:readNum('aws',x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', name:'TRUE WIND SPEED', hdr:'TWS', u:'TWS', du:'KT',
-   v:()=>{const x=get('environment.wind.speedTrue');
-          return x===null?null:readNum('tws',x*MS_TO_KT).toFixed(1);}},
-  /* Signed either side of the bow, the way it is called on deck: 40
-     degrees to starboard is 40, not 320. The bezel shows the same angle
-     as a picture; this is for when you want the number. */
-  {k:'awa', name:'WIND ANGLE', hdr:'AWA', u:'',
-   v:()=>{const x=get('environment.wind.angleApparent');
-          if(x===null) return null;
-          let d=Math.round(x*DEG); d=((d%360)+360)%360; if(d>180) d-=360;
-          return (d<0?'-':'')+Math.abs(d)+'°';}},
-  {k:'dpt', name:'DEPTH', u:()=>CFG.depthUnit==='m'?'M':'FT',
+  /* Where the boat is GOING, which is not where it is pointing - the
+     difference is the tide and the leeway, and on a windward leg it is
+     the whole story. True, not magnetic: that is what the GPS puts on
+     the wire, and relabelling it would be a lie. */
+  {k:'cog', sen:'gps', name:'COURSE', hdr:'COG',
+   u:()=>point(degOf('navigation.courseOverGroundTrue')),
+   v:()=>bearing(degOf('navigation.courseOverGroundTrue'))},
+
+  /* ---- DEPTH -------------------------------------------------------- */
+  {k:'dpt', sen:'dpt', name:'DEPTH', u:()=>metric()?'M':'FT',
    v:()=>{let x=get('environment.depth.belowKeel');
           if(x===null) x=get('environment.depth.belowTransducer');
           if(x===null) return null;
-          const d=readNum('dpt', CFG.depthUnit==='m'?x:x*M_TO_FT);
+          const d=readNum('dpt', metric()?x:x*M_TO_FT);
           return d.toFixed(d<100?1:0);}},
-  /* Heel is unsigned with the side spelled out under it: 12 STBD reads
-     the way it is said, where -12 has to be decoded. */
-  {k:'heel', name:'HEEL', u:'',
-   v:()=>{const x=get('att.roll');
-          return x===null?null:readNum('heel',Math.abs(x*DEG)).toFixed(0)+'°';},
-   sub:()=>{const x=get('att.roll');
-            return x===null?'':(x>0?'STBD':'PORT');}},
-  {k:'twa', name:'TRUE WIND ANGLE', hdr:'TWA', u:'',
+  /* Most depth transducers are a DST and measure this too. Tied to the
+     depth unit rather than given a setting of its own: that switch is
+     the only metric-or-not the app has, and a boat sounding in feet is
+     not thinking in celsius. Dashed out on a transducer that only
+     sounds, which is the honest answer. */
+  {k:'sea', sen:'dpt', name:'SEA TEMP', hdr:'SEA',
+   u:()=>metric()?'°C':'°F',
+   v:()=>{const k=get('environment.water.temperature');
+          if(k===null) return null;
+          const c=k-273.15;
+          return readNum('sea', metric()?c:c*9/5+32).toFixed(1);}},
+
+  /* ---- WIND --------------------------------------------------------- */
+  {k:'aws', sen:'wnd', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
+   v:()=>{const x=get('environment.wind.speedApparent');
+          return x===null?null:readNum('aws',x*MS_TO_KT).toFixed(1);}},
+  {k:'tws', sen:'wnd', name:'TRUE WIND SPEED', hdr:'TWS', u:'TWS', du:'KT',
+   v:()=>{const x=get('environment.wind.speedTrue');
+          return x===null?null:readNum('tws',x*MS_TO_KT).toFixed(1);}},
+  /* The bezel shows the same angle as a picture; this is for when you
+     want the number. */
+  {k:'awa', sen:'wnd', name:'WIND ANGLE', hdr:'AWA', u:'',
+   v:()=>{const d=offBow('environment.wind.angleApparent');
+          return d===null?null:(d<0?'-':'')+Math.abs(d)+'°';}},
+  {k:'twa', sen:'wnd', name:'TRUE WIND ANGLE', hdr:'TWA', u:'',
    v:()=>{const x=get('environment.wind.angleTrueWater');
           return x===null?null:Math.abs(x*DEG).toFixed(0)+'°';},
-   sub:()=>{const x=get('environment.wind.angleTrueWater');
-            return x===null?'':(x>0?'STBD':'PORT');}},
+   sub:()=>sideOf('environment.wind.angleTrueWater')},
+  /* The one wind number that does not move when the boat turns, which
+     is what makes a shift a shift rather than a helm error. The strip's
+     LIFT/HEADER is computed off this; now you can watch it directly. */
+  {k:'twd', sen:'wnd', name:'WIND DIRECTION', hdr:'TWD',
+   u:()=>point(degOf('environment.wind.directionTrue')),
+   v:()=>bearing(degOf('environment.wind.directionTrue'))},
+
+  /* ---- MOTION: the 9-axis ------------------------------------------- */
+  /* Three digits, zero padded, the way a compass card is read: 007 is a
+     heading and 7 is a typo. Magnetic first because that is what the
+     steering compass beside it shows; course over ground only if the
+     boat has no compass at all.
+     The unit line is the COMPASS POINT, which is the one thing the
+     three figures do not tell you at a glance: 258 is a number you have
+     to decode and W is a direction you already know. A label saying HDG
+     there would be telling you twice - the degree ring against the
+     number has already said what it is. Eight points rather than four,
+     because four are wrong most of the time: 258 is not west, it is
+     west by a bit, and the eighth that contains it is the smallest
+     honest answer in two characters. */
+  {k:'hdg', sen:'mot', name:'HEADING', hdr:'',
+   u:()=>point(hdgDeg()), v:()=>bearing(hdgDeg())},
+  {k:'heel', sen:'mot', name:'HEEL', u:'',
+   v:()=>{const x=get('att.roll');
+          return x===null?null:readNum('heel',Math.abs(x*DEG)).toFixed(0)+'°';},
+   sub:()=>sideOf('att.roll')},
+  /* The other half of what the attitude message already carries and
+     nothing has ever shown. Fore-and-aft trim: crew weight upwind, and
+     how hard she is burying the bow off it. */
+  {k:'pitch', sen:'mot', name:'PITCH', hdr:'PITCH', u:'',
+   v:()=>{const x=get('att.pitch');
+          return x===null?null:readNum('pitch',Math.abs(x*DEG)).toFixed(0)+'°';},
+   sub:()=>{const x=get('att.pitch');
+            return x===null?'':(x>0?'BOW UP':'BOW DN');}},
+  /* Subscribed since the beginning and never displayed. Degrees per
+     MINUTE, not per second: a boat turns at a rate you would otherwise
+     be reading as 0.2.
+     Signed rather than unsigned with STBD under it, the way heel and
+     TWA are done. Two cells reading "12 / STBD" would be a heel and a
+     swing that look identical, and the rate is the part you cannot
+     guess - the sign you can, from the wheel in your hands. */
+  {k:'rot', sen:'mot', name:'RATE OF TURN', hdr:'ROT', u:'°/M', du:'°/MIN',
+   v:()=>{const x=get('navigation.rateOfTurn');
+          if(x===null) return null;
+          const d=readNum('rot',x*DEG*60);
+          return (d<0?'-':'')+Math.abs(d).toFixed(0);}},
+
+  /* ---- PERFORMANCE -------------------------------------------------- */
   /* Velocity made good: what the boat is doing towards where the wind is
      coming from. The plugin serves it when it can, and cos(TWA) times
      speed is the same number when it cannot. */
-  {k:'vmg', name:'VMG', u:'KT',
+  {k:'vmg', sen:'perf', name:'VMG', u:'KT',
    v:()=>{let x=get('performance.velocityMadeGood');
           if(x===null){ const sog=get('navigation.speedOverGround'),
                               twa=get('environment.wind.angleTrueWater');
@@ -4997,7 +5091,7 @@ const PICK_G={
 
 function musPickRows(){
   const g=PICK_G[PICK.g], cur=g.map()[PICK.sl];
-  return MUS_CELLS.map(c=>{
+  const row=c=>{
     /* The SHORT unit here whichever page asked, because a menu row is
        narrow and KNOTS APP squeezes APPARENT WIND out of it. The long
        one is for the dial's own third line, which has the width. */
@@ -5005,6 +5099,13 @@ function musPickRows(){
     return `<button class="pkrow${c.k===cur?' sel':''}${v===null?' none':''}"`
       +` data-k="${c.k}"><i>${c.name}</i>`
       +`<b>${v===null?'—':v}</b><s>${v===null?'':u}</s></button>`;
+  };
+  /* One heading per instrument, and only for instruments that have a
+     reading in the list - the group order is SENSORS, not the order the
+     catalogue happens to be written in, so the two cannot drift. */
+  return SENSORS.map(([sen,title])=>{
+    const rows=MUS_CELLS.filter(c=>c.sen===sen);
+    return rows.length ? `<div class="pkhd">${title}</div>`+rows.map(row).join('') : '';
   }).join('');
 }
 
@@ -5054,8 +5155,17 @@ function musPickPlace(){
 function musPickOpen(group, slot, el){
   if(PICK && PICK.g===group && PICK.sl===slot) return musPickClose();
   PICK={g:group, sl:slot, el:el};
-  $('mus-pk').innerHTML=musPickRows();
-  $('mus-pk').scrollTop=0;
+  const pk=$('mus-pk');
+  pk.innerHTML=musPickRows();
+  /* Opens ON the reading that is already in the cell rather than at the
+     top. Fourteen readings in five groups is four screenfuls of
+     scrolling, and starting at BOAT SPEED every time means hunting for
+     where you are before you can go anywhere. Centred, so the groups
+     either side of it are visible and you can see which way to scroll.
+     scrollIntoView is not used: it scrolls the PAGE too, and the page
+     here is a kiosk that must not move. */
+  const sel=pk.querySelector('.pkrow.sel');
+  pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(PICK_H-sel.offsetHeight)/2) : 0;
   musPickPlace();
   $('mus-veil').classList.add('on');
   $('mus-pick').classList.add('on');
