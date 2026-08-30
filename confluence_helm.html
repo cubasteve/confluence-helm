@@ -1975,10 +1975,6 @@ const PATHS=['navigation.speedOverGround','navigation.speedThroughWater',
  'navigation.position','navigation.headingMagnetic','navigation.courseOverGroundTrue',
  'navigation.attitude','navigation.rateOfTurn','environment.wind.directionTrue',
  'environment.depth.belowTransducer','environment.depth.belowKeel',
- /* The DST's other half. Subscribing to it on a boat whose transducer
-    only sounds costs nothing - Signal K sends what it has - and the
-    reading dashes out, which is the honest answer. */
- 'environment.water.temperature',
  'environment.wind.angleApparent','environment.wind.speedApparent',
  'environment.wind.angleTrueWater','environment.wind.speedTrue',
  'performance.velocityMadeGood',
@@ -2058,14 +2054,13 @@ function demo(){
     put('environment.wind.speedTrue',(9.5+Math.sin(t*.4)*1.5)/MS_TO_KT);
     put('environment.wind.directionTrue',(cog*DEG+52+Math.sin(t*.2)*6)/DEG);
     put('att.roll',(12+Math.sin(t*.8)*5)/DEG);
-    /* The rest of what a 9-axis and a DST put on the wire, so the
-       readings that come off them are exercisable with nothing plugged
-       in - a menu row that always reads a dash is a row nobody can
-       check. Rate of turn is the S the demo is already sailing, in
-       rad/s, so it agrees with the course it is steering. */
+    /* The rest of what the 9-axis puts on the wire, so the readings that
+       come off it are exercisable with nothing plugged in - a menu row
+       that always reads a dash is a row nobody can check. Rate of turn
+       is the S the demo is already sailing, in rad/s, so it agrees with
+       the course it is steering. */
     put('att.pitch',(3+Math.sin(t*.5)*4)/DEG);
     put('navigation.rateOfTurn', Math.cos(t*0.09)*0.09*0.004/0.12);
-    put('environment.water.temperature', 295.6+Math.sin(t*.05)*1.4);
   },120);}
 
 /* ==================================================================
@@ -4821,17 +4816,6 @@ const MUS_CELLS=[
           if(x===null) return null;
           const d=readNum('dpt', metric()?x:x*M_TO_FT);
           return d.toFixed(d<100?1:0);}},
-  /* Most depth transducers are a DST and measure this too. Tied to the
-     depth unit rather than given a setting of its own: that switch is
-     the only metric-or-not the app has, and a boat sounding in feet is
-     not thinking in celsius. Dashed out on a transducer that only
-     sounds, which is the honest answer. */
-  {k:'sea', sen:'dpt', name:'SEA TEMP', hdr:'SEA',
-   u:()=>metric()?'°C':'°F',
-   v:()=>{const k=get('environment.water.temperature');
-          if(k===null) return null;
-          const c=k-273.15;
-          return readNum('sea', metric()?c:c*9/5+32).toFixed(1);}},
 
   /* ---- WIND --------------------------------------------------------- */
   {k:'aws', sen:'wnd', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
