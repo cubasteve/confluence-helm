@@ -979,11 +979,13 @@ a.lib-row{text-decoration:none;color:inherit}
    the compass ticks, 13 to the volume ring, 48 to the text below. */
 .mcell[data-slot="p"] b,
 .mcell[data-slot="s"] b{font-size:120px}
-/* The HTML half of the degree ring - DEG_EM and DEG_UP in the script,
-   kept in step by hand because there is no build step to share them.
-   `top` needs position:relative to bite, and the parent must not be
-   static-positioned away underneath it. */
-.mcell b i{font-style:normal;font-size:.66em;position:relative;top:-.34em;
+/* The HTML half of the degree ring. --deg is DEG_EM in the script, kept
+   in step by hand because there is no build step to share them; the lift
+   is calc'd off it by the same rule, so only the one number moves.
+   `top` resolves against this element's OWN font-size, which is why the
+   0.66 (DEG_TOP) is divided by --deg. */
+.mcell b i{--deg:.52;font-style:normal;font-size:calc(var(--deg)*1em);
+  position:relative;top:calc(-.66em*(1 - var(--deg))/var(--deg));
   letter-spacing:0}
 .mcell em{font-size:24px;letter-spacing:.16em}
 /* Clear of the volume ring's topmost tick with room to spare rather than
@@ -2135,9 +2137,14 @@ const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o);
    drops it down the number's side; lifting it back is what keeps it
    where a full-size ring was. Both are in em, so every cell on both
    pages gets the same ring at its own size for free.
+   The lift is DERIVED, not chosen: the ring's top sits DEG_TOP of the
+   way up a full-size em box, so holding it there costs
+   (1-DEG_EM)*DEG_TOP of the parent's em, which is that over DEG_EM of
+   the ring's own. Change DEG_EM alone and the ring stays put.
    SVG and HTML need different markup for the same thing, so the dial
    builds a <tspan> here and the music page an <i> in paintStrip. */
-const DEG_EM=0.66, DEG_UP=0.34;
+const DEG_TOP=0.66, DEG_EM=0.52;
+const DEG_UP=(1-DEG_EM)*DEG_TOP/DEG_EM;
 const SVGNS='http://www.w3.org/2000/svg';
 const wVal=(id,v)=>{
   const k=id+'|v'; if(_w.get(k)===v)return; _w.set(k,v);
@@ -2146,7 +2153,7 @@ const wVal=(id,v)=>{
     el.textContent=v.slice(0,-1);
     const t=document.createElementNS(SVGNS,'tspan');
     t.setAttribute('font-size',DEG_EM+'em');
-    t.setAttribute('dy',(-DEG_UP)+'em');
+    t.setAttribute('dy',(-DEG_UP).toFixed(3)+'em');
     t.textContent='\u00b0';
     el.appendChild(t);
   } else el.textContent=v;
@@ -4688,20 +4695,36 @@ drawDemo();
    always used and no cell is short.
    Adding a reading is an entry here and nothing else: it appears in
    every picker on both pages at once. */
+/* Read once and used twice - by the number and by the compass point
+   under it - so the two can never disagree about which way the boat is
+   pointing. Degrees, 0 to under 360. */
+const hdgDeg=()=>{ let x=get('navigation.headingMagnetic');
+  if(x===null) x=get('navigation.courseOverGroundTrue');
+  return x===null?null:((x*DEG)%360+360)%360; };
+const CARD=['N','NE','E','SE','S','SW','W','NW'];
+
 const MUS_CELLS=[
   /* Three digits, zero padded, the way a compass card is read: 007 is a
      heading and 7 is a typo. Magnetic first because that is what the
      steering compass beside it shows; course over ground only if the
      boat has no compass at all, and it is not the same number - it is
      where you are going rather than where you are pointing. */
-/* No unit line: the degree ring IS the unit, and it belongs against the
-     number rather than under it. A label saying HDG under a three-digit
-     figure with a degree sign on it is telling you twice. */
-  {k:'hdg', name:'HEADING', hdr:'', u:'',
-   v:()=>{let x=get('navigation.headingMagnetic');
-          if(x===null) x=get('navigation.courseOverGroundTrue');
-          if(x===null) return null;
-          return String(Math.round(((x*DEG)%360+360)%360)).padStart(3,'0')+'°';}},
+/* The unit line is the COMPASS POINT, which is the one thing the three
+     figures do not tell you at a glance: 258 is a number you have to
+     decode and W is a direction you already know. A label saying HDG
+     there would be telling you twice - the degree ring against the
+     number has already said what it is.
+     Eight points rather than four, because four are wrong most of the
+     time: 258 is not west, it is west by a bit, and the eighth that
+     contains it is the smallest honest answer in two characters.
+     Magnetic, like the number above it and like the steering compass
+     beside it. */
+  {k:'hdg', name:'HEADING', hdr:'', u:()=>{const d=hdgDeg();
+     return d===null?'':CARD[Math.round(d/45)%8];},
+   v:()=>{const d=hdgDeg();
+          /* %360 AFTER the rounding as well as before it: 359.6 rounds
+             up to 360, and a compass card has no 360 on it. */
+          return d===null?null:String(Math.round(d)%360).padStart(3,'0')+'°';}},
   /* SOG rather than a blank: over the ground is not the only speed a
      boat has, and now that every other cell carries a header an empty
      one reads as a gap rather than as a decision. Heading keeps its
