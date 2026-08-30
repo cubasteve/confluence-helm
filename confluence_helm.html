@@ -1321,10 +1321,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
   <!-- 432 tucked this into the digits' negative space, which worked while
        it said SOG and stopped working the moment it could say BOAT SPEED
-       or APPARENT WIND: the huge glyphs top out at 359. 386 does not
-       clear them either, but it sits in the gap ABOVE the digits' waist
-       where nothing is drawn, and it clears the timer's +/- buttons at
-       314. -->
+       or APPARENT WIND. 386 clears them: dominant-baseline:middle puts
+       the digits' ink at 432..629, not at the 359 the y attribute alone
+       would suggest, so the label's own ink at 373..395 has 37px of air
+       under it. It clears the timer's +/- buttons at 314 too. -->
   <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
   <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
   <!-- Beside the number, not under it, and sharing its y: every text on
@@ -4826,10 +4826,14 @@ const MUS_CELLS=[
           return d.toFixed(d<100?1:0);}},
 
   /* ---- WIND --------------------------------------------------------- */
-  {k:'aws', sen:'wnd', name:'APPARENT WIND', hdr:'AWS', u:'AWS', du:'KT',
+  /* KT, not AWS. The acronym belongs on the HEADER above the number,
+     where it says which wind this is; on the unit line it says nothing
+     the header has not, and it is the one place the reading's actual
+     unit gets to appear. */
+  {k:'aws', sen:'wnd', name:'APPARENT WIND', hdr:'AWS', u:'KT',
    v:()=>{const x=get('environment.wind.speedApparent');
           return x===null?null:readNum('aws',x*MS_TO_KT).toFixed(1);}},
-  {k:'tws', sen:'wnd', name:'TRUE WIND SPEED', hdr:'TWS', u:'TWS', du:'KT',
+  {k:'tws', sen:'wnd', name:'TRUE WIND SPEED', hdr:'TWS', u:'KT',
    v:()=>{const x=get('environment.wind.speedTrue');
           return x===null?null:readNum('tws',x*MS_TO_KT).toFixed(1);}},
   /* The bezel shows the same angle as a picture; this is for when you
@@ -4855,13 +4859,16 @@ const MUS_CELLS=[
      boat has no compass at all.
      The unit line is the COMPASS POINT, which is the one thing the
      three figures do not tell you at a glance: 258 is a number you have
-     to decode and W is a direction you already know. A label saying HDG
-     there would be telling you twice - the degree ring against the
-     number has already said what it is. Eight points rather than four,
-     because four are wrong most of the time: 258 is not west, it is
-     west by a bit, and the eighth that contains it is the smallest
-     honest answer in two characters. */
-  {k:'hdg', sen:'mot', name:'HEADING', hdr:'',
+     to decode and W is a direction you already know. Eight points rather
+     than four, because four are wrong most of the time: 258 is not west,
+     it is west by a bit, and the eighth that contains it is the smallest
+     honest answer in two characters.
+     That leaves the header free to name the reading, which it now does.
+     It was blank while the unit line was blank too - a number with a
+     degree ring on it is only ever one thing, so nothing needed saying -
+     but a cell reading 258 over W with no title is the odd one out in a
+     row of nine that all have one. */
+  {k:'hdg', sen:'mot', name:'HEADING', hdr:'HDING',
    u:()=>point(hdgDeg()), v:()=>bearing(hdgDeg())},
   {k:'heel', sen:'mot', name:'HEEL', u:'',
    v:()=>{const x=get('att.roll');
@@ -5084,10 +5091,10 @@ const PICK_G={
 function musPickRows(){
   const g=PICK_G[PICK.g], cur=g.map()[PICK.sl];
   const row=c=>{
-    /* The SHORT unit here whichever page asked, because a menu row is
-       narrow and KNOTS APP squeezes APPARENT WIND out of it. The long
-       one is for the dial's own third line, which has the width. */
-    const v=c.v(), u=(typeof c.u==='function'?c.u():c.u);
+    /* The SHORT unit here whichever page asked: a menu row is narrow,
+       and the long one is for the dial's own third line, which has the
+       width for a DEGREES PER MINUTE. */
+    const v=c.v(), u=musUnitOf(c);
     return `<button class="pkrow${c.k===cur?' sel':''}${v===null?' none':''}"`
       +` data-k="${c.k}"><i>${c.name}</i>`
       +`<b>${v===null?'—':v}</b><s>${v===null?'':u}</s></button>`;
