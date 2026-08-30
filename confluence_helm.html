@@ -53,9 +53,12 @@ body{display:flex;align-items:center;justify-content:center}
    this for exactly that reason; the dial never got one, and the bottom
    centre - the major tick you reach for to pull the dock - is the
    place it showed.
-   Nothing here scrolls or pinches, so nothing is given up. And it
-   cannot be reproduced in a headless test: synthetic PointerEvents
-   never go near the browser's touch pipeline. */
+   It cannot be reproduced with synthetic PointerEvents - those never go
+   near the browser's touch pipeline - and that cuts both ways: it also
+   hides what this rule COSTS. Nothing under #stage can rely on the
+   browser scrolling it, whatever touch-action it sets on itself, and
+   the one thing that has to scroll - the reading picker - drives its
+   own from pointer events instead of trying to win that argument. */
 #stage,#stage *{touch-action:none}
 
 /* --- pages ---
@@ -1037,12 +1040,17 @@ a.lib-row{text-decoration:none;color:inherit}
   transition:max-height .26s cubic-bezier(.16,1,.3,1), opacity .16s}
 #mus-pick.on{max-height:300px;opacity:1}
 /* The scroller inside, because the rounded corners have to clip it and a
-   scrolling box cannot also be the animated one. touch-action is set
-   back to pan-y here: #stage turns it off everywhere so a swipe is never
-   stolen by a scroll, and this is the one place that has to scroll. */
-/* The first group heading brings its own top space, so the scroller
-   needs none of its own. */
-#mus-pick .pk{max-height:300px;overflow-y:auto;touch-action:pan-y;
+   scrolling box cannot also be the animated one. The first group heading
+   brings its own top space, so the scroller needs none of its own.
+   touch-action stays NONE, inherited from #stage *, and that is the
+   whole design: the menu drives its own scroll from pointer events
+   (pkDrag, below). Asking the browser to do it meant setting pan-y on
+   the menu and every row in it and then trusting that no ancestor's
+   `none` vetoed it - untestable here, and it did not work on the panel.
+   Driving it by hand needs no such trust, behaves the same under a
+   finger and a mouse, and can actually be tested. overflow-y:auto stays
+   so a wheel still works and so scrollTop means something. */
+#mus-pick .pk{max-height:300px;overflow-y:auto;
   -webkit-overflow-scrolling:touch;padding:0 0 6px}
 #mus-pick .pk::-webkit-scrollbar{width:0}
 /* In the flow, not stuck to the top of the scroller. Sticky was the
@@ -5164,7 +5172,7 @@ function musPickMark(){
     !!PICK && PICK.g==='dial' && PICK.sl===sl));
 }
 function musPickClose(){
-  PICK=null;
+  PICK=null; pkStop();
   const pk=$('mus-pick'); if(pk) pk.classList.remove('on');
   const v=$('mus-veil'); if(v) v.classList.remove('on');
   musPickMark();
@@ -5202,10 +5210,62 @@ $('dial-cells').addEventListener('click',e=>{
   if(c.dataset.slot!=='c0' && CFG.racePro && tState==='countdown') return;
   e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
 
-$('mus-pick').addEventListener('pointerdown',()=>gClaim());
+/* ---- the menu scrolls itself ---------------------------------------
+   Everything under #stage has touch-action:none so a swipe is never
+   stolen by a scroll, which also means the browser will not scroll this
+   list. Thirteen readings do not fit in 300px, so the drag IS the
+   scroll: pointer deltas go straight into scrollTop, and a flick coasts
+   afterwards the way a native one would.
+   PK_SLOP is what separates a tap from a drag. Without it the finger
+   that scrolled the list would also choose whatever reading it happened
+   to lift over, which is the worst possible outcome of a scroll. */
+const PK_SLOP=10, PK_FLICK=0.15;      /* px, and px per ms */
+let pkDrag=null, pkMoved=0, pkGlide=null;
+const pkStop=()=>{ if(pkGlide) cancelAnimationFrame(pkGlide); pkGlide=null; };
+function pkCoast(v){                  /* v in scrollTop px per ms */
+  const pk=$('mus-pk'); let last=performance.now();
+  const step=now=>{
+    const dt=Math.min(40, now-last); last=now;
+    const was=pk.scrollTop;
+    pk.scrollTop += v*dt;
+    v *= Math.pow(0.994, dt);         /* about half every 115 ms */
+    /* Stops at the ends rather than grinding against them: scrollTop
+       clamps itself, so a coast that is no longer moving is over. */
+    pkGlide = (Math.abs(v)>0.02 && pk.scrollTop!==was)
+      ? requestAnimationFrame(step) : null;
+  };
+  pkGlide=requestAnimationFrame(step);
+}
+$('mus-pick').addEventListener('pointerdown',e=>{
+  gClaim(); pkStop(); pkMoved=0;
+  pkDrag={id:e.pointerId, y0:e.clientY, y:e.clientY,
+          t:performance.now(), top:$('mus-pk').scrollTop, v:0};
+});
+/* On WINDOW, not on the menu, and deliberately NOT setPointerCapture.
+   Capture was the obvious way to keep a finger that runs off the menu
+   scrolling it - and it retargets the CLICK to the capturing element,
+   so `closest('.pkrow')` found nothing and a plain tap stopped choosing
+   anything at all. Window listeners keyed on the pointer id give the
+   same reach with none of that. */
+addEventListener('pointermove',e=>{
+  if(!pkDrag || e.pointerId!==pkDrag.id) return;
+  const now=performance.now(), dt=now-pkDrag.t;
+  if(dt>0) pkDrag.v=(pkDrag.y-e.clientY)/dt;   /* sign of scrollTop */
+  pkDrag.y=e.clientY; pkDrag.t=now;
+  pkMoved=Math.max(pkMoved, Math.abs(e.clientY-pkDrag.y0));
+  $('mus-pk').scrollTop = pkDrag.top-(e.clientY-pkDrag.y0);
+});
+['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
+  if(!pkDrag || e.pointerId!==pkDrag.id) return;
+  const v=pkDrag.v; pkDrag=null;
+  if(pkMoved>PK_SLOP && Math.abs(v)>PK_FLICK) pkCoast(v);
+}));
 $('mus-pick').addEventListener('click',e=>{
   const b=e.target.closest('.pkrow'); if(!b) return;
-  e.stopPropagation(); musPickChoose(b.dataset.k); });
+  e.stopPropagation();
+  /* A drag that ended over a row is a scroll, not a choice. */
+  if(pkMoved>PK_SLOP){ pkMoved=0; return; }
+  musPickChoose(b.dataset.k); });
 $('mus-veil').addEventListener('pointerdown',()=>gClaim());
 $('mus-veil').addEventListener('click',e=>{ e.stopPropagation(); musPickClose(); });
 
