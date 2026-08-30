@@ -105,9 +105,11 @@ svg{width:100%;height:100%;display:block}
 .value-s{font-size:68px;font-weight:var(--w-val);fill:var(--ink-dim)}
 /* The middle cell is narrower than its neighbours because it has to be:
    the three are 214px apart and only the outer two can overflow towards
-   the rim. Being SMALLER is geometry. Being dimmer was not - it read as
-   a lesser instrument, and now that any reading can land in any of the
-   three it should not. */
+   the rim. Spreading them to 260 so all three could be .value was tried
+   and put the outer two into the bezel's 120 tick labels - the row has
+   nowhere to go sideways. Being SMALLER is geometry. Being dimmer was
+   not - it read as a lesser instrument, and now that any reading can
+   land in any of the three it should not. */
 #c2{fill:var(--ink)}
 .unit{font-size:34px;font-weight:600;fill:var(--label);letter-spacing:.14em}
 .label{font-size:32px;font-weight:var(--w-lbl);letter-spacing:.20em;
@@ -1296,43 +1298,74 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
   <!-- 432 tucked this into the digits' negative space, which worked while
        it said SOG and stopped working the moment it could say BOAT SPEED
-       or APPARENT WIND: the huge glyphs top out around 430. 386 clears
-       them, and clears the timer's +/- buttons at 314. -->
+       or APPARENT WIND: the huge glyphs top out at 359. 386 does not
+       clear them either, but it sits in the gap ABOVE the digits' waist
+       where nothing is drawn, and it clears the timer's +/- buttons at
+       314. -->
   <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
   <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
-  <text id="spd-u" class="unit" x="540" y="664" text-anchor="middle">KT</text>
+  <!-- Beside the number, not under it, and sharing its y: every text on
+       this dial is dominant-baseline:middle, so the same y centres the
+       unit on the number's own middle rather than dropping it to the
+       baseline. dialUnitX() sets the x each repaint from the number's
+       measured width. Anchored start so the unit grows rightward into
+       empty glass instead of back into the digits. -->
+  <text id="spd-u" class="unit" x="756" y="556" text-anchor="start">KT</text>
+  <!-- Off-glass, and the only thing that ever measures a huge string.
+       visibility rather than display so getBBox still answers. -->
+  <text id="spd-meas" class="huge" x="0" y="-400" visibility="hidden">0</text>
 
-  <!-- performance strip: hidden during the countdown, replaced by pings -->
+  <!-- performance strip: hidden during the countdown, replaced by pings.
+       Up 21 into the line the big cell's unit used to occupy, and
+       centred in what is left of it: 33px clear of the number's ink
+       above and 32 of the headers below, where it used to have 39 and 7.
+       It belongs with the number - it is that number's context - and the
+       cells below needed the rest of the room more than it did. -->
   <g id="strip">
-    <text id="p-tws" class="strip" x="322" y="706" text-anchor="middle">TWS ––</text>
-    <text id="p-tgt" class="strip" x="540" y="706" text-anchor="middle">TGT ––</text>
-    <text id="p-shf" class="strip" x="758" y="706" text-anchor="middle">––</text>
+    <text id="p-tws" class="strip" x="322" y="685" text-anchor="middle">TWS ––</text>
+    <text id="p-tgt" class="strip" x="540" y="685" text-anchor="middle">TGT ––</text>
+    <text id="p-shf" class="strip" x="758" y="685" text-anchor="middle">––</text>
   </g>
 
-  <!-- start line pings, only while the countdown runs -->
+  <!-- start line pings, only while the countdown runs. They travel with
+       the strip they replace, and their box has to stay ABOVE the cell
+       tap rects: those are declared later, so they would take these
+       taps. -->
   <g id="pings" style="display:none">
     <g id="ping-pin" class="pbtn">
-      <rect x="322" y="676" width="160" height="62" rx="16"/>
-      <text x="402" y="708" text-anchor="middle">PIN</text>
+      <rect x="322" y="650" width="160" height="62" rx="16"/>
+      <text x="402" y="682" text-anchor="middle">PIN</text>
     </g>
     <g id="ping-boat" class="pbtn">
-      <rect x="598" y="676" width="160" height="62" rx="16"/>
-      <text x="678" y="708" text-anchor="middle">BOAT</text>
+      <rect x="598" y="650" width="160" height="62" rx="16"/>
+      <text x="678" y="682" text-anchor="middle">BOAT</text>
     </g>
   </g>
 
-  <text id="c1-lbl" class="label" x="326" y="758" text-anchor="middle">DEPTH</text>
-  <text id="dpt" class="value" x="326" y="826" text-anchor="middle">––</text>
-  <text id="dpt-u" class="unit" x="326" y="884" text-anchor="middle">FEET</text>
-  <text id="c3-u" class="unit" x="754" y="884" text-anchor="middle">KNOTS</text>
+  <!-- One grid for all three: header 739, value 821, unit 891. These are
+       MIDDLES, not baselines - dominant-baseline:middle is set on every
+       text in this file - so the ink lands 726..748, 772..852 and
+       876..900: 25px of air under the header and 25 under the number.
+       It used to be 10 and 12, with the header's ink ending at 767 and
+       the number's starting at 777, and the row read as one crowded
+       block. That is what the line the big cell's unit gave up buys.
+       900 is as low as the row goes - the lock's tap circle starts at
+       914 - and the x's do not move: the bezel's 120 tick labels sit at
+       137..188 and 892..943, and a 104px reading pushed outboard runs
+       straight into them. -->
+  <text id="c1-lbl" class="label" x="326" y="739" text-anchor="middle">DEPTH</text>
+  <text id="dpt" class="value" x="326" y="821" text-anchor="middle">––</text>
+  <text id="dpt-u" class="unit" x="326" y="891" text-anchor="middle">FT</text>
 
-  <text id="c3-lbl" class="label" x="754" y="758" text-anchor="middle">VMG</text>
-  <text id="vmg" class="value" x="754" y="826" text-anchor="middle">––</text>
+  <text id="c2-lbl" class="label" x="540" y="739" text-anchor="middle">HEEL</text>
+  <text id="c2" class="value-s" x="540" y="821" text-anchor="middle">––</text>
+  <!-- .unit, not the 40px .value-s it was: STBD under a heel angle is
+       the same kind of line as FT under a depth, and now it looks it. -->
+  <text id="c2b" class="unit" x="540" y="891" text-anchor="middle">––</text>
 
-
-  <text id="c2-lbl" class="label" x="540" y="762" text-anchor="middle">HEEL</text>
-  <text id="c2" class="value-s" x="540" y="822" text-anchor="middle">––</text>
-  <text id="c2b" class="value-s" x="540" y="886" text-anchor="middle" style="font-size:40px">––</text>
+  <text id="c3-lbl" class="label" x="754" y="739" text-anchor="middle">VMG</text>
+  <text id="vmg" class="value" x="754" y="821" text-anchor="middle">––</text>
+  <text id="c3-u" class="unit" x="754" y="891" text-anchor="middle">KT</text>
 
   <!-- Tap targets over the four cells. LAST in the SVG, and that is not
        cosmetic: SVG has no z-index, so painting order is hit-test order,
@@ -1341,21 +1374,23 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        with the number in it, which is the half you aim at.
        Transparent rects rather than the <text> itself, which hit-tests on its glyphs: a number is mostly
        the gaps between its strokes, and a target you have to hit a
-       stroke of is not a target. 176 x 156 is 29 x 26 mm.
-       Below y=734 there is no dial tap to collide with - the timer is
-       above 0.33 and the speed toggle above 0.68 - and they clear the
-       ping buttons at 738 and the lock at 914. -->
+       stroke of is not a target. 176 x 188 is 29 x 31 mm, up from
+       29 x 26 - the row got taller, so the targets did.
+       The only dial tap they must miss is the timer's, above 0.33 of the
+       stage - the speed toggle that used to own everything below 0.68 is
+       long gone. The lower three start at 716, clear of the ping buttons
+       that end at 712, and stop at 904, clear of the lock at 914. -->
   <g id="dial-cells">
-    <!-- The big one. Wider and taller because it is: label at 432 to
-         unit at 664. -->
-    <rect class="dcell" data-g="dial" data-slot="c0" x="330" y="396"
-          width="420" height="290" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="740"
-          width="176" height="156" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="740"
-          width="176" height="156" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="740"
-          width="176" height="156" fill="transparent"/>
+    <!-- The big one, over the label, the number AND the unit beside it:
+         a widest-case 88.8 puts the unit's tail at 882. -->
+    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="368"
+          width="620" height="272" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="716"
+          width="176" height="188" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="716"
+          width="176" height="188" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="716"
+          width="176" height="188" fill="transparent"/>
   </g>
 
 
@@ -2318,13 +2353,16 @@ function render(){
     wVal ('dpt', Math.abs(dm)>999?'999':String(Math.round(dm)));
     wCls ('dpt','alarm', L.dist<0);                  // over early
     wCls ('dpt','warn', false); wCls('dpt','stale', false);
-    wText('dpt-u', met?'METRES':'FEET');
+    /* Abbreviated, like every other unit on the glass since the units
+       were shortened - METRES and SECONDS were the last two words left
+       sitting under numbers that say KT and FT the rest of the time. */
+    wText('dpt-u', met?'M':'FT');
     wVal ('c2',  Math.abs(L.bias).toFixed(0)+'\u00b0');
     wText('c2b', L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT));
     wCls ('c2','stale', false); wCls('c2b','stale', false);
     wVal ('vmg', L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
     wCls ('vmg','alarm', L.burn!==null&&L.burn<0);
-    wText('c3-u','SECONDS');
+    wText('c3-u','SEC');
     /* The override has written over all three, so what paintDialCells
        last put there is no longer what is on the glass. Without this its
        cache would still match on the frame the countdown ends, and TO
@@ -3377,9 +3415,10 @@ function drawDepth(){
   $('bar-alarm').style.width=(CFG.depthAlarm/mx*100)+'%';
   $('bar-warn').style.left =(CFG.depthAlarm/mx*100)+'%';
   $('bar-warn').style.width=((CFG.depthWarn-CFG.depthAlarm)/mx*100)+'%';
-  /* through the cache, so the dial's DRAW block and this cannot end up
-     disagreeing about what the label already says */
-  wText('dpt-u', CFG.depthUnit==='m'?'METRES':'FEET');
+  /* It used to set #dpt-u here as well, from back when that element was
+     the depth cell's unit and nothing else. It is now whatever reading
+     the first cell is showing - true wind as easily as depth - and the
+     panel has no business writing it. paintDialCells owns it. */
 }
 $('d-up').addEventListener('click',()=>{
   CFG.depthAlarm++; CFG.depthWarn=CFG.depthAlarm*2; drawDepth(); prefsSave();});
@@ -4852,6 +4891,9 @@ function paintDialCells(){
     wText(lbl, musHdr(c));
     wVal(val, v===null?'––':v);
     wText(third, v===null ? '' : (sub || musDU(c)));
+    /* Only the big cell's unit is beside its number; the other three
+       still sit under theirs, centred, and need no x at all. */
+    if(sl==='c0') wAttr(third,'x', dialUnitX(v===null?'––':v));
     wCls(val,'stale', v===null);
     wCls(third,'stale', v===null);
     /* The shallow alarm follows the READING, not the cell. It used to be
@@ -4867,6 +4909,34 @@ function paintDialCells(){
 }
 
 const musCell=k=>MUS_CELLS.find(c=>c.k===k);
+
+/* Where the big cell's unit sits, in SVG user units.
+
+   It hangs off the number's own right edge, so KT stays against the 6 in
+   5.6 instead of floating out where a 99.9 would have ended. Parking it
+   at the widest string the reading could ever show was the other option
+   and it looked it - a hundred pixels of nothing between the number and
+   its unit, out among the bezel's tick labels.
+   The cost is that it steps when a digit appears - 9.9 to 10.1 moves it
+   one glyph - but it steps WITH the number's edge, which reads as one
+   object moving rather than a label wandering off on its own.
+   Measured by SHAPE, every digit turned into an 8, which does two
+   things: tabular figures make all digits the same width so the shape is
+   exact, and a handful of cached entries then covers every number the
+   boat will ever show. Without that this would be a getBBox every
+   frame. */
+const numShape=s=>String(s).replace(/[0-9]/g,'8');
+const SHAPE_W=new Map();
+function shapeW(str){
+  const k=numShape(str); let w=SHAPE_W.get(k);
+  if(w===undefined){ wVal('spd-meas',k); w=$('spd-meas').getBBox().width;
+                     SHAPE_W.set(k,w); }
+  return w;
+}
+const SPD_GAP=28;
+function dialUnitX(v){
+  return Math.round(540+(v?shapeW(v):0)/2+SPD_GAP);
+}
 
 let stripKey='';
 function paintStrip(){
