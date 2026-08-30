@@ -979,6 +979,12 @@ a.lib-row{text-decoration:none;color:inherit}
    the compass ticks, 13 to the volume ring, 48 to the text below. */
 .mcell[data-slot="p"] b,
 .mcell[data-slot="s"] b{font-size:120px}
+/* The HTML half of the degree ring - DEG_EM and DEG_UP in the script,
+   kept in step by hand because there is no build step to share them.
+   `top` needs position:relative to bite, and the parent must not be
+   static-positioned away underneath it. */
+.mcell b i{font-style:normal;font-size:.66em;position:relative;top:-.34em;
+  letter-spacing:0}
 .mcell em{font-size:24px;letter-spacing:.16em}
 /* Clear of the volume ring's topmost tick with room to spare rather than
    by a hair: lower than this and the degree sign sits on the twelve
@@ -2119,6 +2125,33 @@ const wAttr=(id,a,v)=>{const k=id+'|a|'+a; if(_w.get(k)===v)return; _w.set(k,v);
 const wText=(id,v)  =>{const k=id+'|t';    if(_w.get(k)===v)return; _w.set(k,v); $(id).textContent=v;};
 const wCls =(id,c,o)=>{const k=id+'|c|'+c; if(_w.get(k)===o)return; _w.set(k,o); $(id).classList.toggle(c,o);};
 
+/* The degree ring is a UNIT, not a fourth digit, and at the sizes the
+   readings run now a full-size one reads as one. So it is written as its
+   own child at DEG_EM of the number, which leaves the number itself
+   untouched - shrinking the whole line to tame the ring would shrink the
+   reading, which is the thing you are trying to read.
+   DEG_UP is not decoration. The glyph is drawn near the TOP of its own
+   em box and sits on the same baseline as the digits, so a smaller box
+   drops it down the number's side; lifting it back is what keeps it
+   where a full-size ring was. Both are in em, so every cell on both
+   pages gets the same ring at its own size for free.
+   SVG and HTML need different markup for the same thing, so the dial
+   builds a <tspan> here and the music page an <i> in paintStrip. */
+const DEG_EM=0.66, DEG_UP=0.34;
+const SVGNS='http://www.w3.org/2000/svg';
+const wVal=(id,v)=>{
+  const k=id+'|v'; if(_w.get(k)===v)return; _w.set(k,v);
+  const el=$(id); if(!el)return;
+  if(typeof v==='string' && v.endsWith('\u00b0')){
+    el.textContent=v.slice(0,-1);
+    const t=document.createElementNS(SVGNS,'tspan');
+    t.setAttribute('font-size',DEG_EM+'em');
+    t.setAttribute('dy',(-DEG_UP)+'em');
+    t.textContent='\u00b0';
+    el.appendChild(t);
+  } else el.textContent=v;
+};
+
 /* The app dock is NOT on this list. The panel covers the glass and a
    running app replaces it, but a dock leaves the dial in plain sight -
    and a dial frozen in plain sight reads as a crash. */
@@ -2268,19 +2301,22 @@ function render(){
     wText('c2-lbl','BIAS');
     wText('c3-lbl','BURN');
     const dm = met ? L.dist : L.dist*M_TO_FT;
-    /* `de` was hoisted out of the depth block that used to live above
-       this; that block belongs to paintDialCells now, and #dpt is
-       whatever c1 is showing between countdowns. */
-    const de=$('dpt');
-    de.textContent = Math.abs(dm)>999?'999':Math.round(dm);
-    de.classList.toggle('alarm', L.dist<0);          // over early
-    de.classList.remove('warn','stale');
+    /* Through the SAME cached writers paintDialCells uses. Writing these
+       three straight at the element left the cache holding what the
+       readings had put there, so the handover back could be skipped as a
+       no-op with TO LINE / BIAS / BURN still on the glass - and the same
+       for the classes, where a stale `alarm` stayed red over a depth
+       that was fine. Resetting dialCellKey below fixes the group; this
+       fixes the elements. */
+    wVal ('dpt', Math.abs(dm)>999?'999':String(Math.round(dm)));
+    wCls ('dpt','alarm', L.dist<0);                  // over early
+    wCls ('dpt','warn', false); wCls('dpt','stale', false);
     wText('dpt-u', met?'METRES':'FEET');
-    $('c2').textContent  = Math.abs(L.bias).toFixed(0)+'°';
-    $('c2b').textContent = L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT);
-    $('c2').classList.remove('stale'); $('c2b').classList.remove('stale');
-    $('vmg').textContent = L.burn===null?'––':(L.burn>0?'+':'')+L.burn;
-    $('vmg').classList.toggle('alarm', L.burn!==null&&L.burn<0);
+    wVal ('c2',  Math.abs(L.bias).toFixed(0)+'\u00b0');
+    wText('c2b', L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT));
+    wCls ('c2','stale', false); wCls('c2b','stale', false);
+    wVal ('vmg', L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
+    wCls ('vmg','alarm', L.burn!==null&&L.burn<0);
     wText('c3-u','SECONDS');
     /* The override has written over all three, so what paintDialCells
        last put there is no longer what is on the glass. Without this its
@@ -4716,6 +4752,12 @@ const MUS_CELLS=[
             x=sog*Math.cos(twa); }
           return readNum('vmg',x*MS_TO_KT).toFixed(1);}},
 ];
+/* The dial's wVal builds a <tspan>; this is the same ring for the music
+   page, where the cells are HTML. Safe to interpolate: every string it
+   sees came out of a value function in MUS_CELLS, which only ever
+   produce digits, a sign, a dot and the ring itself. */
+const degMark=v=>String(v).endsWith('\u00b0')
+  ? String(v).slice(0,-1)+'<i>\u00b0</i>' : String(v);
 const musUnitOf=c=>typeof c.u==='function'?c.u():c.u;
 /* The dial's own two, each falling back to the shared one. */
 const musHdr =c=>c.hdr!==undefined?c.hdr:c.name;
@@ -4782,10 +4824,10 @@ function paintDialCells(){
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
     const [lbl,val,third]=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
-    if(!c){ wText(lbl,''); wText(val,'––'); wText(third,''); continue; }
+    if(!c){ wText(lbl,''); wVal(val,'––'); wText(third,''); continue; }
     const v=c.v(), sub=musSub(c);
     wText(lbl, musHdr(c));
-    wText(val, v===null?'––':v);
+    wVal(val, v===null?'––':v);
     wText(third, v===null ? '' : (sub || musDU(c)));
     wCls(val,'stale', v===null);
     wCls(third,'stale', v===null);
@@ -4823,7 +4865,7 @@ function paintStrip(){
      dash reads as "broken", which usually is not. */
   box.innerHTML=row.map(r=> r.v===null ? '' :
     `<span class="mcell" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
-    +`<u>${r.h}</u><b>${r.v}</b><em>${r.u}</em></span>`).join('');
+    +`<u>${r.h}</u><b>${degMark(r.v)}</b><em>${r.u}</em></span>`).join('');
   /* The cells are rebuilt, so the menu is anchored to an element that no
      longer exists - re-point it at the new one. */
   if(PICK && PICK.g==='mus'){
