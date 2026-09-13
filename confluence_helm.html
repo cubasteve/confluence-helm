@@ -2271,6 +2271,7 @@ function render(){
   live('s-dpt', d!==null);
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
+  windModeTick();
 
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
@@ -4971,6 +4972,19 @@ const MUS_CELLS=[
   {k:'twd', sen:'wnd', name:'WIND DIRECTION', hdr:'TWD',
    u:()=>point(degOf('environment.wind.directionTrue')),
    v:()=>bearing(degOf('environment.wind.directionTrue'))},
+  /* The switchers. Each is whichever of two readings the wind can bear
+     right now, and delegates everything to it - header, number, unit,
+     side - so the cell reads exactly as the underlying one would and
+     the header is what tells you which. AWA 38 on the beat; TWA 158
+     STBD once you bear away onto the run. */
+  {k:'wa', sen:'wnd', name:'WIND ANGLE · AUTO',
+   hdr:()=>musHdr(windPick('awa','twa')), u:()=>musUnitOf(windPick('awa','twa')),
+   du:()=>musDU(windPick('awa','twa')),   sub:()=>musSub(windPick('awa','twa')),
+   v:()=>windPick('awa','twa').v()},
+  {k:'ws', sen:'wnd', name:'WIND SPEED · AUTO',
+   hdr:()=>musHdr(windPick('aws','tws')), u:()=>musUnitOf(windPick('aws','tws')),
+   du:()=>musDU(windPick('aws','tws')),
+   v:()=>windPick('aws','tws').v()},
 
   /* ---- MOTION: the 9-axis ------------------------------------------- */
   /* Three digits, zero padded, the way a compass card is read: 007 is a
@@ -5033,9 +5047,43 @@ const MUS_CELLS=[
    produce digits, a sign, a dot and the ring itself. */
 const degMark=v=>String(v).endsWith('\u00b0')
   ? String(v).slice(0,-1)+'<i>\u00b0</i>' : String(v);
+/* ---- apparent or true: which wind you are sailing to -----------------
+   Upwind you steer to the apparent wind - the telltales, the angle the
+   sails actually feel - so that is what the display should read. On a
+   run the apparent angle is a poor guide: it is small, it changes with
+   every knot of boat speed, and in light air it goes to nothing while
+   the boat is still moving with the breeze. Downwind you sail to the
+   TRUE wind angle, which is what racing displays switch to. The AUTO
+   readings below follow the point of sail: apparent on a beat and a
+   reach, true once the wind is well aft of the beam.
+   Hysteresis, because a reach sits right on the boundary: over to true
+   once |TWA| has been past RUN for DWELL, back to apparent once it has
+   been forward of BEAT for as long. A single line at the beam would flip
+   the header with every wave. A tunable object rather than three
+   consts so a test can shorten the dwell.
+   With no apparent reading at all - no vane fitted - it shows true
+   whatever the angle, rather than a dash. */
+const WIND_AUTO={run:100, beat:80, dwell:8000};      /* deg, deg, ms */
+let windAuto='app', windAutoSince=0;
+function windModeTick(){
+  const now=Date.now();
+  const noVane = get('environment.wind.angleApparent')===null;
+  const t=get('environment.wind.angleTrueWater');
+  const twa=t===null?null:Math.abs(smoothAngle('twa_auto', t*DEG));
+  const wantTrue = noVane || (twa!==null && twa>WIND_AUTO.run);
+  const wantApp  = !noVane && twa!==null && twa<WIND_AUTO.beat;
+  const want = windAuto==='app' ? (wantTrue?'true':'app')
+                                : (wantApp ?'app' :'true');
+  if(want===windAuto){ windAutoSince=0; return; }
+  if(!windAutoSince){ windAutoSince=now; return; }
+  if(now-windAutoSince>=WIND_AUTO.dwell){ windAuto=want; windAutoSince=0; }
+}
+const windPick=(app,tru)=>musCell(windAuto==='app'?app:tru);
+
 const musUnitOf=c=>typeof c.u==='function'?c.u():c.u;
 /* The dial's own two, each falling back to the shared one. */
-const musHdr =c=>c.hdr!==undefined?c.hdr:c.name;
+const musHdr =c=>{ const h=c.hdr!==undefined?c.hdr:c.name;
+                   return typeof h==='function'?h():h; };
 const musDU  =c=>{ const v=c.du!==undefined?c.du:c.u;
                    return typeof v==='function'?v():v; };
 const musSub =c=>c.sub?c.sub():'';
