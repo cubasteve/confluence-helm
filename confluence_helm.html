@@ -1710,8 +1710,14 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <svg id="t-svg" viewBox="0 0 1080 1080">
     <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
-      <g id="t-tiles"></g>       <!-- satellite basemap slots in here -->
-      <g id="t-path"></g>
+      <!-- The camera. A pinch or a drag transforms THIS group while the
+           finger is down and commits to MAPVIEW on release, so the tiles
+           are laid out once per gesture rather than once per frame.
+           Inside the clip, so the circle stays put and the map moves. -->
+      <g id="t-cam">
+        <g id="t-tiles"></g>     <!-- satellite basemap slots in here -->
+        <g id="t-path"></g>
+      </g>
     </g>
   </svg>
   <div class="t-stats">
@@ -5637,6 +5643,102 @@ function drawTiles(v){
   g.innerHTML=out;
 }
 
+/* ---- zoom and pan: the glass is the control ---------------------------
+   No buttons, same as the radar. Two fingers scale the map about the
+   point between them; one finger drags it. While a finger is down the
+   change is a transform on #t-cam - one attribute, no relayout - and on
+   release it is folded into MAPVIEW and the map drawn once, properly,
+   with tiles at the right zoom. Drawing tiles per pointermove would
+   rewrite the <image> tags every frame and reload them all.
+   A view set this way is MANUAL: drawMap stops refitting it. Double-tap
+   hands the view back to the fit.
+   Scale is clamped to what z11..z19 tiles would be - the whole lake at
+   one end, a boat-length at the other. Tiles beyond z17 are the z17
+   ones scaled up, which is soft but true. */
+const TMAP_SCALE_MIN=256*Math.pow(2,11), TMAP_SCALE_MAX=256*Math.pow(2,19);
+let tmapLastTap=0;
+(function(){
+  const svg=$('t-svg'); if(!svg) return;
+  const ptrs=new Map(); let pin=null, drag=null, lock=false, cam=null;
+  /* client -> SVG user units, so the maths is in the map's own 1080 */
+  const toSvg=(x,y)=>{ const q=svg.createSVGPoint(); q.x=x; q.y=y;
+    const o=q.matrixTransform(svg.getScreenCTM().inverse()); return {x:o.x,y:o.y}; };
+  const two=()=>{ const [a,b]=[...ptrs.values()];
+    const A=toSvg(a.x,a.y), B=toSvg(b.x,b.y);
+    return {x:(A.x+B.x)/2, y:(A.y+B.y)/2, d:Math.hypot(A.x-B.x,A.y-B.y)}; };
+  const paint=()=>{ if(!cam) return;
+    $('t-cam').setAttribute('transform',
+      `translate(${cam.tx.toFixed(1)} ${cam.ty.toFixed(1)}) translate(${cam.cx.toFixed(1)} ${cam.cy.toFixed(1)})`
+      +` scale(${cam.s.toFixed(4)}) translate(${(-cam.cx).toFixed(1)} ${(-cam.cy).toFixed(1)})`); };
+  /* Fold the transform into the view: the mercator point under the
+     pinch centre must land back under it at the new scale, then the pan
+     shifts everything by tx,ty screen pixels. */
+  const commit=()=>{
+    const v=MAPVIEW; if(!v||!cam) { cam=null; return; }
+    const s1=Math.max(TMAP_SCALE_MIN, Math.min(TMAP_SCALE_MAX, v.scale*cam.s));
+    const k=s1/v.scale;
+    const ux=v.mx+(cam.cx-MAP_CX)/v.scale, uy=v.my+(cam.cy-MAP_CY)/v.scale;
+    MAPVIEW={ mx: ux-(cam.cx-MAP_CX)/s1 - cam.tx/s1,
+              my: uy-(cam.cy-MAP_CY)/s1 - cam.ty/s1,
+              scale:s1, manual:true };
+    cam=null; tileKey='';
+    drawMap(shownTrack());
+  };
+  svg.addEventListener('pointerdown',e=>{
+    if(!MAPVIEW) return;                    /* nothing to move */
+    gClaim();
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{ svg.setPointerCapture(e.pointerId); }catch(err){}
+    if(ptrs.size===2){
+      /* a second finger turns the pan into a zoom; lock keeps the
+         finger still down when it ends from starting a fresh pan */
+      drag=null; lock=true;
+      const m=two();
+      pin={d0:m.d||1};
+      cam={s:1, cx:m.x, cy:m.y, tx:0, ty:0};
+    }else if(ptrs.size===1 && !lock){
+      const P=toSvg(e.clientX,e.clientY);
+      drag={x:P.x,y:P.y};
+      cam={s:1, cx:MAP_CX, cy:MAP_CY, tx:0, ty:0};
+    }
+  });
+  svg.addEventListener('pointermove',e=>{
+    if(!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pin && ptrs.size>=2){
+      const m=two(), v=MAPVIEW;
+      const lo=TMAP_SCALE_MIN/v.scale, hi=TMAP_SCALE_MAX/v.scale;
+      cam.s=Math.max(lo, Math.min(hi, m.d/pin.d0));
+      paint(); return;
+    }
+    if(!drag) return;
+    const P=toSvg(e.clientX,e.clientY);
+    cam.tx=P.x-drag.x; cam.ty=P.y-drag.y;
+    paint();
+  });
+  const up=e=>{
+    if(!ptrs.has(e.pointerId)) return;
+    ptrs.delete(e.pointerId);
+    if(pin && ptrs.size<2){ pin=null; commit(); }
+    if(ptrs.size===0){
+      lock=false;
+      if(drag){
+        const moved=Math.hypot(cam.tx,cam.ty);
+        drag=null;
+        if(moved>6){ commit(); return; }
+        cam=null;
+        /* a still finger: the second tap inside 320 ms refits */
+        const now=Date.now();
+        if(now-tmapLastTap<320){ tmapLastTap=0;
+          MAPVIEW=null; tileKey=''; drawMap(shownTrack()); }
+        else tmapLastTap=now;
+      }
+    }
+  };
+  svg.addEventListener('pointerup',up);
+  svg.addEventListener('pointercancel',up);
+})();
+
 /* one implementation of the numbers, used by the map and the library */
 function trackStats(pts){
   if(!pts||pts.length<2) return {nm:0,secs:0,avg:0,max:0};
@@ -5670,8 +5772,14 @@ function drawMap(pts){
   const P=pts.filter((_,i)=>i%step===0);
   if(P[P.length-1]!==pts[pts.length-1]) P.push(pts[pts.length-1]);  /* keep the head */
 
-  if(outOfView(MAPVIEW,P)) MAPVIEW=fitView(P);
+  /* Refit only while the view is the app's own. Once a finger has set
+     it, a live track growing out of the circle is what it looks like -
+     the boat sailing off the edge of the map you chose - and pulling the
+     view back to fit would undo the zoom every second. Double-tap gives
+     the fit back. */
+  if(!(MAPVIEW&&MAPVIEW.manual) && outOfView(MAPVIEW,P)) MAPVIEW=fitView(P);
   const v=MAPVIEW;
+  $('t-cam').removeAttribute('transform');
   drawTiles(v);
   const M=P.map(p=>merc(p.la,p.lo));
   const X=M.map(m=>projX(v,m)), Y=M.map(m=>projY(v,m));
