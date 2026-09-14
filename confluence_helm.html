@@ -4425,7 +4425,7 @@ errPaint();
 
 const KB_ABC=['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'];
 const KB_SYM=['1234567890','-/:;()$&@"','.,?!\'+=#%*','_\\|~<>[]{}'];
-const KB_NUM=['1234567890','.-'];                 /* a position: digits, a point, a minus */
+const KB_NUM=['1234567890','.-NSEW'];             /* a position: digits, a point, a minus, a hemisphere */
 /* The keyboard's markup, for whoever needs one: the WPA key and the
    new-mark form both draw it from here, with their own state
    {shift,sym,num} and their own word on the go key. */
@@ -7017,13 +7017,20 @@ let MK=null;
 const MARK_MAX_NM=100;
 const fmtDM=v=>{ const s=v<0?'-':'', a=Math.abs(v), d=Math.floor(a); return s+d+' '+((a-d)*60).toFixed(3); };
 function parseDM(str){
-  const t=String(str).trim().replace(/[°'′"]/g,' ').replace(/\s+/g,' ');
+  /* As a chart writes it - 28°49.03'N, 081°16.17'W - or as a minus:
+     a hemisphere letter at either end sets the sign, S and W negative,
+     and a minus does the same. Degree and minute marks are spaces. */
+  let t=String(str).trim().toUpperCase();
+  let sign=1; const hem=t.match(/^([NSEW])|([NSEW])$/);
+  if(hem){ if(/[SW]/.test(hem[0])) sign=-1; t=t.replace(/^[NSEW]|[NSEW]$/g,'').trim(); }
+  t=t.replace(/[°'′"]/g,' ').replace(/\s+/g,' ').trim();
   if(!t) return null;
-  const parts=t.split(' '), neg=parts[0].startsWith('-');
-  const d=Math.abs(parseFloat(parts[0])); if(!isFinite(d)) return null;
+  const parts=t.split(' '); if(parts[0].startsWith('-')){ sign=-sign; parts[0]=parts[0].slice(1); }
+  const d=parseFloat(parts[0]); if(!isFinite(d)||d<0) return null;
   let v=d;
   if(parts.length>1){ const m=parseFloat(parts[1]); if(!isFinite(m)||m<0||m>=60) return null; v=d+m/60; }
-  return neg?-v:v;
+  if(parts.length>2) return null;
+  return sign*v;
 }
 function mkOpen(){
   MK={f:'name', name:'', lat:'', lon:'', kb:{shift:false,sym:false,num:false}};

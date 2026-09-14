@@ -234,7 +234,9 @@ to the line.
 and a position typed on the app's own keyboard or taken from the GPS
 with `HERE`. Positions read as the sailing instructions write them,
 degrees and decimal minutes with a space between, or as decimal
-degrees; west and south are minus. A position more than 100 NM from the
+degrees, with the hemisphere as a letter at either end or as a minus
+for west and south — `28 49.03 N` and `081 16.17 W` go in as the chart
+writes them. A position more than 100 NM from the
 boat is refused with a hint about the minus: a longitude typed without
 it lands in Asia, and the map would try to fit the globe. `SAVE` keeps
 the mark for good —
