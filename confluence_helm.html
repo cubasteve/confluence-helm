@@ -2389,8 +2389,17 @@ function render(){
 
   /* ---- performance strip ---- */
   const racing = CFG.racePro && tState==='countdown';
-  wSty('strip','display', racing?'none':'');
-  wSty('pings','display', racing?'':'none');
+  /* PIN and BOAT are up whenever you are PRE-START with the race set on
+     - idle as well as counting down. The line is set while the committee
+     is still laying it, well before the sequence; making the pings wait
+     for the countdown meant pinging in the five minutes you are trying
+     to hit the line. They take the strip's row and give it back at the
+     gun. The TO LINE / BIAS / BURN override of the bottom cells stays a
+     countdown thing: pre-start it would take your readings away for the
+     whole afternoon. */
+  const preStart = CFG.racePro && (tState==='idle'||tState==='countdown');
+  wSty('strip','display', preStart?'none':'');
+  wSty('pings','display', preStart?'':'none');
   /* With racePro off the strip carries ONE reading, centred; with it on
      that reading moves left to make room for TGT and the shift.
      What the reading IS belongs to paintDialCells now - the strip is
@@ -2401,7 +2410,7 @@ function render(){
   wAttr('p-tws','x', CFG.racePro?322:540);
   wAttr('dc4','x',     CFG.racePro?232:420);
   wAttr('dc4','width', CFG.racePro?180:240);
-  wSty ('dc4','display', racing?'none':'');
+  wSty ('dc4','display', preStart?'none':'');
   wSty('p-tgt','display', CFG.racePro?'':'none');
   wSty('p-shf','display', CFG.racePro?'':'none');
 
