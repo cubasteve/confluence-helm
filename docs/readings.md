@@ -214,10 +214,14 @@ in view under it. What fills the other slots depends on where you are:
 |---|---|
 | `DIST` | range to the next mark, metres under 1000 and nautical miles beyond |
 | `BRG` | true bearing to it, to steer against COG |
-| `MARK 2 OF 5` | which mark, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
+| `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
-The next mark comes from the course set in the Tracks app; with no
-course set, the only leg is back to the line. Target speed and the wind
+The next mark comes from the course set in the Tracks app: tap marks
+on the course sheet in the order you will sail them, and each one you
+add gets a `P` and an `S` beside it for the side you will leave it —
+port unless you say otherwise, red and green the way the lights are.
+The side shows on the map by the mark's number and in the box as you
+close on it. With no course set, the only leg is back to the line. Target speed and the wind
 shift are not in the box: they are readings, picked into any slot like
 the rest.
 

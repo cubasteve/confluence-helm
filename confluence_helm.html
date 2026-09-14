@@ -725,6 +725,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row .lib-main b{display:block;font-size:26px;font-weight:600;color:var(--ink)}
 .course-row .lib-main span{font-size:17px;letter-spacing:.1em;color:var(--label)}
 .course-row.line .lib-main b{color:var(--label)}
+/* which side to leave a mark: P red, S green, the way the lights are.
+   Only on rows that are in the course. */
+.course-row .side{display:flex;gap:10px;margin-right:14px;flex:none}
+.sb{width:50px;height:50px;border-radius:25px;border:2px solid var(--hairline);
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--label)}
+.sb.on{color:#fff;background:var(--port);border-color:var(--port)}
+.sb.on[data-side="S"]{background:var(--stbd);border-color:var(--stbd)}
 .course-bar{display:flex;gap:18px;margin-top:22px}
 .cbtn{height:64px;padding:0 30px;border-radius:32px;border:2px solid var(--hairline);white-space:nowrap;
   background:none;font-family:var(--font);font-size:20px;font-weight:600;
@@ -2732,6 +2739,9 @@ function lineData(){
    starts the course over. */
 let COURSE = JSON.parse(localStorage.getItem('course')||'null') || {marks:[], next:0};
 const courseSave=()=>localStorage.setItem('course',JSON.stringify(COURSE));
+/* Which side to leave each mark, by id: 'P' or 'S', port unless set.
+   Lives in COURSE so it is saved and cleared with the course. */
+const markSide=id=>(COURSE.side&&COURSE.side[id])||'P';
 const COURSE_ROUND={near:40, away:60};
 let courseNear=false;
 function courseNext(){
@@ -2864,7 +2874,7 @@ function paintRace(met){
     const i=COURSE.next, N=COURSE.marks.length;
     if(n.id==='finish'){ wText('rp-r2-l', N?'LAST LEG':'NO COURSE SET'); wText('rp-r2','FINISH LINE'); }
     else { const after=i+1<N ? markOf(COURSE.marks[i+1]) : null;
-      wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N);
+      wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N+' · TO '+(markSide(n.id)==='P'?'PORT':'STBD'));
       wText('rp-r2', n.hdr+(after ? ' · THEN '+after.hdr : ' · THEN FINISH')); }
   }
 }
@@ -6249,7 +6259,9 @@ function drawMap(pts){
     out+=`<circle class="t-mark" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14"
            fill="${on?'var(--accent)':'var(--panel)'}" stroke="var(--accent)" stroke-width="4"/>
           <text x="${x.toFixed(1)}" y="${(y+1).toFixed(1)}" text-anchor="middle"
-           font-size="17" font-weight="700" fill="${on?'#fff':'var(--accent)'}">${i+1}</text>`; });
+           font-size="17" font-weight="700" fill="${on?'#fff':'var(--accent)'}">${i+1}</text>
+          <text x="${(x+19).toFixed(1)}" y="${(y-13).toFixed(1)}" text-anchor="middle"
+           font-size="15" font-weight="700" fill="${markSide(id)==='P'?'var(--port)':'var(--stbd)'}">${markSide(id)}</text>`; });
   if(trackLive())                                   /* pulsing head while live */
     out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="24"
            fill="none" stroke="var(--port)" stroke-width="3" stroke-opacity=".55"/>`;
@@ -6769,8 +6781,11 @@ function renderCourse(){
   box.innerHTML=lineRow+MARKS.map(m=>{
     const i=COURSE.marks.indexOf(m.id);
     const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
+    const sd=markSide(m.id);
+    const side= i<0 ? '' : `<div class="side"><span class="sb${sd==='P'?' on':''}" data-side="P">P</span>`
+                          +`<span class="sb${sd==='S'?' on':''}" data-side="S">S</span></div>`;
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
-      <div class="lib-main"><b>${m.name}</b><span>${m.hdr}</span></div></div>`; }).join('');
+      <div class="lib-main"><b>${m.name}</b><span>${m.hdr}</span></div>${side}</div>`; }).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
 $('trk-course').addEventListener('click',()=>{
@@ -6778,10 +6793,16 @@ $('trk-course').addEventListener('click',()=>{
 $('course-list').addEventListener('click',e=>{
   if(courseDragged()) return;                 /* a scroll, not a choice */
   const row=e.target.closest('.course-row'); if(!row) return;
+  /* P or S on a mark in the course sets its side; it is not a tap on
+     the row, which would take the mark out. */
+  const sb=e.target.closest('.sb');
+  if(sb){ COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
+    courseSave(); renderCourse(); drawMap(shownTrack()); return; }
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
   else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
-    if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length; }
+    if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length;
+              if(COURSE.side) delete COURSE.side[id]; }
     else COURSE.marks.push(id);
     courseSave(); }
   renderCourse(); drawMap(shownTrack()); });
