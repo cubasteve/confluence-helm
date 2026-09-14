@@ -129,14 +129,14 @@ body.night #mark{opacity:.07}
 .tbtn rect{fill:var(--label)}
 .tbtn:active circle{fill:var(--chip)}
 .strip{font-size:32px;font-weight:600;fill:var(--ink-dim);letter-spacing:.06em}
-/* RACE PRO. The pill under the countdown is the button; the box it
+/* RACE. The pill above the countdown is the button; the box it
    expands into covers the big cell. The box scales up out of the pill
    - transform-origin is the pill's centre - and is not there for taps
    while closed, so the big cell's own rect gets them. */
 .rp-txt{font-size:21px;font-weight:800;font-style:italic;letter-spacing:.18em;fill:#fff}
 .rp-btn .stripe{stroke:#fff;stroke-width:5;opacity:.35;stroke-linecap:round}
 .rp-btn:active .pill{opacity:.75}
-.rp-box{opacity:0;transform:scale(.25);transform-origin:540px 186px;pointer-events:none;
+.rp-box{opacity:0;transform:scale(.25);transform-origin:540px 170px;pointer-events:none;
   transition:transform .22s cubic-bezier(.2,.8,.3,1),opacity .16s}
 .rp-box.on{opacity:1;transform:scale(1);pointer-events:auto}
 .rp-face{fill:var(--panel);stroke:url(#rp-grad);stroke-width:3}
@@ -1353,7 +1353,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <path id="awa-tri" d="M540 80 L572 140 L540 124 L508 140 Z" fill="var(--accent)"/>
   </g>
 
-  <!-- The clock at 258, up from 268, with RACE PRO above it where the
+  <!-- The clock at 258, up from 268, with RACE above it where the
        START word was. The clock says its own state - grey while idle,
        red in the last minute, counting up once racing, pulsing once
        finished - so the word was saying it twice. -->
@@ -1453,8 +1453,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </g>
 
 
-  <!-- RACE PRO. A permanent pill above the clock, where the START word
-       was, at 186: the race set reads as one stack - pill, clock, sync
+  <!-- RACE. A permanent pill above the clock, where the START word
+       was, at 170: the race set reads as one stack - pill, clock, sync
        - and the band under the +/- circles is free, so the box starts
        at 312, straight under them. The alert banner (120..240) does sit
        over the pill while an alert is up; the countdown opens the box
@@ -1473,14 +1473,14 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        and B work. -->
   <defs>
     <linearGradient id="rp-grad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#E0242A"/><stop offset="1" stop-color="#FF8A1E"/>
+      <stop offset="0" stop-color="#0B47C4"/><stop offset="1" stop-color="#2E9BFF"/>
     </linearGradient>
   </defs>
   <g id="race">
     <g id="rp-btn" class="rp-btn">
-      <rect class="pill" x="442" y="166" width="196" height="40" rx="20" fill="url(#rp-grad)"/>
-      <path class="stripe" d="M606 172 L594 200"/><path class="stripe" d="M621 172 L609 200"/>
-      <text class="rp-txt" x="526" y="186" text-anchor="middle">RACE PRO</text>
+      <rect class="pill" x="462" y="150" width="156" height="40" rx="20" fill="url(#rp-grad)"/>
+      <path class="stripe" d="M588 156 L576 184"/><path class="stripe" d="M603 156 L591 184"/>
+      <text class="rp-txt" x="526" y="170" text-anchor="middle">RACE</text>
     </g>
     <g id="rp-box" class="rp-box">
       <rect class="rp-face" x="184" y="312" width="712" height="334" rx="24"/>
@@ -2319,7 +2319,7 @@ const wVal=(id,v)=>{
 };
 /* A number with its unit riding on it, half-size. One string key, so a
    repeat is a no-op. Kept for the odd place a value and unit share a
-   line; the RACE PRO box puts its units on their own line. */
+   line; the RACE box puts its units on their own line. */
 const wUnit=(id,v,u)=>{
   const k=id+'|u'; const key=v+'\u0000'+u; if(_w.get(k)===key)return; _w.set(k,key);
   const el=$(id); el.textContent=v;
@@ -2448,7 +2448,7 @@ function render(){
 
   paintDialCells();
 
-  /* ---- RACE PRO ---- */
+  /* ---- RACE ---- */
   wCls('rp-box','on', rpOpen);
   if(rpOpen){
     /* the reading the box is covering, so it is not lost */
@@ -3024,7 +3024,7 @@ let tGun=0;                               // racing: wall-clock start
 let tFinal=0;                             // finished: frozen elapsed
 let tLeft=CFG.startMins*60000;            // countdown remaining while idle
 
-/* RACE PRO's box: opened by its pill or by the countdown, closed by
+/* RACE's box: opened by its pill or by the countdown, closed by
    its pill, the gun or a reset. */
 let rpOpen=false;
 const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; rpOpen=true;
@@ -3478,7 +3478,7 @@ function timerTap(){
   }, DBL);
 }
 
-/* RACE PRO's pill: a tap toggles the box. gClaim on pointerdown, as
+/* RACE's pill: a tap toggles the box. gClaim on pointerdown, as
    the +/- do: it sits in timerTap()'s third, and the gesture judge runs
    on the capture phase, so pointerup is too late to opt out. The 24 px
    tap-or-swipe rule on top, so a drag that ends on it is not a tap. */

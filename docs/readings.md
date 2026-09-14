@@ -166,10 +166,10 @@ The dial's big cell is the exception: its unit sits *beside* the number
 rather than under it, measured off the number's own right edge so it
 stays against the last digit.
 
-## RACE PRO
+## RACE
 
-A pill above the countdown, where the START word used to be, in the
-racing red-to-orange, that is always there: pill, clock and sync buttons
+A blue pill above the countdown, where the START word used to be, that
+is always there: pill, clock and sync buttons
 read as one stack. Tap it and it opens into a box over the big number;
 the countdown opens it by itself, and the gun closes it. Reset closes it
 too. It sits above the clock rather than under it so the box can start
@@ -178,7 +178,7 @@ big as they are. The shallow-water banner does cover it while an alert
 is up; the countdown still opens the box on its own, and the banner
 snoozes on a tap.
 
-![The RACE PRO box during a countdown](img/dial-countdown.png)
+![The RACE box during a countdown](img/dial-countdown.png)
 
 The box covers the big cell, so its first slot carries whatever that
 cell was showing — SOG, or depth, or whatever you put there — and
