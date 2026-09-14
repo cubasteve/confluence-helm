@@ -416,7 +416,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .tile .sub{font-size:14px;font-weight:600;letter-spacing:.06em;
   color:var(--accent);margin-top:-4px}
 .tile.off .sub{color:var(--label)}
-#ss-ico{fill:none;stroke:currentColor;stroke-width:1.9;
+#ss-ico,#race-ico{fill:none;stroke:currentColor;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
 #ss-ico text{fill:currentColor;stroke:none;font-family:var(--font)}
 .tile.on{color:var(--accent)}
@@ -1561,6 +1561,19 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
 
+    <!-- The race set: start-line pings during the countdown, target
+         speed, the lift/header strip, TO LINE / BIAS / BURN. One tile,
+         because it is one decision - are we racing today. -->
+    <div class="slab">Race</div>
+    <div class="dimrow">
+      <button class="tile" id="race-btn">
+        <svg id="race-ico" viewBox="0 0 24 24">
+          <path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>
+        <span>RACE PRO</span>
+        <span class="sub" id="race-sub">OFF</span>
+      </button>
+    </div>
+
     <div class="slab">Shallow alarm</div>
     <div class="depthwrap">
       <div class="bar">
@@ -1838,8 +1851,9 @@ const CFG={
 
   /* ---- feature switches -------------------------------------------
      racePro turns on the start-line pings, polar target % and the
-     lift/header readout. All the code stays in the file, it just is
-     not drawn or evaluated. Flip to true when you want it back.
+     lift/header readout. Off here is only the default: the RACE PRO
+     tile on the control panel sets it and it is saved with the other
+     prefs.
      showHeel needs the BNO080 heading node to be publishing
      navigation.attitude.                                            */
   racePro:false,
@@ -3544,7 +3558,11 @@ const PREF_DEFS={
      source-code default with no panel control at all: the only way off
      was to edit the file, and until someone did, the shallow alarm was
      firing on invented depth. */
-  windDemo:   v=>typeof v==='boolean' ? v : null
+  windDemo:   v=>typeof v==='boolean' ? v : null,
+  /* The race set is a panel tile now. It used to be a source constant,
+     which meant the pings, the target and the shift strip could only be
+     had by editing the file - so on the boat they never were. */
+  racePro:    v=>typeof v==='boolean' ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5044,7 +5062,6 @@ function windDemoTick(){
    constant; at 8 Hz the bezel moves the way the boat did. */
 setInterval(windDemoTick, 120);
 $('demo-btn').addEventListener('click',()=>demoSet(!CFG.windDemo));
-drawDemo();
 
 /* ---- the sensor readout on the music page --------------------------
    It was one thin row of 32px numbers above the album art, which is
@@ -8907,6 +8924,23 @@ fitStage();
    open, so letting the events through costs nothing underneath. */
 let ssHold=null, ssPt=null;
 const ssFar=e=>!ssPt||Math.hypot(e.clientX-ssPt.x,e.clientY-ssPt.y)>24;
+/* RACE PRO. A tap toggles; the same 24 px tap-or-swipe rule as the
+   display tiles, so a swipe-down that starts on it still closes the
+   panel rather than being swallowed. */
+function drawRace(){
+  const on=!!CFG.racePro;
+  wCls('race-btn','on',on); wCls('race-btn','off',!on);
+  wText('race-sub', on?'ON':'OFF');
+}
+let racePt=null;
+$('race-btn').addEventListener('pointerdown',e=>{ racePt={x:e.clientX,y:e.clientY}; });
+$('race-btn').addEventListener('pointerup',e=>{
+  if(!racePt) return; const far=Math.hypot(e.clientX-racePt.x,e.clientY-racePt.y)>24; racePt=null;
+  if(far) return;
+  CFG.racePro=!CFG.racePro; drawRace(); prefsSave();
+  dialCellKey='';                        /* the strip's unit comes and goes with it */
+});
+
 $('ss-btn').addEventListener('pointerdown',e=>{
   ssPt={x:e.clientX,y:e.clientY};
   ssHold=setTimeout(()=>{ ssHold=null;               /* held: start now */
@@ -8937,6 +8971,12 @@ drawBezelTicks();
 /* Preferences first: applyTheme, drawDepth and applyDim below all read
    CFG, so restoring it has to happen before any of them run. */
 prefsLoad(); applyDim(CFG.dim,false); layoutPages();
+/* The two persisted tiles are painted HERE, after prefsLoad, and nowhere
+   earlier. DEMO used to be painted at its own definition, three thousand
+   lines above this, which is before the saved value has been read - so a
+   panel with the demo saved off came up with the pill lit until the next
+   toggle. RACE PRO would have done the same. */
+drawDemo(); drawRace();
 /* Warm the radio state at boot rather than on first panel open. The call
    costs a handful of subprocesses on the Pi, and doing it here means it
    has long finished by the time anyone swipes up - instead of the panel
