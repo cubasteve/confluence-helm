@@ -143,6 +143,9 @@ body.night #mark{opacity:.07}
 .pbtn.set .ring{stroke:var(--stbd)} .pbtn.set text{fill:var(--stbd)}
 .pbtn:active .ring{fill:var(--chip)}
 .stale{opacity:.30}.alarm{fill:var(--alarm)!important}.warn{fill:var(--warn)!important}
+/* a reading that judges itself - target %, the shift - colours its value */
+text.good{fill:var(--stbd)}text.bad{fill:var(--port)}
+.mcell.good b{color:var(--stbd)}.mcell.bad b{color:var(--port)}
 text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 
 /* ---------------- control panel ----------------
@@ -1361,7 +1364,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        or APPARENT WIND. 386 clears them: dominant-baseline:middle puts
        the digits' ink at 432..629, not at the 359 the y attribute alone
        would suggest, so the label's own ink at 373..395 has 37px of air
-       under it. It shares the row with TO LINE and BURN, either side. -->
+       under it. It clears the timer's +/- buttons at 314 too. -->
   <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
   <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
   <!-- Beside the number, not under it, and sharing its y: every text on
@@ -1377,33 +1380,31 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
   <!-- The race cluster. Every race number lives up here with the timer,
        which is where the start already is, and the big number below
-       keeps the centre of the glass at full size. Two rows on each side
-       of the pings, in the band between the +/- circles (which end at
-       314) and the big number's ink (which starts at 432):
-           TGT 121%     (P) PIN +12 (B)     LIFT 12°        y 335 / 338
-           TO LINE 45 M       SOG           BURN +3 S       y 386
-       The left items hang off 392 and the right ones start at 688, so
-       the cluster holds together round the pings rather than spreading
-       to the rim; the bezel's 60s at 142..183 and 897..938 stay clear.
-       The rings are at 430 and 650: the club line is 250 m long, so a
-       bias against it can say BOAT +633 (feet), 165 px at 30px, and
-       that has to fit between them with air either side. The second row
-       shares its y with the big cell's label, which is never wider than
-       the 296 between them. TO LINE, BIAS and BURN are
-       up whenever you are pre-start - BURN with dashes until the clock
-       runs, since it is the clock it is counting - and fold away at the
-       gun with the pings, when TGT and the shift are what a leg needs.
+       keeps the centre of the glass at full size. One row, in the band
+       between the +/- circles (which end at 314) and the big cell's
+       label (whose ink starts at 373):
+           LINE 45 M   (P) PIN +12 (B)   BURN +3 S           y 335 / 338
+       LINE hangs off 392 and BURN starts at 688, so the row holds
+       together round the pings rather than spreading to the rim. LINE,
+       not TO LINE: the bezel's 60 sits at 142..183 on this row, and the
+       widest reading, 999 FT, reached 168 with the longer word. The rings are at
+       430 and 650: the club line is 250 m long, so a bias against it
+       can say BOAT +633 (feet), 165 px at 30px, and that has to fit
+       between them with air either side. All of it is up whenever you
+       are pre-start - BURN with dashes until the clock runs, since it is
+       the clock it is counting - and folds away at the gun.
        P and B are the two ends of the line, so the bias reads between
        them: PIN +12 with the P ring on its left is the sentence.
+       Target speed and the wind shift are not here: they are readings,
+       tgt and shf in the picker, wanted on a Sunday beat as much as on
+       a leg and no more a start-line number than VMG is.
        Declared AFTER the big number, not before it: a 268px glyph's
        cell reaches up to 350, and the number painted over the rings
        took the lower half of their taps. -->
   <g id="race">
-    <text id="rc-tgt" x="392" y="335" text-anchor="end"><tspan class="rl">TGT </tspan><tspan class="rv" id="rc-tgt-v">––</tspan></text>
-    <text id="rc-shf" x="688" y="335"><tspan class="rl" id="rc-shf-l">SHIFT </tspan><tspan class="rv" id="rc-shf-v">––</tspan></text>
     <g id="rc-cd">
-      <text id="rc-line" x="392" y="386" text-anchor="end"><tspan class="rl">TO LINE </tspan><tspan class="rv" id="rc-line-v">––</tspan></text>
-      <text id="rc-burn" x="688" y="386"><tspan class="rl">BURN </tspan><tspan class="rv" id="rc-burn-v">––</tspan></text>
+      <text id="rc-line" x="392" y="335" text-anchor="end"><tspan class="rl">LINE </tspan><tspan class="rv" id="rc-line-v">––</tspan></text>
+      <text id="rc-burn" x="688" y="335"><tspan class="rl">BURN </tspan><tspan class="rv" id="rc-burn-v">––</tspan></text>
       <text id="rc-bias" class="rbias" x="540" y="338" text-anchor="middle">––</text>
     </g>
     <!-- start line pings: a circled P and B under the countdown, either
@@ -1474,12 +1475,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        long gone. The lower three start at 716 and stop at 904, clear of
        the lock at 914. -->
   <g id="dial-cells">
-    <!-- The big one, over the number AND the unit beside it: a
-         widest-case 88.8 puts the unit's tail at 882. From 400, under
-         the label rather than over it, so TO LINE and BURN on the
-         label's row are not taps on it. -->
-    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="400"
-          width="620" height="240" fill="transparent"/>
+    <!-- The big one, over the label, the number AND the unit beside it:
+         a widest-case 88.8 puts the unit's tail at 882. -->
+    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="368"
+          width="620" height="272" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="716"
           width="176" height="188" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="716"
@@ -2363,6 +2362,7 @@ function render(){
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
   windModeTick();
+  shiftTick();
   lineWatch();
   courseWatch();
 
@@ -2433,30 +2433,6 @@ function render(){
   const preStart = tState==='idle'||tState==='countdown';
   wSty('rc-cd','display', preStart?'':'none');
   wSty('pings','display', preStart?'':'none');
-
-  let tgtPct=null;
-  if(tws!==null && twa!==null && sogR!==null){
-    const t=targetSpeed(tws,twa);
-    if(t>0.3) tgtPct=(sogR*MS_TO_KT)/t*100;
-  }
-  wText('rc-tgt-v', tgtPct===null?'––':tgtPct.toFixed(0)+'%');
-  wCls ('rc-tgt-v','good', tgtPct!==null&&tgtPct>=98);
-  wCls ('rc-tgt-v','bad',  tgtPct!==null&&tgtPct<90);
-
-  let twdDeg=get('environment.wind.directionTrue');
-  twdDeg = twdDeg===null?null:twdDeg*DEG;
-  const sh = windShift(twdDeg, awa);
-  /* Through wCls, not `el.className=`. On an SVG element className is a
-     read-only SVGAnimatedString, so assigning a string to it is a silent
-     no-op - this has been setting the text since it was written and
-     never once turned it green or red. */
-  /* The shift: its label says which way, its value how much. STEADY
-     under two degrees, with the degrees still shown - a 1° is not a 0°. */
-  const steady = sh===null||sh.deg<2;
-  wText('rc-shf-l', (sh===null?'SHIFT' : steady?'STEADY' : sh.lift?'LIFT':'HEADER')+' ');
-  wVal ('rc-shf-v', sh===null?'––':sh.deg.toFixed(0)+'\u00b0');
-  wCls ('rc-shf-v','good', !steady && sh.lift);
-  wCls ('rc-shf-v','bad',  !steady && !sh.lift);
 
   /* The line's numbers. lineData is null without a fix or a wind; burn
      is null until the countdown runs, which is what it counts against.
@@ -2561,6 +2537,20 @@ function targetSpeed(tws,twa){                 // bilinear over the table
    enough that a persistent shift shows and a puff does not. */
 const TWD_TAU=300000;
 let twdAvg=null, twdAt=0;
+/* The shift is a READING now (shf in the picker), but its running mean
+   has to be fed whether or not anyone has it on the glass - a mean that
+   only moved while the cell was showing would snap onto the current
+   wind the moment you picked it and say STEADY through the lift you
+   picked it for. So DATA ticks it every frame, on every page, and the
+   cell reads SHIFT. Through a smoothed apparent angle of its own - the
+   bezel's 'awa' filter is stepped once a frame in DRAW, and stepping it
+   here as well would run it twice as fast. */
+let SHIFT=null;
+function shiftTick(){
+  const twd=get('environment.wind.directionTrue');
+  const a=get('environment.wind.angleApparent');
+  SHIFT=windShift(twd===null?null:twd*DEG, a===null?null:smoothAngle('awa_shf',a*DEG));
+}
 function windShift(twd, awa){
   if(twd===null||awa===null) return null;
   const r=twd*Math.PI/180, now=Date.now();
@@ -5186,6 +5176,14 @@ const MUS_CELLS=[
   {k:'twd', sen:'wnd', name:'WIND DIRECTION', hdr:'TWD',
    u:()=>point(degOf('environment.wind.directionTrue')),
    v:()=>bearing(degOf('environment.wind.directionTrue'))},
+  /* The shift, off the running mean shiftTick keeps. The number is how
+     far, the third line which way: LIFT and HEADER by tack, STEADY under
+     two degrees with the degrees still shown, because a 1° is not a 0°.
+     Green and red through cls, the hook a reading uses to judge itself. */
+  {k:'shf', sen:'wnd', name:'WIND SHIFT', hdr:'SHIFT', u:'',
+   v:()=>SHIFT===null?null:SHIFT.deg.toFixed(0)+'°',
+   sub:()=>SHIFT===null?'':SHIFT.deg<2?'STEADY':SHIFT.lift?'LIFT':'HEADER',
+   cls:()=>SHIFT===null||SHIFT.deg<2?'':SHIFT.lift?'good':'bad'},
   /* The switchers. Each is whichever of two readings the wind can bear
      right now, and delegates everything to it - header, number, unit,
      side - so the cell reads exactly as the underlying one would and
@@ -5270,7 +5268,23 @@ const MUS_CELLS=[
             if(sog===null||twa===null) return null;
             x=sog*Math.cos(twa); }
           return readNum('vmg',x*MS_TO_KT).toFixed(1);}},
+  /* Boat speed against the polar target for this wind, as a percentage.
+     98 and up is on target; under 90 is a sail to look at. Not a
+     start-line number - it used to live with the race set and was
+     asked out - so it is a reading like VMG, wanted on any leg. */
+  {k:'tgt', sen:'perf', name:'TARGET SPEED', hdr:'TGT', u:'%',
+   v:()=>{const tws=get('environment.wind.speedTrue'), twa=get('environment.wind.angleTrueWater'),
+                sog=get('navigation.speedOverGround');
+          if(tws===null||twa===null||sog===null) return null;
+          const t=targetSpeed(tws*MS_TO_KT, Math.abs(twa*DEG));
+          if(t<=0.3) return null;
+          return readNum('tgt', sog*MS_TO_KT/t*100).toFixed(0);},
+   cls:()=>{const c=musCell('tgt'), v=c.v(); if(v===null) return '';
+            return +v>=98?'good' : +v<90?'bad' : '';}},
 ];
+/* A reading's own verdict on its value: '', 'good' or 'bad'. Only the
+   readings that have one define cls; the painters ask through this. */
+const musCls=c=>c&&c.cls ? c.cls() : '';
 /* The dial's wVal builds a <tspan>; this is the same ring for the music
    page, where the cells are HTML. Safe to interpolate: every string it
    sees came out of a value function in MUS_CELLS, which only ever
@@ -5390,7 +5404,7 @@ const DIAL_EL={ c0:['spd-label','spd','spd-u'],
 let dialCellKey='';
 function paintDialCells(){
   const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
-    return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c):''); })
+    return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c)+musCls(c):''); })
     .join('|');
   if(key===dialCellKey) return;
   dialCellKey=key;
@@ -5406,6 +5420,8 @@ function paintDialCells(){
       wText(els[0], !c ? '––' : v===null ? musHdr(c)+' ––'
         : [musHdr(c), v, musSub(c)||musDU(c)].filter(Boolean).join(' '));
       wCls(els[0],'stale', v===null);
+      const cl=musCls(c);
+      wCls(els[0],'good', cl==='good'); wCls(els[0],'bad', cl==='bad');
       continue;
     }
     const [lbl,val,third]=els;
@@ -5428,6 +5444,8 @@ function paintDialCells(){
     const dv = shallow ? parseFloat(v) : null;
     wCls(val,'alarm', shallow && dv<CFG.depthAlarm);
     wCls(val,'warn',  shallow && dv>=CFG.depthAlarm && dv<CFG.depthWarn);
+    const cl=musCls(c);
+    wCls(val,'good', cl==='good'); wCls(val,'bad', cl==='bad');
   }
 }
 
@@ -5470,17 +5488,21 @@ function paintStrip(){
      is the page's business. */
   const row=MUS_SLOTS.map(sl=>{
     const c=musCell(MUS.slot[sl]);
+    /* The third line is the side when the reading has one - STBD,
+       LIFT - and the unit when it does not, exactly as the dial's cells
+       decide it. This page used to show only the unit, so heel here was
+       a bare number with nothing under it. */
     return {sl:sl, k:c?c.k:'', v:c?c.v():null,
-            h:c?musHdr(c):'', u:c?musDU(c):''};
+            h:c?musHdr(c):'', u:c?(musSub(c)||musDU(c)):'', cl:musCls(c)};
   });
-  const key=row.map(r=>r.sl+r.k+r.v+r.h+r.u).join('|');
+  const key=row.map(r=>r.sl+r.k+r.v+r.h+r.u+r.cl).join('|');
   if(key===stripKey) return;              /* nothing moved - leave the DOM alone */
   stripKey=key;
   /* A slot with no reading behind it shows nothing at all rather than a
      dash: an empty corner reads as "not fitted", which is true, and a
      dash reads as "broken", which usually is not. */
   box.innerHTML=row.map(r=> r.v===null ? '' :
-    `<span class="mcell" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
+    `<span class="mcell ${r.cl}" data-g="mus" data-slot="${r.sl}" data-k="${r.k}">`
     +`<u>${r.h}</u><b>${degMark(r.v)}</b><em>${r.u}</em></span>`).join('');
   /* The cells are rebuilt, so the menu is anchored to an element that no
      longer exists - re-point it at the new one. */

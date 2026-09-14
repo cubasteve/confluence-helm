@@ -24,7 +24,7 @@ dots at the foot say where you are. The dial is the one you come back to.
 
 | | |
 |---|---|
-| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, the race set round the timer, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
+| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, the start line round the timer, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
 | ![Music](docs/img/music.png) | **Music** — what is playing, transport, a volume ring around the album art, and three more readings around that. |
 
 **Apps** are not pages, and the difference is deliberate: a page is always
@@ -51,12 +51,12 @@ that says which instruments are actually feeding.
 ## Reading the dial
 
 Every number is a choice. **Tap any reading and a menu unrolls from it**,
-grouped by instrument, listing all thirteen with their live values.
+grouped by instrument, listing every one with its live value.
 
 ![The reading picker](docs/img/picker.png)
 
 The defaults are boat speed in the middle, true wind under it, and depth,
-heel and VMG along the bottom — but any of the thirteen goes in any slot,
+heel and VMG along the bottom — but any of them goes in any slot,
 on either page, and the choice is remembered.
 
 → **[What every reading means, and where it comes from](docs/readings.md)**
@@ -133,7 +133,7 @@ docs/                     everything below
 
 | | |
 |---|---|
-| [Readings](docs/readings.md) | the thirteen numbers, what each means, and the picker |
+| [Readings](docs/readings.md) | every number, what each means, and the picker |
 | [The display](docs/display.md) | pages, gestures, the panel and dock, brightness, touch lock, alerts, golden hour |
 | [Radar](docs/radar.md) | two rain services, the metered forecast, the wind layer, the memory budget |
 | [Tracks](docs/tracks.md) | recording a sail, the library, and getting one onto a phone |

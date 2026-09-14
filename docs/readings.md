@@ -8,7 +8,7 @@ put a different one in any slot.
 ## Every slot is a choice
 
 There are no fixed readouts. **Tap any number and a menu unrolls from
-it**, listing all thirteen readings with their live values; tap one and
+it**, listing every reading with its live value; tap one and
 it takes that slot. The reading that was there moves to wherever the new
 one came from — a swap, not a shuffle, so nothing you did not touch ever
 moves.
@@ -18,10 +18,10 @@ moves.
 The menu is grouped by **instrument**, which is the useful sort: it
 answers "what else can this box tell me", and it makes a dead sensor
 obvious. A whole group dashed out is a wire to check; one dashed row
-among thirteen reads as normal.
+among many reads as normal.
 
 It opens on the reading the slot already holds, centred, rather than at
-the top — thirteen readings is more than fits, and starting at BOAT SPEED
+the top — the list is longer than fits, and starting at BOAT SPEED
 every time means hunting for where you are before you can go anywhere.
 Drag to scroll it; a flick coasts. A drag never chooses anything, however
 it ends.
@@ -30,7 +30,7 @@ Choices are saved per page (`musSlots` and `dialSlots` in browser
 storage) and survive a restart. The two pages keep separate maps — the
 dial and the music page are not showing the same things and never were.
 
-## The thirteen
+## The readings
 
 Values are magnetic where a compass is involved, and metric or imperial
 follows the depth-unit setting.
@@ -65,10 +65,18 @@ transducer when it is not. This is the reading the shallow alarm watches.
 | WIND ANGLE | `AWA` | — | `environment.wind.angleApparent` |
 | TRUE WIND ANGLE | `TWA` | STBD / PORT | `environment.wind.angleTrueWater` |
 | WIND DIRECTION | `TWD` | compass point | `environment.wind.directionTrue` |
+| WIND SHIFT | `SHIFT` | LIFT / HEADER / STEADY | the direction against its own five-minute mean |
 
 **WIND DIRECTION** is the one wind number that does not move when the
 boat turns, which is what makes a shift a shift rather than a helm error.
-The race strip's LIFT / HEADER is computed from it.
+
+**WIND SHIFT** is that direction against a slow average of where it has
+been: the number is how far, the line under it which way — LIFT or
+HEADER by tack, STEADY under two degrees with the degrees still shown,
+because a 1° is not a 0°. Green for a lift, red for a header. The
+average keeps running whether or not the reading is on the glass, so
+picking it mid-lift shows the lift rather than a mean that has just
+been reset to now.
 
 **WIND ANGLE** is signed either side of the bow, the way it is called on
 deck: forty degrees to starboard is 40, not 320. **TRUE WIND ANGLE** is
@@ -102,9 +110,16 @@ identical, and the rate is the part you cannot guess.
 | Reading | Header | Unit | Source |
 |---|---|---|---|
 | VMG | `VMG` | KT | `performance.velocityMadeGood`, or SOG × cos(TWA) |
+| TARGET SPEED | `TGT` | % | SOG against the polar target for this true wind |
 
-Not a sensor, and it does not pretend to be one. The Signal K plugin
-serves it when it can; the arithmetic is the same number when it cannot.
+Not sensors, and they do not pretend to be. The Signal K plugin serves
+VMG when it can; the arithmetic is the same number when it cannot.
+
+**TARGET SPEED** is how close the boat is to what the polar says she
+should be doing at this wind speed and angle: green at 98 % and up, red
+under 90 %. It used to live with the race set and was asked out — it is
+wanted on a Sunday beat as much as on a leg, and no more a start-line
+number than VMG is.
 
 ## Where they can go
 
@@ -153,36 +168,36 @@ stays against the last digit.
 
 ## The race set
 
-Every race number lives round the timer, which is where the start
+The start-line numbers live round the timer, which is where the start
 already was, so the big number keeps the middle of the glass at full
 size and the readings below keep their cells through the sequence:
 
 ```
           (+)      5:00      (-)
-   TGT 121%   (P) PIN +12 (B)   LIFT 12°
-   TO LINE 45 M     SOG      BURN +3 S
+   LINE 45 M   (P) PIN +12 (B)   BURN +3 S
 ```
 
 ![The dial during a countdown](img/dial-countdown.png)
 
-| Item | What it is | When |
-|---|---|---|
-| `TGT` | boat speed as a percentage of the polar target for this wind; green at 98 % and up, red under 90 % | always |
-| `LIFT` / `HEADER` / `STEADY` | the shift since the wind direction settled: the label says which way, the value how many degrees | always |
-| `P` `B` | the two ends of the line; tap each as you pass it | pre-start |
-| between them | the line's bias: the favoured end and what it is worth, `PIN +12` | pre-start |
-| `TO LINE` | distance to the line, metres or feet with the depth unit; red when you are over | pre-start |
-| `BURN` | seconds in hand to the line at this speed; red when you are late; dashes until the clock runs | pre-start |
+| Item | What it is |
+|---|---|
+| `P` `B` | the two ends of the line; tap each as you pass it |
+| between them | the line's bias: the favoured end and what it is worth, `PIN +12` |
+| `LINE` | distance to the line, metres or feet with the depth unit; red when you are over |
+| `BURN` | seconds in hand to the line at this speed; red when you are late; dashes until the clock runs |
+
+All of it is up whenever the clock is idle or counting down, and folds
+away at the gun.
 
 The bias sits between the P and B rings because they *are* the two
 ends: `PIN +12` with the P ring on its left is the whole sentence. It
 is up while the clock is idle as well as counting down, since the end
 you pick is decided before the sequence, not during it.
 
-The pre-start items fold away at the gun, when TGT and the shift are
-what a leg needs. They used to take over the three bottom cells during
-the countdown instead — which cost you depth, heel and VMG for the
-whole sequence, at the one time you most want the depth.
+They used to take over the three bottom cells during the countdown
+instead — which cost you depth, heel and VMG for the whole sequence, at
+the one time you most want the depth. Target speed and the wind shift
+are not here: they are readings, picked into any slot like the rest.
 
 ## When a sensor is not there
 
