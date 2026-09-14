@@ -133,9 +133,10 @@ number than VMG is.
 | `c4` | the strip under it — header, value and unit on one line | TRUE WIND SPEED |
 | `c1` `c2` `c3` | the row along the bottom | DEPTH · HEEL · VMG |
 
-The bottom three are one size, with a rule across the top of the row
-and two hairlines down from it cutting the row into its cells, so it
-reads as a small table under the big number. The middle one used to be smaller and dimmer, because the three
+The bottom three are one size. A rule under the big number and another
+above the row make the strip a band between them, and two hairlines
+down from the lower rule cut the row into its cells, so the lower half
+reads as one table: the number, its strip, the three cells. The middle one used to be smaller and dimmer, because the three
 are 214 px apart and only the outer two could spill towards the rim;
 with the cuts there is nowhere to spill, so all three are sized to the
 space between them and read the same.
