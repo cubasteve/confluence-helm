@@ -5302,12 +5302,6 @@ function readNum(k, raw){
    yours, and the two should not be the same decision. */
 const MUS_SLOTS=['a','p','s'];                /* apex, port, starboard */
 const MUS={ slot:{a:'hdg', p:'aws', s:'dpt'} };
-try{ const v=JSON.parse(localStorage.getItem('musSlots')||'null');
-     if(v) for(const k of MUS_SLOTS)
-       if(MUS_CELLS.some(c=>c.k===v[k])) MUS.slot[k]=v[k]; }catch(e){}
-try{ const v=JSON.parse(localStorage.getItem('dialSlots')||'null');
-     if(v) for(const k of DIAL_SLOTS)
-       if(MUS_CELLS.some(c=>c.k===v[k])) DIAL.slot[k]=v[k]; }catch(e){}
 const musSave=()=>{ try{
   localStorage.setItem('musSlots', JSON.stringify(MUS.slot)); }catch(e){} };
 
@@ -5322,6 +5316,24 @@ const DIAL_SLOTS=['c0','c1','c2','c3','c4'];
 const DIAL={ slot:{c0:'sog', c1:'dpt', c2:'heel', c3:'vmg', c4:'tws'} };
 const dialSave=()=>{ try{
   localStorage.setItem('dialSlots', JSON.stringify(DIAL.slot)); }catch(e){} };
+
+/* Read the saved choices back, AFTER both maps exist. The dial's restore
+   used to sit above DIAL's declaration inside a try/catch that caught
+   everything - so it threw on the temporal dead zone every load, the
+   catch ate it, and the dial came up on its defaults while the saves
+   went faithfully into storage. Days of "it does not remember" with
+   nothing in the console. Only the parse is guarded now: a stored value
+   that is not JSON is the one thing worth being quiet about, and a
+   reading that no longer exists is simply skipped, so a slot never comes
+   up blank after a catalogue change. */
+function slotsLoad(key, slots, map){
+  let v=null;
+  try{ v=JSON.parse(localStorage.getItem(key)||'null'); }catch(e){ return; }
+  if(!v) return;
+  for(const k of slots) if(MUS_CELLS.some(c=>c.k===v[k])) map[k]=v[k];
+}
+slotsLoad('musSlots',  MUS_SLOTS,  MUS.slot);
+slotsLoad('dialSlots', DIAL_SLOTS, DIAL.slot);
 
 /* Three lines each: label, value, and then the reading's own third line
    - which side the heel is on, which tack the wind is over - or the long
