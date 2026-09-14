@@ -168,21 +168,36 @@ stays against the last digit.
 
 ## RACE
 
-A blue pill above the countdown, where the START word used to be, that
-is always there: pill, clock and sync buttons
-read as one stack. Tap it and it opens into a box over the big number;
-the countdown opens it by itself, and the gun closes it. Reset closes it
-too. It sits above the clock rather than under it so the box can start
-straight under the sync buttons, which is what lets its numbers be as
-big as they are. The shallow-water banner does cover it while an alert
-is up; the countdown still opens the box on its own, and the banner
-snoozes on a tap.
+A pill above the countdown that says where in the race you are, and
+opens into a box over the big number with the numbers that matter for
+that part of it.
+
+| The pill says | Colour | Icon | When |
+|---|---|---|---|
+| `RACE` | blue | slashes | idle |
+| `COUNTDOWN` | amber | flag | the countdown |
+| `RACING` | green | chevrons | after the gun |
+| the mark's name, `RUM` | orange | buoy | racing, within 300 m of the next mark |
+| `FINISH` | orange | chequered flag | racing, within 300 m of the finish line, once clear of it since the gun |
+| `FINISHED` | slate | chequered flag | after the finish |
+
+The box's border takes the pill's colour, so the two read as one thing.
+
+**Opening and closing.** Tap the pill and the box opens or closes in
+any state. The countdown opens it by itself and the gun closes it.
+Closing on a mark opens it by itself and the rounding closes it — and
+so does sailing back out beyond 350 m, so a range that wobbles about
+the line does not flap it. A hand that closed it stays respected until
+the next thing happens. Reset closes it.
+
+**The box covers the big cell**, so its first slot carries whatever
+that cell was showing — SOG, or depth, or whatever you put there — and
+nothing is lost. The strip and the three readings along the bottom stay
+in view under it. What fills the other slots depends on where you are:
 
 ![The RACE box during a countdown](img/dial-countdown.png)
 
-The box covers the big cell, so its first slot carries whatever that
-cell was showing — SOG, or depth, or whatever you put there — and
-nothing is lost. Then the start-line numbers:
+*Before the gun*, the line:
 
 | Item | What it is |
 |---|---|
@@ -191,14 +206,20 @@ nothing is lost. Then the start-line numbers:
 | `LINE BIAS` | the favoured end and what it is worth, `PIN +12`, between the two ends |
 | `P` `B` | the two ends of the line; tap each as you pass it, and the bias is then about the line you pinged rather than the club marks |
 
-The bias sits between the P and B rings because they *are* the two
-ends: `PIN +12` with the P ring on its left is the whole sentence. Open
-the box before the sequence to ping the ends and read the bias while
-you still have a choice of end.
+![The RACE box closing on a mark](img/dial-mark.png)
 
-The strip and the three readings along the bottom stay in view under
-the box. Target speed and the wind shift are not in it: they are
-readings, picked into any slot like the rest.
+*After the gun*, the leg:
+
+| Item | What it is |
+|---|---|
+| `DIST` | range to the next mark, metres under 1000 and nautical miles beyond |
+| `BRG` | true bearing to it, to steer against COG |
+| `MARK 2 OF 5` | which mark, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
+
+The next mark comes from the course set in the Tracks app; with no
+course set, the only leg is back to the line. Target speed and the wind
+shift are not in the box: they are readings, picked into any slot like
+the rest.
 
 ## When a sensor is not there
 

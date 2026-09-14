@@ -134,12 +134,16 @@ body.night #mark{opacity:.07}
    - transform-origin is the pill's centre - and is not there for taps
    while closed, so the big cell's own rect gets them. */
 .rp-txt{font-size:21px;font-weight:800;font-style:italic;letter-spacing:.18em;fill:#fff}
-.rp-btn .stripe{stroke:#fff;stroke-width:5;opacity:.35;stroke-linecap:round}
 .rp-btn:active .pill{opacity:.75}
+/* the pill's icons, one per state, drawn 24 px about their own origin */
+.rp-ic .ic{display:none}.rp-ic .ic.on{display:inline}
+.rp-ic path,.rp-ic rect.o{fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.rp-ic .stripe{stroke-width:4;opacity:.55}
+.rp-ic rect.f{fill:#fff}
 .rp-box{opacity:0;transform:scale(.25);transform-origin:540px 170px;pointer-events:none;
   transition:transform .22s cubic-bezier(.2,.8,.3,1),opacity .16s}
 .rp-box.on{opacity:1;transform:scale(1);pointer-events:auto}
-.rp-face{fill:var(--panel);stroke:url(#rp-grad);stroke-width:3}
+.rp-face{fill:var(--panel);stroke-width:3}
 .rp-l{font-size:24px;font-weight:var(--w-lbl);letter-spacing:.18em;fill:var(--label)}
 .rp-v{font-size:84px;font-weight:var(--w-val);fill:var(--ink)}
 .rp-u{font-size:24px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
@@ -1471,30 +1475,49 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        Values at 84px. Declared after the tap rects so the box, not the
        big cell's rect under it, gets the taps - which is what lets P
        and B work. -->
+  <!-- One gradient per state. The pill's fill and the box's border both
+       follow whichever is current, so the colour says where in the race
+       you are before the word does: blue idle, amber counting down,
+       green racing, orange closing on a mark, slate once finished. -->
   <defs>
-    <linearGradient id="rp-grad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0B47C4"/><stop offset="1" stop-color="#2E9BFF"/>
-    </linearGradient>
+    <linearGradient id="rp-g-idle"   x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B47C4"/><stop offset="1" stop-color="#2E9BFF"/></linearGradient>
+    <linearGradient id="rp-g-count"  x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B36A00"/><stop offset="1" stop-color="#FFB020"/></linearGradient>
+    <linearGradient id="rp-g-racing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0E7A43"/><stop offset="1" stop-color="#24D17E"/></linearGradient>
+    <linearGradient id="rp-g-mark"   x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C2410C"/><stop offset="1" stop-color="#FF8A1E"/></linearGradient>
+    <linearGradient id="rp-g-finish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2B3238"/><stop offset="1" stop-color="#6C757C"/></linearGradient>
   </defs>
   <g id="race">
+    <!-- The pill says the race's state. Its width follows the word:
+         paintRace() measures the text and sets the rect and the icon's
+         place, once per change. Icons drawn about (0,0), 24 px. -->
     <g id="rp-btn" class="rp-btn">
-      <rect class="pill" x="462" y="150" width="156" height="40" rx="20" fill="url(#rp-grad)"/>
-      <path class="stripe" d="M588 156 L576 184"/><path class="stripe" d="M603 156 L591 184"/>
-      <text class="rp-txt" x="526" y="170" text-anchor="middle">RACE</text>
+      <rect id="rp-pill" class="pill" x="462" y="150" width="156" height="40" rx="20" fill="url(#rp-g-idle)"/>
+      <text id="rp-txt" class="rp-txt" x="478" y="170">RACE</text>
+      <g id="rp-ic" class="rp-ic" transform="translate(594 170)">
+        <g id="ic-idle" class="ic on"><path class="stripe" d="M2 -14 L-8 14"/><path class="stripe" d="M14 -14 L4 14"/></g>
+        <g id="ic-count" class="ic"><path d="M-8 -11 V11"/><path d="M-8 -11 H9 L5 -6 9 -1 H-8"/></g>
+        <g id="ic-racing" class="ic"><path d="M-9 -8 L-2 0 -9 8"/><path d="M1 -8 L8 0 1 8"/></g>
+        <g id="ic-mark" class="ic"><path d="M0 -11 L9 5 H-9 Z"/><path d="M-12 10 H12"/></g>
+        <g id="ic-finish" class="ic"><path d="M-9 -11 V11"/><rect class="o" x="-7" y="-11" width="16" height="12"/><rect class="f" x="-7" y="-11" width="8" height="6"/><rect class="f" x="1" y="-5" width="8" height="6"/></g>
+      </g>
     </g>
+    <!-- The box has two faces. Pre-start it is the line: LINE, BURN and
+         the bias between the pings. Once racing it is the leg: DIST and
+         BRG to the next mark (or to the finish line once the course is
+         sailed), and which mark that is. The same slots serve both. -->
     <g id="rp-box" class="rp-box">
-      <rect class="rp-face" x="184" y="312" width="712" height="334" rx="24"/>
+      <rect id="rp-face" class="rp-face" x="184" y="312" width="712" height="334" rx="24" stroke="url(#rp-g-idle)"/>
       <text id="rp-c0-l"   class="rp-l" x="300" y="352" text-anchor="middle">SOG</text>
       <text id="rp-c0"     class="rp-v" x="300" y="416" text-anchor="middle">––</text>
       <text id="rp-c0-u"   class="rp-u" x="300" y="474" text-anchor="middle"></text>
-      <text                class="rp-l" x="540" y="352" text-anchor="middle">LINE</text>
-      <text id="rp-line"   class="rp-v" x="540" y="416" text-anchor="middle">––</text>
-      <text id="rp-line-u" class="rp-u" x="540" y="474" text-anchor="middle">M</text>
-      <text                class="rp-l" x="780" y="352" text-anchor="middle">BURN</text>
-      <text id="rp-burn"   class="rp-v" x="780" y="416" text-anchor="middle">––</text>
-      <text                class="rp-u" x="780" y="474" text-anchor="middle">S</text>
-      <text                class="rp-l" x="540" y="532" text-anchor="middle">LINE BIAS</text>
-      <text id="rp-bias"   class="rp-bias" x="540" y="588" text-anchor="middle">––</text>
+      <text id="rp-2-l"    class="rp-l" x="540" y="352" text-anchor="middle">LINE</text>
+      <text id="rp-2"      class="rp-v" x="540" y="416" text-anchor="middle">––</text>
+      <text id="rp-2-u"    class="rp-u" x="540" y="474" text-anchor="middle">M</text>
+      <text id="rp-3-l"    class="rp-l" x="780" y="352" text-anchor="middle">BURN</text>
+      <text id="rp-3"      class="rp-v" x="780" y="416" text-anchor="middle">––</text>
+      <text id="rp-3-u"    class="rp-u" x="780" y="474" text-anchor="middle">S</text>
+      <text id="rp-r2-l"   class="rp-l" x="540" y="532" text-anchor="middle">LINE BIAS</text>
+      <text id="rp-r2"     class="rp-bias" x="540" y="588" text-anchor="middle">––</text>
       <!-- start line pings: the two ends of the line either side of the
            bias, which is why PIN +12 reads as a sentence. The drawn ring
            is 18 px; the transparent circle under it is the tap target. -->
@@ -2389,6 +2412,7 @@ function render(){
   shiftTick();
   lineWatch();
   courseWatch();
+  markWatch();
 
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
@@ -2449,27 +2473,7 @@ function render(){
   paintDialCells();
 
   /* ---- RACE ---- */
-  wCls('rp-box','on', rpOpen);
-  if(rpOpen){
-    /* the reading the box is covering, so it is not lost */
-    const c=musCell(DIAL.slot.c0), v=c?c.v():null;
-    wText('rp-c0-l', c?musHdr(c):'');
-    wVal ('rp-c0', v===null?'––':v);
-    wText('rp-c0-u', !c||v===null?'':(musSub(c)||musDU(c)));
-    wCls ('rp-c0','stale', v===null);
-    const cl=musCls(c);
-    wCls ('rp-c0','good', cl==='good'); wCls('rp-c0','bad', cl==='bad');
-    /* the line: null without a fix or a wind; burn null until the clock
-       runs, which is what it counts against */
-    const L=lineData();
-    const dm = L ? (met ? L.dist : L.dist*M_TO_FT) : null;
-    wText('rp-line', dm===null?'––' : Math.abs(dm)>999?'999':String(Math.round(dm)));
-    wText('rp-line-u', met?'M':'FT');
-    wCls ('rp-line','bad', dm!==null && dm<0);            // over early
-    wText('rp-burn', !L||L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
-    wCls ('rp-burn','bad', !!L && L.burn!==null && L.burn<0);
-    wText('rp-bias', L ? L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT) : '––');
-  }
+  paintRace(met);
 
   }
   /* ================= end DRAW ========================================= */
@@ -2759,6 +2763,112 @@ function courseWatch(){
 }
 function courseAdvance(){ if(COURSE.next<COURSE.marks.length){ COURSE.next++; courseSave(); courseNear=false; } }
 
+/* ---- the mark approach ---------------------------------------------------
+   Inside APPROACH metres of the next mark, racing, the pill turns
+   orange and says the mark, and the box opens on the leg's numbers.
+   Edge-triggered, with hysteresis and the mark's index remembered: the
+   box opens once on the way in, and closes on the way out or when the
+   rounding advances the course - it does not fight a hand that closed
+   it, and does not reopen because the range wobbled about the line. */
+const MARK_APPROACH={inside:300, outside:350};
+let markNear=false, markNearIdx=-1;
+function markWatch(){
+  if(tState!=='racing'){ markNear=false; return; }
+  const g=markGeo(); let d=g?g.dist:Infinity;
+  /* The finish is the start line, and at the gun you are on it. Closing
+     on the finish only counts once the boat has been clear of the line
+     since the gun - lineArmed, the same guard the auto-finish uses -
+     otherwise a course with no marks said FINISH the moment it said
+     RACING. */
+  if(g && g.n.id==='finish' && !lineArmed) d=Infinity;
+  if(!markNear){
+    if(d<MARK_APPROACH.inside){ markNear=true; markNearIdx=COURSE.next; rpOpen=true; }
+  } else if(d>MARK_APPROACH.outside || COURSE.next!==markNearIdx){
+    markNear=false; rpOpen=false;
+  }
+}
+
+/* ---- the pill and the box --------------------------------------------------
+   The pill is the race's state: what it says, its colour and its icon
+   follow tState, and the mark approach on top of that. The box shows
+   the line pre-start and the leg once racing. */
+const RP_STATE={
+  idle:   {txt:'RACE',      g:'rp-g-idle',   ic:'ic-idle'},
+  count:  {txt:'COUNTDOWN', g:'rp-g-count',  ic:'ic-count'},
+  racing: {txt:'RACING',    g:'rp-g-racing', ic:'ic-racing'},
+  mark:   {txt:'',          g:'rp-g-mark',   ic:'ic-mark'},     /* the mark's name */
+  toFin:  {txt:'FINISH',    g:'rp-g-mark',   ic:'ic-finish'},   /* closing on the line */
+  finish: {txt:'FINISHED',  g:'rp-g-finish', ic:'ic-finish'},
+};
+function raceStatus(){
+  if(tState==='idle') return RP_STATE.idle;
+  if(tState==='countdown') return RP_STATE.count;
+  if(tState==='finished') return RP_STATE.finish;
+  if(markNear){ const n=courseNext();
+    return n.id==='finish' ? RP_STATE.toFin : Object.assign({}, RP_STATE.mark, {txt:n.hdr}); }
+  return RP_STATE.racing;
+}
+let rpTxtW=null;                              /* the last word measured */
+function paintRace(met){
+  const st=raceStatus();
+  /* the pill: the word, then the rect and the icon fitted round it */
+  wText('rp-txt', st.txt);
+  if(rpTxtW!==st.txt){
+    rpTxtW=st.txt;
+    const tw=$('rp-txt').getBBox().width;
+    const w=Math.round(tw+16+10+24+14), x=Math.round(540-w/2);
+    wAttr('rp-pill','x',x); wAttr('rp-pill','width',w);
+    wAttr('rp-txt','x',x+16);
+    wAttr('rp-ic','transform',`translate(${x+w-14-12} 170)`);
+  }
+  wAttr('rp-pill','fill','url(#'+st.g+')');
+  wAttr('rp-face','stroke','url(#'+st.g+')');
+  for(const k of ['ic-idle','ic-count','ic-racing','ic-mark','ic-finish']) wCls(k,'on', k===st.ic);
+
+  wCls('rp-box','on', rpOpen);
+  if(!rpOpen) return;
+  /* the reading the box is covering, so it is not lost */
+  const c=musCell(DIAL.slot.c0), v=c?c.v():null;
+  wText('rp-c0-l', c?musHdr(c):'');
+  wVal ('rp-c0', v===null?'––':v);
+  wText('rp-c0-u', !c||v===null?'':(musSub(c)||musDU(c)));
+  wCls ('rp-c0','stale', v===null);
+  const cl=musCls(c);
+  wCls ('rp-c0','good', cl==='good'); wCls('rp-c0','bad', cl==='bad');
+
+  const leg = tState==='racing'||tState==='finished';
+  wSty('pings','display', leg?'none':'');
+  if(!leg){
+    /* the line: null without a fix or a wind; burn null until the clock
+       runs, which is what it counts against */
+    const L=lineData();
+    const dm = L ? (met ? L.dist : L.dist*M_TO_FT) : null;
+    wText('rp-2-l','LINE'); wText('rp-3-l','BURN'); wText('rp-r2-l','LINE BIAS');
+    wVal ('rp-2', dm===null?'––' : Math.abs(dm)>999?'999':String(Math.round(dm)));
+    wText('rp-2-u', met?'M':'FT');
+    wCls ('rp-2','bad', dm!==null && dm<0);             // over early
+    wVal ('rp-3', !L||L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
+    wText('rp-3-u','S');
+    wCls ('rp-3','bad', !!L && L.burn!==null && L.burn<0);
+    wText('rp-r2', L ? L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT) : '––');
+  } else {
+    /* the leg: range and bearing to the next mark, and which it is */
+    const g=markGeo(), n=g?g.n:courseNext();
+    wText('rp-2-l','DIST'); wText('rp-3-l','BRG');
+    wVal ('rp-2', !g?'––' : g.dist<1000 ? String(Math.round(g.dist)) : (g.dist/1852).toFixed(2));
+    wText('rp-2-u', g&&g.dist>=1000?'NM':'M');
+    wCls ('rp-2','bad', false);
+    wVal ('rp-3', g?bearing(g.brg):'––');
+    wText('rp-3-u','');
+    wCls ('rp-3','bad', false);
+    const i=COURSE.next, N=COURSE.marks.length;
+    if(n.id==='finish'){ wText('rp-r2-l', N?'LAST LEG':'NO COURSE SET'); wText('rp-r2','FINISH LINE'); }
+    else { const after=i+1<N ? markOf(COURSE.marks[i+1]) : null;
+      wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N);
+      wText('rp-r2', n.hdr+(after ? ' · THEN '+after.hdr : ' · THEN FINISH')); }
+  }
+}
+
 const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
@@ -3031,12 +3141,12 @@ const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; rpOpen=tru
   COURSE.next=0; courseNear=false; courseSave(); };
 const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
-const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; rpOpen=false; };
+const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; rpOpen=false; markNear=false; };
 const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
   trkSave();                     /* reports its own failure - see trkSave */
   paintTrack(); };
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
-  lineWas=null; lineArmed=false; rpOpen=false; };
+  lineWas=null; lineArmed=false; rpOpen=false; markNear=false; };
 
 /* +/- only mean anything before the gun */
 function nudge(sec){
