@@ -105,7 +105,14 @@ svg{width:100%;height:100%;display:block}
 
 .huge{font-size:268px;font-weight:var(--w-huge);fill:var(--ink);letter-spacing:-.02em}
 .value{font-size:104px;font-weight:var(--w-val);fill:var(--ink)}
-.value-s{font-size:68px;font-weight:var(--w-val);fill:var(--ink-dim)}
+/* the three cells along the bottom, one size. 88 is what fits between
+   the two hairlines that cut the row: a heading with its ring is 190
+   wide, 88.8 is 193, and the cells are 214 apart. The middle one used
+   to be 68 and dimmer, because only the outer two could spill toward
+   the rim; with the cuts there is nowhere to spill, so all three fit
+   the same space and read the same. */
+.cellv{font-size:88px;font-weight:var(--w-val);fill:var(--ink)}
+.cut{stroke:var(--hairline);stroke-width:2}
 /* The middle cell is narrower than its neighbours because it has to be:
    the three are 214px apart and only the outer two can overflow towards
    the rim. Spreading them to 260 so all three could be .value was tried
@@ -1421,17 +1428,23 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        137..188 and 892..943, and a 104px reading pushed outboard runs
        straight into them. -->
   <text id="c1-lbl" class="label" x="326" y="739" text-anchor="middle">DEPTH</text>
-  <text id="dpt" class="value" x="326" y="821" text-anchor="middle">––</text>
+  <text id="dpt" class="cellv" x="326" y="821" text-anchor="middle">––</text>
   <text id="dpt-u" class="unit" x="326" y="891" text-anchor="middle">FT</text>
 
   <text id="c2-lbl" class="label" x="540" y="739" text-anchor="middle">HEEL</text>
-  <text id="c2" class="value-s" x="540" y="821" text-anchor="middle">––</text>
-  <!-- .unit, not the 40px .value-s it was: STBD under a heel angle is
-       the same kind of line as FT under a depth, and now it looks it. -->
+  <text id="c2" class="cellv" x="540" y="821" text-anchor="middle">––</text>
+  <!-- .unit: STBD under a heel angle is the same kind of line as FT
+       under a depth, and it looks it. -->
   <text id="c2b" class="unit" x="540" y="891" text-anchor="middle">––</text>
 
   <text id="c3-lbl" class="label" x="754" y="739" text-anchor="middle">VMG</text>
-  <text id="vmg" class="value" x="754" y="821" text-anchor="middle">––</text>
+  <text id="vmg" class="cellv" x="754" y="821" text-anchor="middle">––</text>
+
+  <!-- Two hairlines cut the row into its cells, midway between the
+       centres, the height of the row: header ink at 726, unit ink to
+       900. -->
+  <line class="cut" x1="433" y1="726" x2="433" y2="902"/>
+  <line class="cut" x1="647" y1="726" x2="647" y2="902"/>
   <text id="c3-u" class="unit" x="754" y="891" text-anchor="middle">KT</text>
 
   <!-- Tap targets over the four cells. LAST in the SVG, and that is not
