@@ -105,13 +105,13 @@ svg{width:100%;height:100%;display:block}
 
 .huge{font-size:268px;font-weight:var(--w-huge);fill:var(--ink);letter-spacing:-.02em}
 .value{font-size:104px;font-weight:var(--w-val);fill:var(--ink)}
-/* the three cells along the bottom, one size. 88 is what fits between
-   the two hairlines that cut the row: a heading with its ring is 190
-   wide, 88.8 is 193, and the cells are 214 apart. The middle one used
+/* the three cells along the bottom, one size. 96 is what fits between
+   the two hairlines that cut the row: a heading with its ring is 207
+   wide, 88.8 is 210, and the cells are 240 apart. The middle one used
    to be 68 and dimmer, because only the outer two could spill toward
    the rim; with the cuts there is nowhere to spill, so all three fit
    the same space and read the same. */
-.cellv{font-size:88px;font-weight:var(--w-val);fill:var(--ink)}
+.cellv{font-size:96px;font-weight:var(--w-val);fill:var(--ink)}
 .cut{stroke:var(--hairline);stroke-width:2}
 /* The middle cell is narrower than its neighbours because it has to be:
    the three are 214px apart and only the outer two can overflow towards
@@ -152,7 +152,7 @@ body.night #mark{opacity:.07}
 .rp-box.on{opacity:1;transform:scale(1);pointer-events:auto}
 .rp-face{fill:var(--panel);stroke-width:3}
 .rp-l{font-size:24px;font-weight:var(--w-lbl);letter-spacing:.18em;fill:var(--label)}
-.rp-v{font-size:84px;font-weight:var(--w-val);fill:var(--ink)}
+.rp-v{font-size:80px;font-weight:var(--w-val);fill:var(--ink)}
 .rp-u{font-size:24px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
 .rp-bias{font-size:36px;font-weight:var(--w-val);fill:var(--ink)}
 .pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
@@ -1389,19 +1389,21 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
   <!-- 432 tucked this into the digits' negative space, which worked while
        it said SOG and stopped working the moment it could say BOAT SPEED
-       or APPARENT WIND. 386 clears them: dominant-baseline:middle puts
-       the digits' ink at 432..629, not at the 359 the y attribute alone
-       would suggest, so the label's own ink at 373..395 has 37px of air
-       under it. It clears the timer's +/- buttons at 304 too. -->
-  <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
-  <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
+       or APPARENT WIND. 340 clears them: dominant-baseline:middle puts
+       the digits' ink at 386..583, not at the 313 the y attribute alone
+       would suggest, so the label's own ink at 327..349 has 37px of air
+       under it, and 23 above it to the timer's +/- at 304. The whole
+       middle sits 46 higher than it did, which is what the bottom row
+       grew into. -->
+  <text id="spd-label" class="label" x="540" y="340" text-anchor="middle">SOG</text>
+  <text id="spd" class="huge" x="540" y="510" text-anchor="middle">0.0</text>
   <!-- Beside the number, not under it, and sharing its y: every text on
        this dial is dominant-baseline:middle, so the same y centres the
        unit on the number's own middle rather than dropping it to the
        baseline. dialUnitX() sets the x each repaint from the number's
        measured width. Anchored start so the unit grows rightward into
        empty glass instead of back into the digits. -->
-  <text id="spd-u" class="unit" x="756" y="556" text-anchor="start">KT</text>
+  <text id="spd-u" class="unit" x="756" y="510" text-anchor="start">KT</text>
   <!-- Off-glass, and the only thing that ever measures a huge string.
        visibility rather than display so getBBox still answers. -->
   <text id="spd-meas" class="huge" x="0" y="-400" visibility="hidden">0</text>
@@ -1412,11 +1414,15 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        above and 32 of the headers below. It belongs with the number -
        it is that number's context. -->
   <g id="strip">
-    <text id="p-tws" class="strip" x="540" y="685" text-anchor="middle">TWS ––</text>
+    <text id="p-tws" class="strip" x="540" y="639" text-anchor="middle">TWS ––</text>
   </g>
 
 
-  <!-- One grid for all three: header 739, value 821, unit 891. These are
+  <!-- One grid for all three: header 693, value 775, unit 845, at 300,
+       540 and 780 - 240 apart, up from 214, and 46 higher than they
+       were, which is what moving the big number up bought. The outer
+       two sit 7 clear of the bezel's 120s at 188 and 892 with the
+       widest common value, 88.8 at 96px. These are
        MIDDLES, not baselines - dominant-baseline:middle is set on every
        text in this file - so the ink lands 726..748, 772..852 and
        876..900: 25px of air under the header and 25 under the number.
@@ -1427,25 +1433,25 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        914 - and the x's do not move: the bezel's 120 tick labels sit at
        137..188 and 892..943, and a 104px reading pushed outboard runs
        straight into them. -->
-  <text id="c1-lbl" class="label" x="326" y="739" text-anchor="middle">DEPTH</text>
-  <text id="dpt" class="cellv" x="326" y="821" text-anchor="middle">––</text>
-  <text id="dpt-u" class="unit" x="326" y="891" text-anchor="middle">FT</text>
+  <text id="c1-lbl" class="label" x="300" y="693" text-anchor="middle">DEPTH</text>
+  <text id="dpt" class="cellv" x="300" y="775" text-anchor="middle">––</text>
+  <text id="dpt-u" class="unit" x="300" y="845" text-anchor="middle">FT</text>
 
-  <text id="c2-lbl" class="label" x="540" y="739" text-anchor="middle">HEEL</text>
-  <text id="c2" class="cellv" x="540" y="821" text-anchor="middle">––</text>
+  <text id="c2-lbl" class="label" x="540" y="693" text-anchor="middle">HEEL</text>
+  <text id="c2" class="cellv" x="540" y="775" text-anchor="middle">––</text>
   <!-- .unit: STBD under a heel angle is the same kind of line as FT
        under a depth, and it looks it. -->
-  <text id="c2b" class="unit" x="540" y="891" text-anchor="middle">––</text>
+  <text id="c2b" class="unit" x="540" y="845" text-anchor="middle">––</text>
 
-  <text id="c3-lbl" class="label" x="754" y="739" text-anchor="middle">VMG</text>
-  <text id="vmg" class="cellv" x="754" y="821" text-anchor="middle">––</text>
+  <text id="c3-lbl" class="label" x="780" y="693" text-anchor="middle">VMG</text>
+  <text id="vmg" class="cellv" x="780" y="775" text-anchor="middle">––</text>
+  <text id="c3-u" class="unit" x="780" y="845" text-anchor="middle">KT</text>
 
   <!-- Two hairlines cut the row into its cells, midway between the
-       centres, the height of the row: header ink at 726, unit ink to
-       900. -->
-  <line class="cut" x1="433" y1="726" x2="433" y2="902"/>
-  <line class="cut" x1="647" y1="726" x2="647" y2="902"/>
-  <text id="c3-u" class="unit" x="754" y="891" text-anchor="middle">KT</text>
+       centres, the height of the row: header ink at 680, unit ink to
+       854. -->
+  <line class="cut" x1="420" y1="680" x2="420" y2="856"/>
+  <line class="cut" x1="660" y1="680" x2="660" y2="856"/>
 
   <!-- Tap targets over the four cells. LAST in the SVG, and that is not
        cosmetic: SVG has no z-index, so painting order is hit-test order,
@@ -1463,16 +1469,16 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <g id="dial-cells">
     <!-- The big one, over the label, the number AND the unit beside it:
          a widest-case 88.8 puts the unit's tail at 882. -->
-    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="368"
-          width="620" height="272" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="716"
-          width="176" height="188" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="716"
-          width="176" height="188" fill="transparent"/>
-    <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="716"
-          width="176" height="188" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="322"
+          width="620" height="278" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c1" x="200" y="670"
+          width="200" height="190" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c2" x="440" y="670"
+          width="200" height="190" fill="transparent"/>
+    <rect class="dcell" data-g="dial" data-slot="c3" x="680" y="670"
+          width="200" height="190" fill="transparent"/>
     <!-- The strip. -->
-    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="420" y="652"
+    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="420" y="606"
           width="240" height="60" fill="transparent"/>
   </g>
 
@@ -1488,11 +1494,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        do, since it is in timerTap()'s third.
        Tap the pill and the box opens; the countdown opens it by itself
        and the gun closes it. The box covers the big cell - 184..896 by
-       312..646 takes in a 4-digit number and its unit - and carries
+       312..614 takes in a 4-digit number and its unit, and ends above
+       the strip at 639 - and carries
        what it covers in its first slot, so nothing is lost:
            SOG 4.6 KT   |   LINE 45 M   |   BURN +3 S
                      (P)   PIN +12   (B)
-       Values at 84px. Declared after the tap rects so the box, not the
+       Values at 80px. Declared after the tap rects so the box, not the
        big cell's rect under it, gets the taps - which is what lets P
        and B work. -->
   <!-- One gradient per state. The pill's fill and the box's border both
@@ -1526,31 +1533,31 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          BRG to the next mark (or to the finish line once the course is
          sailed), and which mark that is. The same slots serve both. -->
     <g id="rp-box" class="rp-box">
-      <rect id="rp-face" class="rp-face" x="184" y="312" width="712" height="334" rx="24" stroke="url(#rp-g-idle)"/>
-      <text id="rp-c0-l"   class="rp-l" x="300" y="352" text-anchor="middle">SOG</text>
-      <text id="rp-c0"     class="rp-v" x="300" y="416" text-anchor="middle">––</text>
-      <text id="rp-c0-u"   class="rp-u" x="300" y="474" text-anchor="middle"></text>
-      <text id="rp-2-l"    class="rp-l" x="540" y="352" text-anchor="middle">LINE</text>
-      <text id="rp-2"      class="rp-v" x="540" y="416" text-anchor="middle">––</text>
-      <text id="rp-2-u"    class="rp-u" x="540" y="474" text-anchor="middle">M</text>
-      <text id="rp-3-l"    class="rp-l" x="780" y="352" text-anchor="middle">BURN</text>
-      <text id="rp-3"      class="rp-v" x="780" y="416" text-anchor="middle">––</text>
-      <text id="rp-3-u"    class="rp-u" x="780" y="474" text-anchor="middle">S</text>
-      <text id="rp-r2-l"   class="rp-l" x="540" y="532" text-anchor="middle">LINE BIAS</text>
-      <text id="rp-r2"     class="rp-bias" x="540" y="588" text-anchor="middle">––</text>
+      <rect id="rp-face" class="rp-face" x="184" y="312" width="712" height="302" rx="24" stroke="url(#rp-g-idle)"/>
+      <text id="rp-c0-l"   class="rp-l" x="300" y="348" text-anchor="middle">SOG</text>
+      <text id="rp-c0"     class="rp-v" x="300" y="408" text-anchor="middle">––</text>
+      <text id="rp-c0-u"   class="rp-u" x="300" y="464" text-anchor="middle"></text>
+      <text id="rp-2-l"    class="rp-l" x="540" y="348" text-anchor="middle">LINE</text>
+      <text id="rp-2"      class="rp-v" x="540" y="408" text-anchor="middle">––</text>
+      <text id="rp-2-u"    class="rp-u" x="540" y="464" text-anchor="middle">M</text>
+      <text id="rp-3-l"    class="rp-l" x="780" y="348" text-anchor="middle">BURN</text>
+      <text id="rp-3"      class="rp-v" x="780" y="408" text-anchor="middle">––</text>
+      <text id="rp-3-u"    class="rp-u" x="780" y="464" text-anchor="middle">S</text>
+      <text id="rp-r2-l"   class="rp-l" x="540" y="518" text-anchor="middle">LINE BIAS</text>
+      <text id="rp-r2"     class="rp-bias" x="540" y="572" text-anchor="middle">––</text>
       <!-- start line pings: the two ends of the line either side of the
            bias, which is why PIN +12 reads as a sentence. The drawn ring
            is 18 px; the transparent circle under it is the tap target. -->
       <g id="pings">
         <g id="ping-pin" class="pbtn">
-          <circle class="hit" cx="400" cy="588" r="30"/>
-          <circle class="ring" cx="400" cy="588" r="20"/>
-          <text x="400" y="588" text-anchor="middle">P</text>
+          <circle class="hit" cx="400" cy="572" r="30"/>
+          <circle class="ring" cx="400" cy="572" r="20"/>
+          <text x="400" y="572" text-anchor="middle">P</text>
         </g>
         <g id="ping-boat" class="pbtn">
-          <circle class="hit" cx="680" cy="588" r="30"/>
-          <circle class="ring" cx="680" cy="588" r="20"/>
-          <text x="680" y="588" text-anchor="middle">B</text>
+          <circle class="hit" cx="680" cy="572" r="30"/>
+          <circle class="ring" cx="680" cy="572" r="20"/>
+          <text x="680" y="572" text-anchor="middle">B</text>
         </g>
       </g>
     </g>
