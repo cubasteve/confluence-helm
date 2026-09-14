@@ -221,11 +221,30 @@ in view under it. What fills the other slots depends on where you are:
 | `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
 The next mark comes from the course set in the Tracks app: tap marks
-on the course sheet in the order you will sail them, and each one you
-add gets a `P` and an `S` beside it for the side you will leave it —
-port unless you say otherwise, red and green the way the lights are.
-The side shows on the map by the mark's number and in the box as you
-close on it. With no course set, the only leg is back to the line. Target speed and the wind
+on the course sheet in the order you will sail them. The course is
+listed first, in its order, with the rest of the marks under it. Each
+mark in the course gets a `P` and an `S` beside it for the side you
+will leave it — port unless you say otherwise, red and green the way
+the lights are. The side shows on the map by the mark's number and in
+the box as you close on it. With no course set, the only leg is back
+to the line.
+
+![Adding a mark of your own](img/course-form.png)
+
+**Marks of your own.** `+ MARK` on the sheet's bar opens a form: a name,
+and a position typed on the app's own keyboard or taken from the GPS
+with `HERE`. Positions read as the sailing instructions write them,
+degrees and decimal minutes with a space between, or as decimal
+degrees; west and south are minus. `SAVE` keeps the mark for good —
+it is there after a reboot, on the sheet, on the map and in the
+readings like the club's — and adds it to the course.
+
+![The course in edit mode](img/course-edit.png)
+
+**EDIT** puts a grip on every course row: drag it onto another row and
+the mark takes that place, and NEXT follows its mark rather than its
+number. A mark of your own gets a ✕ in edit mode, which removes it from
+the course and from storage. `DONE` leaves edit mode. Target speed and the wind
 shift are not in the box: they are readings, picked into any slot like
 the rest.
 

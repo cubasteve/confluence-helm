@@ -724,6 +724,30 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    inside the 600 the rail spans. */
 .rbtn{width:84px}
 #course-list{max-height:560px}
+#course-main,#course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
+/* the form starts under where the alert banner ends (240): a shoaling
+   warning while you are entering a mark is not far-fetched here */
+#course-add{padding-top:40px}
+#mk-kb{width:100%}
+.course-bar .cbtn{padding:0 22px}
+/* the new-mark form: three fields and the app's own keyboard */
+.mk-row{display:flex;gap:12px;width:100%}
+.mk-field{flex:1;height:64px;border-radius:14px;background:var(--chip);display:flex;
+  align-items:center;padding:0 16px;gap:12px;border:2px solid transparent;overflow:hidden;min-width:0}
+.mk-field.on{border-color:var(--accent)}
+.mk-lbl{font-size:16px;letter-spacing:.14em;color:var(--label);flex:none}
+.mk-val{font-size:26px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;flex:1}
+.mk-field .pw-cur{display:none;height:32px}.mk-field.on .pw-cur{display:block}
+.mk-row .cbtn{height:64px;padding:0 22px}
+.kb.small .kk{height:56px;font-size:24px}
+/* edit mode: a grip to drag a course mark by, a delete on your own */
+.course-row .grip{width:44px;height:52px;display:flex;align-items:center;justify-content:center;
+  font-size:32px;color:var(--label);flex:none}
+.course-row.lift{background:var(--chip)}
+.course-row .del{width:50px;height:50px;border-radius:25px;border:2px solid var(--alarm);color:var(--alarm);
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex:none;margin-right:14px}
+.course-sep{height:2px;background:var(--hairline);margin:8px 0}
+
 .course-row .seq{width:52px;height:52px;border-radius:26px;flex:0 0 52px;
   display:flex;align-items:center;justify-content:center;font-size:24px;
   font-weight:600;color:var(--label);border:2px solid var(--hairline)}
@@ -1888,13 +1912,34 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        sheet as the library, same rows. -->
   <div id="t-course">
     <div class="t-title">Course</div>
-    <div class="lib-list" id="course-list"></div>
-    <div class="course-bar">
-      <button class="cbtn" id="course-next">NEXT ▸</button>
-      <button class="cbtn" id="course-clr">CLEAR</button>
-      <button class="cbtn on" id="course-done">DONE</button>
+    <div id="course-main">
+      <div class="lib-list" id="course-list"></div>
+      <div class="course-bar">
+        <button class="cbtn" id="course-add-btn">+ MARK</button>
+        <button class="cbtn" id="course-next">NEXT ▸</button>
+        <button class="cbtn" id="course-clr">CLEAR</button>
+        <button class="cbtn" id="course-edit">EDIT</button>
+        <button class="cbtn on" id="course-done">DONE</button>
+      </div>
     </div>
-    <div class="t-hint">TAP MARKS IN ORDER</div>
+    <!-- A mark of your own: a name, and a position typed or taken from
+         the GPS. Degrees and decimal minutes as the sailing instructions
+         give them, or decimal degrees; west and south are minus. -->
+    <div id="course-add" style="display:none">
+      <div class="mk-row"><div class="mk-field on" data-f="name"><span class="mk-lbl">NAME</span><span class="mk-val" id="mk-name"></span><span class="pw-cur"></span></div></div>
+      <div class="mk-row">
+        <div class="mk-field" data-f="lat"><span class="mk-lbl">LAT</span><span class="mk-val" id="mk-lat"></span><span class="pw-cur"></span></div>
+        <div class="mk-field" data-f="lon"><span class="mk-lbl">LON</span><span class="mk-val" id="mk-lon"></span><span class="pw-cur"></span></div>
+        <button class="cbtn" id="mk-here">HERE</button>
+      </div>
+      <div class="kb small" id="mk-kb"></div>
+      <div class="ns-msg" id="mk-msg"></div>
+      <div class="course-bar">
+        <button class="cbtn" id="mk-cancel">CANCEL</button>
+        <button class="cbtn on" id="mk-save">SAVE</button>
+      </div>
+    </div>
+    <div class="t-hint" id="course-hint">TAP MARKS IN ORDER</div>
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2661,6 +2706,14 @@ const MARKS=[
   {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  lat:DM(28,51.201), lon:-DM(81,15.212)},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
+/* Marks of your own, from the course sheet's NEW MARK: kept in browser
+   storage under 'marks' and folded into MARKS at boot, so they are
+   there for the course, the map and the readings like the club's. */
+let USER_MARKS=[];
+try{ USER_MARKS=JSON.parse(localStorage.getItem('marks')||'[]'); if(!Array.isArray(USER_MARKS)) USER_MARKS=[]; }catch(e){ USER_MARKS=[]; }
+USER_MARKS.forEach(m=>{ if(m&&m.id&&!MARKS.some(x=>x.id===m.id)) MARKS.push(m); });
+const marksSave=()=>localStorage.setItem('marks',JSON.stringify(USER_MARKS));
+const isUserMark=id=>USER_MARKS.some(m=>m.id===id);
 
 let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
 const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
@@ -4330,6 +4383,24 @@ $('ns-sw').addEventListener('click',()=>{
    two hand-written copies of it would drift apart. */
 const KB_ABC=['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'];
 const KB_SYM=['1234567890','-/:;()$&@"','.,?!\'+=#%*','_\\|~<>[]{}'];
+const KB_NUM=['1234567890','.-'];                 /* a position: digits, a point, a minus */
+/* The keyboard's markup, for whoever needs one: the WPA key and the
+   new-mark form both draw it from here, with their own state
+   {shift,sym,num} and their own word on the go key. */
+function kbHtml(st, go){
+  const rows=st.num?KB_NUM : st.sym?KB_SYM : KB_ABC, up=st.shift&&!st.sym&&!st.num;
+  let o=rows.map(row=>'<div class="kb-r">'+row.split('').map(c=>{
+      const ch=up?c.toUpperCase():c;
+      return '<button class="kk" data-c="'+esc(ch)+'">'+esc(ch)+'</button>';
+    }).join('')+'</div>').join('');
+  o+='<div class="kb-r">'
+    +(st.num?'':'<button class="kk fn" data-a="sym">'+(st.sym?'ABC':'?123')+'</button>'
+      +(st.sym?'':'<button class="kk fn'+(st.shift?' on':'')+'" data-a="shift">⇧</button>'))
+    +'<button class="kk sp" data-c=" "></button>'
+    +'<button class="kk fn" data-a="del">⌫</button>'
+    +'<button class="kk go" data-a="go">'+esc(go)+'</button></div>';
+  return o;
+}
 
 function showPw(on,ssid){
   $('ns-list-view').style.display = on?'none':'';
@@ -4346,21 +4417,7 @@ function paintPw(){
      and no idea which character was wrong. */
   $('pw-txt').textContent = v.length>24 ? '…'+v.slice(-24) : v;
 }
-function drawKb(){
-  const rows=NET.pw.sym?KB_SYM:KB_ABC, up=NET.pw.shift&&!NET.pw.sym;
-  let o=rows.map(row=>'<div class="kb-r">'+row.split('').map(c=>{
-      const ch=up?c.toUpperCase():c;
-      return '<button class="kk" data-c="'+esc(ch)+'">'+esc(ch)+'</button>';
-    }).join('')+'</div>').join('');
-  o+='<div class="kb-r">'
-    +'<button class="kk fn" data-a="sym">'+(NET.pw.sym?'ABC':'?123')+'</button>'
-    +(NET.pw.sym?'':'<button class="kk fn'+(NET.pw.shift?' on':'')
-                   +'" data-a="shift">⇧</button>')
-    +'<button class="kk sp" data-c=" "></button>'
-    +'<button class="kk fn" data-a="del">⌫</button>'
-    +'<button class="kk go" data-a="join">JOIN</button></div>';
-  $('kb').innerHTML=o;
-}
+function drawKb(){ $('kb').innerHTML=kbHtml(NET.pw,'JOIN'); }
 $('kb').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b||!NET.pw) return;
   const c=b.dataset.c, a=b.dataset.a;
@@ -4373,7 +4430,7 @@ $('kb').addEventListener('click',e=>{
   if(a==='shift'){ NET.pw.shift=!NET.pw.shift; return drawKb(); }
   if(a==='sym')  { NET.pw.sym=!NET.pw.sym; NET.pw.shift=false; return drawKb(); }
   if(a==='del')  { NET.pw.val=NET.pw.val.slice(0,-1); return paintPw(); }
-  if(a==='join') return pwJoin();
+  if(a==='go')   return pwJoin();
 });
 $('pw-cancel').addEventListener('click',()=>{ showPw(false); setMsg(''); });
 
@@ -6790,12 +6847,18 @@ $('qr-box').addEventListener('click',e=>{
 });
 $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
-const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on'); };
+const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
+  courseEdit=false; $('course-edit').classList.remove('on'); if(MK) mkClose(); };
 /* ---- the course sheet --------------------------------------------------
    Every mark, in the club's order. Tap one to add it to the course - it
    takes the next number - and tap it again to take it out. The line's
    row says which line is in force, and tapping it while a pinged line
    is drops the pings and goes back to the marks. */
+/* The course first, in its order, then the marks not in it. In edit
+   mode every course row gets a grip to drag by, and a mark of your own
+   gets a delete. + MARK is on the bar, not a row at the foot of the
+   list: twelve rows in a 560 window put a foot row off the screen. */
+let courseEdit=false;
 function renderCourse(){
   const box=$('course-list'); if(!box) return;
   const E=lineEnds();
@@ -6803,14 +6866,20 @@ function renderCourse(){
       <div class="seq">⚑</div><div class="lib-main">
       <b>START · FINISH LINE</b><span>${E.pinged?'PINGED · TAP TO USE THE MARKS':
         markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr}</span></div></div>`;
-  box.innerHTML=lineRow+MARKS.map(m=>{
+  const row=m=>{
     const i=COURSE.marks.indexOf(m.id);
     const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
     const sd=markSide(m.id);
     const side= i<0 ? '' : `<div class="side"><span class="sb${sd==='P'?' on':''}" data-side="P">P</span>`
                           +`<span class="sb${sd==='S'?' on':''}" data-side="S">S</span></div>`;
+    const del = courseEdit&&isUserMark(m.id) ? '<div class="del">✕</div>' : '';
+    const grip= courseEdit&&i>=0 ? '<div class="grip">≡</div>' : '';
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
-      <div class="lib-main"><b>${m.name}</b><span>${m.hdr}</span></div>${side}</div>`; }).join('');
+      <div class="lib-main"><b>${esc(m.name)}</b><span>${esc(m.hdr)}</span></div>${side}${del}${grip}</div>`; };
+  const inC=COURSE.marks.map(markOf).filter(Boolean), rest=MARKS.filter(m=>!COURSE.marks.includes(m.id));
+  box.innerHTML=lineRow+inC.map(row).join('')
+    +(inC.length&&rest.length?'<div class="course-sep"></div>':'')+rest.map(row).join('');
+  $('course-hint').textContent = courseEdit ? 'DRAG ≡ TO REORDER · ✕ DELETES YOUR OWN' : 'TAP MARKS IN ORDER';
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
 $('trk-course').addEventListener('click',()=>{
@@ -6819,10 +6888,13 @@ $('course-list').addEventListener('click',e=>{
   if(courseDragged()) return;                 /* a scroll, not a choice */
   const row=e.target.closest('.course-row'); if(!row) return;
   /* P or S on a mark in the course sets its side; it is not a tap on
-     the row, which would take the mark out. */
+     the row, which would take the mark out. Nor is the delete, nor the
+     grip. */
   const sb=e.target.closest('.sb');
   if(sb){ COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
+  if(e.target.closest('.del')){ markDelete(row.dataset.mark); return; }
+  if(e.target.closest('.grip')) return;
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
   else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
@@ -6832,6 +6904,113 @@ $('course-list').addEventListener('click',e=>{
     courseSave(); }
   renderCourse(); drawMap(shownTrack()); });
 $('course-next').addEventListener('click',()=>{ courseAdvance(); renderCourse(); });
+$('course-edit').addEventListener('click',()=>{ courseEdit=!courseEdit;
+  $('course-edit').classList.toggle('on',courseEdit); renderCourse(); });
+
+/* ---- reordering: drag a course row by its grip -------------------------
+   The grip's pointerdown is taken on the capture phase and stopped, so
+   the list's drag-to-scroll never starts; from there the row under the
+   pointer decides. Crossing onto another course row moves the dragged
+   mark to that row's place and the list is redrawn - the pointer is
+   tracked by id, so redrawing under it is fine. NEXT follows its mark,
+   not its number. */
+let mkDrag=null;
+$('course-list').addEventListener('pointerdown',e=>{
+  const g=e.target.closest('.grip'); if(!g) return;
+  e.stopPropagation(); gClaim();
+  const row=g.closest('.course-row'); row.classList.add('lift');
+  mkDrag={id:e.pointerId, mark:row.dataset.mark};
+},true);
+addEventListener('pointermove',e=>{
+  if(!mkDrag||e.pointerId!==mkDrag.id) return;
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  const row=el&&el.closest('.course-row.in'); if(!row||row.dataset.mark===mkDrag.mark) return;
+  const a=COURSE.marks.indexOf(mkDrag.mark), b=COURSE.marks.indexOf(row.dataset.mark);
+  if(a<0||b<0) return;
+  const nextId=COURSE.marks[COURSE.next];
+  COURSE.marks.splice(a,1); COURSE.marks.splice(b,0,mkDrag.mark);
+  const n=COURSE.marks.indexOf(nextId); if(n>=0) COURSE.next=n;
+  renderCourse();
+  const lifted=$('course-list').querySelector(`.course-row[data-mark="${mkDrag.mark}"]`);
+  if(lifted) lifted.classList.add('lift');
+});
+['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
+  if(!mkDrag||e.pointerId!==mkDrag.id) return; mkDrag=null;
+  courseSave(); renderCourse(); drawMap(shownTrack()); }));
+
+/* ---- a mark of your own ---------------------------------------------------
+   NAME, LAT and LON on the app's own keyboard - letters for the name,
+   digits, a point and a minus for a position. HERE fills the position
+   from the fix. SAVE keeps the mark, puts it in MARKS for good and adds
+   it to the course. Positions read as the sailing instructions write
+   them, degrees and decimal minutes with a space between, or as decimal
+   degrees; west and south are minus. */
+let MK=null;
+const fmtDM=v=>{ const s=v<0?'-':'', a=Math.abs(v), d=Math.floor(a); return s+d+' '+((a-d)*60).toFixed(3); };
+function parseDM(str){
+  const t=String(str).trim().replace(/[°'′"]/g,' ').replace(/\s+/g,' ');
+  if(!t) return null;
+  const parts=t.split(' '), neg=parts[0].startsWith('-');
+  const d=Math.abs(parseFloat(parts[0])); if(!isFinite(d)) return null;
+  let v=d;
+  if(parts.length>1){ const m=parseFloat(parts[1]); if(!isFinite(m)||m<0||m>=60) return null; v=d+m/60; }
+  return neg?-v:v;
+}
+function mkOpen(){
+  MK={f:'name', name:'', lat:'', lon:'', kb:{shift:false,sym:false,num:false}};
+  $('course-main').style.display='none'; $('course-add').style.display='';
+  $('course-hint').textContent='D M.MMM OR DECIMAL · WEST IS MINUS';
+  $('mk-msg').textContent=''; mkPaint();
+}
+function mkClose(){ MK=null; $('course-add').style.display='none'; $('course-main').style.display=''; renderCourse(); }
+function mkPaint(){
+  if(!MK) return;
+  $('mk-name').textContent=MK.name; $('mk-lat').textContent=MK.lat; $('mk-lon').textContent=MK.lon;
+  document.querySelectorAll('#course-add .mk-field').forEach(f=>f.classList.toggle('on',f.dataset.f===MK.f));
+  MK.kb.num = MK.f!=='name';
+  $('mk-kb').innerHTML=kbHtml(MK.kb,'SAVE');
+}
+function mkHere(){
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null){ $('mk-msg').textContent='NO POSITION FIX'; return; }
+  MK.lat=fmtDM(la); MK.lon=fmtDM(lo); $('mk-msg').textContent=''; mkPaint();
+}
+function mkSave(){
+  const lat=parseDM(MK.lat), lon=parseDM(MK.lon);
+  if(lat===null||Math.abs(lat)>90||lon===null||Math.abs(lon)>180){ $('mk-msg').textContent='CHECK THE POSITION'; return; }
+  let name=MK.name.trim().toUpperCase().replace(/\s+/g,' ');
+  if(!name) name='MARK '+(USER_MARKS.length+1);
+  const id='u'+Date.now().toString(36);
+  const m={id, name, hdr:name.slice(0,8).trim(), lat, lon};
+  USER_MARKS.push(m); marksSave(); MARKS.push(m);
+  COURSE.marks.push(id); courseSave();
+  mkClose(); drawMap(shownTrack());
+}
+function markDelete(id){
+  if(!isUserMark(id)) return;
+  USER_MARKS=USER_MARKS.filter(m=>m.id!==id); marksSave();
+  const k=MARKS.findIndex(m=>m.id===id); if(k>=0) MARKS.splice(k,1);
+  const i=COURSE.marks.indexOf(id);
+  if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length; }
+  if(COURSE.side) delete COURSE.side[id];
+  courseSave(); renderCourse(); drawMap(shownTrack());
+}
+$('course-add').addEventListener('click',e=>{
+  if(!MK) return;
+  const f=e.target.closest('.mk-field'); if(f){ MK.f=f.dataset.f; mkPaint(); return; }
+  const b=e.target.closest('#mk-kb button'); if(!b) return;
+  const c=b.dataset.c, a=b.dataset.a;
+  const cap = MK.f==='name' ? 18 : 14;
+  if(c!==undefined){ if(MK[MK.f].length<cap) MK[MK.f]+=c; if(MK.kb.shift){ MK.kb.shift=false; } mkPaint(); return; }
+  if(a==='shift'){ MK.kb.shift=!MK.kb.shift; return mkPaint(); }
+  if(a==='sym')  { MK.kb.sym=!MK.kb.sym; MK.kb.shift=false; return mkPaint(); }
+  if(a==='del')  { MK[MK.f]=MK[MK.f].slice(0,-1); return mkPaint(); }
+  if(a==='go')   return mkSave();
+});
+$('course-add-btn').addEventListener('click',mkOpen);
+$('mk-here').addEventListener('click',mkHere);
+$('mk-save').addEventListener('click',mkSave);
+$('mk-cancel').addEventListener('click',mkClose);
 $('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0}; courseSave(); renderCourse(); drawMap(shownTrack()); });
 $('course-done').addEventListener('click',closeLib);
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
