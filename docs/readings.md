@@ -114,20 +114,13 @@ serves it when it can; the arithmetic is the same number when it cannot.
 
 | Slot | Where | Default |
 |---|---|---|
-| `c0` | the big number, right of centre, with its unit beside it | BOAT SPEED |
+| `c0` | the big number in the middle, with its unit beside it | BOAT SPEED |
 | `c4` | the strip under it — header, value and unit on one line | TRUE WIND SPEED |
 | `c1` `c2` `c3` | the row along the bottom | DEPTH · HEEL · VMG |
 
 The middle of the bottom three is set smaller than its neighbours, and
 that is geometry rather than preference: the three are 214 px apart and
 only the outer two can overflow towards the rim.
-
-The big number is **right-aligned**, not centred, because the left of
-the glass belongs to the race column (below). Its unit's tail is pinned
-just short of the bezel's 90, and the number hangs off that and grows
-leftward. A reading too wide to stop short of the column — 12.1 is, 4.6
-is not — is drawn smaller rather than allowed to touch it, so the column
-never moves and the number is still the biggest thing on the glass.
 
 **The music page** has three, arranged around the album art.
 
@@ -158,29 +151,38 @@ The dial's big cell is the exception: its unit sits *beside* the number
 rather than under it, measured off the number's own right edge so it
 stays against the last digit.
 
-## The race column
+## The race set
 
-Every race number, stacked down the left of the big one, label over
-value, as large as five rows in that space allow.
+Every race number lives round the timer, which is where the start
+already was, so the big number keeps the middle of the glass at full
+size and the readings below keep their cells through the sequence:
+
+```
+          (+)      5:00      (-)
+   TGT 121%   (P) PIN +12 (B)   LIFT 12°
+   TO LINE 45 M     SOG      BURN +3 S
+```
 
 ![The dial during a countdown](img/dial-countdown.png)
 
-| Row | What it is | When |
+| Item | What it is | When |
 |---|---|---|
 | `TGT` | boat speed as a percentage of the polar target for this wind; green at 98 % and up, red under 90 % | always |
-| `LIFT` / `HEADER` / `STEADY` | the shift since the wind direction settled, in degrees; the label says which way, the value how much | always |
-| `TO LINE` | distance to the start line, metres or feet with the depth unit; red when you are over | countdown |
-| `BIAS` | the line's angle to the wind in the label, the favoured end and what it is worth in the value: `PIN +12` | countdown |
-| `BURN` | seconds in hand to the line at this speed; red when you are late | countdown |
+| `LIFT` / `HEADER` / `STEADY` | the shift since the wind direction settled: the label says which way, the value how many degrees | always |
+| `P` `B` | the two ends of the line; tap each as you pass it | pre-start |
+| between them | the line's bias: the favoured end and what it is worth, `PIN +12` | pre-start |
+| `TO LINE` | distance to the line, metres or feet with the depth unit; red when you are over | pre-start |
+| `BURN` | seconds in hand to the line at this speed; red when you are late; dashes until the clock runs | pre-start |
 
-The three countdown rows fold away outside the countdown, when they would
-be dashes, rather than sitting there all afternoon. They used to take
-over the three bottom cells instead — which cost you depth, heel and VMG
-for the whole sequence, at the one time you most want the depth.
+The bias sits between the P and B rings because they *are* the two
+ends: `PIN +12` with the P ring on its left is the whole sentence. It
+is up while the clock is idle as well as counting down, since the end
+you pick is decided before the sequence, not during it.
 
-`PIN` and `BOAT` are the two rings under the countdown: tap each as you
-pass that end of the line, and the column's line numbers are then about
-the line you actually pinged rather than the club marks.
+The pre-start items fold away at the gun, when TGT and the shift are
+what a leg needs. They used to take over the three bottom cells during
+the countdown instead — which cost you depth, heel and VMG for the
+whole sequence, at the one time you most want the depth.
 
 ## When a sensor is not there
 

@@ -24,7 +24,7 @@ dots at the foot say where you are. The dial is the one you come back to.
 
 | | |
 |---|---|
-| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, a race column down the left, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
+| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, the race set round the timer, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
 | ![Music](docs/img/music.png) | **Music** — what is playing, transport, a volume ring around the album art, and three more readings around that. |
 
 **Apps** are not pages, and the difference is deliberate: a page is always
@@ -70,7 +70,7 @@ on either page, and the choice is remembered.
 | swipe **up** from the bottom | the app dock |
 | **tap** a reading | change what it shows |
 | **tap** the timer | start or sync the countdown; double-tap to start racing |
-| **tap** Ⓟ or Ⓑ under the timer | ping the pin and boat ends of the start line |
+| **tap** Ⓟ or Ⓑ under the timer | ping the pin and boat ends of the start line; the bias reads between them |
 | **hold** anywhere on the dial | reset |
 | **hold** the padlock | lock the touchscreen for a wipe-down |
 
