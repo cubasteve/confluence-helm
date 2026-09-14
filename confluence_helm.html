@@ -687,10 +687,28 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   font-size:17px;letter-spacing:.1em;color:var(--label);opacity:.55}
 
 /* --- track library --- */
-#t-lib{position:absolute;inset:0;background:var(--panel);opacity:0;
+#t-lib,#t-course{position:absolute;inset:0;background:var(--panel);opacity:0;
   pointer-events:none;transition:opacity .22s;display:flex;
   flex-direction:column;align-items:center;justify-content:center}
-#t-lib.on{opacity:1;pointer-events:auto}
+#t-lib.on,#t-course.on{opacity:1;pointer-events:auto}
+/* Seven on the rail now, so each is 84 wide rather than 92: 7 x 84 sits
+   inside the 600 the rail spans. */
+.rbtn{width:84px}
+#course-list{max-height:560px}
+.course-row .seq{width:52px;height:52px;border-radius:26px;flex:0 0 52px;
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  font-weight:600;color:var(--label);border:2px solid var(--hairline)}
+.course-row.in .seq{background:var(--accent);border-color:var(--accent);color:#fff}
+.course-row.next .seq{box-shadow:0 0 0 4px var(--accent) inset}
+.course-row .lib-main b{display:block;font-size:26px;font-weight:600;color:var(--ink)}
+.course-row .lib-main span{font-size:17px;letter-spacing:.1em;color:var(--label)}
+.course-row.line .lib-main b{color:var(--label)}
+.course-bar{display:flex;gap:18px;margin-top:22px}
+.cbtn{height:64px;padding:0 30px;border-radius:32px;border:2px solid var(--hairline);white-space:nowrap;
+  background:none;font-family:var(--font);font-size:20px;font-weight:600;
+  letter-spacing:.12em;color:var(--label)}
+.cbtn.on{border-color:var(--accent);color:var(--accent)}
+.cbtn:active{background:var(--chip)}
 .lib-list{width:600px;max-height:600px;overflow-y:auto;overscroll-behavior:contain}
 .lib-row{display:flex;align-items:center;gap:16px;height:112px;
   border-bottom:2px solid var(--hairline)}
@@ -1741,6 +1759,21 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><b>GPX</b></button>
     <button class="rbtn" id="trk-clr"><svg viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
+    <button class="rbtn" id="trk-course"><svg viewBox="0 0 24 24">
+      <circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/>
+      <circle cx="17" cy="17" r="2.5"/><path d="M8 16.5L16 7.5M18 8.5v6"/></svg><b>COURSE</b></button>
+  </div>
+  <!-- The course sheet: the club's marks, tapped into an order. Same
+       sheet as the library, same rows. -->
+  <div id="t-course">
+    <div class="t-title">Course</div>
+    <div class="lib-list" id="course-list"></div>
+    <div class="course-bar">
+      <button class="cbtn" id="course-next">NEXT ▸</button>
+      <button class="cbtn" id="course-clr">CLEAR</button>
+      <button class="cbtn on" id="course-done">DONE</button>
+    </div>
+    <div class="t-hint">TAP MARKS IN ORDER</div>
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2279,6 +2312,7 @@ function render(){
   live('s-hdg', get('navigation.headingMagnetic')!==null);
   windModeTick();
   lineWatch();
+  courseWatch();
 
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
@@ -2533,8 +2567,38 @@ function windShift(twd, awa){
    plane geometry on a local east/north grid - good to a few cm over
    a start line, which is far better than GPS itself.
    ================================================================== */
+/* The club's marks, as the sailing instructions give them - degrees and
+   decimal minutes, converted here once. Checked against the recorded
+   sail of 2026-09-09: the boat passed within 23 m of Rum and 22 m of
+   Gosling, so these are right to the metre. hdr is the short name a
+   32 px cell header can carry; name is what the course sheet shows. */
+const DM=(d,m)=>d+m/60;
+const MARKS=[
+  {id:'flag',   name:'ROMANCE FLAG',      hdr:'FLAG',   lat:DM(28,49.123), lon:-DM(81,15.874)},
+  {id:'ball',   name:'ROMANCE SAIL BALL', hdr:'BALL',   lat:DM(28,49.150), lon:-DM(81,15.721)},
+  {id:'rum',    name:'RUM MARK',          hdr:'RUM',    lat:DM(28,50.130), lon:-DM(81,15.840)},
+  {id:'gosling',name:'GOSLING MARK',      hdr:'GOSLING',lat:DM(28,49.800), lon:-DM(81,15.150)},
+  {id:'cb8',    name:'CHANNEL BUOY 8',    hdr:'CB 8',   lat:DM(28,49.881), lon:-DM(81,17.193)},
+  {id:'cb10',   name:'CHANNEL BUOY 10',   hdr:'CB 10',  lat:DM(28,49.501), lon:-DM(81,16.897)},
+  {id:'cb12',   name:'CHANNEL BUOY 12',   hdr:'CB 12',  lat:DM(28,49.284), lon:-DM(81,16.508)},
+  {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', lat:DM(28,49.004), lon:-DM(81,14.566)},
+  {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  lat:DM(28,50.851), lon:-DM(81,14.916)},
+  {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  lat:DM(28,51.201), lon:-DM(81,15.212)},
+];
+const markOf=id=>MARKS.find(m=>m.id===id);
+
 let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
 const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
+/* The line is the pinged one if both ends have been pinged, else the
+   club's: Romance Flag at the pin end, the Sail Ball at the boat end.
+   Pinging still wins, for a day the committee sets it somewhere else;
+   the course sheet has the way back. */
+const LINE_MARKS={pin:'flag', boat:'ball'};
+function lineEnds(){
+  if(LINE.pin && LINE.boat) return {pin:LINE.pin, boat:LINE.boat, pinged:true};
+  const P=markOf(LINE_MARKS.pin), B=markOf(LINE_MARKS.boat);
+  return {pin:{lat:P.lat,lon:P.lon}, boat:{lat:B.lat,lon:B.lon}, pinged:false};
+}
 function pingEnd(which){
   const la=get('pos.lat'), lo=get('pos.lon');
   if(la===null||lo===null) return;
@@ -2545,12 +2609,12 @@ function toXY(lat,lon,lat0,lon0){              // metres east / north
            y:(lat-lat0)*111320 };
 }
 function lineData(){
-  if(!LINE.pin||!LINE.boat) return null;
+  const E=lineEnds();
   const la=get('pos.lat'), lo=get('pos.lon');
   if(la===null||lo===null) return null;
-  const P=toXY(LINE.pin.lat ,LINE.pin.lon ,LINE.pin.lat,LINE.pin.lon);
-  const B=toXY(LINE.boat.lat,LINE.boat.lon,LINE.pin.lat,LINE.pin.lon);
-  const C=toXY(la,lo,LINE.pin.lat,LINE.pin.lon);
+  const P=toXY(E.pin.lat ,E.pin.lon ,E.pin.lat,E.pin.lon);
+  const B=toXY(E.boat.lat,E.boat.lon,E.pin.lat,E.pin.lon);
+  const C=toXY(la,lo,E.pin.lat,E.pin.lon);
   const vx=B.x-P.x, vy=B.y-P.y, len=Math.hypot(vx,vy);
   if(len<1) return null;
 
@@ -2615,6 +2679,46 @@ function lineData(){
    direction, because a windward-leeward finishes downwind through it -
    freezes the clock. Two fixes MAX_JUMP apart are a GPS hop, not a
    crossing, and are ignored either way. */
+/* ---- the course ---------------------------------------------------------
+   A sequence of mark ids, set on the course sheet, and which one is
+   next. The mark after the last one is the FINISH - the middle of the
+   line - so the next-mark readings carry you all the way home.
+   Rounding advances it: inside NEAR metres arms the mark, and passing
+   back out beyond AWAY is the rounding. NEXT on the sheet advances it
+   by hand for a mark the GPS never saw you get near. A new countdown
+   starts the course over. */
+let COURSE = JSON.parse(localStorage.getItem('course')||'null') || {marks:[], next:0};
+const courseSave=()=>localStorage.setItem('course',JSON.stringify(COURSE));
+const COURSE_ROUND={near:40, away:60};
+let courseNear=false;
+function courseNext(){
+  if(COURSE.next<COURSE.marks.length){
+    const m=markOf(COURSE.marks[COURSE.next]);
+    if(m) return {id:m.id, hdr:m.hdr, lat:m.lat, lon:m.lon};
+  }
+  const e=lineEnds();
+  return {id:'finish', hdr:'FINISH',
+          lat:(e.pin.lat+e.boat.lat)/2, lon:(e.pin.lon+e.boat.lon)/2};
+}
+/* bearing and distance from the boat to the next mark. True bearing,
+   like COG, because both come off the GPS and steering one to the other
+   needs no declination. */
+function markGeo(){
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null) return null;
+  const n=courseNext(), C=toXY(n.lat,n.lon,la,lo);
+  return {n, dist:Math.hypot(C.x,C.y), brg:(Math.atan2(C.x,C.y)*DEG+360)%360};
+}
+const rangeTxt=m=> m<1000 ? Math.round(m)+' M' : (m/1852).toFixed(2)+' NM';
+function courseWatch(){
+  const g=markGeo(); if(!g||g.n.id==='finish'){ courseNear=false; return; }
+  if(g.dist<COURSE_ROUND.near) courseNear=true;
+  else if(courseNear && g.dist>COURSE_ROUND.away){
+    courseNear=false; COURSE.next++; courseSave();
+    console.log('[helm] rounded', g.n.hdr); }
+}
+function courseAdvance(){ if(COURSE.next<COURSE.marks.length){ COURSE.next++; courseSave(); courseNear=false; } }
+
 const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
 let lineWas=null, lineArmed=false;
 function lineWatch(){
@@ -2870,7 +2974,8 @@ let tGun=0;                               // racing: wall-clock start
 let tFinal=0;                             // finished: frozen elapsed
 let tLeft=CFG.startMins*60000;            // countdown remaining while idle
 
-const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; };
+const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown';
+  COURSE.next=0; courseNear=false; courseSave(); };
 const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
 const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; };
@@ -3357,6 +3462,7 @@ $('trk-cache').addEventListener('click',e=>{ e.stopPropagation(); cacheArea(); }
 
 /* one delegated handler for the whole list - rows come and go */
 $('lib-list').addEventListener('click',e=>{
+  if(libDragged()) return;                    /* a scroll, not a choice */
   /* A boat row is a real link, which is exactly right on a phone - tap
      and the file downloads. On the helm that same tap would drop it in
      the Pi's own downloads folder, where nothing can reach it, so here
@@ -4964,6 +5070,7 @@ const SENSORS=[
   ['wnd','WIND'],
   ['mot','MOTION'],           /* the 9-axis: magnetometer, accelerometer, gyro */
   ['perf','PERFORMANCE'],     /* not a sensor - arithmetic on the others */
+  ['crs','COURSE'],           /* the GPS against the marks you set */
 ];
 
 /* Degrees, 0 to under 360, from a radian path. Used by every compass
@@ -5096,6 +5203,22 @@ const MUS_CELLS=[
           if(x===null) return null;
           const d=readNum('rot',x*DEG*60);
           return (d<0?'-':'')+Math.abs(d).toFixed(0);}},
+
+  /* ---- COURSE --------------------------------------------------------- */
+  /* The header is the MARK, so the cell says where you are going as
+     well as how far. NEXT MARK carries the bearing with the range on
+     its third line; MARK RANGE is the range big, for the last few
+     hundred metres. Both point at the finish line once the course is
+     sailed, and dash with no fix. */
+  {k:'mkb', sen:'crs', name:'NEXT MARK',
+   hdr:()=>{const g=markGeo(); return g?g.n.hdr:'MARK';}, u:'',
+   v:()=>{const g=markGeo(); return g?bearing(g.brg):null;},
+   sub:()=>{const g=markGeo(); return g?rangeTxt(g.dist):'';}},
+  {k:'mkd', sen:'crs', name:'MARK RANGE',
+   hdr:()=>{const g=markGeo(); return g?g.n.hdr:'MARK';},
+   u:()=>{const g=markGeo(); return g&&g.dist>=1000?'NM':'M';},
+   v:()=>{const g=markGeo(); if(!g) return null;
+          return g.dist<1000 ? String(Math.round(g.dist)) : (g.dist/1852).toFixed(2);}},
 
   /* ---- PERFORMANCE -------------------------------------------------- */
   /* Velocity made good: what the boat is doing towards where the wind is
@@ -5534,6 +5657,35 @@ $('mus-pick').addEventListener('click',e=>{
 $('mus-veil').addEventListener('pointerdown',()=>gClaim());
 $('mus-veil').addEventListener('click',e=>{ e.stopPropagation(); musPickClose(); });
 
+/* The same scroller for any list under #stage - the course sheet and
+   the race library. Same reasoning as the picker's: the browser will
+   not scroll anything here, so the drag is the scroll and a flick
+   coasts. Returns a function the list's click handler asks: was that a
+   drag? A yes clears itself, so one scroll swallows one tap and no
+   more. Defined here rather than beside the lists because it needs
+   PK_SLOP and PK_FLICK, which live above. */
+function dragScroll(list){
+  const st={drag:null, moved:0, glide:null};
+  const stop=()=>{ if(st.glide) cancelAnimationFrame(st.glide); st.glide=null; };
+  const coast=v=>{ let last=performance.now();
+    const step=now=>{ const dt=Math.min(40,now-last); last=now;
+      const was=list.scrollTop; list.scrollTop+=v*dt; v*=Math.pow(0.994,dt);
+      st.glide=(Math.abs(v)>0.02 && list.scrollTop!==was)?requestAnimationFrame(step):null; };
+    st.glide=requestAnimationFrame(step); };
+  list.addEventListener('pointerdown',e=>{ gClaim(); stop(); st.moved=0;
+    st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(), top:list.scrollTop, v:0}; });
+  addEventListener('pointermove',e=>{ const d=st.drag; if(!d||e.pointerId!==d.id) return;
+    const now=performance.now(), dt=now-d.t; if(dt>0) d.v=(d.y-e.clientY)/dt;
+    d.y=e.clientY; d.t=now; st.moved=Math.max(st.moved, Math.abs(e.clientY-d.y0));
+    list.scrollTop=d.top-(e.clientY-d.y0); });
+  ['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{ const d=st.drag;
+    if(!d||e.pointerId!==d.id) return; st.drag=null;
+    if(st.moved>PK_SLOP && Math.abs(d.v)>PK_FLICK) coast(d.v); }));
+  return ()=>{ const m=st.moved>PK_SLOP; if(m) st.moved=0; return m; };
+}
+const courseDragged=dragScroll($('course-list'));
+const libDragged=dragScroll($('lib-list'));
+
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
 
@@ -5839,7 +5991,12 @@ function drawMap(pts){
      the boat sailing off the edge of the map you chose - and pulling the
      view back to fit would undo the zoom every second. Double-tap gives
      the fit back. */
-  if(!(MAPVIEW&&MAPVIEW.manual) && outOfView(MAPVIEW,P)) MAPVIEW=fitView(P);
+  /* The fit takes the course in too: a track that has not reached the
+     marks yet still shows where they are. */
+  const E=lineEnds();
+  const CM=COURSE.marks.map(markOf).filter(Boolean).map(m=>({la:m.lat,lo:m.lon}))
+    .concat([{la:E.pin.lat,lo:E.pin.lon},{la:E.boat.lat,lo:E.boat.lon}]);
+  if(!(MAPVIEW&&MAPVIEW.manual) && outOfView(MAPVIEW,P.concat(CM))) MAPVIEW=fitView(P.concat(CM));
   const v=MAPVIEW;
   $('t-cam').removeAttribute('transform');
   drawTiles(v);
@@ -5868,6 +6025,18 @@ function drawMap(pts){
   const L=P.length-1;
   out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="13"
          fill="var(--port)"/>`;
+  /* the line as a bar between its ends, and the course marks numbered */
+  const pe=merc(E.pin.lat,E.pin.lon), be=merc(E.boat.lat,E.boat.lon);
+  out+=`<line class="t-line" x1="${projX(v,pe).toFixed(1)}" y1="${projY(v,pe).toFixed(1)}"
+         x2="${projX(v,be).toFixed(1)}" y2="${projY(v,be).toFixed(1)}"
+         stroke="var(--ink)" stroke-width="4" stroke-dasharray="8 6" stroke-opacity=".7"/>`;
+  COURSE.marks.forEach((id,i)=>{ const m=markOf(id); if(!m) return;
+    const q=merc(m.lat,m.lon), x=projX(v,q), y=projY(v,q);
+    const on=i===COURSE.next;
+    out+=`<circle class="t-mark" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14"
+           fill="${on?'var(--accent)':'var(--panel)'}" stroke="var(--accent)" stroke-width="4"/>
+          <text x="${x.toFixed(1)}" y="${(y+1).toFixed(1)}" text-anchor="middle"
+           font-size="17" font-weight="700" fill="${on?'#fff':'var(--accent)'}">${i+1}</text>`; });
   if(trackLive())                                   /* pulsing head while live */
     out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="24"
            fill="none" stroke="var(--port)" stroke-width="3" stroke-opacity=".55"/>`;
@@ -6371,7 +6540,41 @@ $('qr-box').addEventListener('click',e=>{
 });
 $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
-const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); };
+const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on'); };
+/* ---- the course sheet --------------------------------------------------
+   Every mark, in the club's order. Tap one to add it to the course - it
+   takes the next number - and tap it again to take it out. The line's
+   row says which line is in force, and tapping it while a pinged line
+   is drops the pings and goes back to the marks. */
+function renderCourse(){
+  const box=$('course-list'); if(!box) return;
+  const E=lineEnds();
+  const lineRow=`<div class="lib-row course-row line" data-line="1">
+      <div class="seq">⚑</div><div class="lib-main">
+      <b>START · FINISH LINE</b><span>${E.pinged?'PINGED · TAP TO USE THE MARKS':
+        markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr}</span></div></div>`;
+  box.innerHTML=lineRow+MARKS.map(m=>{
+    const i=COURSE.marks.indexOf(m.id);
+    const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
+    return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
+      <div class="lib-main"><b>${m.name}</b><span>${m.hdr}</span></div></div>`; }).join('');
+}
+function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
+$('trk-course').addEventListener('click',()=>{
+  if($('t-course').classList.contains('on')) closeLib(); else { hideQR(); $('t-lib').classList.remove('on'); openCourse(); } });
+$('course-list').addEventListener('click',e=>{
+  if(courseDragged()) return;                 /* a scroll, not a choice */
+  const row=e.target.closest('.course-row'); if(!row) return;
+  if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
+      ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
+  else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
+    if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length; }
+    else COURSE.marks.push(id);
+    courseSave(); }
+  renderCourse(); drawMap(shownTrack()); });
+$('course-next').addEventListener('click',()=>{ courseAdvance(); renderCourse(); });
+$('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0}; courseSave(); renderCourse(); drawMap(shownTrack()); });
+$('course-done').addEventListener('click',closeLib);
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
 /* Two lists, and the difference matters.
 
