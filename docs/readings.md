@@ -115,7 +115,7 @@ serves it when it can; the arithmetic is the same number when it cannot.
 | Slot | Where | Default |
 |---|---|---|
 | `c0` | the big number in the middle, with its unit beside it | BOAT SPEED |
-| `c4` | the strip under it — header, value and unit on one line | TRUE WIND SPEED |
+| `c4` | the left of the strip under it — header and value on one line, beside the polar target and the shift | TRUE WIND SPEED |
 | `c1` `c2` `c3` | the row along the bottom | DEPTH · HEEL · VMG |
 
 The middle of the bottom three is set smaller than its neighbours, and
@@ -150,6 +150,11 @@ a fourth figure.
 The dial's big cell is the exception: its unit sits *beside* the number
 rather than under it, measured off the number's own right edge so it
 stays against the last digit.
+
+The strip is the other: header and value only, no third line. It shares
+its row with `TGT` and the lift/header readout, and a heading's compass
+point or a mark's range beside them runs into the target — so the strip
+is where a number goes, and a cell is where its context does.
 
 ## When a sensor is not there
 

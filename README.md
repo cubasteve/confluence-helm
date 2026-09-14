@@ -70,6 +70,7 @@ on either page, and the choice is remembered.
 | swipe **up** from the bottom | the app dock |
 | **tap** a reading | change what it shows |
 | **tap** the timer | start or sync the countdown; double-tap to start racing |
+| **tap** Ⓟ or Ⓑ under the timer | ping the pin and boat ends of the start line |
 | **hold** anywhere on the dial | reset |
 | **hold** the padlock | lock the touchscreen for a wipe-down |
 

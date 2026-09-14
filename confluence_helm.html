@@ -130,10 +130,11 @@ body.night #mark{opacity:.07}
 .tbtn:active circle{fill:var(--chip)}
 .strip{font-size:32px;font-weight:600;fill:var(--ink-dim);letter-spacing:.06em}
 .strip.good{fill:var(--stbd)}.strip.bad{fill:var(--port)}
-.pbtn rect{fill:none;stroke:var(--label);stroke-width:3}
-.pbtn text{font-size:28px;font-weight:600;letter-spacing:.18em;fill:var(--label)}
-.pbtn.set rect{stroke:var(--stbd)} .pbtn.set text{fill:var(--stbd)}
-.pbtn:active rect{fill:var(--chip)}
+.pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
+.pbtn .hit{fill:transparent}
+.pbtn text{font-size:21px;font-weight:600;fill:var(--label)}
+.pbtn.set .ring{stroke:var(--stbd)} .pbtn.set text{fill:var(--stbd)}
+.pbtn:active .ring{fill:var(--chip)}
 .stale{opacity:.30}.alarm{fill:var(--alarm)!important}.warn{fill:var(--warn)!important}
 text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 
@@ -1367,7 +1368,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        visibility rather than display so getBBox still answers. -->
   <text id="spd-meas" class="huge" x="0" y="-400" visibility="hidden">0</text>
 
-  <!-- performance strip: hidden during the countdown, replaced by pings.
+  <!-- performance strip: the reading in slot c4, TGT and the shift.
        Up 21 into the line the big cell's unit used to occupy, and
        centred in what is left of it: 33px clear of the number's ink
        above and 32 of the headers below, where it used to have 39 and 7.
@@ -1379,18 +1380,24 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <text id="p-shf" class="strip" x="758" y="685" text-anchor="middle">––</text>
   </g>
 
-  <!-- start line pings, only while the countdown runs. They travel with
-       the strip they replace, and their box has to stay ABOVE the cell
-       tap rects: those are declared later, so they would take these
-       taps. -->
+  <!-- start line pings: a circled P and B tucked under the countdown,
+       up whenever the clock is idle or counting down. 338 is the middle
+       of the only free band up there - the +/- circles end at 314 and
+       the big cell's label starts at 373 - and the drawn ring is 18 px
+       because the request was very small; the transparent circle under
+       it is the tap target, 30 px, the two 64 apart so they never share
+       one. They sit in timerTap()'s top third, so pointerdown gClaims
+       exactly as the +/- do. -->
   <g id="pings" style="display:none">
     <g id="ping-pin" class="pbtn">
-      <rect x="322" y="650" width="160" height="62" rx="16"/>
-      <text x="402" y="682" text-anchor="middle">PIN</text>
+      <circle class="hit" cx="508" cy="338" r="30"/>
+      <circle class="ring" cx="508" cy="338" r="18"/>
+      <text x="508" y="338" text-anchor="middle">P</text>
     </g>
     <g id="ping-boat" class="pbtn">
-      <rect x="598" y="650" width="160" height="62" rx="16"/>
-      <text x="678" y="682" text-anchor="middle">BOAT</text>
+      <circle class="hit" cx="572" cy="338" r="30"/>
+      <circle class="ring" cx="572" cy="338" r="18"/>
+      <text x="572" y="338" text-anchor="middle">B</text>
     </g>
   </g>
 
@@ -1430,8 +1437,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        29 x 26 - the row got taller, so the targets did.
        The only dial tap they must miss is the timer's, above 0.33 of the
        stage - the speed toggle that used to own everything below 0.68 is
-       long gone. The lower three start at 716, clear of the ping buttons
-       that end at 712, and stop at 904, clear of the lock at 914. -->
+       long gone. The lower three start at 716 and stop at 904, clear of
+       the lock at 914. -->
   <g id="dial-cells">
     <!-- The big one, over the label, the number AND the unit beside it:
          a widest-case 88.8 puts the unit's tail at 882. -->
@@ -1443,11 +1450,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
           width="176" height="188" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="716"
           width="176" height="188" fill="transparent"/>
-    <!-- The strip. x and width are set every frame, because the reading
-         slides left when racePro puts TGT and the shift beside it, and
-         the whole rect is hidden while the ping buttons are up. -->
-    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="420" y="652"
-          width="240" height="60" fill="transparent"/>
+    <!-- The strip's reading, the left third of the row: TGT and the
+         shift have the rest and are not pickable. -->
+    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="232" y="652"
+          width="180" height="60" fill="transparent"/>
   </g>
 
 
@@ -1559,19 +1565,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <span class="sub" id="ss-sub">OFF</span>
       </button>
       <input id="dim" type="range" min="25" max="100" value="100">
-    </div>
-
-    <!-- The race set: start-line pings during the countdown, target
-         speed, the lift/header strip, TO LINE / BIAS / BURN. One tile,
-         because it is one decision - are we racing today. -->
-    <div class="slab">Race</div>
-    <div class="dimrow">
-      <button class="tile" id="race-btn">
-        <svg id="race-ico" viewBox="0 0 24 24">
-          <path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>
-        <span>RACE PRO</span>
-        <span class="sub" id="race-sub">OFF</span>
-      </button>
     </div>
 
     <div class="slab">Shallow alarm</div>
@@ -1850,13 +1843,12 @@ const CFG={
   host:'localhost:3000', theme:'auto', demo:false,
 
   /* ---- feature switches -------------------------------------------
-     racePro turns on the start-line pings, polar target % and the
-     lift/header readout. Off here is only the default: the RACE PRO
-     tile on the control panel sets it and it is saved with the other
-     prefs.
+     There is no race switch: the start-line pings, the polar target and
+     the lift/header readout are always on. It is a racing boat, and the
+     tile that turned them on was one more thing to find on the panel
+     before a start.
      showHeel needs the BNO080 heading node to be publishing
      navigation.attitude.                                            */
-  racePro:false,
   showHeel:true,
 
   /* fpsProbe measures every slide, keeps the samples in localStorage and
@@ -2388,34 +2380,20 @@ function render(){
   if(twa!==null)tg.setAttribute('transform',`rotate(${twa} ${CX} ${CY})`);
 
   /* ---- performance strip ---- */
-  const racing = CFG.racePro && tState==='countdown';
-  /* PIN and BOAT are up whenever you are PRE-START with the race set on
-     - idle as well as counting down. The line is set while the committee
-     is still laying it, well before the sequence; making the pings wait
-     for the countdown meant pinging in the five minutes you are trying
-     to hit the line. They take the strip's row and give it back at the
-     gun. The TO LINE / BIAS / BURN override of the bottom cells stays a
+  const racing = tState==='countdown';
+  /* P and B are up whenever you are PRE-START - idle as well as counting
+     down. The line is set while the committee is still laying it, well
+     before the sequence; making the pings wait for the countdown meant
+     pinging in the five minutes you are trying to hit the line. They
+     live under the countdown, so the strip keeps its row throughout.
+     The TO LINE / BIAS / BURN override of the bottom cells stays a
      countdown thing: pre-start it would take your readings away for the
      whole afternoon. */
-  const preStart = CFG.racePro && (tState==='idle'||tState==='countdown');
-  wSty('strip','display', preStart?'none':'');
+  const preStart = tState==='idle'||tState==='countdown';
   wSty('pings','display', preStart?'':'none');
-  /* With racePro off the strip carries ONE reading, centred; with it on
-     that reading moves left to make room for TGT and the shift.
-     What the reading IS belongs to paintDialCells now - the strip is
-     slot c4 - so only the geometry is set here. The tap target follows
-     it, and goes away entirely while the pings are up: the rects are
-     declared after the ping buttons and would otherwise swallow their
-     taps. */
-  wAttr('p-tws','x', CFG.racePro?322:540);
-  wAttr('dc4','x',     CFG.racePro?232:420);
-  wAttr('dc4','width', CFG.racePro?180:240);
-  wSty ('dc4','display', preStart?'none':'');
-  wSty('p-tgt','display', CFG.racePro?'':'none');
-  wSty('p-shf','display', CFG.racePro?'':'none');
 
   let tgtPct=null;
-  if(CFG.racePro && tws!==null && twa!==null && sogR!==null){
+  if(tws!==null && twa!==null && sogR!==null){
     const t=targetSpeed(tws,twa);
     if(t>0.3) tgtPct=(sogR*MS_TO_KT)/t*100;
   }
@@ -2425,7 +2403,7 @@ function render(){
 
   let twdDeg=get('environment.wind.directionTrue');
   twdDeg = twdDeg===null?null:twdDeg*DEG;
-  const sh = CFG.racePro ? windShift(twdDeg, awa) : null;
+  const sh = windShift(twdDeg, awa);
   /* Through wCls, not `el.className=`. On an SVG element className is a
      read-only SVGAnimatedString, so assigning a string to it is a silent
      no-op - this has been setting the text since it was written and
@@ -2437,7 +2415,7 @@ function render(){
   wCls('p-shf','bad',  !steady && !sh.lift);
 
   /* ---- three cells, contextual on race state ---- */
-  const L = (CFG.racePro && racing) ? lineData() : null;
+  const L = racing ? lineData() : null;
   if(L){
     wText('c1-lbl','TO LINE');
     wText('c2-lbl','BIAS');
@@ -3567,11 +3545,7 @@ const PREF_DEFS={
      source-code default with no panel control at all: the only way off
      was to edit the file, and until someone did, the shallow alarm was
      firing on invented depth. */
-  windDemo:   v=>typeof v==='boolean' ? v : null,
-  /* The race set is a panel tile now. It used to be a source constant,
-     which meant the pings, the target and the shift strip could only be
-     had by editing the file - so on the boat they never were. */
-  racePro:    v=>typeof v==='boolean' ? v : null
+  windDemo:   v=>typeof v==='boolean' ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5392,22 +5366,21 @@ let dialCellKey='';
 function paintDialCells(){
   const key=DIAL_SLOTS.map(sl=>{ const c=musCell(DIAL.slot[sl]);
     return sl+(c?c.k+c.v()+musSub(c)+musDU(c)+musHdr(c):''); })
-    .join('|')+(CFG.racePro?'|R':'');   /* the strip drops its unit in race mode */
+    .join('|');
   if(key===dialCellKey) return;
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
     const els=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
-    /* The strip: three lines' worth of text on one line, in the order it
-       would be read aloud - TWS 11.6 KT. With racePro on it shares the
-       row with TGT and the shift, so the unit is dropped for the width.
+    /* The strip: header and value on one line, in the order it would be
+       read aloud - TWS 11.6. It shares the row with TGT and the shift,
+       so the unit is dropped for the width.
        Plain text rather than wVal: at 32px a full-size degree ring is
        not the fourth digit it becomes at 268, and a tspan inside a
        composed line would have to be built child by child. */
     if(els.length===1){
       const v=c?c.v():null;
       wText(els[0], !c ? '––' : v===null ? musHdr(c)+' ––'
-        : [musHdr(c), v, CFG.racePro ? '' : (musSub(c)||musDU(c))]
-            .filter(Boolean).join(' '));
+        : musHdr(c)+' '+v);
       wCls(els[0],'stale', v===null);
       continue;
     }
@@ -5642,12 +5615,12 @@ $('dial-cells').addEventListener('pointerdown',e=>{
   if(e.target.closest('.dcell')){ gClaim(); G.releaseOnDrag=true; } });
 $('dial-cells').addEventListener('click',e=>{
   const c=e.target.closest('.dcell'); if(!c) return;
-  /* TO LINE / BIAS / BURN own the three LOWER cells during a racePro
+  /* TO LINE / BIAS / BURN own the three LOWER cells during the
      countdown - the local up in tick() that decides it is called
      `racing`, which it is not; it is the same condition spelled out.
      Offering a choice you would not then see is worse than not offering.
      The big one is not overridden, so it stays yours throughout. */
-  if(c.dataset.slot!=='c0' && CFG.racePro && tState==='countdown') return;
+  if(c.dataset.slot!=='c0' && tState==='countdown') return;
   e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
 
 /* ---- the menu scrolls itself ---------------------------------------
@@ -8933,23 +8906,6 @@ fitStage();
    open, so letting the events through costs nothing underneath. */
 let ssHold=null, ssPt=null;
 const ssFar=e=>!ssPt||Math.hypot(e.clientX-ssPt.x,e.clientY-ssPt.y)>24;
-/* RACE PRO. A tap toggles; the same 24 px tap-or-swipe rule as the
-   display tiles, so a swipe-down that starts on it still closes the
-   panel rather than being swallowed. */
-function drawRace(){
-  const on=!!CFG.racePro;
-  wCls('race-btn','on',on); wCls('race-btn','off',!on);
-  wText('race-sub', on?'ON':'OFF');
-}
-let racePt=null;
-$('race-btn').addEventListener('pointerdown',e=>{ racePt={x:e.clientX,y:e.clientY}; });
-$('race-btn').addEventListener('pointerup',e=>{
-  if(!racePt) return; const far=Math.hypot(e.clientX-racePt.x,e.clientY-racePt.y)>24; racePt=null;
-  if(far) return;
-  CFG.racePro=!CFG.racePro; drawRace(); prefsSave();
-  dialCellKey='';                        /* the strip's unit comes and goes with it */
-});
-
 $('ss-btn').addEventListener('pointerdown',e=>{
   ssPt={x:e.clientX,y:e.clientY};
   ssHold=setTimeout(()=>{ ssHold=null;               /* held: start now */
@@ -8980,12 +8936,12 @@ drawBezelTicks();
 /* Preferences first: applyTheme, drawDepth and applyDim below all read
    CFG, so restoring it has to happen before any of them run. */
 prefsLoad(); applyDim(CFG.dim,false); layoutPages();
-/* The two persisted tiles are painted HERE, after prefsLoad, and nowhere
+/* The persisted tile is painted HERE, after prefsLoad, and nowhere
    earlier. DEMO used to be painted at its own definition, three thousand
    lines above this, which is before the saved value has been read - so a
    panel with the demo saved off came up with the pill lit until the next
-   toggle. RACE PRO would have done the same. */
-drawDemo(); drawRace();
+   toggle. */
+drawDemo();
 /* Warm the radio state at boot rather than on first panel open. The call
    costs a handful of subprocesses on the Pi, and doing it here means it
    has long finished by the time anyone swipes up - instead of the panel
