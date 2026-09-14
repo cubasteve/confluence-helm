@@ -2714,6 +2714,7 @@ function markGeo(){
 }
 const rangeTxt=m=> m<1000 ? Math.round(m)+' M' : (m/1852).toFixed(2)+' NM';
 function courseWatch(){
+  if(!raceOn()){ courseNear=false; return; }
   const g=markGeo(); if(!g||g.n.id==='finish'){ courseNear=false; return; }
   if(g.dist<COURSE_ROUND.near) courseNear=true;
   else if(courseNear && g.dist>COURSE_ROUND.away){
@@ -2724,7 +2725,15 @@ function courseAdvance(){ if(COURSE.next<COURSE.marks.length){ COURSE.next++; co
 
 const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
 let lineWas=null, lineArmed=false;
+/* Nothing automatic happens until you have started the countdown by
+   hand, and nothing after the finish or a reset. That was already true
+   of the start - the only ways into RACING are the countdown reaching
+   zero or the double-tap during it - but it is stated here rather than
+   implied, and the course watcher below leans on the same test so that
+   rounding a mark on a Sunday potter, clock idle, does not move it. */
+const raceOn=()=>tState==='countdown'||tState==='racing';
 function lineWatch(){
+  if(!raceOn()){ lineWas=null; return; }
   const L=lineData();
   if(!L){ lineWas=null; return; }
   const now=Date.now(), d=L.dist;
@@ -2967,6 +2976,8 @@ $('trk-rec').addEventListener('click',()=>{
                                  clock to it; the next, once well away,
                                  finishes (lineWatch)
      any state  hold 0.7 s ..... reset back to idle
+     IDLE / FINISHED: nothing automatic - no crossing counts, no mark
+                is rounded - until the countdown is started by hand
 
    The countdown self-starts the race at zero so a missed double tap
    never costs you the whole race time; crossing early or late is what
