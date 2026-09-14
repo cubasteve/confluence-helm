@@ -24,7 +24,7 @@ dots at the foot say where you are. The dial is the one you come back to.
 
 | | |
 |---|---|
-| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
+| ![Dial](docs/img/dial.png) | **Dial** — the instrument. Five readings you choose, a race column down the left, a compass bezel carrying apparent and true wind marks, and a start-line timer you tap to run. |
 | ![Music](docs/img/music.png) | **Music** — what is playing, transport, a volume ring around the album art, and three more readings around that. |
 
 **Apps** are not pages, and the difference is deliberate: a page is always

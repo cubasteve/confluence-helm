@@ -129,7 +129,12 @@ body.night #mark{opacity:.07}
 .tbtn rect{fill:var(--label)}
 .tbtn:active circle{fill:var(--chip)}
 .strip{font-size:32px;font-weight:600;fill:var(--ink-dim);letter-spacing:.06em}
-.strip.good{fill:var(--stbd)}.strip.bad{fill:var(--port)}
+/* the race column: five label-over-value rows down the left of the big
+   number. The value is .rval; a unit rides on it as a half-size tspan. */
+.rlbl{font-size:21px;font-weight:var(--w-lbl);letter-spacing:.16em;fill:var(--label)}
+.rval{font-size:54px;font-weight:var(--w-val);fill:var(--ink)}
+.rval .u{font-size:.5em;font-weight:600;fill:var(--label);letter-spacing:.1em}
+.rval.good{fill:var(--stbd)}.rval.bad{fill:var(--port)}
 .pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
 .pbtn .hit{fill:transparent}
 .pbtn text{font-size:21px;font-weight:600;fill:var(--label)}
@@ -1349,35 +1354,60 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <rect x="700" y="263" width="48" height="10" rx="5"/>
   </g>
 
-  <!-- 432 tucked this into the digits' negative space, which worked while
-       it said SOG and stopped working the moment it could say BOAT SPEED
-       or APPARENT WIND. 386 clears them: dominant-baseline:middle puts
-       the digits' ink at 432..629, not at the 359 the y attribute alone
-       would suggest, so the label's own ink at 373..395 has 37px of air
-       under it. It clears the timer's +/- buttons at 314 too. -->
-  <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
-  <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
+  <!-- The big cell is RIGHT-ALIGNED: the race column has the left of
+       the glass, so the number hangs off a right edge and grows leftward
+       into what the column leaves it. dialFit() sets every x here each
+       repaint, and shrinks the number when a wide reading would reach
+       the column - see it for the arithmetic.
+       386 for the label: dominant-baseline:middle puts the digits' ink
+       at 432..629, not at the 359 the y attribute alone would suggest,
+       so the label's own ink at 373..395 has 37px of air under it. It
+       clears the timer's +/- buttons at 314 too. -->
+  <text id="spd-label" class="label" x="633" y="386" text-anchor="middle">SOG</text>
+  <text id="spd" class="huge" x="852" y="556" text-anchor="end">0.0</text>
   <!-- Beside the number, not under it, and sharing its y: every text on
        this dial is dominant-baseline:middle, so the same y centres the
        unit on the number's own middle rather than dropping it to the
-       baseline. dialUnitX() sets the x each repaint from the number's
-       measured width. Anchored start so the unit grows rightward into
-       empty glass instead of back into the digits. -->
-  <text id="spd-u" class="unit" x="756" y="556" text-anchor="start">KT</text>
-  <!-- Off-glass, and the only thing that ever measures a huge string.
-       visibility rather than display so getBBox still answers. -->
+       baseline. Anchored END against a fixed right edge, so a wider unit
+       - STBD, BOW UP - pushes the number left rather than running out
+       into the bezel's 90. -->
+  <text id="spd-u" class="unit" x="940" y="556" text-anchor="end">KT</text>
+  <!-- Off-glass, and the only things that ever measure a huge string or
+       a unit. visibility rather than display so getBBox still answers. -->
   <text id="spd-meas" class="huge" x="0" y="-400" visibility="hidden">0</text>
+  <text id="unit-meas" class="unit" x="0" y="-400" visibility="hidden">KT</text>
 
-  <!-- performance strip: the reading in slot c4, TGT and the shift.
-       Up 21 into the line the big cell's unit used to occupy, and
-       centred in what is left of it: 33px clear of the number's ink
-       above and 32 of the headers below, where it used to have 39 and 7.
-       It belongs with the number - it is that number's context - and the
-       cells below needed the rest of the room more than it did. -->
+  <!-- the strip: the reading in slot c4, one line under the big number
+       and centred on it - dialFit() moves its x with the number's. Up 21
+       into the line the big cell's unit used to occupy: 33px clear of
+       the number's ink above and 32 of the headers below. It belongs
+       with the number - it is that number's context. -->
   <g id="strip">
-    <text id="p-tws" class="strip" x="322" y="685" text-anchor="middle">TWS ––</text>
-    <text id="p-tgt" class="strip" x="540" y="685" text-anchor="middle">TGT ––</text>
-    <text id="p-shf" class="strip" x="758" y="685" text-anchor="middle">––</text>
+    <text id="p-tws" class="strip" x="633" y="685" text-anchor="middle">TWS ––</text>
+  </g>
+
+  <!-- The race column. Every race number, stacked down the left of the
+       big one: target, shift, and during the countdown TO LINE, BIAS and
+       BURN. Right-aligned against 385 so the ragged edge faces the bezel
+       curve, where the room varies, and the straight edge faces the
+       number, which never comes closer than 405. Five rows at 74 from
+       346 to 680: the top label clears the +/- buttons at 314 and the
+       bottom value's ink ends at 700, 26 clear of the DEPTH header. The
+       widest value, PIN +12, is 200 at this size and its left edge at
+       185 is inside the face at every row. -->
+  <g id="race-col">
+    <text id="rc-tgt-l"  class="rlbl" x="385" y="346" text-anchor="end">TGT</text>
+    <text id="rc-tgt"    class="rval" x="385" y="384" text-anchor="end">––</text>
+    <text id="rc-shf-l"  class="rlbl" x="385" y="420" text-anchor="end">SHIFT</text>
+    <text id="rc-shf"    class="rval" x="385" y="458" text-anchor="end">––</text>
+    <g id="rc-cd" style="display:none">
+      <text id="rc-line-l" class="rlbl" x="385" y="494" text-anchor="end">TO LINE</text>
+      <text id="rc-line"   class="rval" x="385" y="532" text-anchor="end">––</text>
+      <text id="rc-bias-l" class="rlbl" x="385" y="568" text-anchor="end">BIAS</text>
+      <text id="rc-bias"   class="rval" x="385" y="606" text-anchor="end">––</text>
+      <text id="rc-burn-l" class="rlbl" x="385" y="642" text-anchor="end">BURN</text>
+      <text id="rc-burn"   class="rval" x="385" y="680" text-anchor="end">––</text>
+    </g>
   </g>
 
   <!-- start line pings: a circled P and B tucked under the countdown,
@@ -1440,20 +1470,20 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        long gone. The lower three start at 716 and stop at 904, clear of
        the lock at 914. -->
   <g id="dial-cells">
-    <!-- The big one, over the label, the number AND the unit beside it:
-         a widest-case 88.8 puts the unit's tail at 882. -->
-    <rect class="dcell" data-g="dial" data-slot="c0" x="270" y="368"
-          width="620" height="272" fill="transparent"/>
+    <!-- The big one, over the label, the number AND the unit beside it.
+         From 405, where the number's room starts, so the race column to
+         its left is never a tap on it. -->
+    <rect class="dcell" data-g="dial" data-slot="c0" x="405" y="368"
+          width="545" height="272" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c1" x="238" y="716"
           width="176" height="188" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c2" x="452" y="716"
           width="176" height="188" fill="transparent"/>
     <rect class="dcell" data-g="dial" data-slot="c3" x="666" y="716"
           width="176" height="188" fill="transparent"/>
-    <!-- The strip's reading, the left third of the row: TGT and the
-         shift have the rest and are not pickable. -->
-    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="232" y="652"
-          width="180" height="60" fill="transparent"/>
+    <!-- The strip. x is set with the number's by dialFit(). -->
+    <rect class="dcell" id="dc4" data-g="dial" data-slot="c4" x="513" y="652"
+          width="240" height="60" fill="transparent"/>
   </g>
 
 
@@ -2260,6 +2290,14 @@ const wVal=(id,v)=>{
     el.appendChild(t);
   } else el.textContent=v;
 };
+/* A number with its unit riding on it, half-size, as the race column
+   shows TO LINE and BURN. One string key, so a repeat is a no-op. */
+const wUnit=(id,v,u)=>{
+  const k=id+'|u'; const key=v+'\u0000'+u; if(_w.get(k)===key)return; _w.set(k,key);
+  const el=$(id); el.textContent=v;
+  if(u){ const t=document.createElementNS(SVGNS,'tspan'); t.setAttribute('class','u');
+         t.textContent=' '+u; el.appendChild(t); }
+};
 
 /* The app dock is NOT on this list. The panel covers the glass and a
    running app replaces it, but a dock leaves the dial in plain sight -
@@ -2392,14 +2430,15 @@ function render(){
   const preStart = tState==='idle'||tState==='countdown';
   wSty('pings','display', preStart?'':'none');
 
+  /* ---- the race column ---- */
   let tgtPct=null;
   if(tws!==null && twa!==null && sogR!==null){
     const t=targetSpeed(tws,twa);
     if(t>0.3) tgtPct=(sogR*MS_TO_KT)/t*100;
   }
-  $('p-tgt').textContent = tgtPct===null?'TGT ––':'TGT '+tgtPct.toFixed(0)+'%';
-  $('p-tgt').classList.toggle('good', tgtPct!==null&&tgtPct>=98);
-  $('p-tgt').classList.toggle('bad',  tgtPct!==null&&tgtPct<90);
+  wText('rc-tgt', tgtPct===null?'––':tgtPct.toFixed(0)+'%');
+  wCls ('rc-tgt','good', tgtPct!==null&&tgtPct>=98);
+  wCls ('rc-tgt','bad',  tgtPct!==null&&tgtPct<90);
 
   let twdDeg=get('environment.wind.directionTrue');
   twdDeg = twdDeg===null?null:twdDeg*DEG;
@@ -2408,47 +2447,32 @@ function render(){
      read-only SVGAnimatedString, so assigning a string to it is a silent
      no-op - this has been setting the text since it was written and
      never once turned it green or red. */
+  /* The shift: its label says which way, its value how much. STEADY
+     under two degrees, with the degrees still shown - a 1° is not a 0°. */
   const steady = sh===null||sh.deg<2;
-  wText('p-shf', steady ? 'STEADY'
-        : (sh.lift?'LIFT ':'HEADER ')+sh.deg.toFixed(0)+'°');
-  wCls('p-shf','good', !steady && sh.lift);
-  wCls('p-shf','bad',  !steady && !sh.lift);
+  wText('rc-shf-l', sh===null?'SHIFT' : steady?'STEADY' : sh.lift?'LIFT':'HEADER');
+  wVal ('rc-shf', sh===null?'––':sh.deg.toFixed(0)+'\u00b0');
+  wCls ('rc-shf','good', !steady && sh.lift);
+  wCls ('rc-shf','bad',  !steady && !sh.lift);
 
-  /* ---- three cells, contextual on race state ---- */
+  /* TO LINE, BIAS and BURN are countdown rows: they need the line and
+     the clock, and pre-start or after the gun they would be three rows
+     of dashes. They used to take over the three bottom cells instead,
+     which cost you your readings for the whole sequence. */
+  wSty('rc-cd','display', racing?'':'none');
   const L = racing ? lineData() : null;
-  if(L){
-    wText('c1-lbl','TO LINE');
-    wText('c2-lbl','BIAS');
-    wText('c3-lbl','BURN');
-    const dm = met ? L.dist : L.dist*M_TO_FT;
-    /* Through the SAME cached writers paintDialCells uses. Writing these
-       three straight at the element left the cache holding what the
-       readings had put there, so the handover back could be skipped as a
-       no-op with TO LINE / BIAS / BURN still on the glass - and the same
-       for the classes, where a stale `alarm` stayed red over a depth
-       that was fine. Resetting dialCellKey below fixes the group; this
-       fixes the elements. */
-    wVal ('dpt', Math.abs(dm)>999?'999':String(Math.round(dm)));
-    wCls ('dpt','alarm', L.dist<0);                  // over early
-    wCls ('dpt','warn', false); wCls('dpt','stale', false);
-    /* Abbreviated, like every other unit on the glass since the units
-       were shortened - METRES and SECONDS were the last two words left
-       sitting under numbers that say KT and FT the rest of the time. */
-    wText('dpt-u', met?'M':'FT');
-    wVal ('c2',  Math.abs(L.bias).toFixed(0)+'\u00b0');
-    wText('c2b', L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT));
-    wCls ('c2','stale', false); wCls('c2b','stale', false);
-    wVal ('vmg', L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
-    wCls ('vmg','alarm', L.burn!==null&&L.burn<0);
-    wText('c3-u','SEC');
-    /* The override has written over all three, so what paintDialCells
-       last put there is no longer what is on the glass. Without this its
-       cache would still match on the frame the countdown ends, and TO
-       LINE / BIAS / BURN would stay up over live readings. */
-    dialCellKey='';
-  } else {
-    paintDialCells();
+  if(racing){
+    const dm = L ? (met ? L.dist : L.dist*M_TO_FT) : null;
+    wUnit('rc-line', dm===null?'––' : Math.abs(dm)>999?'999':String(Math.round(dm)),
+          dm===null?'' : met?'M':'FT');
+    wCls ('rc-line','bad', dm!==null && dm<0);           // over early
+    wText('rc-bias-l', L ? 'BIAS '+Math.abs(L.bias).toFixed(0)+'\u00b0' : 'BIAS');
+    wText('rc-bias', L ? L.favoured+' +'+Math.round(met?L.gain:L.gain*M_TO_FT) : '––');
+    wUnit('rc-burn', !L||L.burn===null?'––':(L.burn>0?'+':'')+L.burn,
+          !L||L.burn===null?'':'S');
+    wCls ('rc-burn','bad', !!L && L.burn!==null && L.burn<0);
   }
+  paintDialCells();
 
   }
   /* ================= end DRAW ========================================= */
@@ -5371,16 +5395,15 @@ function paintDialCells(){
   dialCellKey=key;
   for(const sl of DIAL_SLOTS){
     const els=DIAL_EL[sl], c=musCell(DIAL.slot[sl]);
-    /* The strip: header and value on one line, in the order it would be
-       read aloud - TWS 11.6. It shares the row with TGT and the shift,
-       so the unit is dropped for the width.
+    /* The strip: three lines' worth of text on one line, in the order it
+       would be read aloud - TWS 11.6 KT.
        Plain text rather than wVal: at 32px a full-size degree ring is
        not the fourth digit it becomes at 268, and a tspan inside a
        composed line would have to be built child by child. */
     if(els.length===1){
       const v=c?c.v():null;
       wText(els[0], !c ? '––' : v===null ? musHdr(c)+' ––'
-        : musHdr(c)+' '+v);
+        : [musHdr(c), v, musSub(c)||musDU(c)].filter(Boolean).join(' '));
       wCls(els[0],'stale', v===null);
       continue;
     }
@@ -5390,9 +5413,9 @@ function paintDialCells(){
     wText(lbl, musHdr(c));
     wVal(val, v===null?'––':v);
     wText(third, v===null ? '' : (sub || musDU(c)));
-    /* Only the big cell's unit is beside its number; the other three
-       still sit under theirs, centred, and need no x at all. */
-    if(sl==='c0') wAttr(third,'x', dialUnitX(v===null?'––':v));
+    /* Only the big cell is fitted; the other three sit centred under
+       their headers and need no x at all. */
+    if(sl==='c0') dialFit(v===null?'––':v, v===null ? '' : (sub || musDU(c)));
     wCls(val,'stale', v===null);
     wCls(third,'stale', v===null);
     /* The shallow alarm follows the READING, not the cell. It used to be
@@ -5432,9 +5455,34 @@ function shapeW(str){
                      SHAPE_W.set(k,w); }
   return w;
 }
-const SPD_GAP=28;
-function dialUnitX(v){
-  return Math.round(540+(v?shapeW(v):0)/2+SPD_GAP);
+const UNIT_W=new Map();
+function unitW(str){
+  if(!str) return 0; let w=UNIT_W.get(str);
+  if(w===undefined){ wText('unit-meas',str); w=$('unit-meas').getBBox().width;
+                     UNIT_W.set(str,w); }
+  return w;
+}
+/* The big cell's geometry, from the right. The unit's tail is pinned at
+   UNIT_R, 940: the bezel's 90 starts at 956. The number ends SPD_GAP
+   short of the unit's head, so a wide unit - STBD, BOW UP - moves the
+   number left rather than the unit right. And the number may reach no
+   further left than NUM_L, 405: the race column ends at 385. A reading
+   whose 268px width would cross that is scaled down to fit - 12.1 is
+   about 75%, -140° about 60% - because the column is what was asked for
+   and a number shrunk to fit is still the biggest thing on the glass.
+   Label and strip are centred on the number, and the strip's tap rect
+   follows them; the cell's own rect is fixed at 405..950. */
+const SPD_GAP=28, UNIT_R=940, NUM_L=405, HUGE=268;
+function dialFit(v,u){
+  const numR = UNIT_R - unitW(u) - (u?SPD_GAP:0);
+  const w=shapeW(v), room=numR-NUM_L;
+  const fs = w>room ? HUGE*room/w : HUGE;
+  const cx = Math.round(numR - Math.min(w,room)/2);
+  wAttr('spd','x', numR);
+  wSty ('spd','fontSize', fs.toFixed(1)+'px');
+  wAttr('spd-label','x', cx);
+  wAttr('p-tws','x', cx);
+  wAttr('dc4','x', cx-120);
 }
 
 let stripKey='';
@@ -5615,12 +5663,6 @@ $('dial-cells').addEventListener('pointerdown',e=>{
   if(e.target.closest('.dcell')){ gClaim(); G.releaseOnDrag=true; } });
 $('dial-cells').addEventListener('click',e=>{
   const c=e.target.closest('.dcell'); if(!c) return;
-  /* TO LINE / BIAS / BURN own the three LOWER cells during the
-     countdown - the local up in tick() that decides it is called
-     `racing`, which it is not; it is the same condition spelled out.
-     Offering a choice you would not then see is worse than not offering.
-     The big one is not overridden, so it stays yours throughout. */
-  if(c.dataset.slot!=='c0' && tState==='countdown') return;
   e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
 
 /* ---- the menu scrolls itself ---------------------------------------

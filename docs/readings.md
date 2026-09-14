@@ -114,13 +114,20 @@ serves it when it can; the arithmetic is the same number when it cannot.
 
 | Slot | Where | Default |
 |---|---|---|
-| `c0` | the big number in the middle, with its unit beside it | BOAT SPEED |
-| `c4` | the left of the strip under it — header and value on one line, beside the polar target and the shift | TRUE WIND SPEED |
+| `c0` | the big number, right of centre, with its unit beside it | BOAT SPEED |
+| `c4` | the strip under it — header, value and unit on one line | TRUE WIND SPEED |
 | `c1` `c2` `c3` | the row along the bottom | DEPTH · HEEL · VMG |
 
 The middle of the bottom three is set smaller than its neighbours, and
 that is geometry rather than preference: the three are 214 px apart and
 only the outer two can overflow towards the rim.
+
+The big number is **right-aligned**, not centred, because the left of
+the glass belongs to the race column (below). Its unit's tail is pinned
+just short of the bezel's 90, and the number hangs off that and grows
+leftward. A reading too wide to stop short of the column — 12.1 is, 4.6
+is not — is drawn smaller rather than allowed to touch it, so the column
+never moves and the number is still the biggest thing on the glass.
 
 **The music page** has three, arranged around the album art.
 
@@ -151,10 +158,29 @@ The dial's big cell is the exception: its unit sits *beside* the number
 rather than under it, measured off the number's own right edge so it
 stays against the last digit.
 
-The strip is the other: header and value only, no third line. It shares
-its row with `TGT` and the lift/header readout, and a heading's compass
-point or a mark's range beside them runs into the target — so the strip
-is where a number goes, and a cell is where its context does.
+## The race column
+
+Every race number, stacked down the left of the big one, label over
+value, as large as five rows in that space allow.
+
+![The dial during a countdown](img/dial-countdown.png)
+
+| Row | What it is | When |
+|---|---|---|
+| `TGT` | boat speed as a percentage of the polar target for this wind; green at 98 % and up, red under 90 % | always |
+| `LIFT` / `HEADER` / `STEADY` | the shift since the wind direction settled, in degrees; the label says which way, the value how much | always |
+| `TO LINE` | distance to the start line, metres or feet with the depth unit; red when you are over | countdown |
+| `BIAS` | the line's angle to the wind in the label, the favoured end and what it is worth in the value: `PIN +12` | countdown |
+| `BURN` | seconds in hand to the line at this speed; red when you are late | countdown |
+
+The three countdown rows fold away outside the countdown, when they would
+be dashes, rather than sitting there all afternoon. They used to take
+over the three bottom cells instead — which cost you depth, heel and VMG
+for the whole sequence, at the one time you most want the depth.
+
+`PIN` and `BOAT` are the two rings under the countdown: tap each as you
+pass that end of the line, and the column's line numbers are then about
+the line you actually pinged rather than the club marks.
 
 ## When a sensor is not there
 
