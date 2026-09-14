@@ -750,7 +750,10 @@ a.lib-row{text-decoration:none;color:inherit}
 #lib-hint{bottom:176px;font-size:19px;letter-spacing:.12em}
 .t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
 .t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
-.t-hint{position:absolute;bottom:104px;left:0;right:0;text-align:center;
+/* 150 from the foot, not 104: the app host's CLOSE pill tops out 115
+   from the foot, and at 104 the hint's descenders sat on it. Both sheets
+   share this, so both lift. */
+.t-hint{position:absolute;bottom:150px;left:0;right:0;text-align:center;
   font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7}
 
 /* --- now playing --- */
