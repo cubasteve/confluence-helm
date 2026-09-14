@@ -746,7 +746,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row.lift{background:var(--chip)}
 .course-row .del{width:50px;height:50px;border-radius:25px;border:2px solid var(--alarm);color:var(--alarm);
   display:flex;align-items:center;justify-content:center;font-size:22px;flex:none;margin-right:14px}
-.course-sep{height:2px;background:var(--hairline);margin:8px 0}
 
 .course-row .seq{width:52px;height:52px;border-radius:26px;flex:0 0 52px;
   display:flex;align-items:center;justify-content:center;font-size:24px;
@@ -2714,6 +2713,15 @@ try{ USER_MARKS=JSON.parse(localStorage.getItem('marks')||'[]'); if(!Array.isArr
 USER_MARKS.forEach(m=>{ if(m&&m.id&&!MARKS.some(x=>x.id===m.id)) MARKS.push(m); });
 const marksSave=()=>localStorage.setItem('marks',JSON.stringify(USER_MARKS));
 const isUserMark=id=>USER_MARKS.some(m=>m.id===id);
+/* The order of the list is yours too - EDIT on the course sheet drags
+   marks about, the club's included - and it is kept under 'markOrder'
+   as a list of ids: marks it names come first in that order, any it
+   does not (a new one, or one added in a later version) keep their
+   place after them. */
+try{ const o=JSON.parse(localStorage.getItem('markOrder')||'null');
+  if(Array.isArray(o)){ const rank=id=>{ const i=o.indexOf(id); return i<0?o.length:i; };
+    MARKS.sort((a,b)=>rank(a.id)-rank(b.id)); } }catch(e){}
+const markOrderSave=()=>localStorage.setItem('markOrder',JSON.stringify(MARKS.map(m=>m.id)));
 
 let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
 const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
@@ -6854,10 +6862,11 @@ const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').
    takes the next number - and tap it again to take it out. The line's
    row says which line is in force, and tapping it while a pinged line
    is drops the pings and goes back to the marks. */
-/* The course first, in its order, then the marks not in it. In edit
-   mode every course row gets a grip to drag by, and a mark of your own
-   gets a delete. + MARK is on the bar, not a row at the foot of the
-   list: twelve rows in a 560 window put a foot row off the screen. */
+/* Every mark, in the list's own order; the numbers on the left say
+   the course's. In edit mode every row gets a grip to drag by - that
+   reorders the LIST, which is kept - and a mark of your own gets a
+   delete. + MARK is on the bar, not a row at the foot of the list:
+   twelve rows in a 560 window put a foot row off the screen. */
 let courseEdit=false;
 function renderCourse(){
   const box=$('course-list'); if(!box) return;
@@ -6873,13 +6882,11 @@ function renderCourse(){
     const side= i<0 ? '' : `<div class="side"><span class="sb${sd==='P'?' on':''}" data-side="P">P</span>`
                           +`<span class="sb${sd==='S'?' on':''}" data-side="S">S</span></div>`;
     const del = courseEdit&&isUserMark(m.id) ? '<div class="del">✕</div>' : '';
-    const grip= courseEdit&&i>=0 ? '<div class="grip">≡</div>' : '';
+    const grip= courseEdit ? '<div class="grip">≡</div>' : '';
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b><span>${esc(m.hdr)}</span></div>${side}${del}${grip}</div>`; };
-  const inC=COURSE.marks.map(markOf).filter(Boolean), rest=MARKS.filter(m=>!COURSE.marks.includes(m.id));
-  box.innerHTML=lineRow+inC.map(row).join('')
-    +(inC.length&&rest.length?'<div class="course-sep"></div>':'')+rest.map(row).join('');
-  $('course-hint').textContent = courseEdit ? 'DRAG ≡ TO REORDER · ✕ DELETES YOUR OWN' : 'TAP MARKS IN ORDER';
+  box.innerHTML=lineRow+MARKS.map(row).join('');
+  $('course-hint').textContent = courseEdit ? 'DRAG ≡ TO REORDER THE LIST · ✕ DELETES YOUR OWN' : 'TAP MARKS IN ORDER';
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
 $('trk-course').addEventListener('click',()=>{
@@ -6907,13 +6914,13 @@ $('course-next').addEventListener('click',()=>{ courseAdvance(); renderCourse();
 $('course-edit').addEventListener('click',()=>{ courseEdit=!courseEdit;
   $('course-edit').classList.toggle('on',courseEdit); renderCourse(); });
 
-/* ---- reordering: drag a course row by its grip -------------------------
+/* ---- reordering: drag a row by its grip ---------------------------------
    The grip's pointerdown is taken on the capture phase and stopped, so
    the list's drag-to-scroll never starts; from there the row under the
-   pointer decides. Crossing onto another course row moves the dragged
-   mark to that row's place and the list is redrawn - the pointer is
-   tracked by id, so redrawing under it is fine. NEXT follows its mark,
-   not its number. */
+   pointer decides. Crossing onto another mark's row moves the dragged
+   mark to that row's place in MARKS and the list is redrawn - the
+   pointer is tracked by id, so redrawing under it is fine. The course
+   is untouched: its order is the numbers, set by tapping. */
 let mkDrag=null;
 $('course-list').addEventListener('pointerdown',e=>{
   const g=e.target.closest('.grip'); if(!g) return;
@@ -6924,19 +6931,17 @@ $('course-list').addEventListener('pointerdown',e=>{
 addEventListener('pointermove',e=>{
   if(!mkDrag||e.pointerId!==mkDrag.id) return;
   const el=document.elementFromPoint(e.clientX,e.clientY);
-  const row=el&&el.closest('.course-row.in'); if(!row||row.dataset.mark===mkDrag.mark) return;
-  const a=COURSE.marks.indexOf(mkDrag.mark), b=COURSE.marks.indexOf(row.dataset.mark);
+  const row=el&&el.closest('.course-row[data-mark]'); if(!row||row.dataset.mark===mkDrag.mark) return;
+  const a=MARKS.findIndex(m=>m.id===mkDrag.mark), b=MARKS.findIndex(m=>m.id===row.dataset.mark);
   if(a<0||b<0) return;
-  const nextId=COURSE.marks[COURSE.next];
-  COURSE.marks.splice(a,1); COURSE.marks.splice(b,0,mkDrag.mark);
-  const n=COURSE.marks.indexOf(nextId); if(n>=0) COURSE.next=n;
+  const [m]=MARKS.splice(a,1); MARKS.splice(b,0,m);
   renderCourse();
   const lifted=$('course-list').querySelector(`.course-row[data-mark="${mkDrag.mark}"]`);
   if(lifted) lifted.classList.add('lift');
 });
 ['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
   if(!mkDrag||e.pointerId!==mkDrag.id) return; mkDrag=null;
-  courseSave(); renderCourse(); drawMap(shownTrack()); }));
+  markOrderSave(); renderCourse(); }));
 
 /* ---- a mark of your own ---------------------------------------------------
    NAME, LAT and LON on the app's own keyboard - letters for the name,

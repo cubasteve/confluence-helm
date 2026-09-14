@@ -221,9 +221,8 @@ in view under it. What fills the other slots depends on where you are:
 | `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
 The next mark comes from the course set in the Tracks app: tap marks
-on the course sheet in the order you will sail them. The course is
-listed first, in its order, with the rest of the marks under it. Each
-mark in the course gets a `P` and an `S` beside it for the side you
+on the course sheet in the order you will sail them; the numbers on
+the left are that order. Each mark in the course gets a `P` and an `S` beside it for the side you
 will leave it — port unless you say otherwise, red and green the way
 the lights are. The side shows on the map by the mark's number and in
 the box as you close on it. With no course set, the only leg is back
@@ -241,10 +240,12 @@ readings like the club's — and adds it to the course.
 
 ![The course in edit mode](img/course-edit.png)
 
-**EDIT** puts a grip on every course row: drag it onto another row and
-the mark takes that place, and NEXT follows its mark rather than its
-number. A mark of your own gets a ✕ in edit mode, which removes it from
-the course and from storage. `DONE` leaves edit mode. Target speed and the wind
+**EDIT** is for the list itself, not the course — the course's order
+is the numbers, set by tapping. It puts a grip on every row: drag it
+onto another row and the mark takes that place in the list, the club's
+marks included, and the order is kept. A mark of your own gets a ✕ in
+edit mode, which removes it from the course and from storage. `DONE`
+leaves edit mode. Target speed and the wind
 shift are not in the box: they are readings, picked into any slot like
 the rest.
 
