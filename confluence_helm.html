@@ -136,12 +136,12 @@ body.night #mark{opacity:.07}
 .rp-txt{font-size:21px;font-weight:800;font-style:italic;letter-spacing:.18em;fill:#fff}
 .rp-btn .stripe{stroke:#fff;stroke-width:5;opacity:.35;stroke-linecap:round}
 .rp-btn:active .pill{opacity:.75}
-.rp-box{opacity:0;transform:scale(.25);transform-origin:692px 948px;pointer-events:none;
+.rp-box{opacity:0;transform:scale(.25);transform-origin:540px 186px;pointer-events:none;
   transition:transform .22s cubic-bezier(.2,.8,.3,1),opacity .16s}
 .rp-box.on{opacity:1;transform:scale(1);pointer-events:auto}
 .rp-face{fill:var(--panel);stroke:url(#rp-grad);stroke-width:3}
 .rp-l{font-size:24px;font-weight:var(--w-lbl);letter-spacing:.18em;fill:var(--label)}
-.rp-v{font-size:80px;font-weight:var(--w-val);fill:var(--ink)}
+.rp-v{font-size:84px;font-weight:var(--w-val);fill:var(--ink)}
 .rp-u{font-size:24px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
 .rp-bias{font-size:36px;font-weight:var(--w-val);fill:var(--ink)}
 .pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
@@ -1353,17 +1353,20 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <path id="awa-tri" d="M540 80 L572 140 L540 124 L508 140 Z" fill="var(--accent)"/>
   </g>
 
-  <text id="timer-lbl" class="label" x="540" y="196" text-anchor="middle">START</text>
-  <text id="timer" class="value" x="540" y="268" text-anchor="middle">5:00</text>
+  <!-- The clock at 258, up from 268, with RACE PRO above it where the
+       START word was. The clock says its own state - grey while idle,
+       red in the last minute, counting up once racing, pulsing once
+       finished - so the word was saying it twice. -->
+  <text id="timer" class="value" x="540" y="258" text-anchor="middle">5:00</text>
   <!-- sync: nudge the countdown a whole minute either way -->
   <g id="t-plus" class="tbtn">
-    <circle cx="356" cy="268" r="46"/>
-    <rect x="332" y="263" width="48" height="10" rx="5"/>
-    <rect x="351" y="244" width="10" height="48" rx="5"/>
+    <circle cx="356" cy="258" r="46"/>
+    <rect x="332" y="253" width="48" height="10" rx="5"/>
+    <rect x="351" y="234" width="10" height="48" rx="5"/>
   </g>
   <g id="t-minus" class="tbtn">
-    <circle cx="724" cy="268" r="46"/>
-    <rect x="700" y="263" width="48" height="10" rx="5"/>
+    <circle cx="724" cy="258" r="46"/>
+    <rect x="700" y="253" width="48" height="10" rx="5"/>
   </g>
 
   <!-- 432 tucked this into the digits' negative space, which worked while
@@ -1371,7 +1374,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        or APPARENT WIND. 386 clears them: dominant-baseline:middle puts
        the digits' ink at 432..629, not at the 359 the y attribute alone
        would suggest, so the label's own ink at 373..395 has 37px of air
-       under it. It clears the timer's +/- buttons at 314 too. -->
+       under it. It clears the timer's +/- buttons at 304 too. -->
   <text id="spd-label" class="label" x="540" y="386" text-anchor="middle">SOG</text>
   <text id="spd" class="huge" x="540" y="556" text-anchor="middle">0.0</text>
   <!-- Beside the number, not under it, and sharing its y: every text on
@@ -1450,28 +1453,24 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </g>
 
 
-  <!-- RACE PRO. A permanent pill at the foot of the dial, beside the
-       padlock, so the band under the +/- circles is free and the box can
-       start at 322, straight under them. Not under the clock, where it
-       was: that band is what caps the box. Not above the clock, where
-       START is: the alert banner ends at 240 and sat over it, and a
-       shoaling warning is exactly what turns up on a start line - in
-       the demo the tap went through the banner to the clock and started
-       the countdown. Down here nothing covers it. 594..790 at 928..968:
-       its far corner is 496 from the centre, which is where the tick
-       ring starts, and its near edge is 18 clear of the lock's circle,
-       which ends at 576. No gClaim: this is
-       below timerTap()'s third, a tap here is nobody else's, and a
-       swipe up for the dock that starts on it never releases on it.
-       Tap the pill and the box opens; the countdown opens it by
-       itself and the gun closes it. The box covers the big cell -
-       184..896 by 322..646 takes in a 4-digit number and its unit - and
-       carries what it covers in its first slot, so nothing is lost:
+  <!-- RACE PRO. A permanent pill above the clock, where the START word
+       was, at 186: the race set reads as one stack - pill, clock, sync
+       - and the band under the +/- circles is free, so the box starts
+       at 312, straight under them. The alert banner (120..240) does sit
+       over the pill while an alert is up; the countdown opens the box
+       by itself, so the banner costs the manual tap and nothing else,
+       and it snoozes on a tap. (Which used to start the countdown: see
+       the banner's gClaim.) The pill gClaims on pointerdown as the +/-
+       do, since it is in timerTap()'s third.
+       Tap the pill and the box opens; the countdown opens it by itself
+       and the gun closes it. The box covers the big cell - 184..896 by
+       312..646 takes in a 4-digit number and its unit - and carries
+       what it covers in its first slot, so nothing is lost:
            SOG 4.6 KT   |   LINE 45 M   |   BURN +3 S
                      (P)   PIN +12   (B)
-       Values at 80px, up from 64 when the pill sat under the clock.
-       Declared after the tap rects so the box, not the big cell's rect
-       under it, gets the taps - which is what lets P and B work. -->
+       Values at 84px. Declared after the tap rects so the box, not the
+       big cell's rect under it, gets the taps - which is what lets P
+       and B work. -->
   <defs>
     <linearGradient id="rp-grad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#E0242A"/><stop offset="1" stop-color="#FF8A1E"/>
@@ -1479,36 +1478,36 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </defs>
   <g id="race">
     <g id="rp-btn" class="rp-btn">
-      <rect class="pill" x="594" y="928" width="196" height="40" rx="20" fill="url(#rp-grad)"/>
-      <path class="stripe" d="M758 934 L746 962"/><path class="stripe" d="M773 934 L761 962"/>
-      <text class="rp-txt" x="678" y="948" text-anchor="middle">RACE PRO</text>
+      <rect class="pill" x="442" y="166" width="196" height="40" rx="20" fill="url(#rp-grad)"/>
+      <path class="stripe" d="M606 172 L594 200"/><path class="stripe" d="M621 172 L609 200"/>
+      <text class="rp-txt" x="526" y="186" text-anchor="middle">RACE PRO</text>
     </g>
     <g id="rp-box" class="rp-box">
-      <rect class="rp-face" x="184" y="322" width="712" height="324" rx="24"/>
-      <text id="rp-c0-l"   class="rp-l" x="300" y="362" text-anchor="middle">SOG</text>
-      <text id="rp-c0"     class="rp-v" x="300" y="424" text-anchor="middle">––</text>
-      <text id="rp-c0-u"   class="rp-u" x="300" y="480" text-anchor="middle"></text>
-      <text                class="rp-l" x="540" y="362" text-anchor="middle">LINE</text>
-      <text id="rp-line"   class="rp-v" x="540" y="424" text-anchor="middle">––</text>
-      <text id="rp-line-u" class="rp-u" x="540" y="480" text-anchor="middle">M</text>
-      <text                class="rp-l" x="780" y="362" text-anchor="middle">BURN</text>
-      <text id="rp-burn"   class="rp-v" x="780" y="424" text-anchor="middle">––</text>
-      <text                class="rp-u" x="780" y="480" text-anchor="middle">S</text>
-      <text                class="rp-l" x="540" y="536" text-anchor="middle">LINE BIAS</text>
-      <text id="rp-bias"   class="rp-bias" x="540" y="590" text-anchor="middle">––</text>
+      <rect class="rp-face" x="184" y="312" width="712" height="334" rx="24"/>
+      <text id="rp-c0-l"   class="rp-l" x="300" y="352" text-anchor="middle">SOG</text>
+      <text id="rp-c0"     class="rp-v" x="300" y="416" text-anchor="middle">––</text>
+      <text id="rp-c0-u"   class="rp-u" x="300" y="474" text-anchor="middle"></text>
+      <text                class="rp-l" x="540" y="352" text-anchor="middle">LINE</text>
+      <text id="rp-line"   class="rp-v" x="540" y="416" text-anchor="middle">––</text>
+      <text id="rp-line-u" class="rp-u" x="540" y="474" text-anchor="middle">M</text>
+      <text                class="rp-l" x="780" y="352" text-anchor="middle">BURN</text>
+      <text id="rp-burn"   class="rp-v" x="780" y="416" text-anchor="middle">––</text>
+      <text                class="rp-u" x="780" y="474" text-anchor="middle">S</text>
+      <text                class="rp-l" x="540" y="532" text-anchor="middle">LINE BIAS</text>
+      <text id="rp-bias"   class="rp-bias" x="540" y="588" text-anchor="middle">––</text>
       <!-- start line pings: the two ends of the line either side of the
            bias, which is why PIN +12 reads as a sentence. The drawn ring
            is 18 px; the transparent circle under it is the tap target. -->
       <g id="pings">
         <g id="ping-pin" class="pbtn">
-          <circle class="hit" cx="400" cy="590" r="30"/>
-          <circle class="ring" cx="400" cy="590" r="20"/>
-          <text x="400" y="590" text-anchor="middle">P</text>
+          <circle class="hit" cx="400" cy="588" r="30"/>
+          <circle class="ring" cx="400" cy="588" r="20"/>
+          <text x="400" y="588" text-anchor="middle">P</text>
         </g>
         <g id="ping-boat" class="pbtn">
-          <circle class="hit" cx="680" cy="590" r="30"/>
-          <circle class="ring" cx="680" cy="590" r="20"/>
-          <text x="680" y="590" text-anchor="middle">B</text>
+          <circle class="hit" cx="680" cy="588" r="30"/>
+          <circle class="ring" cx="680" cy="588" r="20"/>
+          <text x="680" y="588" text-anchor="middle">B</text>
         </g>
       </g>
     </g>
@@ -3053,7 +3052,7 @@ function clock(ms){
 }
 
 function tick(){
-  const el=$('timer'), lb=$('timer-lbl');
+  const el=$('timer');
   let ms, lbl, dim=false, hot=false;
 
   if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; }
@@ -3066,7 +3065,6 @@ function tick(){
   else { ms=tFinal; lbl='FINISH'; }
 
   el.textContent=clock(Math.max(0,ms));
-  lb.textContent=lbl;
   el.classList.toggle('stale',dim);
   el.classList.toggle('alarm',hot);
   // a finished time pulses so it is obviously frozen, not still running
@@ -3480,11 +3478,12 @@ function timerTap(){
   }, DBL);
 }
 
-/* RACE PRO's pill: a tap toggles the box. The same 24 px tap-or-swipe
-   rule as the panel's tiles, so a swipe for the dock that starts on it
-   is not also a tap. */
+/* RACE PRO's pill: a tap toggles the box. gClaim on pointerdown, as
+   the +/- do: it sits in timerTap()'s third, and the gesture judge runs
+   on the capture phase, so pointerup is too late to opt out. The 24 px
+   tap-or-swipe rule on top, so a drag that ends on it is not a tap. */
 let rpPt=null;
-$('rp-btn').addEventListener('pointerdown',e=>{ rpPt={x:e.clientX,y:e.clientY}; });
+$('rp-btn').addEventListener('pointerdown',e=>{ gClaim(); rpPt={x:e.clientX,y:e.clientY}; });
 $('rp-btn').addEventListener('pointerup',e=>{
   if(!rpPt) return; const far=Math.hypot(e.clientX-rpPt.x,e.clientY-rpPt.y)>24; rpPt=null;
   if(!far) rpOpen=!rpOpen; });
@@ -4424,6 +4423,12 @@ function alertPaint(){
   $('al-t').textContent=top.a.text;
   $('al-s').textContent=top.a.sub||'TAP TO SNOOZE';
 }
+/* gClaim on pointerdown, not only stopPropagation on click: the gesture
+   judge listens for pointerup on the capture phase, so a click handler
+   cannot stop it, and the banner sits in timerTap()'s third - TAP TO
+   SNOOZE on a shoaling warning was also a tap on the clock, which
+   started the countdown, or during one synced it to the minute. */
+$('alert').addEventListener('pointerdown',gClaim);
 $('alert').addEventListener('click',e=>{
   e.stopPropagation();
   const top=alertTop(); if(!top) return;

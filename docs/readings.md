@@ -168,13 +168,15 @@ stays against the last digit.
 
 ## RACE PRO
 
-A pill at the foot of the dial, beside the padlock, in the racing
-red-to-orange, that is always there. Tap it and it opens into a box over
-the big number; the countdown opens it by itself, and the gun closes it.
-Reset closes it too. It lives at the foot rather than under the clock so
-the box can start straight under the sync buttons — which is what lets
-its numbers be as big as they are — and rather than above the clock
-because the shallow-water banner sits there.
+A pill above the countdown, where the START word used to be, in the
+racing red-to-orange, that is always there: pill, clock and sync buttons
+read as one stack. Tap it and it opens into a box over the big number;
+the countdown opens it by itself, and the gun closes it. Reset closes it
+too. It sits above the clock rather than under it so the box can start
+straight under the sync buttons, which is what lets its numbers be as
+big as they are. The shallow-water banner does cover it while an alert
+is up; the countdown still opens the box on its own, and the banner
+snoozes on a tap.
 
 ![The RACE PRO box during a countdown](img/dial-countdown.png)
 
