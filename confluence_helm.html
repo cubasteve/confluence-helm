@@ -653,6 +653,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* which build is on the glass. Small, permanent, and the only way to tell
    three copies of this file apart at a glance. */
 .build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
+.errlog{font-size:17px;letter-spacing:.06em;color:var(--alarm);opacity:.85;white-space:pre-line;
+  text-transform:none;margin-top:8px}
+.errlog:empty{display:none}
 /* --- ambient screensaver --- */
 #saver{position:absolute;inset:0;background:var(--bg);opacity:0;z-index:30;
   pointer-events:none;transition:opacity .5s}
@@ -1728,6 +1731,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          over file://, not the deployed one - which is the whole point of
          printing it. -->
     <div class="hint"><span class="build">__BUILD__</span></div>
+    <div class="hint errlog" id="errlog"></div>
   </div>
 
   <!-- ---- the picker, over the panel ----
@@ -2076,6 +2080,10 @@ const CFG={
   lat:28.61, lon:-81.27              // fallback until GPS gives a fix
 };
 const MS_TO_KT=1.94384, M_TO_FT=3.28084, DEG=180/Math.PI;
+/* An angle into -180..180 by arithmetic, not by a loop: a while that
+   subtracts 360 never ends on an Infinity, and an Infinity from a bad
+   sample would have hung the page at the next frame. */
+const wrap180=d=>((d+180)%360+360)%360-180;
 const CX=540, CY=540, R_OUT=516, R_MIN=492, R_MAJ=474, R_LBL=436;
 const $=i=>document.getElementById(i);
 
@@ -2678,7 +2686,7 @@ function windShift(twd, awa){
   twdAvg.x+=(Math.cos(r)-twdAvg.x)*a;
   twdAvg.y+=(Math.sin(r)-twdAvg.y)*a;
   const avg=Math.atan2(twdAvg.y,twdAvg.x)*DEG;
-  let d=twd-avg; while(d>180)d-=360; while(d<-180)d+=360;
+  let d=wrap180(twd-avg);
   // starboard tack (wind from starboard, awa>0): a veer is a lift
   return {deg:Math.abs(d), lift: awa>0 ? d>0 : d<0, raw:d};
 }
@@ -2775,7 +2783,7 @@ function lineData(){
 
   // bias: how far the line is off square to the wind
   let lineBrg=Math.atan2(vx,vy)*DEG;
-  let bias=lineBrg-(twd+90); while(bias>180)bias-=360; while(bias<-180)bias+=360;
+  let bias=wrap180(lineBrg-(twd+90));
   const gain=Math.abs(len*Math.sin(bias*Math.PI/180));
   const favoured = bias>0 ? 'PIN' : 'BOAT';
 
@@ -4393,6 +4401,28 @@ $('ns-sw').addEventListener('click',()=>{
    Rendered from a table rather than written out as markup: the shift
    and symbol layers are the same keyboard with different faces, and
    two hand-written copies of it would drift apart. */
+/* ---- the error trap ----------------------------------------------------
+   A kiosk has no console anyone will ever read. An error or an
+   unhandled rejection is kept, the last five, with the time and the
+   line, under the build on the control panel - so "it froze" can be
+   answered with what threw. */
+const ERRLOG_MAX=5;
+function errKeep(msg){
+  let l=[]; try{ l=JSON.parse(localStorage.getItem('errlog')||'[]'); }catch(e){}
+  const t=new Date(); const hh=String(t.getHours()).padStart(2,'0'), mm=String(t.getMinutes()).padStart(2,'0');
+  l.push(hh+':'+mm+' '+String(msg).slice(0,140)); while(l.length>ERRLOG_MAX) l.shift();
+  try{ localStorage.setItem('errlog',JSON.stringify(l)); }catch(e){}
+  errPaint();
+}
+function errPaint(){
+  const el=document.getElementById('errlog'); if(!el) return;
+  let l=[]; try{ l=JSON.parse(localStorage.getItem('errlog')||'[]'); }catch(e){}
+  el.textContent=l.join('\n');
+}
+addEventListener('error',e=>errKeep((e.message||'error')+(e.lineno?' @'+e.lineno:'')));
+addEventListener('unhandledrejection',e=>errKeep('rejected: '+(e.reason&&e.reason.message||e.reason)));
+errPaint();
+
 const KB_ABC=['1234567890','qwertyuiop','asdfghjkl','zxcvbnm'];
 const KB_SYM=['1234567890','-/:;()$&@"','.,?!\'+=#%*','_\\|~<>[]{}'];
 const KB_NUM=['1234567890','.-'];                 /* a position: digits, a point, a minus */
@@ -4950,8 +4980,7 @@ function vMove(e){
   }
   /* Accumulated from the LAST angle, not the first: measuring from the
      start would jump by 360 the moment a slow turn crossed six o'clock. */
-  let d=vAngle(e)-vDrag.aPrev;
-  while(d>180) d-=360; while(d<-180) d+=360;
+  let d=wrap180(vAngle(e)-vDrag.aPrev);
   vDrag.aPrev+=d;
   vDrag.v=Math.max(0, Math.min(100, vDrag.v + d/V_SPAN*100));
   volPend=Math.round(vDrag.v);
@@ -6983,7 +7012,12 @@ function mkPaint(){
   $('mk-name').textContent=MK.name; $('mk-lat').textContent=MK.lat; $('mk-lon').textContent=MK.lon;
   document.querySelectorAll('#course-add .mk-field').forEach(f=>f.classList.toggle('on',f.dataset.f===MK.f));
   MK.kb.num = MK.f!=='name';
-  $('mk-kb').innerHTML=kbHtml(MK.kb,'SAVE');
+  /* The keyboard is 45 buttons; rebuilt on every keystroke it is the
+     slowest thing a Pi does in this form, and the button under the
+     finger is destroyed mid-tap. Rebuilt only when its layer changes,
+     as the WPA keyboard does. */
+  const layer=(MK.kb.num?'n':'')+(MK.kb.sym?'s':'')+(MK.kb.shift?'u':'');
+  if(MK.layer!==layer){ MK.layer=layer; $('mk-kb').innerHTML=kbHtml(MK.kb,'SAVE'); }
 }
 function mkHere(){
   const la=get('pos.lat'), lo=get('pos.lon');
