@@ -217,7 +217,7 @@ in view under it. What fills the other slots depends on where you are:
 | Item | What it is |
 |---|---|
 | `DIST` | range to the next mark, metres under 1000 and nautical miles beyond |
-| `BRG` | true bearing to it, to steer against COG |
+| `BRG` | true bearing to it, to steer against COG; double-tap it to move the course on by hand, for a mark rounded wide or one the committee dropped |
 | `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
 The next mark comes from the course set in the Tracks app: tap marks

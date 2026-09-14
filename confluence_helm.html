@@ -1573,6 +1573,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <text id="rp-3-u"    class="rp-u" x="780" y="464" text-anchor="middle">S</text>
       <text id="rp-r2-l"   class="rp-l" x="540" y="518" text-anchor="middle">LINE BIAS</text>
       <text id="rp-r2"     class="rp-bias" x="540" y="572" text-anchor="middle">––</text>
+      <!-- On the leg, a double tap on the bearing advances the course by
+           hand - for a mark rounded wide, or one the committee dropped.
+           The rect is the third column; it gClaims because its top is in
+           timerTap()'s third. -->
+      <rect id="rp-adv" x="660" y="322" width="234" height="176" rx="16" fill="transparent"/>
       <!-- start line pings: the two ends of the line either side of the
            bias, which is why PIN +12 reads as a sentence. The drawn ring
            is 18 px; the transparent circle under it is the tap target. -->
@@ -1915,7 +1920,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <div class="lib-list" id="course-list"></div>
       <div class="course-bar">
         <button class="cbtn" id="course-add-btn">+ MARK</button>
-        <button class="cbtn" id="course-next">NEXT ▸</button>
         <button class="cbtn" id="course-clr">CLEAR</button>
         <button class="cbtn" id="course-edit">EDIT</button>
         <button class="cbtn on" id="course-done">DONE</button>
@@ -1938,7 +1942,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="cbtn on" id="mk-save">SAVE</button>
       </div>
     </div>
-    <div class="t-hint" id="course-hint">TAP MARKS IN ORDER</div>
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2820,7 +2823,8 @@ function lineData(){
    next. The mark after the last one is the FINISH - the middle of the
    line - so the next-mark readings carry you all the way home.
    Rounding advances it: inside NEAR metres arms the mark, and passing
-   back out beyond AWAY is the rounding. NEXT on the sheet advances it
+   back out beyond AWAY is the rounding. A double tap on the bearing in
+   the RACE box advances it
    by hand for a mark the GPS never saw you get near. A new countdown
    starts the course over. */
 let COURSE = JSON.parse(localStorage.getItem('course')||'null') || {marks:[], next:0};
@@ -6886,7 +6890,6 @@ function renderCourse(){
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b><span>${esc(m.hdr)}</span></div>${side}${del}${grip}</div>`; };
   box.innerHTML=lineRow+MARKS.map(row).join('');
-  $('course-hint').textContent = courseEdit ? 'DRAG ≡ TO REORDER THE LIST · ✕ DELETES YOUR OWN' : 'TAP MARKS IN ORDER';
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
 $('trk-course').addEventListener('click',()=>{
@@ -6910,7 +6913,15 @@ $('course-list').addEventListener('click',e=>{
     else COURSE.marks.push(id);
     courseSave(); }
   renderCourse(); drawMap(shownTrack()); });
-$('course-next').addEventListener('click',()=>{ courseAdvance(); renderCourse(); });
+/* The bearing's double tap: the course moves on. Only while racing,
+   which is the only time the leg face is up with a course to move. */
+let rpAdvAt=0;
+$('rp-adv').addEventListener('pointerdown',gClaim);
+$('rp-adv').addEventListener('pointerup',()=>{
+  const now=Date.now();
+  if(now-rpAdvAt<DBL && tState==='racing'){ rpAdvAt=0; courseAdvance(); renderCourse(); }
+  else rpAdvAt=now;
+});
 $('course-edit').addEventListener('click',()=>{ courseEdit=!courseEdit;
   $('course-edit').classList.toggle('on',courseEdit); renderCourse(); });
 
@@ -6964,7 +6975,6 @@ function parseDM(str){
 function mkOpen(){
   MK={f:'name', name:'', lat:'', lon:'', kb:{shift:false,sym:false,num:false}};
   $('course-main').style.display='none'; $('course-add').style.display='';
-  $('course-hint').textContent='D M.MMM OR DECIMAL · WEST IS MINUS';
   $('mk-msg').textContent=''; mkPaint();
 }
 function mkClose(){ MK=null; $('course-add').style.display='none'; $('course-main').style.display=''; renderCourse(); }
