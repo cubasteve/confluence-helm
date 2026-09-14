@@ -987,13 +987,15 @@ a.lib-row{text-decoration:none;color:inherit}
   transition:transform .26s linear, opacity .35s;
   opacity:0}
 #mb-wind.on{opacity:1}
+#mb-twa{transform-box:view-box;transform-origin:540px 540px;transition:transform .26s linear, opacity .35s;opacity:0}
+#mb-twa.on{opacity:.9}
+#mb-twa path{fill:none;stroke:var(--ink);stroke-width:7;stroke-linejoin:round}
 .mb-wedge{fill:var(--accent);stroke:var(--bg);stroke-width:5;stroke-linejoin:round;paint-order:stroke}
-.mb-tail{fill:none;stroke:var(--accent);stroke-width:8;stroke-linecap:round;opacity:.45}
-.mb-arc{fill:none;stroke:var(--accent);stroke-width:14;stroke-linecap:round;opacity:.55}
+.mb-arc{fill:none;stroke:var(--accent);stroke-width:16;stroke-linecap:round;opacity:.6}
 #mb-wind.port .mb-wedge{fill:var(--port)}
-#mb-wind.port .mb-tail,#mb-wind.port .mb-arc{stroke:var(--port)}
+#mb-wind.port .mb-arc{stroke:var(--port)}
 #mb-wind.stbd .mb-wedge{fill:var(--stbd)}
-#mb-wind.stbd .mb-tail,#mb-wind.stbd .mb-arc{stroke:var(--stbd)}
+#mb-wind.stbd .mb-arc{stroke:var(--stbd)}
 
 /* One quiet row above the art. The instruments are context for the
    music here, not the subject - the dial proper is where you read them
@@ -1803,13 +1805,15 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <div id="music">
   <svg class="m-bezel" viewBox="0 0 1080 1080" aria-hidden="true">
     <g id="mb-ticks"></g>
+    <!-- The dial's marks, exactly: the hollow triangle for true wind and
+         the filled, haloed arrow with its band for apparent, at the
+         same radii, each group rotating to its angle. -->
+    <g id="mb-twa">
+      <path d="M540 84 L570 144 L510 144 Z"/>
+    </g>
     <g id="mb-wind">
-      <!-- drawn at the bow; the whole group rotates to the wind angle.
-           The same treatment as the dial's: a band on the ring behind
-           the wedge, a haloed edge, and half again the size. -->
-      <path class="mb-arc" d="M461.8 46.2 A500 500 0 0 1 618.2 46.2"/>
-      <path class="mb-tail" d="M540 96 L540 160"/>
-      <path class="mb-wedge" d="M540 30 L572 96 L508 96 Z"/>
+      <path class="mb-arc" d="M468.7 33.0 A512 512 0 0 1 611.3 33.0"/>
+      <path class="mb-wedge" d="M540 62 L586 150 L540 126 L494 150 Z"/>
     </g>
   </svg>
   <div class="m-sheet">
@@ -5152,10 +5156,21 @@ function drawBezelTicks(){
    dial. Track a continuous angle and always add the short way about. */
 const shortWay=(from,to)=>{ let d=(to-from)%360;
   if(d>180)d-=360; if(d<-180)d+=360; return d; };
-let bezelCont=null;
+let bezelCont=null, bezelContT=null;
 
 function paintBezel(){
   const g=$('mb-wind'); if(!g) return;
+  /* true wind first: the hollow triangle, the dial's, the short way round */
+  const tg=$('mb-twa');
+  let tdeg=smoothedAngle('twa');
+  if(tdeg===null){ const t=get('environment.wind.angleTrueWater'); tdeg = t===null?null:t*DEG; }
+  if(tdeg===null){ tg.classList.remove('on'); bezelContT=null; }
+  else{
+    tg.classList.add('on');
+    if(bezelContT===null){ bezelContT=tdeg; tg.style.transform=`rotate(${tdeg.toFixed(1)}deg)`; }
+    else{ const d=shortWay(bezelContT,tdeg);
+      if(Math.abs(d)>0.12){ bezelContT+=d; tg.style.transform=`rotate(${bezelContT.toFixed(1)}deg)`; } }
+  }
   /* take the dial's already-filtered angle so the bezel is not fed raw
      4 Hz steps; fall back to raw only if the dial has not seen it yet */
   let deg=smoothedAngle('awa');
