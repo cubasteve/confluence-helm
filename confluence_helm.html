@@ -2278,6 +2278,7 @@ function render(){
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
   windModeTick();
+  lineWatch();
 
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
@@ -2586,7 +2587,63 @@ function lineData(){
       burn=Math.round((tEnd-Date.now())/1000 - tToLine);
     }
   }
-  return {dist, bias, gain, favoured, burn, len};
+  /* where along the line the boat is: 0 at the pin, 1 at the boat end.
+     A crossing that is not between the ends is a boat sailing round
+     the pin, not a start. */
+  const along=(wx*vx+wy*vy)/(len*len);
+  return {dist, bias, gain, favoured, burn, len, along};
+}
+
+/* ---- auto start, auto finish ------------------------------------------
+   With both ends pinged the clock watches the line itself.
+   A crossing is the signed distance going from the pre-start side to
+   the course side between two GPS fixes, between the ends. The instant
+   is interpolated between the two fixes by distance, so at one fix a
+   second and five knots it lands within a couple of tenths.
+
+   During the countdown a crossing does NOT start the clock: that is
+   over early, and on a synced countdown it is the ordinary mistake -
+   you dip, come back, and cross again after the gun. The gun starts the
+   clock at 0:00 as before. The first proper crossing after it, inside
+   START_WINDOW, re-bases the clock to the moment you crossed, which is
+   what the double-tap did by hand. A boat still over the line at the
+   gun is caught the same way: it has to come back below the line before
+   a crossing can happen, so the return counts and the dip does not.
+
+   The finish is the same line. Once the boat has been AWAY metres from
+   it after the start, the next crossing between the ends - either
+   direction, because a windward-leeward finishes downwind through it -
+   freezes the clock. Two fixes MAX_JUMP apart are a GPS hop, not a
+   crossing, and are ignored either way. */
+const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
+let lineWas=null, lineArmed=false;
+function lineWatch(){
+  const L=lineData();
+  if(!L){ lineWas=null; return; }
+  const now=Date.now(), d=L.dist;
+  const was=lineWas; lineWas={d, t:now, along:L.along};
+  if(tState==='racing' && Math.abs(d)>LINE_AUTO.away) lineArmed=true;
+  if(!was) return;
+  /* BOTH fixes between the ends. A fix beyond the pin followed by one
+     inside is a boat rounding the pin end, and the sign changes just the
+     same. */
+  const inside=a=>a>-LINE_AUTO.slack && a<1+LINE_AUTO.slack;
+  const between = inside(L.along) && inside(was.along);
+  const hop = Math.abs(d-was.d)>LINE_AUTO.maxJump;
+  if(!between || hop) return;
+  const crossed = (was.d>0 && d<=0) || (was.d<0 && d>=0);
+  if(!crossed) return;
+  /* the instant: where between the two fixes the distance passed zero */
+  const f=was.d/(was.d-d), at=was.t+(now-was.t)*f;
+  if(tState==='racing'){
+    if(lineArmed){ tFinal=at-tGun; tState='finished'; lineArmed=false;
+      trkSave(); paintTrack(); console.log('[helm] finished on the line'); }
+    /* The LATEST crossing inside the window is the start: a boat that
+       crosses, is recalled, comes back and crosses again started the
+       second time. */
+    else if(was.d>0 && now-tGun<LINE_AUTO.startWindow){
+      tGun=at; console.log('[helm] started on the line'); }
+  }
 }
 
 
@@ -2798,6 +2855,10 @@ $('trk-rec').addEventListener('click',()=>{
                 double tap ..... you crossed - start the race clock
                 reaches 0:00 ... starts the race clock by itself
      RACING     double tap ..... finished, freeze the elapsed time
+                crosses line ... with both ends pinged: the first
+                                 crossing after the gun re-bases the
+                                 clock to it; the next, once well away,
+                                 finishes (lineWatch)
      any state  hold 0.7 s ..... reset back to idle
 
    The countdown self-starts the race at zero so a missed double tap
@@ -2812,11 +2873,12 @@ let tLeft=CFG.startMins*60000;            // countdown remaining while idle
 const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; };
 const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
-const startRace  =()=>{ tGun=Date.now(); tState='racing'; };
+const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; };
 const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
   trkSave();                     /* reports its own failure - see trkSave */
   paintTrack(); };
-const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000; };
+const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
+  lineWas=null; lineArmed=false; };
 
 /* +/- only mean anything before the gun */
 function nudge(sec){
