@@ -133,17 +133,17 @@ body.night #mark{opacity:.07}
    expands into covers the big cell. The box scales up out of the pill
    - transform-origin is the pill's centre - and is not there for taps
    while closed, so the big cell's own rect gets them. */
-.rp-txt{font-size:22px;font-weight:800;font-style:italic;letter-spacing:.24em;fill:#fff}
+.rp-txt{font-size:21px;font-weight:800;font-style:italic;letter-spacing:.18em;fill:#fff}
 .rp-btn .stripe{stroke:#fff;stroke-width:5;opacity:.35;stroke-linecap:round}
 .rp-btn:active .pill{opacity:.75}
-.rp-box{opacity:0;transform:scale(.25);transform-origin:540px 338px;pointer-events:none;
+.rp-box{opacity:0;transform:scale(.25);transform-origin:692px 948px;pointer-events:none;
   transition:transform .22s cubic-bezier(.2,.8,.3,1),opacity .16s}
 .rp-box.on{opacity:1;transform:scale(1);pointer-events:auto}
 .rp-face{fill:var(--panel);stroke:url(#rp-grad);stroke-width:3}
-.rp-l{font-size:22px;font-weight:var(--w-lbl);letter-spacing:.18em;fill:var(--label)}
-.rp-v{font-size:64px;font-weight:var(--w-val);fill:var(--ink)}
-.rp-u{font-size:22px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
-.rp-bias{font-size:30px;font-weight:var(--w-val);fill:var(--ink)}
+.rp-l{font-size:24px;font-weight:var(--w-lbl);letter-spacing:.18em;fill:var(--label)}
+.rp-v{font-size:80px;font-weight:var(--w-val);fill:var(--ink)}
+.rp-u{font-size:24px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
+.rp-bias{font-size:36px;font-weight:var(--w-val);fill:var(--ink)}
 .pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
 .pbtn .hit{fill:transparent}
 .pbtn text{font-size:21px;font-weight:600;fill:var(--label)}
@@ -1450,14 +1450,26 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </g>
 
 
-  <!-- RACE PRO. A permanent pill under the countdown, in the band the
-       +/- circles (ending 314) and the big cell's label (ink from 373)
-       leave: 316..360. Tap it and the box opens; the countdown opens it
-       by itself and the gun closes it. The box covers the big cell -
-       220..900 by 366..646 takes in a 4-digit number and its unit - and
-       carries what it covers in its first cell, so nothing is lost:
+  <!-- RACE PRO. A permanent pill at the foot of the dial, beside the
+       padlock, so the band under the +/- circles is free and the box can
+       start at 322, straight under them. Not under the clock, where it
+       was: that band is what caps the box. Not above the clock, where
+       START is: the alert banner ends at 240 and sat over it, and a
+       shoaling warning is exactly what turns up on a start line - in
+       the demo the tap went through the banner to the clock and started
+       the countdown. Down here nothing covers it. 594..790 at 928..968:
+       its far corner is 496 from the centre, which is where the tick
+       ring starts, and its near edge is 18 clear of the lock's circle,
+       which ends at 576. No gClaim: this is
+       below timerTap()'s third, a tap here is nobody else's, and a
+       swipe up for the dock that starts on it never releases on it.
+       Tap the pill and the box opens; the countdown opens it by
+       itself and the gun closes it. The box covers the big cell -
+       184..896 by 322..646 takes in a 4-digit number and its unit - and
+       carries what it covers in its first slot, so nothing is lost:
            SOG 4.6 KT   |   LINE 45 M   |   BURN +3 S
                      (P)   PIN +12   (B)
+       Values at 80px, up from 64 when the pill sat under the clock.
        Declared after the tap rects so the box, not the big cell's rect
        under it, gets the taps - which is what lets P and B work. -->
   <defs>
@@ -1467,36 +1479,36 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </defs>
   <g id="race">
     <g id="rp-btn" class="rp-btn">
-      <rect class="pill" x="430" y="316" width="220" height="44" rx="22" fill="url(#rp-grad)"/>
-      <path class="stripe" d="M612 322 L598 354"/><path class="stripe" d="M628 322 L614 354"/>
-      <text class="rp-txt" x="530" y="338" text-anchor="middle">RACE PRO</text>
+      <rect class="pill" x="594" y="928" width="196" height="40" rx="20" fill="url(#rp-grad)"/>
+      <path class="stripe" d="M758 934 L746 962"/><path class="stripe" d="M773 934 L761 962"/>
+      <text class="rp-txt" x="678" y="948" text-anchor="middle">RACE PRO</text>
     </g>
     <g id="rp-box" class="rp-box">
-      <rect class="rp-face" x="220" y="366" width="680" height="280" rx="24"/>
-      <text id="rp-c0-l"   class="rp-l" x="330" y="402" text-anchor="middle">SOG</text>
-      <text id="rp-c0"     class="rp-v" x="330" y="454" text-anchor="middle">––</text>
-      <text id="rp-c0-u"   class="rp-u" x="330" y="502" text-anchor="middle"></text>
-      <text                class="rp-l" x="540" y="402" text-anchor="middle">LINE</text>
-      <text id="rp-line"   class="rp-v" x="540" y="454" text-anchor="middle">––</text>
-      <text id="rp-line-u" class="rp-u" x="540" y="502" text-anchor="middle">M</text>
-      <text                class="rp-l" x="750" y="402" text-anchor="middle">BURN</text>
-      <text id="rp-burn"   class="rp-v" x="750" y="454" text-anchor="middle">––</text>
-      <text                class="rp-u" x="750" y="502" text-anchor="middle">S</text>
-      <text                class="rp-l" x="540" y="548" text-anchor="middle">LINE BIAS</text>
+      <rect class="rp-face" x="184" y="322" width="712" height="324" rx="24"/>
+      <text id="rp-c0-l"   class="rp-l" x="300" y="362" text-anchor="middle">SOG</text>
+      <text id="rp-c0"     class="rp-v" x="300" y="424" text-anchor="middle">––</text>
+      <text id="rp-c0-u"   class="rp-u" x="300" y="480" text-anchor="middle"></text>
+      <text                class="rp-l" x="540" y="362" text-anchor="middle">LINE</text>
+      <text id="rp-line"   class="rp-v" x="540" y="424" text-anchor="middle">––</text>
+      <text id="rp-line-u" class="rp-u" x="540" y="480" text-anchor="middle">M</text>
+      <text                class="rp-l" x="780" y="362" text-anchor="middle">BURN</text>
+      <text id="rp-burn"   class="rp-v" x="780" y="424" text-anchor="middle">––</text>
+      <text                class="rp-u" x="780" y="480" text-anchor="middle">S</text>
+      <text                class="rp-l" x="540" y="536" text-anchor="middle">LINE BIAS</text>
       <text id="rp-bias"   class="rp-bias" x="540" y="590" text-anchor="middle">––</text>
       <!-- start line pings: the two ends of the line either side of the
            bias, which is why PIN +12 reads as a sentence. The drawn ring
            is 18 px; the transparent circle under it is the tap target. -->
       <g id="pings">
         <g id="ping-pin" class="pbtn">
-          <circle class="hit" cx="410" cy="590" r="30"/>
-          <circle class="ring" cx="410" cy="590" r="18"/>
-          <text x="410" y="590" text-anchor="middle">P</text>
+          <circle class="hit" cx="400" cy="590" r="30"/>
+          <circle class="ring" cx="400" cy="590" r="20"/>
+          <text x="400" y="590" text-anchor="middle">P</text>
         </g>
         <g id="ping-boat" class="pbtn">
-          <circle class="hit" cx="670" cy="590" r="30"/>
-          <circle class="ring" cx="670" cy="590" r="18"/>
-          <text x="670" y="590" text-anchor="middle">B</text>
+          <circle class="hit" cx="680" cy="590" r="30"/>
+          <circle class="ring" cx="680" cy="590" r="20"/>
+          <text x="680" y="590" text-anchor="middle">B</text>
         </g>
       </g>
     </g>
@@ -3468,10 +3480,14 @@ function timerTap(){
   }, DBL);
 }
 
-/* RACE PRO's pill: a tap toggles the box. gClaim, because it sits in
-   timerTap()'s top third. */
-$('rp-btn').addEventListener('pointerdown',gClaim);
-$('rp-btn').addEventListener('pointerup',()=>{ rpOpen=!rpOpen; });
+/* RACE PRO's pill: a tap toggles the box. The same 24 px tap-or-swipe
+   rule as the panel's tiles, so a swipe for the dock that starts on it
+   is not also a tap. */
+let rpPt=null;
+$('rp-btn').addEventListener('pointerdown',e=>{ rpPt={x:e.clientX,y:e.clientY}; });
+$('rp-btn').addEventListener('pointerup',e=>{
+  if(!rpPt) return; const far=Math.hypot(e.clientX-rpPt.x,e.clientY-rpPt.y)>24; rpPt=null;
+  if(!far) rpOpen=!rpOpen; });
 
 /* start line pings - tap while sailing past each end */
 ['pin','boat'].forEach(k=>{
