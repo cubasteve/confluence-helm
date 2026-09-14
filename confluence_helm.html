@@ -1447,11 +1447,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <text id="vmg" class="cellv" x="780" y="775" text-anchor="middle">––</text>
   <text id="c3-u" class="unit" x="780" y="845" text-anchor="middle">KT</text>
 
-  <!-- Two hairlines cut the row into its cells, midway between the
-       centres, the height of the row: header ink at 680, unit ink to
-       854. -->
-  <line class="cut" x1="420" y1="680" x2="420" y2="856"/>
-  <line class="cut" x1="660" y1="680" x2="660" y2="856"/>
+  <!-- A rule across the top of the row, 12 above the headers' ink and
+       17 under the strip's, and two hairlines down from it midway
+       between the cells, to the units' ink at 854: the row reads as a
+       small table under the big number. -->
+  <line class="cut" x1="200" y1="668" x2="880" y2="668"/>
+  <line class="cut" x1="420" y1="668" x2="420" y2="856"/>
+  <line class="cut" x1="660" y1="668" x2="660" y2="856"/>
 
   <!-- Tap targets over the four cells. LAST in the SVG, and that is not
        cosmetic: SVG has no z-index, so painting order is hit-test order,
