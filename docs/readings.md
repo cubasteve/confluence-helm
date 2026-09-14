@@ -234,7 +234,10 @@ to the line.
 and a position typed on the app's own keyboard or taken from the GPS
 with `HERE`. Positions read as the sailing instructions write them,
 degrees and decimal minutes with a space between, or as decimal
-degrees; west and south are minus. `SAVE` keeps the mark for good —
+degrees; west and south are minus. A position more than 100 NM from the
+boat is refused with a hint about the minus: a longitude typed without
+it lands in Asia, and the map would try to fit the globe. `SAVE` keeps
+the mark for good —
 it is there after a reboot, on the sheet, on the map and in the
 readings like the club's — and adds it to the course.
 

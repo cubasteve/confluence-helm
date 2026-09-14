@@ -6148,7 +6148,16 @@ const projY=(v,m)=>MAP_CY+(m.y-v.my)*v.scale;
    you every second while you are watching it. It only refits when a point
    actually sails outside the circle.                                    */
 let MAPVIEW=null, lastMapDraw=0;
+const COURSE_FIT_NM=100;
+/* great-circle distance in nautical miles */
+function seaNm(la1,lo1,la2,lo2){
+  const R=Math.PI/180, a=Math.sin((la2-la1)*R/2)**2
+    +Math.cos(la1*R)*Math.cos(la2*R)*Math.sin((lo2-lo1)*R/2)**2;
+  return 2*3440.065*Math.asin(Math.min(1,Math.sqrt(a)));
+}
 function fitView(P){
+  P=P.filter(p=>isFinite(p.la)&&isFinite(p.lo)&&Math.abs(p.la)<89);
+  if(!P.length) return { mx:0.5, my:0.5, scale:TMAP_SCALE_MIN };
   let x0=1,x1=0,y0=1,y1=0;
   for(const p of P){ const m=merc(p.la,p.lo);
     if(m.x<x0)x0=m.x; if(m.x>x1)x1=m.x;
@@ -6178,11 +6187,21 @@ function outOfView(v,P){
    px. Outside the cached box nothing renders and the track draws over
    bare background - degraded, never broken.                           */
 let tileKey='';
+const TILE_CAP=64;                 /* a 1080 view at ~256 px a tile is 25 */
 function drawTiles(v){
   const g=$('t-tiles'); if(!g) return;
   if(!CFG.basemap){ g.innerHTML=''; tileKey=''; return; }
   let z=Math.round(Math.log2(v.scale/256));
-  z=Math.max(CFG.tileMinZ,Math.min(CFG.tileMaxZ,z));
+  /* A view zoomed out past the cached zooms gets no tiles at all, not
+     the z11 ones: clamping z UP while the scale stayed small was the
+     hang. A course with one mark typed without its west minus fitted
+     the map to half the globe, and z11 tiles over half the globe are
+     sixteen million <image> tags in one string - the page never came
+     back, and since the course is kept, nor did the app. The cap below
+     is the belt to that brace: whatever the arithmetic, never more than
+     TILE_CAP tiles. */
+  if(!isFinite(z) || !isFinite(v.mx) || !isFinite(v.my) || z<CFG.tileMinZ){ g.innerHTML=''; tileKey=''; return; }
+  z=Math.min(CFG.tileMaxZ,z);
   /* redrawing identical <image> tags once a second would reload and flicker */
   const key=z+'|'+v.mx.toFixed(8)+'|'+v.my.toFixed(8)+'|'+v.scale.toFixed(2);
   if(key===tileKey) return;
@@ -6190,6 +6209,7 @@ function drawTiles(v){
   const n=Math.pow(2,z), px=v.scale/n, rad=MAP_R/v.scale;
   const x0=Math.floor((v.mx-rad)*n), x1=Math.floor((v.mx+rad)*n);
   const y0=Math.floor((v.my-rad)*n), y1=Math.floor((v.my+rad)*n);
+  if((x1-x0+1)*(y1-y0+1)>TILE_CAP){ g.innerHTML=''; return; }
   let out='';
   for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
     if(x<0||y<0||x>=n||y>=n) continue;
@@ -6340,8 +6360,11 @@ function drawMap(pts){
   /* The fit takes the course in too: a track that has not reached the
      marks yet still shows where they are. */
   const E=lineEnds();
+  /* Marks within COURSE_FIT_NM of the track are fitted in; one an ocean
+     away is a typo, not a leg, and the map is not fitted to it. */
+  const near=m=>seaNm(P[0].la,P[0].lo,m.la,m.lo)<COURSE_FIT_NM;
   const CM=COURSE.marks.map(markOf).filter(Boolean).map(m=>({la:m.lat,lo:m.lon}))
-    .concat([{la:E.pin.lat,lo:E.pin.lon},{la:E.boat.lat,lo:E.boat.lon}]);
+    .concat([{la:E.pin.lat,lo:E.pin.lon},{la:E.boat.lat,lo:E.boat.lon}]).filter(near);
   if(!(MAPVIEW&&MAPVIEW.manual) && outOfView(MAPVIEW,P.concat(CM))) MAPVIEW=fitView(P.concat(CM));
   const v=MAPVIEW;
   $('t-cam').removeAttribute('transform');
@@ -6991,6 +7014,7 @@ addEventListener('pointermove',e=>{
    them, degrees and decimal minutes with a space between, or as decimal
    degrees; west and south are minus. */
 let MK=null;
+const MARK_MAX_NM=100;
 const fmtDM=v=>{ const s=v<0?'-':'', a=Math.abs(v), d=Math.floor(a); return s+d+' '+((a-d)*60).toFixed(3); };
 function parseDM(str){
   const t=String(str).trim().replace(/[°'′"]/g,' ').replace(/\s+/g,' ');
@@ -7027,6 +7051,14 @@ function mkHere(){
 function mkSave(){
   const lat=parseDM(MK.lat), lon=parseDM(MK.lon);
   if(lat===null||Math.abs(lat)>90||lon===null||Math.abs(lon)>180){ $('mk-msg').textContent='CHECK THE POSITION'; return; }
+  /* Against the fix, or the first mark on the list without one: a mark
+     hundreds of miles off is a sign dropped, not a mark. This is how a
+     longitude typed without its west minus put a mark in Asia, fitted
+     the map to half the globe and hung the Pi on its tiles. */
+  const ref={la:get('pos.lat'), lo:get('pos.lon')};
+  if(ref.la===null||ref.lo===null){ ref.la=MARKS[0].lat; ref.lo=MARKS[0].lon; }
+  const nm=seaNm(ref.la,ref.lo,lat,lon);
+  if(nm>MARK_MAX_NM){ $('mk-msg').textContent=Math.round(nm).toLocaleString()+' NM AWAY · WEST IS MINUS?'; return; }
   let name=MK.name.trim().toUpperCase().replace(/\s+/g,' ');
   if(!name) name='MARK '+(USER_MARKS.length+1);
   const id='u'+Date.now().toString(36);
