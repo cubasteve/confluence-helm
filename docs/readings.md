@@ -166,74 +166,33 @@ The dial's big cell is the exception: its unit sits *beside* the number
 rather than under it, measured off the number's own right edge so it
 stays against the last digit.
 
-## The race set
+## RACE PRO
 
-Before the sequence, the start-line numbers live round the timer, which
-is where the start already was, so the big number keeps the middle of
-the glass at full size and the readings below keep their cells:
+A pill under the countdown, in the racing red-to-orange, that is always
+there. Tap it and it opens into a box over the big number; the countdown
+opens it by itself, and the gun closes it. Reset closes it too.
 
-```
-          (+)      5:00      (-)
-   LINE 45 M   (P) PIN +12 (B)   BURN +3 S
-```
+![The RACE PRO box during a countdown](img/dial-countdown.png)
+
+The box covers the big cell, so its first slot carries whatever that
+cell was showing — SOG, or depth, or whatever you put there — and
+nothing is lost. Then the start-line numbers:
 
 | Item | What it is |
 |---|---|
-| `P` `B` | the two ends of the line; tap each as you pass it |
-| between them | the line's bias: the favoured end and what it is worth, `PIN +12` |
 | `LINE` | distance to the line, metres or feet with the depth unit; red when you are over |
 | `BURN` | seconds in hand to the line at this speed; red when you are late; dashes until the clock runs |
-
-All of it is up whenever the clock is idle or counting down, and folds
-away at the gun.
+| `LINE BIAS` | the favoured end and what it is worth, `PIN +12`, between the two ends |
+| `P` `B` | the two ends of the line; tap each as you pass it, and the bias is then about the line you pinged rather than the club marks |
 
 The bias sits between the P and B rings because they *are* the two
-ends: `PIN +12` with the P ring on its left is the whole sentence. It
-is up while the clock is idle as well as counting down, since the end
-you pick is decided before the sequence, not during it.
+ends: `PIN +12` with the P ring on its left is the whole sentence. Open
+the box before the sequence to ping the ends and read the bias while
+you still have a choice of end.
 
-Target speed and the wind shift are not here: they are readings, picked
-into any slot like the rest.
-
-## The start
-
-From the first second of the countdown to the gun, the whole face is
-the start line. For those five minutes nothing else on the glass
-matters, and the dial's numbers are the wrong shape for the question —
-*am I going to be on the line, on time, at the right end.*
-
-![The start overlay during a countdown](img/dial-countdown.png)
-
-**The clock** at the top, with the same plus and minus either side to
-sync it to a signal. It sits lower than the dial's so the alert banner
-cannot cover it — a shoaling warning is exactly what turns up on a start
-line.
-
-**The picture** is the line, to scale, looking upwind:
-
-- The wind comes at the line from above, and the arrow is tilted by the
-  bias, so a line that is not square to the wind *looks* not square.
-- Pin and boat end are on the sides they really are, seen from the
-  pre-start side. The favoured end is ringed green with what it is
-  worth under it. Tap either end to ping it as you pass — the same as
-  the P and B rings on the dial.
-- The boat is the arrow: where she actually is against the line,
-  pointing where she is actually going, with her course dashed on to
-  where it meets the line. Over early and she is drawn above the line,
-  in red.
-- Everything shares one scale, chosen so the line fills the width and
-  the boat always fits: a long way off zooms out, and the line shrinks
-  with it, so the geometry never lies.
-
-**The foot** is the three numbers: `LINE`, distance to go; `BURN`, the
-seconds in hand at this speed, green with time and red when late; and
-`SOG`.
-
-A double tap on the clock is the gun, as on the dial; a hold is reset;
-the swipes still open the panel and the dock over it. It goes at the
-gun, when the dial and its leg readings come back, and reset brings the
-dial back too. Depth is never hidden by it: the shallow alarm is a
-banner over everything.
+The strip and the three readings along the bottom stay in view under
+the box. Target speed and the wind shift are not in it: they are
+readings, picked into any slot like the rest.
 
 ## When a sensor is not there
 
