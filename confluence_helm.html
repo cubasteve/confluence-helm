@@ -137,6 +137,21 @@ body.night #mark{opacity:.07}
 .rv .u{font-size:.55em;font-weight:600;fill:var(--label);letter-spacing:.1em}
 .rv.good{fill:var(--stbd)}.rv.bad{fill:var(--port)}
 .rbias{font-size:30px;font-weight:var(--w-val);fill:var(--ink)}
+/* the start overlay: the whole face, from the first second of the
+   countdown to the gun */
+#ov-timer{font-size:150px}
+#ov-burn{font-size:120px}
+.ov-small{font-size:26px;font-weight:600;letter-spacing:.14em;fill:var(--label)}
+.ov-lineln{stroke:var(--ink);stroke-width:6;stroke-linecap:round}
+.ov-end circle{fill:var(--bg);stroke:var(--label);stroke-width:4}
+.ov-end text{font-size:24px;font-weight:600;letter-spacing:.12em;fill:var(--label);text-anchor:middle}
+.ov-end.fav circle{stroke:var(--stbd);stroke-width:6}.ov-end.fav text{fill:var(--stbd)}
+.ov-end.set circle{fill:var(--chip)}
+.ov-end:active circle{fill:var(--hairline)}
+.ov-gain{font-size:30px;font-weight:600;fill:var(--stbd);text-anchor:middle}
+.ov-wind path{stroke:var(--accent);stroke-width:6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ov-cogln{stroke:var(--accent);stroke-width:3;stroke-dasharray:10 10;fill:none;opacity:.7}
+.ov-boat path{fill:var(--accent)}.ov-boat.over path{fill:var(--port)}
 .pbtn .ring{fill:none;stroke:var(--label);stroke-width:2.5}
 .pbtn .hit{fill:transparent}
 .pbtn text{font-size:21px;font-weight:600;fill:var(--label)}
@@ -1501,6 +1516,71 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <rect class="lg" x="6" y="11" width="12" height="9" rx="2"/>
     </g>
   </g>
+
+  <!-- ================================================================
+       THE START. From the first second of the countdown to the gun the
+       whole face is the start line, because for those five minutes
+       nothing else on it matters and the dial's numbers are the wrong
+       shape for the question - am I going to be on the line, on time,
+       at the right end.
+       Top: the countdown at 150px with the same +/- sync either side,
+       at 314 rather than the dial's 268 so the alert banner, which ends
+       at 240, cannot sit over its ink (241 up) - a shoaling warning is exactly what
+       turns up on a start line. No COUNTDOWN word: the overlay is the
+       word.
+       Middle: the line, drawn to scale and looking upwind - the wind
+       arrow comes at it from above, tilted by the bias, so a line that
+       is not square to the wind LOOKS not square; the favoured end is
+       ringed green with what it is worth under it; the boat is the
+       arrow, where she actually is against the line, pointing where
+       she is actually going, with her course dashed on to where it
+       meets the line. Over early and she is drawn above it, red.
+       Foot: LINE, BURN, SOG - distance, time in hand, speed.
+       The last group in the SVG, so it paints over everything on the
+       dial, and its face is an opaque circle so nothing under it can
+       take a tap. The stage's gestures still work through it: a tap in
+       the top third is the timer's (double for the gun), a hold is
+       reset, the swipes are the panel's and the dock's. -->
+  <g id="race-ov" style="display:none">
+    <circle cx="540" cy="540" r="540" fill="var(--bg)"/>
+    <text id="ov-timer" class="value" x="540" y="314" text-anchor="middle">5:00</text>
+    <g id="ov-plus" class="tbtn">
+      <circle cx="300" cy="314" r="46"/>
+      <rect x="276" y="309" width="48" height="10" rx="5"/>
+      <rect x="295" y="290" width="10" height="48" rx="5"/>
+    </g>
+    <g id="ov-minus" class="tbtn">
+      <circle cx="780" cy="314" r="46"/>
+      <rect x="756" y="309" width="48" height="10" rx="5"/>
+    </g>
+    <g id="ov-pic">
+      <text id="ov-twd" class="ov-small" x="540" y="390" text-anchor="middle">WIND ––</text>
+      <g id="ov-wind" class="ov-wind" transform="translate(540 437)">
+        <path d="M0 -36 L0 36"/><path d="M-16 16 L0 40 L16 16"/>
+      </g>
+      <line id="ov-line" class="ov-lineln" x1="220" y1="556" x2="860" y2="556"/>
+      <g id="ov-end-l" class="ov-end" transform="translate(220 556)">
+        <circle r="24"/><text id="ov-end-l-t" y="-44">PIN</text>
+      </g>
+      <g id="ov-end-r" class="ov-end" transform="translate(860 556)">
+        <circle r="24"/><text id="ov-end-r-t" y="-44">BOAT</text>
+      </g>
+      <text id="ov-gain" class="ov-gain" x="220" y="608"></text>
+      <path id="ov-cog" class="ov-cogln" d=""/>
+      <g id="ov-boat" class="ov-boat" transform="translate(540 700)">
+        <path d="M0 -28 L18 24 L0 13 L-18 24 Z"/>
+      </g>
+      <text id="ov-nofix" class="ov-small" x="540" y="690" text-anchor="middle" style="display:none">NO POSITION</text>
+    </g>
+    <!-- 300 / 540 / 780: at 920 the face runs 156..924, and a three-digit
+         LINE at 104px is 200 wide, a -120 BURN at 120px is 280. -->
+    <text id="ov-dist-l" class="label" x="300" y="850" text-anchor="middle">LINE · M</text>
+    <text id="ov-dist"   class="value" x="300" y="920" text-anchor="middle">––</text>
+    <text id="ov-burn-l" class="label" x="540" y="850" text-anchor="middle">BURN · S</text>
+    <text id="ov-burn"   class="value" x="540" y="920" text-anchor="middle">––</text>
+    <text id="ov-sog-l"  class="label" x="780" y="850" text-anchor="middle">SOG · KT</text>
+    <text id="ov-sog"    class="value" x="780" y="920" text-anchor="middle">––</text>
+  </g>
 </svg>
 
 <div id="dots"><i></i><i></i></div>
@@ -2449,6 +2529,10 @@ function render(){
           !L||L.burn===null?'':'S');
     wCls ('rc-burn-v','bad', !!L && L.burn!==null && L.burn<0);
   }
+  /* The start overlay: the countdown, and only the countdown. */
+  const ov = tState==='countdown';
+  wSty('race-ov','display', ov?'':'none');
+  if(ov) paintStart(L, met);
   paintDialCells();
 
   }
@@ -2674,7 +2758,94 @@ function lineData(){
      A crossing that is not between the ends is a boat sailing round
      the pin, not a start. */
   const along=(wx*vx+wy*vy)/(len*len);
-  return {dist, bias, gain, favoured, burn, len, along};
+  /* n is the upwind unit normal, v the pin-to-boat vector in metres:
+     the start overlay draws its picture in that frame. */
+  return {dist, bias, gain, favoured, burn, len, along, n:{x:nx,y:ny}, v:{x:vx,y:vy}};
+}
+
+/* ---- the start overlay's picture ----------------------------------------
+   The frame is the line's: up is the upwind normal n, and right is
+   whichever way puts the far end to the right when you look upwind from
+   the pre-start side - so the picture is what you would see over the
+   bow, pin and boat end on the sides they really are. Everything is to
+   one scale, chosen so the line fills the width up to 2.8 px/m and the
+   boat always fits: a long way off zooms out, the line shrinks with it,
+   and the geometry stays honest. Over early is above the line, red. */
+const OV={lineY:556, halfMax:320, below:244, above:85, sMax:2.8};
+function paintStart(L, met){
+  const sog=get('navigation.speedOverGround'), cog=get('navigation.courseOverGroundTrue');
+  let twd=get('environment.wind.directionTrue'); twd=twd===null?null:twd*DEG;
+  wText('ov-sog', sog===null?'––':(sog*MS_TO_KT).toFixed(1));
+  wText('ov-dist-l', 'LINE · '+(met?'M':'FT'));
+  wText('ov-twd', twd===null?'WIND ––':'WIND '+Math.round((twd+360)%360)+'\u00b0');
+  wSty('ov-nofix','display', L?'none':'');
+  wSty('ov-boat','display',  L?'':'none');
+  wSty('ov-cog','display',   L?'':'none');
+  wSty('ov-wind','display',  L&&twd!==null?'':'none');
+  wSty('ov-gain','display',  L?'':'none');
+  if(!L){
+    wText('ov-dist','––'); wText('ov-burn','––');
+    wCls('ov-dist','bad',false); wCls('ov-burn','bad',false); wCls('ov-burn','good',false);
+    wAttr('ov-line','x1',220); wAttr('ov-line','x2',860);
+    wAttr('ov-end-l','transform','translate(220 556)'); wAttr('ov-end-r','transform','translate(860 556)');
+    return;
+  }
+  const dm = met ? L.dist : L.dist*M_TO_FT;
+  wText('ov-dist', Math.abs(dm)>999?'999':String(Math.round(dm)));
+  wCls ('ov-dist','bad', L.dist<0);
+  wText('ov-burn', L.burn===null?'––':(L.burn>0?'+':'')+L.burn);
+  wCls ('ov-burn','bad',  L.burn!==null && L.burn<0);
+  wCls ('ov-burn','good', L.burn!==null && L.burn>=0);
+
+  /* the frame. A line without one - nothing real, but a stub in a probe
+     was enough - gets the square, pin-left default rather than a throw:
+     a throw here ends render() for good, and with it the whole dial. */
+  const n=L.n||{x:0,y:1}, v=L.v||{x:L.len,y:0};
+  const flip = (v.x*n.y - v.y*n.x) < 0;            // boat end left of the pin, seen upwind
+  const r = flip ? {x:-n.y, y:n.x} : {x:n.y, y:-n.x};
+  let s=Math.min(OV.sMax, 2*OV.halfMax/L.len);
+  if(L.dist>0)      s=Math.min(s, OV.below/L.dist);
+  else if(L.dist<0) s=Math.min(s, OV.above/-L.dist);
+  const half=L.len*s/2, y0=OV.lineY;
+  const xPin = flip ? 540+half : 540-half, xBoat = flip ? 540-half : 540+half;
+  wAttr('ov-line','x1',Math.round(Math.min(xPin,xBoat))); wAttr('ov-line','x2',Math.round(Math.max(xPin,xBoat)));
+  const endL=flip?'boat':'pin', endR=flip?'pin':'boat';
+  const endX={pin:xPin, boat:xBoat};
+  for(const [id,k] of [['ov-end-l',endL],['ov-end-r',endR]]){
+    wAttr(id,'transform',`translate(${Math.round(endX[k])} ${y0})`);
+    wAttr(id,'data-end',k);
+    wText(id+'-t', k.toUpperCase());
+    wCls(id,'fav', L.favoured===k.toUpperCase());
+    wCls(id,'set', !!LINE[k]);
+  }
+  const favX=endX[L.favoured.toLowerCase()];
+  wAttr('ov-gain','x',Math.round(favX));
+  wText('ov-gain','+'+Math.round(met?L.gain:L.gain*M_TO_FT)+(met?' M':' FT'));
+
+  /* the boat */
+  const bx = xPin + (xBoat-xPin)*L.along, by = y0 + L.dist*s;
+  let a=0;
+  if(cog!==null){ const c={x:Math.sin(cog), y:Math.cos(cog)};
+    a=Math.atan2(c.x*r.x+c.y*r.y, c.x*n.x+c.y*n.y)*DEG; }
+  wAttr('ov-boat','transform',`translate(${bx.toFixed(1)} ${by.toFixed(1)}) rotate(${a.toFixed(1)})`);
+  wCls('ov-boat','over', L.dist<0);
+  /* her course, dashed, to where it meets the line - or 600 px of it */
+  let d='';
+  if(cog!==null){
+    const dx=Math.sin(a/DEG), dy=-Math.cos(a/DEG);
+    let len=600;
+    if(dy<-0.01 && by>y0) len=Math.min(len,(by-y0)/-dy);
+    if(dy> 0.01 && by<y0) len=Math.min(len,(y0-by)/dy);
+    d=`M${bx.toFixed(1)} ${by.toFixed(1)} L${(bx+dx*len).toFixed(1)} ${(by+dy*len).toFixed(1)}`;
+  }
+  wAttr('ov-cog','d',d);
+
+  /* the wind, from above, tilted by however far the line is off square */
+  if(twd!==null){
+    const u={x:Math.sin(twd/DEG), y:Math.cos(twd/DEG)};
+    const t=Math.atan2(u.x*r.x+u.y*r.y, u.x*n.x+u.y*n.y)*DEG;
+    wAttr('ov-wind','transform',`translate(540 437) rotate(${t.toFixed(1)})`);
+  }
 }
 
 /* ---- auto start, auto finish ------------------------------------------
@@ -3045,6 +3216,8 @@ function tick(){
   lb.textContent=lbl;
   el.classList.toggle('stale',dim);
   el.classList.toggle('alarm',hot);
+  wText('ov-timer', clock(Math.max(0,ms)));
+  wCls ('ov-timer','alarm', hot);
   // a finished time pulses so it is obviously frozen, not still running
   el.style.opacity=(tState==='finished'&&Math.floor(Date.now()/600)%2)?'.4':'';
 
@@ -3673,6 +3846,19 @@ $('t-minus').addEventListener('pointerdown',gClaim);
 $('t-plus') .addEventListener('pointerdown',gClaim);
 $('t-minus').addEventListener('pointerup',()=>nudge(-60));
 $('t-plus') .addEventListener('pointerup',()=>nudge( 60));
+/* The overlay's pair, the same way round as the dial's. */
+$('ov-minus').addEventListener('pointerdown',gClaim);
+$('ov-plus') .addEventListener('pointerdown',gClaim);
+$('ov-minus').addEventListener('pointerup',()=>nudge(-60));
+$('ov-plus') .addEventListener('pointerup',()=>nudge( 60));
+/* The overlay's line ends ping too: which end each one IS is set at
+   paint, because the picture flips to keep the view looking upwind. */
+['ov-end-l','ov-end-r'].forEach(id=>{
+  $(id).addEventListener('pointerdown',gClaim);
+  $(id).addEventListener('pointerup',()=>{
+    const k=$(id).dataset.end; if(!k) return;
+    pingEnd(k); $('ping-'+k).classList.add('set'); });
+});
 
 /* ==================================================================
    CONNECTIVITY  ·  WiFi adapters and Bluetooth
