@@ -727,6 +727,108 @@ def backlight_set(pct):
         return {'ok': False, 'error': str(e)[:80]}
 
 
+# --------------------------------------------------------------- buzzer
+#
+# A countdown you can hear without looking. The panel cannot reach a GPIO
+# pin any more than it can reach the WiFi, so the race timer posts here
+# at each signal and this drives the pin.
+#
+# The hardware is an ACTIVE piezo buzzer - the kind with its own
+# oscillator, which sounds as soon as it has voltage - between the pin
+# and a ground pin. A passive one needs a square wave and would need this
+# to bit-bang, which a Python process sharing a Pi with a browser has no
+# business promising. Anything drawing more than a few mA wants a
+# transistor rather than the pin itself.
+#
+# pinctrl on Bookworm, raspi-gpio on Bullseye. The same words work on
+# both, and both ship with Raspberry Pi OS - so this stays stdlib-only
+# and needs no pip, which is the rule for everything in this file.
+# Shelling out costs a few ms either side of the pulse. Against a 90 ms
+# beep that is inaudible, and it buys not holding a GPIO line open for
+# the life of the process.
+
+BUZZER_CMD = os.environ.get('HELM_BUZZER_CMD', '')   # a test rig overrides this
+
+
+def _buzzer_pin():
+    """The configured pin, or None if the buzzer is switched off."""
+    v = os.environ.get('HELM_BUZZER_GPIO', '17').strip().lower()
+    if v in ('off', 'none', ''):
+        return None
+    try:
+        n = int(v)
+    except ValueError:
+        return None
+    return n if 0 <= n <= 27 else None
+
+
+BUZZER_GPIO = _buzzer_pin()
+_buz = {'lock': threading.Lock(), 'busy': False}
+
+
+def buzzer_tool():
+    if BUZZER_CMD:
+        return BUZZER_CMD.split()
+    for t in ('pinctrl', 'raspi-gpio'):
+        if shutil.which(t):
+            return [t]
+    return None
+
+
+def buzzer_status():
+    if BUZZER_GPIO is None:
+        return {'available': False, 'why': 'OFF'}
+    if not buzzer_tool():
+        return {'available': False, 'why': 'NO PINCTRL'}
+    return {'available': True, 'gpio': BUZZER_GPIO}
+
+
+def _buz_set(on):
+    t = buzzer_tool()
+    if not t or BUZZER_GPIO is None:
+        return
+    run(t + ['set', str(BUZZER_GPIO), 'op', 'dh' if on else 'dl'], 3)
+
+
+def _buz_run(ms, n, gap):
+    """The pattern, off the HTTP thread. The finally is not tidiness: a
+    pin left high is a buzzer that screams until someone pulls a wire,
+    and this runs on a boat where that wire is behind the panel."""
+    try:
+        for i in range(n):
+            if i:
+                time.sleep(gap / 1000.0)
+            _buz_set(True)
+            time.sleep(ms / 1000.0)
+            _buz_set(False)
+    finally:
+        _buz_set(False)
+        _buz['busy'] = False
+
+
+def buzz(ms, n, gap):
+    st = buzzer_status()
+    if not st.get('available'):
+        return dict(st, ok=False, error='NO BUZZER')
+    try:
+        ms = int(90 if ms is None else ms)
+        n = int(1 if n is None else n)
+        gap = int(120 if gap is None else gap)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'BAD PATTERN'}
+    # Clamped, not rejected. The ceiling is the point: a caller that asks
+    # for a ten-second blast has a bug, and the boat should not wear it.
+    ms = max(10, min(2000, ms))
+    n = max(1, min(6, n))
+    gap = max(20, min(1000, gap))
+    with _buz['lock']:
+        if _buz['busy']:
+            return {'ok': False, 'error': 'BUSY'}
+        _buz['busy'] = True
+    threading.Thread(target=_buz_run, args=(ms, n, gap), daemon=True).start()
+    return {'ok': True, 'ms': ms, 'n': n}
+
+
 # ---------------------------------------------------------------- power
 #
 # Shutting down properly matters more on a boat than on a desk. Cutting
@@ -1464,7 +1566,8 @@ def route(path, body):
     if path == '/status':
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
                 'display': display_status(), 'power': power_status(),
-                'backlight': backlight_status(), 'gpx': gpx_status(),
+                'backlight': backlight_status(), 'buzzer': buzzer_status(),
+                'gpx': gpx_status(),
                 'spotify': spotify_status(), 'fit': fit_status()}
 
     if path == '/spotify/like':
@@ -1490,6 +1593,8 @@ def route(path, body):
         return gpx_delete((body or {}).get('name'))
     if path == '/gpx/save':
         return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
+    if path == '/buzz':
+        return buzz(body.get('ms'), body.get('n'), body.get('gap'))
     if path == '/backlight':
         if 'pct' in body:
             return dict(backlight_set(body['pct']), **backlight_status())

@@ -556,3 +556,79 @@ visible wherever you are.
 Alert text carries whole units rather than tenths on purpose: to a tenth
 the banner would rewrite itself several times a second for no added
 meaning.
+
+## Countdown signals
+
+The countdown sounds the pattern a race committee sounds, so it needs no
+learning by anyone who has raced:
+
+| When | Signal |
+|---|---|
+| every whole minute | long |
+| 30, 20 and 10 seconds | short |
+| the last five seconds | short |
+| the gun | long, and green |
+
+One schedule feeds both ways of taking it, so the eye and the ear can
+never disagree:
+
+```js
+sigFor(300) // 'long'   a whole minute
+sigFor(10)  // 'short'
+sigFor(9)   // null     nothing on the seconds between
+sigFor(0)   // 'gun'
+```
+
+**The flash** is a full-face colour wash, the accent for the four signals
+before the gun and green for the gun itself — the one you act on should
+not look like the four that precede it. It lives inside `#stage`, so it
+lights the round face and not the letterbox either side, and it sits
+above everything on it: a start signal has to arrive whether the control
+panel, an app or the screensaver is up. It wakes the screensaver for the
+same reason the shallow alarm does.
+
+It snaps on and fades off. An instant edge reads as a signal and an
+instant end reads as a fault, which is worth the extra line of CSS.
+
+The schedule is walked by the whole second remaining, and the second last
+signalled is remembered, so a clock sitting on `0:10` for eight ticks
+still sounds once. A tick lost to a busy frame skips a signal rather than
+firing a burst of them, which is the right way round.
+
+**The buzzer** is a pin on the Pi. A browser cannot reach a GPIO any more
+than it can reach the WiFi, so the timer posts each signal to `netd` and
+that drives the pin:
+
+```
+POST /buzz  {"ms": 90}            one short beep
+POST /buzz  {"ms": 60, "n": 3, "gap": 60}
+```
+
+It is posted and forgotten. No helper, or no buzzer wired, and the flash
+is simply all there is.
+
+### Wiring one
+
+An **active** piezo buzzer — the kind with its own oscillator, which
+sounds as soon as it has voltage — between GPIO 17 (header pin 11) and
+any ground pin. A passive one needs a square wave, which would mean
+bit-banging from a Python process that shares a Pi with a browser, and
+that is not a promise this can keep. Anything drawing more than a few
+milliamps wants a transistor rather than the pin itself.
+
+The pin is `HELM_BUZZER_GPIO`, default 17, and `off` disables it. The
+pulse shells out to `pinctrl` on Bookworm or `raspi-gpio` on Bullseye;
+both take the same words and both ship with Raspberry Pi OS, so this
+stays stdlib-only like the rest of `netd.py`. Shelling out costs a few
+milliseconds either side of the pulse, which is inaudible against a 90 ms
+beep and saves holding a GPIO line open for the life of the process.
+
+Three guards, because a pin left high is a buzzer that screams until
+somebody pulls a wire, and that wire is behind the panel:
+
+- The pulse runs off the HTTP thread and drives the pin low in a
+  `finally`, so a failure part-way through still ends silent.
+- A length is clamped to two seconds rather than rejected. A caller
+  asking for a ten-second blast has a bug, and the boat should not wear
+  it.
+- A second beep while one is running is refused rather than queued.

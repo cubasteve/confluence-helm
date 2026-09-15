@@ -1311,6 +1311,15 @@ a.lib-row{text-decoration:none;color:inherit}
   padding:16px 22px;border-radius:12px;opacity:0;pointer-events:none;
   transition:opacity .2s;letter-spacing:.04em;z-index:99}
 #fps.on{opacity:.93}
+/* The countdown's flash. Inside #stage, so it lights the face rather
+   than the letterbox either side of it, and above everything on it: a
+   start signal has to be seen whether the panel, an app or the
+   screensaver is up. Snapped on by the class and faded off by losing
+   it - an instant edge reads as a signal, an instant end reads as a
+   fault. */
+#flash{position:absolute;inset:0;background:var(--accent);opacity:0;
+  pointer-events:none;z-index:130;transition:opacity .25s}
+#flash.on{opacity:.88;transition:none}
 </style>
 </head>
 <body>
@@ -2005,6 +2014,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
 <div id="veil"></div>
 <div id="fps"></div>
+<div id="flash"></div>
 
 <!-- Touch lock. Deliberately transparent: spray must not be able to change
      anything, but you must still be able to read the instruments through
@@ -3276,6 +3286,40 @@ const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
   lineWas=null; lineArmed=false; rpOpen=false; markNear=false; };
 
+/* ---- the countdown's signals -------------------------------------------
+   One schedule, two ways of taking it: the face flashes, and a buzzer
+   wired to the Pi beeps. The pattern is the one a committee sounds - a
+   long signal at each whole minute, a short one at thirty, twenty and
+   ten seconds and through the last five, a long one at the gun - so it
+   needs no learning by anyone who has raced.
+   The buzzer is posted to netd and forgotten: no helper, or no buzzer
+   wired, and the flash is simply all there is. */
+const SIG={short:90, long:260, gun:700};
+function sigFor(s){
+  if(s<=0)     return 'gun';
+  if(s%60===0) return 'long';
+  if(s<=5)     return 'short';
+  return (s===30||s===20||s===10) ? 'short' : null;
+}
+let flashT=null;
+function flash(kind){
+  const el=$('flash'); if(!el) return;
+  clearTimeout(flashT);
+  /* green for the gun, the accent for everything before it: the one
+     signal you act on should not look like the four that precede it. */
+  el.style.background = kind==='gun' ? 'var(--stbd)' : 'var(--accent)';
+  el.classList.add('on');
+  flashT=setTimeout(()=>el.classList.remove('on'), SIG[kind]);
+}
+function signal(kind){
+  flash(kind);
+  if(ssOn) ssStop();               /* a countdown is not idle time */
+  netApi('/buzz', {ms:SIG[kind]});
+}
+/* The second we last signalled on, so a schedule second cannot fire
+   twice while the clock sits on it for eight ticks. */
+let sigSec=null;
+
 /* +/- only mean anything before the gun */
 function nudge(sec){
   if(tState==='countdown') tEnd=Math.max(Date.now(), tEnd+sec*1000);
@@ -3293,10 +3337,18 @@ function tick(){
   const el=$('timer');
   let ms, lbl, dim=false, hot=false;
 
-  if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; }
+  if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; sigSec=null; }
   else if(tState==='countdown'){
     ms=tEnd-Date.now();
-    if(ms<=0){ startRace(); ms=0; }        // gun goes, race clock runs
+    if(ms<=0){ signal('gun'); sigSec=null;
+               startRace(); ms=0; }        // gun goes, race clock runs
+    else{
+      /* Ceil, so the last whole second of five minutes IS 300 and the
+         sequence opens with its own long signal. A tick lost to a busy
+         frame skips a signal rather than firing a burst of them. */
+      const s=Math.ceil(ms/1000);
+      if(s!==sigSec){ sigSec=s; const k=sigFor(s); if(k) signal(k); }
+    }
     lbl='COUNTDOWN'; hot=ms<60000;
   }
   else if(tState==='racing'){ ms=Date.now()-tGun; lbl='RACING'; }
