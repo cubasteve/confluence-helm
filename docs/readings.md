@@ -194,6 +194,10 @@ so does sailing back out beyond 350 m, so a range that wobbles about
 the line does not flap it. A hand that closed it stays respected until
 the next thing happens. Reset closes it.
 
+The countdown also sounds. The face flashes and a buzzer beeps, on the
+pattern a race committee sounds.
+→ [Countdown signals](display.md#countdown-signals)
+
 **The box covers the big cell**, so its first slot carries whatever
 that cell was showing — SOG, or depth, or whatever you put there — and
 nothing is lost. The strip and the three readings along the bottom stay
