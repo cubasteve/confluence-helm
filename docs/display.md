@@ -609,26 +609,70 @@ is simply all there is.
 
 ### Wiring one
 
-An **active** piezo buzzer — the kind with its own oscillator, which
-sounds as soon as it has voltage — between GPIO 17 (header pin 11) and
-any ground pin. A passive one needs a square wave, which would mean
-bit-banging from a Python process that shares a Pi with a browser, and
-that is not a promise this can keep. Anything drawing more than a few
-milliamps wants a transistor rather than the pin itself.
+A **panel-mount piezo sounder on the boat's 12 V**, around 100 dB,
+IP65 or better, mounted under the coaming and pointed into the cockpit.
+Loud enough to carry over wind at helm distance, sealed against spray,
+and small enough that one MOSFET switches it.
 
-The pin is `HELM_BUZZER_GPIO`, default 17, and `off` disables it. The
-pulse shells out to `pinctrl` on Bookworm or `raspi-gpio` on Bullseye;
-both take the same words and both ship with Raspberry Pi OS, so this
-stays stdlib-only like the rest of `netd.py`. Shelling out costs a few
-milliseconds either side of the pulse, which is inaudible against a 90 ms
-beep and saves holding a GPIO line open for the life of the process.
+```
+  12 V (fused)  ────────────────►  sounder  +
 
-Three guards, because a pin left high is a buzzer that screams until
-somebody pulls a wire, and that wire is behind the panel:
+                                   sounder  −
+                                      │
+  GPIO 17  ──[ 220 Ω ]──┬── gate    ┌─┴─┐
+                        │           │ Q │  logic-level N-channel MOSFET
+                    [ 10 kΩ ]       └─┬─┘
+                        │             │
+  Pi GND  ──────────────┴─────────────┴──────  boat negative
+```
 
-- The pulse runs off the HTTP thread and drives the pin low in a
-  `finally`, so a failure part-way through still ends silent.
-- A length is clamped to two seconds rather than rejected. A caller
-  asking for a ten-second blast has a bug, and the boat should not wear
-  it.
-- A second beep while one is running is refused rather than queued.
+Four things in that diagram are not decoration:
+
+- **The grounds are joined.** The MOSFET switches the sounder's negative
+  against a ground it shares with the Pi. Without the link there is
+  nothing to switch against. If the Pi already runs off the boat's 12 V
+  through a converter this is usually done for you.
+- **The 10 kΩ pull-down** holds the gate at ground while the Pi boots.
+  Until something claims a GPIO it floats, and a floating gate is a
+  sounder that may howl from power-up until the first beep ends it.
+  `buzz_quiet()` drives the pin low at startup as a second line of
+  defence, but the resistor is the one that works before any software
+  runs.
+- **The 220 Ω** limits the inrush into the gate's capacitance. The pin
+  survives without it; it is a courtesy to the pin.
+- **The fuse** goes at the 12 V end, sized for the sounder rather than
+  for the wire that happened to be spare.
+
+A piezo sounder is capacitive, so it needs no flyback diode. Choose a
+**magnetic** one instead and it has a coil, and then it does.
+
+The sounder is active-high: gate high, MOSFET conducts, sounder sounds.
+Some ready-made driver and relay boards invert that, and one of those
+wired up unset would sit on from boot until the first beep *ended* it.
+`HELM_BUZZER_INVERT=1` flips the drive, because the place you discover
+this is a cockpit and not a bench.
+
+Switching is fast enough that the pattern needs no adjusting for this
+part. A relay would have wanted longer pulses, since five short ones
+through a relay is mostly clicking.
+
+### Testing the install
+
+From the Pi, without waiting for a start:
+
+```bash
+curl -s -X POST -H 'Content-Type: application/json' \
+     -d '{"ms":300}' http://127.0.0.1:8091/buzz
+```
+
+`{"ok":true}` and a beep means the whole path works. `NO BUZZER` with
+`NO PINCTRL` means neither `pinctrl` nor `raspi-gpio` is installed;
+with `OFF` means `HELM_BUZZER_GPIO` is set to `off`. Silence with
+`{"ok":true}` is wiring.
+
+`netd` prints what it found at startup, so the log answers the same
+question after a reboot:
+
+```
+[netd] buzzer: GPIO 17
+```

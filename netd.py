@@ -748,6 +748,13 @@ def backlight_set(pct):
 # the life of the process.
 
 BUZZER_CMD = os.environ.get('HELM_BUZZER_CMD', '')   # a test rig overrides this
+# A bare MOSFET sounds on a HIGH gate, which is the default here. Some
+# ready-made driver and relay boards invert, and one of those wired up
+# unset would sit on from boot until the first beep ENDED it. One env
+# var rather than a code change, because the place you find this out is
+# a cockpit.
+BUZZER_INVERT = os.environ.get('HELM_BUZZER_INVERT', '').strip().lower() \
+                in ('1', 'true', 'yes', 'on')
 
 
 def _buzzer_pin():
@@ -787,7 +794,19 @@ def _buz_set(on):
     t = buzzer_tool()
     if not t or BUZZER_GPIO is None:
         return
-    run(t + ['set', str(BUZZER_GPIO), 'op', 'dh' if on else 'dl'], 3)
+    level = 'dh' if (bool(on) != BUZZER_INVERT) else 'dl'
+    run(t + ['set', str(BUZZER_GPIO), 'op', level], 3)
+
+
+def buzz_quiet():
+    """Drive the pin to its silent state, once, at startup.
+
+    Until something claims a GPIO it floats, and a floating gate on a
+    sounder's MOSFET is a sounder that may be howling from boot until
+    the first beep switches it off. A pull-down resistor on the gate is
+    the real fix and belongs in the wiring; this is the belt to that
+    brace, and it costs one subprocess at startup."""
+    _buz_set(False)
 
 
 def _buz_run(ms, n, gap):
@@ -1727,6 +1746,11 @@ if __name__ == '__main__':
           if _b.get('available') else
           'NO - ' + ('present but not writable' if backlight_dev() else 'none exposed')),
           flush=True)
+    _bz = buzzer_status()
+    print('[netd] buzzer: %s' % ('GPIO %d%s' % (_bz['gpio'],
+          ' (inverted)' if BUZZER_INVERT else '')
+          if _bz.get('available') else 'NO - ' + _bz.get('why', '')), flush=True)
+    buzz_quiet()
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     # Fill the caches before anyone asks. The kiosk often comes up at the
     # same moment this does, and the first /status is the one that decides
