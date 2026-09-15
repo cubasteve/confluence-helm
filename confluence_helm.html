@@ -2870,8 +2870,31 @@ const courseSave=()=>localStorage.setItem('course',JSON.stringify(COURSE));
 /* Which side to leave each mark, by id: 'P' or 'S', port unless set.
    Lives in COURSE so it is saved and cleared with the course. */
 const markSide=id=>(COURSE.side&&COURSE.side[id])||'P';
-const COURSE_ROUND={near:40, away:60};
-let courseNear=false;
+/* Rounding, without trusting the mark's position to the metre.
+   This used to be absolute: inside 40 m of the recorded position, then
+   back outside 60. That is a bet that loses. Club coordinates come to a
+   tenth of a minute, which is 185 m of latitude and so up to 90 m of
+   rounding error before anyone mistypes anything; a buoy swings a scope
+   of its rode around its anchor all day; and rounding wide is normal
+   racing. Miss the 40 m and the mark simply never advances, which is
+   exactly what happened on the water.
+   What says you have rounded is relative, and needs no faith in the
+   position at all: you got as close as you were going to get, and then
+   you went PAST it. Both halves matter - opening alone is also what a
+   tack away from a layline looks like, and on a beat that happens twice
+   a leg.
+   "Past" is read off the compass bearing to the mark, not off COG. Go
+   by a point and that bearing swings; back away from one and it barely
+   moves, whatever the boat is pointing at. COG was the first try and it
+   is the wrong instrument: it is noise at drifting speed, some rigs
+   never publish it, and a stale one would silently stop the course
+   advancing - which is the fault being fixed here, not one to re-import.
+   SWING is 40 because the geometry sets the range. Passing a mark 15 m
+   off and opening the 50 below swings 77 degrees; passing one 160 m off
+   swings 40. A tack at 220 m swings about 10. */
+const COURSE_ROUND={arm:200, leave:50, swing:40};
+let courseNear=false, courseMin=Infinity, courseBrg=0;
+const courseReset=()=>{ courseNear=false; courseMin=Infinity; courseBrg=0; };
 function courseNext(){
   if(COURSE.next<COURSE.marks.length){
     const m=markOf(COURSE.marks[COURSE.next]);
@@ -2892,14 +2915,33 @@ function markGeo(){
 }
 const rangeTxt=m=> m<1000 ? Math.round(m)+' M' : (m/1852).toFixed(2)+' NM';
 function courseWatch(){
-  if(!raceOn()){ courseNear=false; return; }
-  const g=markGeo(); if(!g||g.n.id==='finish'){ courseNear=false; return; }
-  if(g.dist<COURSE_ROUND.near) courseNear=true;
-  else if(courseNear && g.dist>COURSE_ROUND.away){
-    courseNear=false; COURSE.next++; courseSave();
-    console.log('[helm] rounded', g.n.hdr); }
+  if(!raceOn()) return courseReset();
+  const g=markGeo();
+  /* The finish is the line, and lineWatch owns it. */
+  if(!g || g.n.id==='finish') return courseReset();
+
+  /* Approaching. ARM is deliberately loose - it is only there to stop a
+     mark twenty miles off the bow arming anything - and the work is
+     done by the closest approach it starts tracking. */
+  if(g.dist < COURSE_ROUND.arm) courseNear=true;
+  if(!courseNear) return;
+  /* The nearest we have been, and which way the mark lay when we were. */
+  if(g.dist < courseMin){ courseMin=g.dist; courseBrg=g.brg; }
+
+  /* How far it has opened since. Relative, so a mark charted 80 m from
+     where it floats rounds exactly as well as one charted to the metre:
+     both open by the same 50. */
+  if(g.dist - courseMin < COURSE_ROUND.leave) return;
+
+  /* And we went past it rather than backing off it: the bearing to the
+     mark has swung since that closest approach. Position only - no
+     heading, no COG, nothing that needs a second sensor to be right. */
+  if(Math.abs(wrap180(g.brg - courseBrg)) < COURSE_ROUND.swing) return;
+
+  console.log('[helm] rounded', g.n.hdr, 'closest', Math.round(courseMin)+'m');
+  courseReset(); COURSE.next++; courseSave();
 }
-function courseAdvance(){ if(COURSE.next<COURSE.marks.length){ COURSE.next++; courseSave(); courseNear=false; } }
+function courseAdvance(){ if(COURSE.next<COURSE.marks.length){ COURSE.next++; courseSave(); courseReset(); } }
 
 /* ---- the mark approach ---------------------------------------------------
    Inside APPROACH metres of the next mark, racing, the pill turns
@@ -3276,7 +3318,7 @@ let tLeft=CFG.startMins*60000;            // countdown remaining while idle
    its pill, the gun or a reset. */
 let rpOpen=false;
 const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; rpOpen=true;
-  COURSE.next=0; courseNear=false; courseSave(); };
+  COURSE.next=0; courseReset(); courseSave(); };
 const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
 const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; rpOpen=false; markNear=false; };

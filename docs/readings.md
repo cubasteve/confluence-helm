@@ -224,6 +224,36 @@ in view under it. What fills the other slots depends on where you are:
 | `BRG` | true bearing to it, to steer against COG; double-tap it to move the course on by hand, for a mark rounded wide or one the committee dropped |
 | `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
+**Rounding** advances the course on its own, and it does not trust the
+mark's position to the metre. It watches for the two things that mean
+you went round something: you got as close as you were going to get,
+and then you went *past* it — the distance opened by 50 m and the
+compass bearing to the mark swung by 40 degrees or more.
+
+Both halves are load-bearing. Opening alone is also what a tack away
+from a layline looks like, and on a beat that happens twice a leg; the
+bearing barely moves on a tack, because the mark stays in the same
+direction whatever the boat is pointing at.
+
+Reading it off the bearing rather than off `COG` is deliberate. Only
+position is involved, so nothing here needs a second sensor to be
+right, and a rig that never publishes course over the ground rounds
+marks exactly as well as one that does.
+
+It replaced an absolute test — inside 40 m of the recorded position,
+then back outside 60 — which is a bet that loses. Club coordinates come
+to a tenth of a minute, which is 185 m of latitude and so up to 90 m of
+error before anyone mistypes anything; a buoy swings a scope of its rode
+around its anchor all day; and rounding wide is normal racing. Miss the
+40 m and the mark never advanced at all, which is what happened on the
+water.
+
+A mark more than 200 m from where the boat actually sails never arms.
+That is not a tolerance to widen: it means the position is wrong, and
+the fix is to stand at the buoy, take a new mark with `HERE`, and put
+that one in the course. Meanwhile `BRG` in the RACE box advances the
+course on a double tap.
+
 The next mark comes from the course set in the Tracks app: tap marks
 on the course sheet in the order you will sail them; the numbers on
 the left are that order. Each mark in the course gets a `P` and an `S` beside it for the side you
