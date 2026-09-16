@@ -595,24 +595,109 @@ signalled is remembered, so a clock sitting on `0:10` for eight ticks
 still sounds once. A tick lost to a busy frame skips a signal rather than
 firing a burst of them, which is the right way round.
 
-**The buzzer** is a pin on the Pi. A browser cannot reach a GPIO any more
-than it can reach the WiFi, so the timer posts each signal to `netd` and
-that drives the pin:
+**The sounder** is `netd`'s. A browser can reach a GPIO pin no more than
+it can reach the WiFi, and it cannot pick a sound card either, so the
+timer posts each signal to the helper and that makes the noise:
 
 ```
-POST /buzz  {"ms": 90}            one short beep
-POST /buzz  {"ms": 60, "n": 3, "gap": 60}
+POST /buzz  {"ms": 90,  "kind": "warn"}     one short beep
+POST /buzz  {"ms": 700, "kind": "gun"}      the gun
+POST /buzz  {"ms": 60, "n": 3, "gap": 60}   a pattern
+POST /buzz  {"arm": true}                   wake the output, silently
 ```
 
-It is posted and forgotten. No helper, or no buzzer wired, and the flash
-is simply all there is.
+It is posted and forgotten. No helper, or nothing wired, and the flash is
+simply all there is.
 
-### Wiring one
+`kind` names the voice; leave it out and the length decides, so a bare
+`{"ms": 700}` from a `curl` still sounds like a gun. Lengths are clamped
+rather than refused — 10–2000 ms, 1–6 beeps — because a caller that asks
+for a ten-second blast has a bug and the boat should not wear it.
 
-A **panel-mount piezo sounder on the boat's 12 V**, around 100 dB,
-IP65 or better, mounted under the coaming and pointed into the cockpit.
-Loud enough to carry over wind at helm distance, sealed against spray,
-and small enough that one MOSFET switches it.
+### Two ways of making the noise
+
+`HELM_BUZZER_MODE` picks: `auto` (the default), `audio`, `gpio` or `off`.
+`auto` takes audio when there is an `aplay` to send it to, and falls back
+to the pin.
+
+| | `audio` | `gpio` |
+|---|---|---|
+| Output | the Pi's 3.5 mm jack | one GPIO pin |
+| Needs | a powered amp and a speaker | an active piezo and a MOSFET |
+| Voices | two — the gun is not the warning | one |
+| Unplugging it | the plug is the connector | do not; see below |
+
+**Audio is the one to fit.** The 3.5 mm plug is rated for thousands of
+insertions, keyed by shape and findable by feel, which is what you want
+on the thing that gets unplugged after every race. A dupont housing on
+the header is rated for a couple of dozen, and one pin out puts 5 V on
+GPIO 17.
+
+### The audio path
+
+```
+  Pi 3.5 mm ──plug here── class-D amp ── speaker
+                             ▲
+                        boat 12 V (fused)
+```
+
+The amp and the speaker stay on the bulkhead. The lead stays with the Pi.
+The plug in the middle is the only thing anyone handles.
+
+- **The jack is a line output**, not a speaker drive — about 1.1 V p-p,
+  op-amp buffered on the Pi 4. It will drive headphones and it will drive
+  an amplifier input. It will not drive a passive speaker to anything
+  like 100 dB, so the amp is not optional.
+- **A plain 3-pole stereo plug is correct.** The jack is 4-pole — tip
+  left, ring right, second ring ground, sleeve composite video — and a
+  3-pole plug's sleeve simply shorts the unused video pin to ground.
+- **Power the amp from the boat, not from the Pi**, so pulling the plug
+  never leaves anything half-powered.
+- **HDMI is a separate card and is usually the default one**, which is
+  why `netd` names the jack rather than taking what it is given. It
+  reads the card out of `aplay -l` and plays to
+  `plughw:CARD=Headphones,DEV=0`; `plughw:` rather than `hw:` so ALSA
+  converts rather than refusing a rate the bcm2835 device will not take.
+  `HELM_AUDIO_DEV` overrides the whole thing for a rig with something
+  else in front.
+- **The gain is wound up once at startup.** A fresh Raspberry Pi OS comes
+  up well below full, and the amp's pot cannot make up what the Pi never
+  sent. `HELM_AUDIO_VOL` sets it; 100% is the default.
+
+**The two voices.** Warnings are 2500 Hz with a harmonic on top, which is
+where the ear is most sensitive and what carries over wind and hull
+noise. The gun is 420 Hz with two harmonics under it, which sounds like
+a gun. The one signal you act on should not *sound* like the four that
+precede it, for the same reason it does not *look* like them.
+
+Both are synthesised with `wave` — stdlib, like everything else in
+`netd` — at full scale against each voice's own true peak rather than
+against the sum of its harmonic weights, which throws away several dB for
+nothing. Each has a 4 ms raised-cosine edge at both ends: a tone that
+starts at full amplitude on a non-zero sample is a step, and a step into
+a class-D amp is a click you hear before the beep.
+
+A pattern is rendered as **one** file, gaps and all, and handed to one
+`aplay`. The gaps then come out of the sample clock instead of out of a
+`sleep` either side of a process launch.
+
+**Arming.** The analogue output powers down while it is idle, and waking
+it costs a fraction of a second and a pop. Neither matters on a warning
+with half a minute either side of it. Both matter on the gun. So the
+clock posts `{"arm": true}` as the last ten seconds open — at eleven
+seconds, a second clear of the ten-second beep — and the five short beeps
+from there are a second apart and keep it awake through to the gun.
+
+Arming never claims the sounder. A signal arriving mid-arm kills the
+silence and plays, because a beep dropped for the sake of a beep that
+made no sound would be a poor trade.
+
+### The gpio path
+
+An **active** piezo buzzer — the kind with its own oscillator, which
+sounds as soon as it has voltage — switched by a MOSFET off a pin. A
+passive one needs a square wave and would need `netd` to bit-bang, which
+a Python process sharing a Pi with a browser has no business promising.
 
 ```
   12 V (fused)  ────────────────►  sounder  +
@@ -658,21 +743,33 @@ through a relay is mostly clicking.
 
 ### Testing the install
 
-From the Pi, without waiting for a start:
+The control panel carries a **SOUNDER** section whenever `netd` reports
+one, with a TEST button and the output it is actually driving beside it —
+`3.5 MM JACK` or `GPIO 17`. The button sounds the **gun**, because the
+question you cannot answer any other way is whether the loudest noise the
+boat makes carries to the back of the cockpit, and that is a thing to
+find out before a start rather than during one. It goes through the same
+`signal()` the real gun does, flash included: a test down a different
+path would be testing the test.
+
+From the Pi, without the panel:
 
 ```bash
 curl -s -X POST -H 'Content-Type: application/json' \
-     -d '{"ms":300}' http://127.0.0.1:8091/buzz
+     -d '{"ms":700}' http://127.0.0.1:8091/buzz
 ```
 
-`{"ok":true}` and a beep means the whole path works. `NO BUZZER` with
-`NO PINCTRL` means neither `pinctrl` nor `raspi-gpio` is installed;
-with `OFF` means `HELM_BUZZER_GPIO` is set to `off`. Silence with
-`{"ok":true}` is wiring.
+`{"ok":true}` and a noise means the whole path works. `NO BUZZER` with
+`OFF` means `HELM_BUZZER_MODE=off`, or the mode fell through to the pin
+and `HELM_BUZZER_GPIO` is `off`; with `NO APLAY` means `audio` was asked
+for and `alsa-utils` is not installed; with `NO PINCTRL` means neither
+`pinctrl` nor `raspi-gpio` is. `{"ok":true}` and silence is wiring — or,
+on the audio path, a volume pot.
 
-`netd` prints what it found at startup, so the log answers the same
+`netd` prints what it settled on at startup, so the log answers the same
 question after a reboot:
 
 ```
-[netd] buzzer: GPIO 17
+[netd] sounder: audio out plughw:CARD=Headphones,DEV=0 (gain PCM)
+[netd] sounder: GPIO 17
 ```

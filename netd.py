@@ -30,7 +30,8 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import json, math, os, re, shutil, subprocess, sys, tempfile, threading, time
+import array, contextlib, json, math, os, re, shutil, subprocess, sys
+import tempfile, threading, time, wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
@@ -727,25 +728,278 @@ def backlight_set(pct):
         return {'ok': False, 'error': str(e)[:80]}
 
 
-# --------------------------------------------------------------- buzzer
+# --------------------------------------------------------------- sounder
 #
-# A countdown you can hear without looking. The panel cannot reach a GPIO
-# pin any more than it can reach the WiFi, so the race timer posts here
-# at each signal and this drives the pin.
+# A countdown you can hear without looking. A browser can reach a GPIO
+# pin no more than it can reach the WiFi, and it cannot pick a sound card
+# either, so the race timer posts here at each signal and this makes the
+# noise.
 #
-# The hardware is an ACTIVE piezo buzzer - the kind with its own
-# oscillator, which sounds as soon as it has voltage - between the pin
-# and a ground pin. A passive one needs a square wave and would need this
-# to bit-bang, which a Python process sharing a Pi with a browser has no
-# business promising. Anything drawing more than a few mA wants a
-# transistor rather than the pin itself.
+# Two ways of making it, because the boat can be wired either way:
 #
-# pinctrl on Bookworm, raspi-gpio on Bullseye. The same words work on
-# both, and both ship with Raspberry Pi OS - so this stays stdlib-only
-# and needs no pip, which is the rule for everything in this file.
-# Shelling out costs a few ms either side of the pulse. Against a 90 ms
-# beep that is inaudible, and it buys not holding a GPIO line open for
-# the life of the process.
+#   audio   a tone out of the Pi's 3.5 mm jack, into a powered amp and a
+#           speaker. The plug IS the connector - keyed by shape, findable
+#           by feel, good for thousands of insertions - which is what you
+#           want on the thing you unplug after every race. It also lets
+#           the gun have a different voice from the warnings, which one
+#           piezo frequency cannot.
+#   gpio    an ACTIVE piezo buzzer - the kind with its own oscillator,
+#           which sounds as soon as it has voltage - switched by a MOSFET
+#           off a pin. A passive one needs a square wave and would need
+#           this to bit-bang, which a Python process sharing a Pi with a
+#           browser has no business promising. No amp and no speaker, but
+#           one tone and a header connection you should not keep pulling.
+#
+# HELM_BUZZER_MODE picks: auto (the default), audio, gpio or off. auto
+# takes audio when there is a player and an output to send it to, and
+# falls back to the pin.
+#
+# Stdlib only, which is the rule for everything in this file: the tones
+# are synthesised with `wave` and handed to aplay, and aplay ships with
+# Raspberry Pi OS. No pip, no sound library, nothing to be missing on a
+# boat with no network.
+
+SOUND_MODE = os.environ.get('HELM_BUZZER_MODE', 'auto').strip().lower()
+if SOUND_MODE not in ('auto', 'audio', 'gpio', 'off'):
+    SOUND_MODE = 'auto'
+
+# ---- the audio path ----
+
+AUDIO_RATE = 44100
+# Two voices, each a fundamental and the relative weight of its
+# harmonics. The warnings sit where the ear is most sensitive and carry
+# a harmonic to cut through wind and hull noise. The gun is low and fat,
+# because the one signal you act on should not sound like the four that
+# precede it - the same reason it does not look like them.
+AUDIO_VOICE = {
+    'warn': (2500.0, (1.0, 0.35)),
+    'gun':  (420.0, (1.0, 0.55, 0.3)),
+}
+# Headroom under full scale. Each voice is normalised against its own
+# true peak, so nothing here can clip on its own; this margin is for the
+# inter-sample peaks the DAC's reconstruction filter puts back.
+AUDIO_PEAK = 0.9 * 32767
+AUDIO_EDGE_MS = 4.0
+_voice_peak = {}
+
+
+def _peak_of(harm):
+    """The true peak of a voice, so the beep can go out at full scale.
+
+    Dividing by the sum of the harmonic weights is the easy way and it
+    throws away several dB - the harmonics do not all crest together.
+    One period at 2048 points, once per voice, and the tone is as loud
+    as 16 bits allow."""
+    p = _voice_peak.get(harm)
+    if p is None:
+        p = max(abs(sum(a * math.sin(2 * math.pi * (k + 1) * i / 2048.0)
+                        for k, a in enumerate(harm)))
+                for i in range(2048))
+        _voice_peak[harm] = p
+    return p
+
+
+def _audio_player():
+    return 'aplay' if shutil.which('aplay') else None
+
+
+def _audio_card():
+    """The card name of the 3.5 mm jack, from `aplay -l`.
+
+    HDMI is a separate card and is usually the default one, so naming
+    the jack is not optional - a beep out of a monitor nobody has the
+    volume up on is the same as no beep."""
+    rc, out, _ = run(['aplay', '-l'], 5)
+    if rc != 0:
+        return None
+    for line in out.splitlines():
+        m = re.match(r'^card \d+: (\S+) \[([^]]*)\]', line)
+        if m and 'headphone' in (m.group(1) + m.group(2)).lower():
+            return m.group(1)
+    return None
+
+
+def _audio_device():
+    d = os.environ.get('HELM_AUDIO_DEV', '').strip()
+    if d:
+        return d
+    c = AUDIO_CARD
+    # plughw: rather than hw:, so ALSA converts rather than refusing a
+    # rate the bcm2835 device will not take. Falling back to `default`
+    # means whatever the system thinks is the output - right on a rig
+    # with PipeWire in front, wrong on a bare one with HDMI first, which
+    # is what HELM_AUDIO_DEV is for.
+    return ('plughw:CARD=%s,DEV=0' % c) if c else 'default'
+
+
+AUDIO_CARD = _audio_card() if (SOUND_MODE in ('auto', 'audio')
+                               and _audio_player()) else None
+AUDIO_DEV = _audio_device()
+_snd = {'lock': threading.Lock(), 'busy': False, 'dir': None,
+        'wav': {}, 'armed': 0.0, 'arm_proc': None}
+
+
+def _audio_gain():
+    """Wind the output up, once, at startup.
+
+    A fresh Raspberry Pi OS comes up with the analogue output well below
+    full, and the amp's pot cannot make up what the Pi never sent. The
+    control is named differently across cards, so try the usual ones and
+    keep the first that takes it."""
+    if not AUDIO_CARD or not shutil.which('amixer'):
+        return None
+    try:
+        pct = max(10, min(100, int(os.environ.get('HELM_AUDIO_VOL', '100'))))
+    except ValueError:
+        pct = 100
+    for ctl in ('PCM', 'Headphone', 'Master', 'Speaker', 'Digital'):
+        rc, _, _ = run(['amixer', '-q', '-c', AUDIO_CARD,
+                        'sset', ctl, '%d%%' % pct], 5)
+        if rc == 0:
+            return ctl
+    return None
+
+
+def _frames(kind, ms):
+    """One beep, as 16-bit stereo frames."""
+    hz, harm = AUDIO_VOICE.get(kind, AUDIO_VOICE['warn'])
+    n = max(1, int(AUDIO_RATE * ms / 1000.0))
+    # A raised-cosine edge at each end. A tone that starts at full
+    # amplitude on a non-zero sample is a step, and a step into a
+    # class-D amp is a click you hear before the beep - which on the
+    # gun is worse than being four milliseconds late.
+    edge = max(1, min(int(AUDIO_RATE * AUDIO_EDGE_MS / 1000.0), n // 2))
+    pk = _peak_of(harm)
+    buf = array.array('h', bytes(4 * n))
+    for i in range(n):
+        t = i / float(AUDIO_RATE)
+        v = 0.0
+        for k, a in enumerate(harm):
+            v += a * math.sin(2 * math.pi * hz * (k + 1) * t)
+        g = i / float(edge) if i < edge else \
+            (n - i) / float(edge) if i > n - edge else 1.0
+        s = int(AUDIO_PEAK * (v / pk) * (0.5 - 0.5 * math.cos(math.pi * g)))
+        buf[2 * i] = s
+        buf[2 * i + 1] = s
+    return buf
+
+
+def _quiet_frames(ms):
+    return array.array('h', bytes(4 * max(1, int(AUDIO_RATE * ms / 1000.0))))
+
+
+def _audio_dir():
+    if not _snd['dir']:
+        _snd['dir'] = tempfile.mkdtemp(prefix='helm-sound-')
+    return _snd['dir']
+
+
+def _audio_wav(kind, ms, n, gap):
+    """The WHOLE pattern as one file, gaps included.
+
+    One aplay for the pattern rather than one per beep: the gaps come
+    out of the sample clock instead of out of time.sleep() either side
+    of a process launch, so three short beeps are three short beeps and
+    not an approximation of them."""
+    key = (kind, ms, n, gap)
+    p = _snd['wav'].get(key)
+    if p and os.path.exists(p):
+        return p
+    # 'quiet' is the arming file: the DAC opens, nothing is heard.
+    beep = _quiet_frames(ms) if kind == 'quiet' else _frames(kind, ms)
+    buf = array.array('h')
+    for i in range(n):
+        if i:
+            buf.extend(_quiet_frames(gap))
+        buf.extend(beep)
+    if sys.byteorder == 'big':
+        buf.byteswap()                  # WAV frames are little-endian
+    path = os.path.join(_audio_dir(), '%s-%d-%d-%d.wav' % (kind, ms, n, gap))
+    tmp = path + '.part'
+    with contextlib.closing(wave.open(tmp, 'wb')) as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(AUDIO_RATE)
+        w.writeframes(buf.tobytes())
+    os.replace(tmp, path)               # so a half-written file is never played
+    _snd['wav'][key] = path
+    return path
+
+
+def _audio_run(path, timeout, arm=False):
+    """aplay, held by its handle rather than shelled and forgotten.
+
+    The handle is the whole reason: an arming silence has to be cut
+    short the instant a real signal wants the output, and on an
+    exclusive ALSA device the second aplay would simply be refused."""
+    try:
+        p = subprocess.Popen(['aplay', '-q', '-D', AUDIO_DEV, path],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+    except OSError:
+        return
+    if arm:
+        _snd['arm_proc'] = p
+    try:
+        p.wait(timeout)
+    except subprocess.TimeoutExpired:
+        p.kill()
+    finally:
+        if arm and _snd.get('arm_proc') is p:
+            _snd['arm_proc'] = None
+
+
+def _arm_stop():
+    """Silence yields to sound. Waited for, not just killed: the beep
+    behind it is about to open the same device."""
+    p = _snd.get('arm_proc')
+    if p is None:
+        return
+    try:
+        if p.poll() is None:
+            p.kill()
+        p.wait(1)
+    except Exception:
+        pass
+    _snd['arm_proc'] = None
+
+
+def audio_arm():
+    """Wake the DAC, without making a sound.
+
+    The bcm2835 analogue output powers down when it is idle, and opening
+    it again costs a couple of hundred milliseconds and a pop. Neither
+    matters on a warning beep. Both matter on the opening signal of a
+    sequence and on the gun - so the timer arms the output when the
+    countdown starts and again as the last ten seconds open, and the
+    five short beeps from there keep it awake to the gun.
+
+    It never claims the sounder: a signal arriving mid-arm kills the
+    silence and plays, because a beep dropped for the sake of a beep
+    that made no sound would be a poor trade."""
+    now = time.time()
+    if _snd['busy'] or now - _snd['armed'] < 2.0:
+        return {'ok': True, 'armed': False}
+    _snd['armed'] = now
+    threading.Thread(target=_audio_run,
+                     args=(_audio_wav('quiet', 120, 1, 0), 3),
+                     kwargs={'arm': True}, daemon=True).start()
+    return {'ok': True, 'armed': True}
+
+
+def audio_warm():
+    """Render the three signals up front.
+
+    Synthesising 700 ms of tone is tens of milliseconds of Python, and
+    the first thing that would ever ask for it is a gun. Off the startup
+    thread, where nobody is listening."""
+    for kind, ms in (('warn', 90), ('warn', 260), ('gun', 700), ('quiet', 150)):
+        try:
+            _audio_wav(kind, ms, 1, 0)
+        except Exception:
+            return
+
+# ---- the gpio path ----
 
 BUZZER_CMD = os.environ.get('HELM_BUZZER_CMD', '')   # a test rig overrides this
 # A bare MOSFET sounds on a HIGH gate, which is the default here. Some
@@ -770,24 +1024,19 @@ def _buzzer_pin():
 
 
 BUZZER_GPIO = _buzzer_pin()
-_buz = {'lock': threading.Lock(), 'busy': False}
 
 
 def buzzer_tool():
+    # pinctrl on Bookworm, raspi-gpio on Bullseye. The same words work on
+    # both, and both ship with Raspberry Pi OS. Shelling out costs a few
+    # ms either side of the pulse; against a 90 ms beep that is inaudible,
+    # and it buys not holding a GPIO line open for the life of the process.
     if BUZZER_CMD:
         return BUZZER_CMD.split()
     for t in ('pinctrl', 'raspi-gpio'):
         if shutil.which(t):
             return [t]
     return None
-
-
-def buzzer_status():
-    if BUZZER_GPIO is None:
-        return {'available': False, 'why': 'OFF'}
-    if not buzzer_tool():
-        return {'available': False, 'why': 'NO PINCTRL'}
-    return {'available': True, 'gpio': BUZZER_GPIO}
 
 
 def _buz_set(on):
@@ -806,7 +1055,8 @@ def buzz_quiet():
     the first beep switches it off. A pull-down resistor on the gate is
     the real fix and belongs in the wiring; this is the belt to that
     brace, and it costs one subprocess at startup."""
-    _buz_set(False)
+    if SOUND['mode'] == 'gpio':
+        _buz_set(False)
 
 
 def _buz_run(ms, n, gap):
@@ -822,13 +1072,61 @@ def _buz_run(ms, n, gap):
             _buz_set(False)
     finally:
         _buz_set(False)
-        _buz['busy'] = False
 
 
-def buzz(ms, n, gap):
+# ---- what the two of them share ----
+
+def _resolve_mode():
+    """Which path this Pi actually has, decided once.
+
+    Asked on every /status otherwise, and each answer is two subprocess
+    launches - on a poll that runs all day."""
+    if SOUND_MODE == 'off':
+        return {'mode': 'off', 'why': 'OFF'}
+    if SOUND_MODE in ('auto', 'audio'):
+        if _audio_player():
+            return {'mode': 'audio', 'device': AUDIO_DEV, 'card': AUDIO_CARD}
+        if SOUND_MODE == 'audio':
+            return {'mode': 'off', 'why': 'NO APLAY'}
+    if BUZZER_GPIO is None:
+        return {'mode': 'off', 'why': 'OFF'}
+    if not buzzer_tool():
+        return {'mode': 'off', 'why': 'NO PINCTRL'}
+    return {'mode': 'gpio', 'gpio': BUZZER_GPIO}
+
+
+SOUND = _resolve_mode()
+
+
+def buzzer_status():
+    if SOUND['mode'] == 'off':
+        return {'available': False, 'mode': 'off',
+                'why': SOUND.get('why', 'OFF')}
+    return dict(SOUND, available=True)
+
+
+def _sound_run(kind, ms, n, gap):
+    try:
+        if SOUND['mode'] == 'audio':
+            _arm_stop()
+            # A generous ceiling on a pattern that cannot last more than
+            # about eight seconds: aplay should finish long before, and a
+            # wedged one must not hold the sounder busy for the race.
+            _audio_run(_audio_wav(kind, ms, n, gap),
+                       (ms * n + gap * n) / 1000.0 + 5)
+        else:
+            _buz_run(ms, n, gap)
+    finally:
+        _snd['busy'] = False
+
+
+def buzz(ms, n, gap, kind=None, arm=False):
     st = buzzer_status()
     if not st.get('available'):
         return dict(st, ok=False, error='NO BUZZER')
+    if arm:
+        return dict(audio_arm() if SOUND['mode'] == 'audio'
+                    else {'ok': True, 'armed': False}, mode=SOUND['mode'])
     try:
         ms = int(90 if ms is None else ms)
         n = int(1 if n is None else n)
@@ -840,12 +1138,17 @@ def buzz(ms, n, gap):
     ms = max(10, min(2000, ms))
     n = max(1, min(6, n))
     gap = max(20, min(1000, gap))
-    with _buz['lock']:
-        if _buz['busy']:
+    # The caller names the voice; length decides it for anyone who does
+    # not, so a bare {"ms": 700} from a curl still sounds like a gun.
+    if kind not in ('warn', 'gun'):
+        kind = 'gun' if ms >= 500 else 'warn'
+    with _snd['lock']:
+        if _snd['busy']:
             return {'ok': False, 'error': 'BUSY'}
-        _buz['busy'] = True
-    threading.Thread(target=_buz_run, args=(ms, n, gap), daemon=True).start()
-    return {'ok': True, 'ms': ms, 'n': n}
+        _snd['busy'] = True
+    threading.Thread(target=_sound_run, args=(kind, ms, n, gap),
+                     daemon=True).start()
+    return {'ok': True, 'ms': ms, 'n': n, 'kind': kind, 'mode': SOUND['mode']}
 
 
 # ---------------------------------------------------------------- power
@@ -1613,7 +1916,8 @@ def route(path, body):
     if path == '/gpx/save':
         return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
     if path == '/buzz':
-        return buzz(body.get('ms'), body.get('n'), body.get('gap'))
+        return buzz(body.get('ms'), body.get('n'), body.get('gap'),
+                    body.get('kind'), body.get('arm'))
     if path == '/backlight':
         if 'pct' in body:
             return dict(backlight_set(body['pct']), **backlight_status())
@@ -1747,10 +2051,16 @@ if __name__ == '__main__':
           'NO - ' + ('present but not writable' if backlight_dev() else 'none exposed')),
           flush=True)
     _bz = buzzer_status()
-    print('[netd] buzzer: %s' % ('GPIO %d%s' % (_bz['gpio'],
-          ' (inverted)' if BUZZER_INVERT else '')
-          if _bz.get('available') else 'NO - ' + _bz.get('why', '')), flush=True)
+    if not _bz.get('available'):
+        _sd = 'NO - ' + _bz.get('why', '')
+    elif _bz['mode'] == 'audio':
+        _sd = 'audio out %s (gain %s)' % (_bz['device'], _audio_gain() or 'AS SET')
+    else:
+        _sd = 'GPIO %d%s' % (_bz['gpio'], ' (inverted)' if BUZZER_INVERT else '')
+    print('[netd] sounder: %s' % _sd, flush=True)
     buzz_quiet()
+    if _bz.get('mode') == 'audio':
+        threading.Thread(target=audio_warm, daemon=True).start()
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     # Fill the caches before anyone asks. The kiosk often comes up at the
     # same moment this does, and the first /status is the one that decides

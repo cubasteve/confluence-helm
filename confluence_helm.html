@@ -471,6 +471,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bar-scale{display:flex;justify-content:space-between;font-size:19px;
   font-weight:600;color:var(--label);letter-spacing:.1em}
 .steprow{display:flex;align-items:center;gap:14px;margin-top:6px}
+/* The sounder row. The button keeps its own width rather than taking the
+   row, because what it says beside itself - the output it is actually
+   driving - is the half of the answer a silent test does not give. */
+.sndrow{display:flex;align-items:center;gap:20px;margin-top:6px}
+.sndrow .mini.wide{flex:none;width:210px}
+.sndwho{font-size:19px;font-weight:600;letter-spacing:.08em;color:var(--label);
+  text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .numv{min-width:118px;text-align:center;font-size:40px;font-weight:600;color:var(--accent)}
 .numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
   letter-spacing:.12em}
@@ -1747,6 +1754,18 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="mini" id="d-up">+</button>
         <button class="mini wide" id="r-units">FT / M</button>
       </div>
+    </div>
+
+    <!-- Shown only when netd reports a sounder. Its whole job is the
+         question you cannot answer from the cockpit any other way: is
+         the thing plugged in, and can I hear it from back there. So it
+         sounds the GUN, not a polite chirp - the loudest noise the boat
+         will make, which is the one you need to have heard before a
+         start rather than during one. -->
+    <div class="slab sndslab" id="snd-slab" style="display:none">Sounder</div>
+    <div class="sndrow" id="snd-row" style="display:none">
+      <button class="mini wide" id="snd-test">TEST</button>
+      <span class="sndwho" id="snd-who"></span>
     </div>
 
     <!-- deploy.sh rewrites __BUILD__ with the commit it published. A panel
@@ -3334,9 +3353,14 @@ const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
    long signal at each whole minute, a short one at thirty, twenty and
    ten seconds and through the last five, a long one at the gun - so it
    needs no learning by anyone who has raced.
-   The buzzer is posted to netd and forgotten: no helper, or no buzzer
+   The sounder is posted to netd and forgotten: no helper, or nothing
    wired, and the flash is simply all there is. */
 const SIG={short:90, long:260, gun:700};
+/* netd has two voices, not three. The gun is low and fat and the
+   warnings are high and sharp - the ear's half of the distinction the
+   green flash makes for the eye, and the half that reaches the foredeck.
+   A rig wired to a piezo on a GPIO pin has one tone and ignores this. */
+const SIG_VOICE={short:'warn', long:'warn', gun:'gun'};
 function sigFor(s){
   if(s<=0)     return 'gun';
   if(s%60===0) return 'long';
@@ -3356,11 +3380,24 @@ function flash(kind){
 function signal(kind){
   flash(kind);
   if(ssOn) ssStop();               /* a countdown is not idle time */
-  netApi('/buzz', {ms:SIG[kind]});
+  netApi('/buzz', {ms:SIG[kind], kind:SIG_VOICE[kind]});
 }
 /* The second we last signalled on, so a schedule second cannot fire
    twice while the clock sits on it for eight ticks. */
 let sigSec=null;
+/* Wired to a speaker, the Pi's analogue output powers down while it is
+   idle, and waking it costs a fraction of a second and a pop. Neither
+   matters on a warning with half a minute either side of it. Both
+   matter on the gun - so the clock arms the output as the last ten
+   seconds open, and the five short beeps carry it from there.
+   Posted and forgotten like the beeps. netd rate-limits it, drops it
+   for a real signal, and has nothing to arm on a rig wired to a pin. */
+let sigArmed=false;
+function sigArm(){
+  if(sigArmed) return;
+  sigArmed=true;
+  netApi('/buzz',{arm:true});
+}
 
 /* +/- only mean anything before the gun */
 function nudge(sec){
@@ -3379,9 +3416,16 @@ function tick(){
   const el=$('timer');
   let ms, lbl, dim=false, hot=false;
 
-  if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; sigSec=null; }
+  if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; sigSec=null;
+                       sigArmed=false; }
   else if(tState==='countdown'){
     ms=tEnd-Date.now();
+    /* At eleven seconds: a second clear of the ten-second beep, which
+       is the last one with a gap ahead of it long enough for the output
+       to have gone back to sleep. From there the five short beeps are a
+       second apart and keep it awake through to the gun. Once per
+       start - the flag is cleared back in idle. */
+    if(ms<11000) sigArm();
     if(ms<=0){ signal('gun'); sigSec=null;
                startRace(); ms=0; }        // gun goes, race clock runs
     else{
@@ -4168,11 +4212,13 @@ async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
         pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{}, spo=(j&&j.spotify)||{},
-        fit=(j&&j.fit)||{};
+        fit=(j&&j.fit)||{}, snd=(j&&j.buzzer)||{};
   /* Every key the helper sends has to be named here or it is not in
      NET.st at all - and a `need` path pointing at a missing branch is
      silently false, so the tile just never appears. */
-  NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo,fit:fit};
+  NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo,fit:fit,
+          buzzer:snd};
+  paintSounder(snd);
   /* The save button's visibility is decided by what the helper just said, and
      the music page may well have painted before this answer arrived -
      pollMusic and this race at boot and either can win. Without this the
@@ -4478,6 +4524,29 @@ function netForget(i){
   if(NET.kind==='wifi') netDo('FORGETTING '+r.ssid,'/wifi/forget',{ssid:r.ssid});
   else                  netDo('UNPAIRING '+r.name,'/bt/forget',{mac:r.mac});
 }
+
+/* ---- the sounder row ----
+   Hidden outright when netd has nothing to sound, rather than shown
+   greyed: a control that cannot work is worse than no control, and on
+   a phone loading this page over boat WiFi there is no helper at all. */
+function paintSounder(st){
+  const on=!!(st&&st.available);
+  $('snd-slab').style.display=on?'':'none';
+  $('snd-row') .style.display=on?'':'none';
+  if(!on) return;
+  /* Which output, in the words you would need to go and check it: the
+     jack's ALSA name, or the pin number. plughw:CARD=Headphones,DEV=0
+     is netd's business and not a thing to read on a round screen. */
+  $('snd-who').textContent = st.mode==='audio'
+    ? '3.5 MM JACK'
+    : ('GPIO ' + st.gpio);
+}
+
+$('snd-test').addEventListener('click',()=>{
+  /* The real thing, flash and all - signal() is what the gun calls. A
+     test that took a different path would be testing the test. */
+  signal('gun');
+});
 
 $('conn-sec').addEventListener('click',e=>{
   const btn=e.target.closest('.cbtn'); if(!btn) return;
