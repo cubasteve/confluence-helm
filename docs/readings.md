@@ -291,6 +291,10 @@ one the result belongs to:
 | no | `CAP22NS` | 200 |
 | yes | `CAP22` | 201 |
 
+The card shows the name and the class — `STEVEN ARTAU · G4 · CAP22NS`.
+The racer id is what the API wants and nothing you would recognise at a
+glance, so it stays out of sight.
+
 Then it asks the second question — `SUBMIT TO VUDU WAVE?` — with the
 entry and the elapsed time on the card, so what you are agreeing to is
 in front of you. Two answers:

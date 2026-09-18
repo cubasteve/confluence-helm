@@ -3423,7 +3423,11 @@ $('held-yes').addEventListener('click', e=>{
    precisely to stop something like this posting on your behalf.       */
 const SCORE_URL='https://vuduwave.com/lmsa';
 /* From the club's roster - GET /api/racers, which is public. Both are
-   this boat; the answer to the question picks between them. */
+   this boat and this skipper; the answer to the question picks between
+   them. The id is what the API wants and nothing you would recognise at
+   a glance, so the card says the name and the class and keeps the
+   number to itself. */
+const SCORE_ME='STEVEN ARTAU';
 const SCORE_CLASS={ yes:{id:201, cls:'CAP22'},      /* spinnaker    */
                     no: {id:200, cls:'CAP22NS'} };  /* white sails  */
 
@@ -3461,7 +3465,7 @@ function scoreKite(kind){
   if(!((NET.st&&NET.st.score)||{}).available) return scoreShow();
   scoreStep='send';
   $('sc-t').textContent='SUBMIT TO VUDU WAVE?';
-  $('sc-s').textContent='G4 · '+r.cls+' · RACER '+r.id;
+  $('sc-s').textContent=SCORE_ME+' · G4 · '+r.cls;
   $('sc-big').textContent=scoreTime(tFinal);
   scoreFace('told');
 }
@@ -3471,7 +3475,7 @@ function scoreKite(kind){
 function scoreShow(why){
   scoreStep='done';
   $('sc-t').textContent = why ? 'NOT SENT · TYPE IT IN' : ('G4 · '+scorePick.cls);
-  $('sc-s').textContent = why || ('RACER '+scorePick.id+' · '+scorePick.cls);
+  $('sc-s').textContent = why || (SCORE_ME+' · '+scorePick.cls);
   $('sc-time').textContent=scoreTime(tFinal);
   const m=qrMatrix(SCORE_URL);
   $('sc-qr').innerHTML = m ? qrSvg(m) : '';
