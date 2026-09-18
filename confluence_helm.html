@@ -1293,6 +1293,29 @@ a.lib-row{text-decoration:none;color:inherit}
    wondering whether the race went anywhere. */
 #held.done .held-b{display:none}
 
+/* --- the score card ---
+   The held card's shell, the same slot, one at a time - see scoreAsk.
+   Two faces: the question, then the answer with a code on it. */
+#score{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);
+  width:660px;border-radius:22px;padding:22px 26px;background:var(--chip);
+  border:2px solid var(--stbd);color:var(--ink);text-align:center;
+  display:none;z-index:57}
+#score.on{display:block}
+#score      .sc-row{display:none}
+#score.told .sc-row{display:flex}
+#score.told #sc-ask{display:none}
+.sc-row{align-items:center;gap:22px;margin-top:18px;text-align:left}
+/* White, and its own quiet zone. A code drawn in the theme's ink on the
+   theme's chip is a code no camera reads at night. */
+.sc-qr{background:#fff;padding:9px;border-radius:12px;line-height:0;flex:none}
+.sc-qr svg{display:block;width:142px;height:142px;shape-rendering:crispEdges}
+.sc-main{flex:1;min-width:0}
+/* The number you are about to type, in the format the field wants. */
+.sc-time{font-size:62px;font-weight:600;color:var(--accent);letter-spacing:.01em;
+  line-height:1.05}
+.sc-url{font-size:17px;font-weight:600;letter-spacing:.08em;color:var(--label);
+  margin-top:6px}
+
 /* --- touch lock ---
    Paints nothing over the instruments. Its whole job is to swallow
    pointer events; the badge is a hint, not a screen. */
@@ -2060,6 +2083,29 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div class="held-b">
     <button class="mini wide" id="held-no">DISCARD</button>
     <button class="mini wide" id="held-yes">SAVE TO RACES</button>
+  </div>
+</div>
+
+<!-- The score, at the finish. The club's results go into Vudu Wave, and
+     the two things you need to type are the elapsed time in ITS format
+     and the class you sailed - which depends on whether the kite went
+     up, because that is a different handicap and a different entry. So
+     ask the one question, then show the answer and a code to point a
+     phone at. -->
+<div id="score">
+  <div class="held-t" id="sc-t">SPINNAKER?</div>
+  <div class="held-s" id="sc-s"></div>
+  <div class="held-b" id="sc-ask">
+    <button class="mini wide" id="sc-no">NO</button>
+    <button class="mini wide" id="sc-yes">YES</button>
+  </div>
+  <div class="sc-row" id="sc-row">
+    <div class="sc-qr" id="sc-qr"></div>
+    <div class="sc-main">
+      <div class="sc-time" id="sc-time"></div>
+      <div class="sc-url">VUDUWAVE.COM/LMSA</div>
+    </div>
+    <button class="mini" id="sc-done">✓</button>
   </div>
 </div>
 
@@ -3137,8 +3183,8 @@ function lineWatch(){
          With no course set next and length are both 0, so a rig that
          does not use marks is untouched. */
       if(COURSE.next>=COURSE.marks.length){
-        tFinal=at-tGun; tState='finished'; lineArmed=false;
-        trkSave(); paintTrack(); console.log('[helm] finished on the line');
+        tFinal=at-tGun; lineArmed=false;
+        raceFinished(); console.log('[helm] finished on the line');
       }
       else console.log('[helm] crossed the line,',
                        COURSE.marks.length-COURSE.next, 'mark(s) to go');
@@ -3299,7 +3345,11 @@ let heldT=null;
 function heldPaint(){
   const el=$('held'); if(!el) return;
   clearTimeout(heldT);
-  el.classList.toggle('on', !!HELD);
+  /* One card in that slot. The score is the newer question and the held
+     race is not going anywhere - it is on disk, and scoreHide calls
+     back here the moment the score card is answered. */
+  const sc=$('score') && $('score').classList.contains('on');
+  el.classList.toggle('on', !!HELD && !sc);
   el.classList.remove('done');
   if(!HELD) return;
   const st=trackStats(HELD.pts), d=new Date(HELD.pts[0].t),
@@ -3346,6 +3396,66 @@ $('held-yes').addEventListener('click', e=>{
            heldT=setTimeout(heldPaint, 2600); }
   });
 });
+/* ---- the score -------------------------------------------------------
+   Sailing the race is half the job; the other half is typing the result
+   into the club's scorer, which is Vudu Wave. Two things have to go in:
+   the elapsed time in the format that field accepts, and WHICH of this
+   boat's entries it belongs to - same hull, two classes, because flying
+   the kite is a different handicap and a different racer_id.
+
+   Only the helm knows the time and only you know whether the kite went
+   up, so it asks the one question it cannot answer and then puts both
+   halves on the glass with a code to open the page with. It does not
+   submit: the entry form carries an invisible captcha, which is there
+   precisely to stop something like this posting on your behalf.       */
+const SCORE_URL='https://vuduwave.com/lmsa';
+/* From the club's roster - GET /api/racers, which is public. Both are
+   this boat; the answer to the question picks between them. */
+const SCORE_CLASS={ yes:{id:201, cls:'CAP22'},      /* spinnaker    */
+                    no: {id:200, cls:'CAP22NS'} };  /* white sails  */
+
+/* The field takes hh.mm.ss, h.mm.ss, mm.ss, m.ss or DNF/DNS/DSQ, with a
+   dot, colon or comma between. One shape is emitted rather than the
+   shortest that fits - 0.48.15 is as valid as 48.15 and there is no
+   boundary to get wrong. */
+function scoreTime(ms){
+  const t=Math.max(0,Math.round(ms/1000)), p=n=>String(n).padStart(2,'0');
+  return Math.floor(t/3600)+'.'+p(Math.floor(t/60)%60)+'.'+p(t%60);
+}
+
+function scoreAsk(){
+  if(!$('score') || !(tFinal>0)) return;
+  $('score').classList.remove('told');
+  $('score').classList.add('on');
+  $('sc-t').textContent='SPINNAKER?';
+  $('sc-s').textContent='WHICH ENTRY THIS RESULT GOES TO';
+  heldPaint();                     /* stand the held card down meanwhile */
+}
+
+function scoreTell(kind){
+  const r=SCORE_CLASS[kind]; if(!r) return;
+  $('sc-t').textContent='G4 · '+r.cls;
+  $('sc-s').textContent='RACER '+r.id+(kind==='yes'?' · SPINNAKER':' · WHITE SAILS');
+  $('sc-time').textContent=scoreTime(tFinal);
+  const m=qrMatrix(SCORE_URL);
+  $('sc-qr').innerHTML = m ? qrSvg(m) : '';
+  $('sc-qr').style.display = m ? '' : 'none';
+  $('score').classList.add('told');
+}
+
+function scoreHide(){
+  const el=$('score'); if(!el) return;
+  el.classList.remove('on','told');
+  heldPaint();                     /* whatever was waiting behind it */
+}
+
+['score','sc-yes','sc-no','sc-done'].forEach(id=>
+  $(id).addEventListener('pointerdown', e=>gClaim(e)));
+$('score')  .addEventListener('click', e=>e.stopPropagation());
+$('sc-yes') .addEventListener('click', e=>{ e.stopPropagation(); scoreTell('yes'); });
+$('sc-no')  .addEventListener('click', e=>{ e.stopPropagation(); scoreTell('no');  });
+$('sc-done').addEventListener('click', e=>{ e.stopPropagation(); scoreHide(); });
+
 /* Armed, like the library's bin: a mis-tap here throws away a race. */
 $('held-no').addEventListener('click', e=>{
   e.stopPropagation();
@@ -3510,11 +3620,19 @@ const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false;
   /* This track now carries a race, which is what makes it worth a
      question at the next countdown rather than a silent clear. */
   trkRaced=true; try{ localStorage.setItem(RACED_KEY,'1'); }catch(e){} };
-const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
+/* Both ways in - the double tap and the line - differ only in where
+   tFinal comes from: the tap takes now, the line takes the instant it
+   interpolated between two fixes. Everything after that is the same, so
+   it lives here rather than in two copies that drift. */
+function raceFinished(){
+  tState='finished';
   trkSave();                     /* reports its own failure - see trkSave */
-  paintTrack(); };
+  paintTrack();
+  scoreAsk();
+}
+const finishRace =()=>{ tFinal=Date.now()-tGun; raceFinished(); };
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
-  lineWas=null; lineArmed=false; rpOpen=false; markNear=false; };
+  lineWas=null; lineArmed=false; rpOpen=false; markNear=false; scoreHide(); };
 
 /* ---- the countdown's signals -------------------------------------------
    One schedule, two ways of taking it: the face flashes, and a buzzer

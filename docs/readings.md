@@ -276,6 +276,37 @@ than losing it. A start that was aborted before the gun is cleared
 without a question — there is no race in it to ask about — and so is one
 already sitting in `RACES`.
 
+**The score, at the finish.** Sailing the race is half the job; the
+other half is typing the result into the club's scorer at
+[vuduwave.com/lmsa](https://vuduwave.com/lmsa). Two things have to go
+in, and the helm knows exactly one of them.
+
+So it asks the other. A card comes up at the finish with a single
+question — `SPINNAKER?` — because the boat has two entries in the
+roster, the same hull under two handicaps, and the answer decides which
+one the result belongs to:
+
+| Answer | Class | Racer |
+|---|---|---|
+| no | `CAP22NS` | 200 |
+| yes | `CAP22` | 201 |
+
+Answer it and the card shows what to type: the elapsed time already in
+the format that field accepts, the entry it goes to, and a QR code that
+opens the page on your phone. The form takes `hh.mm.ss`, `h.mm.ss`,
+`mm.ss`, `m.ss` or `DNF`/`DNS`/`DSQ`; the card always writes the long
+one, so `0.48.15` rather than `48.15` — both are valid and there is no
+boundary to get wrong.
+
+It asks every time rather than remembering the last answer, and a new
+finish asks again rather than assuming.
+
+**It does not submit for you.** The entry form carries an invisible
+CAPTCHA, which is there precisely to stop something like this posting
+on your behalf, and getting round it is not the helm's business. The
+card's job is to remove the arithmetic and the lookup, so what is left
+is a phone, a number already on the screen, and one tap.
+
 **Rounding** advances the course on its own, and it does not trust the
 mark's position to the metre. It watches for the two things that mean
 you went round something: you got as close as you were going to get,
