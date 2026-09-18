@@ -31,7 +31,7 @@
 # network, so it has no business needing pip.
 
 import array, contextlib, json, math, os, re, shutil, subprocess, sys
-import tempfile, threading, time, wave
+import tempfile, threading, time, urllib.error, urllib.request, wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
@@ -1151,6 +1151,105 @@ def buzz(ms, n, gap, kind=None, arm=False):
     return {'ok': True, 'ms': ms, 'n': n, 'kind': kind, 'mode': SOUND['mode']}
 
 
+# ----------------------------------------------------------------- score
+#
+# The club scores on Vudu Wave, and the browser cannot post to it. The
+# helm page is served off the Pi and vuduwave.com sends no CORS headers,
+# so a fetch from the page is refused before it leaves the machine. Same
+# reason the radios are here: a browser cannot do it, so this does.
+#
+# ONE race, ONE submission, and only ever because a hand on the glass
+# said yes. The two limits below are not for this boat's benefit - it is
+# somebody else's small server, and a bug in a loop here would be a bug
+# in a loop pointed at them.
+#
+# No captcha token is sent. The entry form runs an invisible reCAPTCHA;
+# this has no way to produce a token and no business faking one, so the
+# request goes without and whatever the server answers comes back
+# verbatim for the panel to show. Refused is refused - the helm then
+# falls back to putting the number on the glass for you to type.
+
+SCORE_URL = os.environ.get('HELM_SCORE_URL',
+                           'https://vuduwave.com/api/add_scratch_time')
+def _score_secs(name, dflt):
+    """The limits, with a way for a test rig to shorten them. Nothing on
+    the boat ever sets these: ten seconds between submissions is not a
+    number anyone needs tuned, and shortening it on the water would only
+    ever point more requests at somebody else's server."""
+    try:
+        return max(0.0, float(os.environ.get(name, '') or dflt))
+    except ValueError:
+        return dflt
+
+
+SCORE_GAP = _score_secs('HELM_SCORE_GAP', 10.0)    # between any two
+SCORE_SAME = _score_secs('HELM_SCORE_SAME', 300.0)  # before the SAME one again
+_score = {'lock': threading.Lock(), 'at': 0.0, 'last': None, 'last_at': 0.0}
+
+# The formats that form accepts, which are worth checking here rather
+# than finding out from a round trip: hh.mm.ss, h.mm.ss, mm.ss, m.ss,
+# or a retirement. Dot, colon or comma between.
+SCORE_TIME = re.compile(r'^(?:[0-9]+[,:.][0-5][0-9][,:.][0-5][0-9]'
+                        r'|[0-5]?[0-9][,:.][0-5][0-9]'
+                        r'|[Dd][NnSs][FfSsQq])$')
+
+
+def score_status():
+    return {'available': bool(SCORE_URL), 'url': SCORE_URL}
+
+
+def score_submit(racer_id, elapsed):
+    st = score_status()
+    if not st['available']:
+        return {'ok': False, 'error': 'SCORING OFF'}
+    try:
+        rid = int(racer_id)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'BAD RACER'}
+    elapsed = str(elapsed or '').strip()
+    if not SCORE_TIME.match(elapsed):
+        return {'ok': False, 'error': 'BAD TIME'}
+
+    now = time.time()
+    with _score['lock']:
+        if now - _score['at'] < SCORE_GAP:
+            return {'ok': False, 'error': 'TOO SOON'}
+        if (_score['last'] == (rid, elapsed)
+                and now - _score['last_at'] < SCORE_SAME):
+            # The form says an incorrect time can be resubmitted, so this
+            # is a guard against a double tap and not against you.
+            return {'ok': False, 'error': 'ALREADY SENT'}
+        _score['at'] = now
+
+    body = json.dumps({'elapsed_time': elapsed, 'racer_id': rid}).encode()
+    req = urllib.request.Request(
+        SCORE_URL, data=body, method='POST',
+        headers={'Content-Type': 'application/json',
+                 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            code, raw = r.status, r.read(8192).decode('utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        code, raw = e.code, e.read(8192).decode('utf-8', 'replace')
+    except Exception as e:
+        # No marina wifi, no DNS, no internet off the hotspot. Not a
+        # failure worth dressing up: the fallback is a QR and a phone.
+        return {'ok': False, 'error': str(e)[:80]}
+
+    msg = ''
+    try:
+        msg = str((json.loads(raw) or {}).get('message', ''))
+    except Exception:
+        msg = raw[:120]
+    ok = 200 <= code < 300
+    if ok:
+        with _score['lock']:
+            _score['last'] = (rid, elapsed)
+            _score['last_at'] = time.time()
+    return {'ok': ok, 'status': code, 'message': msg[:160],
+            'error': '' if ok else ('REFUSED ' + str(code))}
+
+
 # ---------------------------------------------------------------- power
 #
 # Shutting down properly matters more on a boat than on a desk. Cutting
@@ -1889,7 +1988,7 @@ def route(path, body):
         return {'ok': True, 'wifi': wifi_status(), 'bt': bt_status(),
                 'display': display_status(), 'power': power_status(),
                 'backlight': backlight_status(), 'buzzer': buzzer_status(),
-                'gpx': gpx_status(),
+                'score': score_status(), 'gpx': gpx_status(),
                 'spotify': spotify_status(), 'fit': fit_status()}
 
     if path == '/spotify/like':
@@ -1915,6 +2014,8 @@ def route(path, body):
         return gpx_delete((body or {}).get('name'))
     if path == '/gpx/save':
         return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
+    if path == '/score':
+        return score_submit(body.get('racer_id'), body.get('elapsed_time'))
     if path == '/buzz':
         return buzz(body.get('ms'), body.get('n'), body.get('gap'),
                     body.get('kind'), body.get('arm'))

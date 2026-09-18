@@ -291,21 +291,63 @@ one the result belongs to:
 | no | `CAP22NS` | 200 |
 | yes | `CAP22` | 201 |
 
-Answer it and the card shows what to type: the elapsed time already in
-the format that field accepts, the entry it goes to, and a QR code that
-opens the page on your phone. The form takes `hh.mm.ss`, `h.mm.ss`,
-`mm.ss`, `m.ss` or `DNF`/`DNS`/`DSQ`; the card always writes the long
-one, so `0.48.15` rather than `48.15` — both are valid and there is no
-boundary to get wrong.
+Then it asks the second question — `SUBMIT TO VUDU WAVE?` — with the
+entry and the elapsed time on the card, so what you are agreeing to is
+in front of you. Two answers:
 
-It asks every time rather than remembering the last answer, and a new
+- **YES** posts it and shows what the server said back. The reply is
+  the server's own words rather than ours: it is the only thing that
+  knows whether the result went in.
+- **NO** shows what to type instead — the time, the entry, and a QR
+  code that opens the page on your phone.
+
+A refusal or a dead connection lands on the same face as NO, with the
+reason on it. The number still has to get in either way, and a card
+that claimed success on a request that failed would be worse than no
+card at all.
+
+The time is written the way the form wants it. It takes `hh.mm.ss`,
+`h.mm.ss`, `mm.ss`, `m.ss` or `DNF`/`DNS`/`DSQ`, with a dot, colon or
+comma between; the card always writes the long one, so `0.48.15` rather
+than `48.15` — both are valid and there is no boundary to get wrong.
+
+It asks both questions every time rather than remembering, and a new
 finish asks again rather than assuming.
 
-**It does not submit for you.** The entry form carries an invisible
-CAPTCHA, which is there precisely to stop something like this posting
-on your behalf, and getting round it is not the helm's business. The
-card's job is to remove the arithmetic and the lookup, so what is left
-is a phone, a number already on the screen, and one tap.
+### How the submission goes
+
+Through `netd`, not from the page. The helm is served off the Pi and
+vuduwave.com sends no CORS headers, so a `fetch` from the page is
+refused before it leaves the machine — the same reason the radios live
+in the helper. On a phone loading this page there is no helper, so the
+second question is not asked at all and the card goes straight to
+telling you what to type.
+
+```
+POST /score  {"racer_id": 201, "elapsed_time": "1.04.15"}
+```
+
+`netd` checks the time against the same formats the form does — an
+unsendable string should not cost a round trip — and forwards it to
+`/api/add_scratch_time`, which is what the page's own Add Result button
+posts to. `HELM_SCORE_URL` points it somewhere else; empty switches
+scoring off and the card stops offering it.
+
+Two limits, neither of them for this boat's benefit. It is somebody
+else's small server, and a bug in a loop here would be a bug in a loop
+pointed at them:
+
+- **Ten seconds** between any two submissions.
+- **Five minutes** before the *same* racer and time may go again, so a
+  double tap cannot post twice. A corrected time goes straight through
+  — the form itself says an incorrect time can be resubmitted.
+
+**No CAPTCHA token is sent.** The entry form runs an invisible
+reCAPTCHA — you would never see it, which is the point of an invisible
+one — and `netd` has no way to produce a token and no business faking
+one. So the request goes without, and whatever the server answers comes
+back for the card to show. If it is refused, it is refused, and the
+fallback is the number on the glass and a phone.
 
 **Rounding** advances the course on its own, and it does not trust the
 mark's position to the metre. It watches for the two things that mean

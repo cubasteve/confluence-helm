@@ -1301,9 +1301,18 @@ a.lib-row{text-decoration:none;color:inherit}
   border:2px solid var(--stbd);color:var(--ink);text-align:center;
   display:none;z-index:57}
 #score.on{display:block}
-#score      .sc-row{display:none}
-#score.told .sc-row{display:flex}
-#score.told #sc-ask{display:none}
+/* Four faces on one card, because a race finishing should not open a
+   stack of things: which entry, then send it or not, then either what
+   the server said or what to type yourself. */
+#score .sc-big,#score .sc-row,#score #sc-end{display:none}
+#score.told .sc-big{display:block}
+#score.qr   .sc-row{display:flex}
+#score.qr   #sc-ask,#score.sent #sc-ask{display:none}
+#score.sent #sc-end{display:flex}
+#score.busy #sc-end{display:none}      /* nothing to press mid-flight */
+/* The number itself, while you decide whether to send it. */
+.sc-big{font-size:62px;font-weight:600;color:var(--accent);margin-top:14px;
+  letter-spacing:.01em;line-height:1.05}
 .sc-row{align-items:center;gap:22px;margin-top:18px;text-align:left}
 /* White, and its own quiet zone. A code drawn in the theme's ink on the
    theme's chip is a code no camera reads at night. */
@@ -2095,9 +2104,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <div id="score">
   <div class="held-t" id="sc-t">SPINNAKER?</div>
   <div class="held-s" id="sc-s"></div>
+  <div class="sc-big" id="sc-big"></div>
   <div class="held-b" id="sc-ask">
     <button class="mini wide" id="sc-no">NO</button>
     <button class="mini wide" id="sc-yes">YES</button>
+  </div>
+  <div class="held-b" id="sc-end">
+    <button class="mini wide" id="sc-close">DONE</button>
   </div>
   <div class="sc-row" id="sc-row">
     <div class="sc-qr" id="sc-qr"></div>
@@ -3423,38 +3436,84 @@ function scoreTime(ms){
   return Math.floor(t/3600)+'.'+p(Math.floor(t/60)%60)+'.'+p(t%60);
 }
 
+/* Which of the two questions the NO/YES pair is answering. One pair of
+   buttons rather than two cards: a race finishing should not open a
+   stack of things on the glass. */
+let scoreStep='kite', scorePick=null;
+const scoreFace=f=>{ $('score').className='on'+(f?' '+f:''); };
+
 function scoreAsk(){
   if(!$('score') || !(tFinal>0)) return;
-  $('score').classList.remove('told');
-  $('score').classList.add('on');
+  scoreStep='kite'; scorePick=null;
+  $('score').className='on';
   $('sc-t').textContent='SPINNAKER?';
   $('sc-s').textContent='WHICH ENTRY THIS RESULT GOES TO';
   heldPaint();                     /* stand the held card down meanwhile */
 }
 
-function scoreTell(kind){
+/* The answer picks the entry, and then the second question - unless
+   there is no helper to send with, in which case there is nothing to
+   ask and the card goes straight to telling you what to type. On a
+   phone loading this same page that is always the way it goes. */
+function scoreKite(kind){
   const r=SCORE_CLASS[kind]; if(!r) return;
-  $('sc-t').textContent='G4 · '+r.cls;
-  $('sc-s').textContent='RACER '+r.id+(kind==='yes'?' · SPINNAKER':' · WHITE SAILS');
+  scorePick=r;
+  if(!((NET.st&&NET.st.score)||{}).available) return scoreShow();
+  scoreStep='send';
+  $('sc-t').textContent='SUBMIT TO VUDU WAVE?';
+  $('sc-s').textContent='G4 · '+r.cls+' · RACER '+r.id;
+  $('sc-big').textContent=scoreTime(tFinal);
+  scoreFace('told');
+}
+
+/* What to type, and a code to open the page with. Where NO goes, and
+   where a refusal goes - the number still has to get in either way. */
+function scoreShow(why){
+  scoreStep='done';
+  $('sc-t').textContent = why ? 'NOT SENT · TYPE IT IN' : ('G4 · '+scorePick.cls);
+  $('sc-s').textContent = why || ('RACER '+scorePick.id+' · '+scorePick.cls);
   $('sc-time').textContent=scoreTime(tFinal);
   const m=qrMatrix(SCORE_URL);
   $('sc-qr').innerHTML = m ? qrSvg(m) : '';
   $('sc-qr').style.display = m ? '' : 'none';
-  $('score').classList.add('told');
+  scoreFace('qr');
+}
+
+async function scoreSend(){
+  const r=scorePick, t=scoreTime(tFinal);
+  scoreStep='busy';
+  $('sc-t').textContent='SENDING…';
+  $('sc-s').textContent='G4 · '+r.cls+' · '+t;
+  scoreFace('sent'); $('score').classList.add('busy');
+  const j=await netApi('/score',{racer_id:r.id, elapsed_time:t});
+  if(j && j.ok){
+    scoreStep='done';
+    $('sc-t').textContent='SENT · '+t;
+    /* The server's own words. It is the only thing that actually knows
+       the result went in, so it says so rather than us. */
+    $('sc-s').textContent=(j.message||('G4 · '+r.cls)).toUpperCase().slice(0,72);
+    scoreFace('sent');
+    return;
+  }
+  scoreShow(((j&&(j.error||j.message))||'NO HELPER').toUpperCase().slice(0,64));
 }
 
 function scoreHide(){
   const el=$('score'); if(!el) return;
-  el.classList.remove('on','told');
+  el.className='';
+  scoreStep='kite';
   heldPaint();                     /* whatever was waiting behind it */
 }
 
-['score','sc-yes','sc-no','sc-done'].forEach(id=>
+['score','sc-yes','sc-no','sc-done','sc-close'].forEach(id=>
   $(id).addEventListener('pointerdown', e=>gClaim(e)));
-$('score')  .addEventListener('click', e=>e.stopPropagation());
-$('sc-yes') .addEventListener('click', e=>{ e.stopPropagation(); scoreTell('yes'); });
-$('sc-no')  .addEventListener('click', e=>{ e.stopPropagation(); scoreTell('no');  });
-$('sc-done').addEventListener('click', e=>{ e.stopPropagation(); scoreHide(); });
+$('score')   .addEventListener('click', e=>e.stopPropagation());
+$('sc-yes')  .addEventListener('click', e=>{ e.stopPropagation();
+  if(scoreStep==='kite') scoreKite('yes'); else if(scoreStep==='send') scoreSend(); });
+$('sc-no')   .addEventListener('click', e=>{ e.stopPropagation();
+  if(scoreStep==='kite') scoreKite('no');  else if(scoreStep==='send') scoreShow(); });
+$('sc-done') .addEventListener('click', e=>{ e.stopPropagation(); scoreHide(); });
+$('sc-close').addEventListener('click', e=>{ e.stopPropagation(); scoreHide(); });
 
 /* Armed, like the library's bin: a mis-tap here throws away a race. */
 $('held-no').addEventListener('click', e=>{
@@ -4499,12 +4558,12 @@ async function netStatus(){
   const j=await netApi('/status');
   const w=(j&&j.wifi)||{}, b=(j&&j.bt)||{}, dsp=(j&&j.display)||{},
         pwr=(j&&j.power)||{}, gpx=(j&&j.gpx)||{}, spo=(j&&j.spotify)||{},
-        fit=(j&&j.fit)||{}, snd=(j&&j.buzzer)||{};
+        fit=(j&&j.fit)||{}, snd=(j&&j.buzzer)||{}, scr=(j&&j.score)||{};
   /* Every key the helper sends has to be named here or it is not in
      NET.st at all - and a `need` path pointing at a missing branch is
      silently false, so the tile just never appears. */
   NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo,fit:fit,
-          buzzer:snd};
+          buzzer:snd, score:scr};
   paintSounder(snd);
   /* The save button's visibility is decided by what the helper just said, and
      the music page may well have painted before this answer arrived -
