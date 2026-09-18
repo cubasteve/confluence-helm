@@ -79,7 +79,8 @@ body{display:flex;align-items:center;justify-content:center}
    hostage. That could not happen while the panel was reachable only
    from the dial; making it reachable everywhere is what exposed it.
      1  pages      2  dots      20 control panel   30 screensaver
-     55 alerts     70 lock      80 hold ring       99 fps readout   */
+     55 alerts     56 held race 70 lock            80 hold ring
+     99 fps readout                                                  */
 #svg,#music,#tmap{z-index:1}
 #dots{position:absolute;left:0;right:0;bottom:64px;display:flex;
   justify-content:center;gap:18px;pointer-events:none;z-index:2}
@@ -1273,6 +1274,25 @@ a.lib-row{text-decoration:none;color:inherit}
 .al-s{font-size:19px;font-weight:600;letter-spacing:.14em;color:var(--label);
   margin-top:6px;text-transform:uppercase}
 
+/* --- the held race ---
+   The alert's shape, at the other end of the face. It has to be at the
+   bottom: it goes up as a countdown starts, and the clock it would
+   otherwise cover is the one thing on the face you are watching. */
+#held{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);
+  width:660px;border-radius:22px;padding:22px 26px;background:var(--chip);
+  border:2px solid var(--accent);color:var(--ink);text-align:center;
+  display:none;z-index:56}
+#held.on{display:block}
+.held-t{font-size:28px;font-weight:600;letter-spacing:.04em}
+.held-s{font-size:19px;font-weight:600;letter-spacing:.12em;color:var(--label);
+  margin-top:7px;text-transform:uppercase}
+.held-b{display:flex;gap:16px;margin-top:20px}
+.held-b .mini.wide{height:74px;font-size:21px;letter-spacing:.1em}
+/* Answered: the buttons go and the card says what happened, then it
+   leaves by itself. A card that vanished on the tap would leave you
+   wondering whether the race went anywhere. */
+#held.done .held-b{display:none}
+
 /* --- touch lock ---
    Paints nothing over the instruments. Its whole job is to swallow
    pointer events; the badge is a hint, not a screen. */
@@ -2030,6 +2050,18 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <!-- One surface for anything that needs attention. Sits above the
      panels and the screensaver so an alarm is visible wherever you are. -->
 <div id="alert"><div class="al-t" id="al-t"></div><div class="al-s" id="al-s"></div></div>
+
+<!-- The race the last countdown left behind. Raised by startCountdown
+     once the new one is already running: the clock behind this card
+     is ticking, so answering it is never on the critical path. -->
+<div id="held">
+  <div class="held-t" id="held-t">LAST RACE NOT SAVED</div>
+  <div class="held-s" id="held-s"></div>
+  <div class="held-b">
+    <button class="mini wide" id="held-no">DISCARD</button>
+    <button class="mini wide" id="held-yes">SAVE TO RACES</button>
+  </div>
+</div>
 
 <div id="veil"></div>
 <div id="fps"></div>
@@ -3097,8 +3129,20 @@ function lineWatch(){
   /* the instant: where between the two fixes the distance passed zero */
   const f=was.d/(was.d-d), at=was.t+(now-was.t)*f;
   if(tState==='racing'){
-    if(lineArmed){ tFinal=at-tGun; tState='finished'; lineArmed=false;
-      trkSave(); paintTrack(); console.log('[helm] finished on the line'); }
+    if(lineArmed){
+      /* The course has to be sailed first. Plenty of club courses bring
+         you back through the line on a leg - a windward-leeward with the
+         line mid-course does it every lap - and without this the race
+         ended on lap one, armed and crossing exactly as a finish looks.
+         With no course set next and length are both 0, so a rig that
+         does not use marks is untouched. */
+      if(COURSE.next>=COURSE.marks.length){
+        tFinal=at-tGun; tState='finished'; lineArmed=false;
+        trkSave(); paintTrack(); console.log('[helm] finished on the line');
+      }
+      else console.log('[helm] crossed the line,',
+                       COURSE.marks.length-COURSE.next, 'mark(s) to go');
+    }
     /* The LATEST crossing inside the window is the start: a boat that
        crosses, is recalled, comes back and crosses again started the
        second time. */
@@ -3193,9 +3237,127 @@ setInterval(()=>{
 function trackClear(){
   TRK=[]; localStorage.removeItem('racetrack');
   trkDirty=false; trkSaveBad=false;      /* the space is back */
+  trkRaced=false;   try{ localStorage.removeItem(RACED_KEY); }catch(e){}
+  trkSavedMark='';  try{ localStorage.removeItem(SAVED_KEY); }catch(e){}
   MAPVIEW=null; tileKey='';
   paintTrack(); drawMap(TRK);
 }
+
+/* ---- what the last race left on the track ----------------------------
+   A countdown has to start on an empty track. It did not: nothing
+   cleared TRK between races, so the second was appended to the first
+   and the record saved afterwards covered both - distance, elapsed and
+   average all wrong, and wrong quietly.
+
+   Clearing outright would be worse, because a race nobody had saved yet
+   would go without a word. So the old one is HELD instead: the new
+   track starts clean, the old one waits under a key of its own, and a
+   card goes up asking what to do with it. Either answer ends the hold.
+   Until one comes the race is still on disk, and a reload puts the card
+   back up rather than losing it.
+
+   Only a track that carried a race is held. An aborted start - a
+   countdown, a reset, a countdown again - never reached the gun, and
+   there is nothing in it worth a question.                            */
+const RACED_KEY='racetrack.raced', SAVED_KEY='racetrack.saved',
+      HELD_KEY ='racetrack.held';
+let trkRaced     = localStorage.getItem(RACED_KEY)==='1';
+let trkSavedMark = localStorage.getItem(SAVED_KEY)||'';
+let HELD=null;
+try{ HELD=JSON.parse(localStorage.getItem(HELD_KEY)||'null'); }catch(e){ HELD=null; }
+if(HELD && !(HELD.pts && HELD.pts.length>=2)) HELD=null;
+
+/* Which track went into RACES, and how much of it. The length as well
+   as the start time, because saving, sailing on and saving again are
+   two records and the first does not cover the second. */
+const trkMark = pts => pts.length ? pts[0].t+':'+pts.length : '';
+function trkMarkSaved(){
+  trkSavedMark=trkMark(TRK);
+  try{ localStorage.setItem(SAVED_KEY, trkSavedMark); }catch(e){}
+}
+
+function heldDrop(){
+  HELD=null;
+  try{ localStorage.removeItem(HELD_KEY); }catch(e){}
+}
+
+/* Set the old race aside and hand the new one a clean track. Called by
+   startCountdown, and nowhere else. */
+function heldTake(){
+  if(trkRaced && TRK.length>=2 && trkMark(TRK)!==trkSavedMark){
+    HELD={pts:TRK.slice()};
+    try{ localStorage.setItem(HELD_KEY, JSON.stringify(HELD)); }
+    catch(e){ /* No room for two copies of a long track. The hold stays
+                 in memory: a reload would lose it, but the card is up
+                 now and one tap puts it in RACES, which has room. */ }
+  }
+  if(TRK.length) trackClear();          /* which clears the two flags too */
+  heldPaint();
+}
+
+let heldT=null;
+function heldPaint(){
+  const el=$('held'); if(!el) return;
+  clearTimeout(heldT);
+  el.classList.toggle('on', !!HELD);
+  el.classList.remove('done');
+  if(!HELD) return;
+  const st=trackStats(HELD.pts), d=new Date(HELD.pts[0].t),
+        pad=x=>String(x).padStart(2,'0');
+  $('held-t').textContent='LAST RACE NOT SAVED';
+  $('held-s').textContent=st.nm.toFixed(2)+' NM · '+durTxt(st.secs)
+                         +' · '+pad(d.getHours())+':'+pad(d.getMinutes());
+  heldDisarm();
+}
+/* Answered: the buttons go and the card says what happened before it
+   leaves. One that vanished on the tap would leave you wondering
+   whether the race went anywhere. */
+function heldMsg(txt, go){
+  const el=$('held');
+  clearTimeout(heldT);
+  el.classList.add('on','done');
+  $('held-t').textContent=txt;
+  $('held-s').textContent='';
+  if(go) heldT=setTimeout(()=>el.classList.remove('on','done'), 2600);
+}
+
+let heldArm=null;
+function heldDisarm(){
+  clearTimeout(heldArm);
+  const b=$('held-no'); if(!b) return;
+  b.classList.remove('danger'); b.textContent='DISCARD';
+}
+
+/* Arrows rather than gClaim itself: gClaim is a const further down the
+   file and naming it here would read it before it is initialised. */
+['held','held-yes','held-no'].forEach(id=>
+  $(id).addEventListener('pointerdown', e=>gClaim(e)));
+$('held').addEventListener('click', e=>e.stopPropagation());
+
+$('held-yes').addEventListener('click', e=>{
+  e.stopPropagation();
+  const pts=HELD&&HELD.pts; if(!pts) return;
+  heldMsg('SAVING…', false);
+  saveRace(pts).then(rec=>{
+    if(rec){ heldDrop(); heldMsg('SAVED · '+rec.name, true); }
+    /* Still held. The card comes back with its buttons, because the
+       race is still there and still needs an answer. */
+    else { heldMsg('SAVE FAILED · STILL HELD', false);
+           heldT=setTimeout(heldPaint, 2600); }
+  });
+});
+/* Armed, like the library's bin: a mis-tap here throws away a race. */
+$('held-no').addEventListener('click', e=>{
+  e.stopPropagation();
+  const b=$('held-no');
+  if(!b.classList.contains('danger')){
+    b.classList.add('danger'); b.textContent='SURE?';
+    clearTimeout(heldArm); heldArm=setTimeout(heldDisarm, 6000);
+    return;
+  }
+  clearTimeout(heldArm);
+  heldDrop(); heldMsg('DISCARDED', true);
+});
 
 function buildGPX(pts){
   pts=pts||TRK;
@@ -3337,10 +3499,17 @@ let tLeft=CFG.startMins*60000;            // countdown remaining while idle
    its pill, the gun or a reset. */
 let rpOpen=false;
 const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; rpOpen=true;
-  COURSE.next=0; courseReset(); courseSave(); };
+  COURSE.next=0; courseReset(); courseSave();
+  /* Last, with the clock already running. The card this may raise is
+     never on the critical path of a start. */
+  heldTake(); };
 const syncMinute =()=>{ if(tState!=='countdown')return;
     tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
-const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false; rpOpen=false; markNear=false; };
+const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false;
+  rpOpen=false; markNear=false;
+  /* This track now carries a race, which is what makes it worth a
+     question at the next countdown rather than a silent clear. */
+  trkRaced=true; try{ localStorage.setItem(RACED_KEY,'1'); }catch(e){} };
 const finishRace =()=>{ tFinal=Date.now()-tGun; tState='finished';
   trkSave();                     /* reports its own failure - see trkSave */
   paintTrack(); };
@@ -6521,7 +6690,12 @@ function trackStats(pts){
   let d=0;
   for(let i=1;i<pts.length;i++)
     d+=Math.hypot((pts[i].lo-pts[i-1].lo)*kx,(pts[i].la-pts[i-1].la)*ky);
-  const secs=(pts[pts.length-1].t-pts[0].t)/1000, nm=d/1852;
+  /* Floored at zero. The Pi has no RTC, so it boots on a stale clock and
+     NTP or the GPS corrects it mid-track - and a correction that goes
+     backwards made a negative elapsed, a negative average, and a card
+     on the face reading -684:-43. The distance is measured from the
+     fixes and is unaffected either way. */
+  const secs=Math.max(0,(pts[pts.length-1].t-pts[0].t)/1000), nm=d/1852;
   const sp=pts.map(p=>(p.s||0)*MS_TO_KT);
   return {nm, secs, avg:secs>0?nm/(secs/3600):0, max:Math.max(...sp,0)};
 }
@@ -6837,9 +7011,12 @@ function flashTrk(msg){
   clearTimeout(el._t); el._t=setTimeout(paintTrack,2200);
 }
 
-function saveRace(){
-  const pts=TRK;
-  if(pts.length<2) return flashTrk('nothing to save');
+/* Saves the live track, or whichever one it is handed - the held race
+   goes in by the same door. Returns the record, or null, so the caller
+   can say what happened. */
+function saveRace(pts){
+  pts=pts||TRK;
+  if(pts.length<2){ flashTrk('nothing to save'); return Promise.resolve(null); }
   const t0=pts[0].t, st=trackStats(pts);
   const d=new Date(t0), pad=x=>String(x).padStart(2,'0');
   const rec={ id:'r'+t0, t:t0,
@@ -6847,8 +7024,12 @@ function saveRace(){
         +` ${pad(d.getHours())}:${pad(d.getMinutes())}`,
     n:pts.length, nm:+st.nm.toFixed(3), secs:Math.round(st.secs),
     avg:+st.avg.toFixed(2), max:+st.max.toFixed(2), pts:pts.slice() };
-  dbPut(rec).then(()=>flashTrk('saved · '+rec.name))
-            .catch(()=>flashTrk('save failed'));
+  return dbPut(rec).then(()=>{
+    /* Marked only when it was the live track: this is what stops the
+       next countdown asking about a race already in RACES. */
+    if(pts===TRK) trkMarkSaved();
+    flashTrk('saved · '+rec.name); return rec;
+  }).catch(()=>{ flashTrk('save failed'); return null; });
 }
 
 /* ------------------------------------------------------------------
@@ -9637,6 +9818,10 @@ prefsLoad(); applyDim(CFG.dim,false); layoutPages();
    panel with the demo saved off came up with the pill lit until the next
    toggle. */
 drawDemo();
+/* A race held from a previous session, for the same reason: HELD is
+   read at its declaration, but the card it draws is markup, and this
+   is where persisted state gets painted. */
+heldPaint();
 /* Warm the radio state at boot rather than on first panel open. The call
    costs a handful of subprocesses on the Pi, and doing it here means it
    has long finished by the time anyone swipes up - instead of the panel

@@ -225,6 +225,57 @@ in view under it. What fills the other slots depends on where you are:
 | `BRG` | true bearing to it, to steer against COG; double-tap it to move the course on by hand, for a mark rounded wide or one the committee dropped |
 | `MARK 2 OF 5 · TO PORT` | which mark, which side to leave it, and what follows it: `RUM · THEN GOSLING`; on the last leg, `FINISH LINE` |
 
+**The line starts and finishes the race on its own.** Crossing it is
+watched on every fix, and the instant is interpolated between the two
+fixes either side of it rather than rounded to the one that noticed.
+Both fixes have to fall between the ends, so a boat rounding outside
+the pin is not a crossing, and a jump of more than 80 m between them is
+discarded as a bad fix rather than believed.
+
+*The start.* The latest crossing within three minutes of the gun moves
+the start time to it — a boat that crosses, is recalled, comes back and
+crosses again started the second time.
+
+*The finish* needs two more things to be true:
+
+- **You have been clear of the line since the gun** — more than 60 m
+  from it at some point. Without this the gun itself would finish the
+  race.
+- **The course is sailed.** Every mark rounded, or no course set at all.
+  Plenty of club courses bring you back through the line on a leg, and a
+  windward-leeward with the line mid-course does it every lap; before
+  this the race ended on lap one, armed and crossing exactly as a finish
+  looks. With no course set there is nothing to wait for and nothing
+  changes.
+
+Either way a double tap on the clock does it by hand, and nothing
+automatic happens at all until you have started the countdown yourself.
+The finish needs a true wind direction to know which side of the line is
+which — from the wind instrument, or from `COG` and `TWA` — so a rig
+with no wind data finishes by hand.
+
+**The track between races.** Recording runs from the countdown to the
+finish, so the approach to the line is in it too. The finish writes the
+track to browser storage, which is the buffer that survives a reload —
+it is **not** a saved race. Putting one in `RACES`, with its distance,
+elapsed, average and maximum, is the save button on the track map, and
+it stays deliberate.
+
+A new countdown has to start on an empty track, or the next race saved
+covers two and its numbers are nonsense. So the old one is set aside
+rather than cleared: the new track starts clean, and a card comes up on
+the face saying `LAST RACE NOT SAVED` with what it is holding —
+`6.46 NM · 59:59 · 02:09` — and two answers, `SAVE TO RACES` and
+`DISCARD`. Discard is armed and asks `SURE?` on the first tap, because a
+mis-tap there throws away a race.
+
+The card goes up *after* the countdown is already running, so answering
+it is never on the critical path of a start, and it waits as long as it
+takes: the held race is on disk, and a reload puts the card back rather
+than losing it. A start that was aborted before the gun is cleared
+without a question — there is no race in it to ask about — and so is one
+already sitting in `RACES`.
+
 **Rounding** advances the course on its own, and it does not trust the
 mark's position to the metre. It watches for the two things that mean
 you went round something: you got as close as you were going to get,
