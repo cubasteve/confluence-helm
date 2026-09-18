@@ -391,6 +391,12 @@ the lights are. The side shows on the map by the mark's number and in
 the box as you close on it. With no course set, the only leg is back
 to the line.
 
+**Every row carries its position**, under the name, as a chart writes
+it — `CB 12 · 28 49.284N · 081 16.508W`. The hemisphere is a letter and
+the degrees are padded, because nothing on a list read at arm's length
+should turn on spotting a minus sign at 16 px. The club's marks and
+your own read the same way.
+
 ![Adding a mark of your own](img/course-form.png)
 
 **Marks of your own.** `+ MARK` on the sheet's bar opens a form: a name,
@@ -412,7 +418,18 @@ readings like the club's — and adds it to the course.
 is the numbers, set by tapping. It puts a grip on every row: drag it
 onto another row and the mark takes that place in the list, the club's
 marks included, and the order is kept. A mark of your own gets a ✕ in
-edit mode, which removes it from the course and from storage. `DONE`
+edit mode, which removes it from the course and from storage.
+
+**Tapping a mark of your own in edit mode opens it**, with its name and
+position already in the fields, and `SAVE` writes over it rather than
+making a second one. Outside edit mode a tap still adds and removes
+marks from the course, which is what that tap is for the rest of the
+time. The club's marks do not open: they are compiled into the page and
+there is nowhere to save them to — their position is on the row either
+way, which is the half of this that everything needs.
+
+Before this a position could be written and never read back, so a mark
+typed slightly wrong could only be deleted and entered again. `DONE`
 leaves edit mode. Target speed and the wind
 shift are not in the box: they are readings, picked into any slot like
 the rest.

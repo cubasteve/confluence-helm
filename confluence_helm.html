@@ -764,7 +764,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row.in .seq{background:var(--accent);border-color:var(--accent);color:#fff}
 .course-row.next .seq{box-shadow:0 0 0 4px var(--accent) inset}
 .course-row .lib-main b{display:block;font-size:26px;font-weight:600;color:var(--ink)}
-.course-row .lib-main span{font-size:17px;letter-spacing:.1em;color:var(--label)}
+/* The position rides on this line, so the tracking comes off it: a
+   course sheet that read its own marks back and then clipped them would
+   have been no better than one that never showed them. */
+.course-row .lib-main span{font-size:16px;letter-spacing:.03em;color:var(--label);
+  white-space:nowrap}
 .course-row.line .lib-main b{color:var(--label)}
 /* which side to leave a mark: P red, S green, the way the lights are.
    Only on rows that are in the course. */
@@ -2018,7 +2022,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <!-- The course sheet: the club's marks, tapped into an order. Same
        sheet as the library, same rows. -->
   <div id="t-course">
-    <div class="t-title">Course</div>
+    <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="lib-list" id="course-list"></div>
       <div class="course-bar">
@@ -2030,7 +2034,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     </div>
     <!-- A mark of your own: a name, and a position typed or taken from
          the GPS. Degrees and decimal minutes as the sailing instructions
-         give them, or decimal degrees; west and south are minus. -->
+         give them, or decimal degrees; west and south are minus.
+         Opened empty by + MARK, and prefilled by a tap on one of your
+         own marks while EDIT is on - a position that could only be
+         written and never read back was a position you had to delete
+         and retype to correct. -->
     <div id="course-add" style="display:none">
       <div class="mk-row"><div class="mk-field on" data-f="name"><span class="mk-lbl">NAME</span><span class="mk-val" id="mk-name"></span><span class="pw-cur"></span></div></div>
       <div class="mk-row">
@@ -7496,7 +7504,8 @@ function renderCourse(){
     const del = courseEdit&&isUserMark(m.id) ? '<div class="del">✕</div>' : '';
     const grip= courseEdit ? '<div class="grip">≡</div>' : '';
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
-      <div class="lib-main"><b>${esc(m.name)}</b><span>${esc(m.hdr)}</span></div>${side}${del}${grip}</div>`; };
+      <div class="lib-main"><b>${esc(m.name)}</b>
+      <span>${esc(m.hdr)} · ${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
   box.innerHTML=lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
@@ -7513,6 +7522,15 @@ $('course-list').addEventListener('click',e=>{
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
   if(e.target.closest('.del')){ markDelete(row.dataset.mark); return; }
   if(e.target.closest('.grip')) return;
+  /* EDIT is the mode for changing the LIST rather than the course, so a
+     tap in it opens the mark instead of adding or removing it. Only
+     your own: the club's are compiled in and there is nothing to save
+     them to - their position is on the row either way, which is the
+     half of this that everything needs. */
+  if(courseEdit && !row.dataset.line){
+    if(isUserMark(row.dataset.mark)) mkOpen(row.dataset.mark);
+    return;
+  }
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
   else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
@@ -7572,6 +7590,14 @@ addEventListener('pointermove',e=>{
 let MK=null;
 const MARK_MAX_NM=100;
 const fmtDM=v=>{ const s=v<0?'-':'', a=Math.abs(v), d=Math.floor(a); return s+d+' '+((a-d)*60).toFixed(3); };
+/* The same number as fmtDM, written the way a chart writes it: the
+   hemisphere as a letter and the degrees padded, because nothing on a
+   list read at arm's length should turn on spotting a minus sign at
+   17 px. fmtDM keeps the minus - it feeds the form, where a minus is
+   what you type. */
+const hemDM=(v,pos,neg,w)=>{ const a=Math.abs(v), d=Math.floor(a);
+  return String(d).padStart(w,'0')+' '+((a-d)*60).toFixed(3)+(v<0?neg:pos); };
+const posDM=m=>hemDM(m.lat,'N','S',2)+' · '+hemDM(m.lon,'E','W',3);
 function parseDM(str){
   /* As a chart writes it - 28°49.03'N, 081°16.17'W - or as a minus:
      a hemisphere letter at either end sets the sign, S and W negative,
@@ -7588,12 +7614,21 @@ function parseDM(str){
   if(parts.length>2) return null;
   return sign*v;
 }
-function mkOpen(){
-  MK={f:'name', name:'', lat:'', lon:'', kb:{shift:false,sym:false,num:false}};
+/* Empty from + MARK, prefilled from a mark of your own. fmtDM rather
+   than posDM: this is the field you type into, and a minus is what the
+   keyboard has. */
+function mkOpen(id){
+  const m=id?markOf(id):null;
+  MK={f:'name', id:m?m.id:null,
+      name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
+      kb:{shift:false,sym:false,num:false}};
+  $('course-title').textContent = m ? 'Edit mark' : 'New mark';
   $('course-main').style.display='none'; $('course-add').style.display='';
   $('mk-msg').textContent=''; mkPaint();
 }
-function mkClose(){ MK=null; $('course-add').style.display='none'; $('course-main').style.display=''; renderCourse(); }
+function mkClose(){ MK=null; $('course-add').style.display='none';
+  $('course-title').textContent='Course';
+  $('course-main').style.display=''; renderCourse(); }
 function mkPaint(){
   if(!MK) return;
   $('mk-name').textContent=MK.name; $('mk-lat').textContent=MK.lat; $('mk-lon').textContent=MK.lon;
@@ -7624,6 +7659,16 @@ function mkSave(){
   if(nm>MARK_MAX_NM){ $('mk-msg').textContent=Math.round(nm).toLocaleString()+' NM AWAY · WEST IS MINUS?'; return; }
   let name=MK.name.trim().toUpperCase().replace(/\s+/g,' ');
   if(!name) name='MARK '+(USER_MARKS.length+1);
+  /* Editing one you already had. USER_MARKS and MARKS hold the SAME
+     object - MARKS is built by pushing these in at boot - so writing
+     through it is the whole update, course and map included. Gone from
+     under us (deleted in another sheet) falls through and makes a new
+     one, which is better than losing what you just typed. */
+  if(MK.id){
+    const m=USER_MARKS.find(x=>x.id===MK.id);
+    if(m){ m.name=name; m.hdr=name.slice(0,8).trim(); m.lat=lat; m.lon=lon;
+           marksSave(); mkClose(); drawMap(shownTrack()); return; }
+  }
   const id='u'+Date.now().toString(36);
   const m={id, name, hdr:name.slice(0,8).trim(), lat, lon};
   USER_MARKS.push(m); marksSave(); MARKS.push(m);
@@ -7651,7 +7696,7 @@ $('course-add').addEventListener('click',e=>{
   if(a==='del')  { MK[MK.f]=MK[MK.f].slice(0,-1); return mkPaint(); }
   if(a==='go')   return mkSave();
 });
-$('course-add-btn').addEventListener('click',mkOpen);
+$('course-add-btn').addEventListener('click',()=>mkOpen());
 $('mk-here').addEventListener('click',mkHere);
 $('mk-save').addEventListener('click',mkSave);
 $('mk-cancel').addEventListener('click',mkClose);
