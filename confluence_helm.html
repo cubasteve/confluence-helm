@@ -764,9 +764,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row.in .seq{background:var(--accent);border-color:var(--accent);color:#fff}
 .course-row.next .seq{box-shadow:0 0 0 4px var(--accent) inset}
 .course-row .lib-main b{display:block;font-size:26px;font-weight:600;color:var(--ink)}
-/* The position rides on this line, so the tracking comes off it: a
-   course sheet that read its own marks back and then clipped them would
-   have been no better than one that never showed them. */
+/* The position rides on this line - and only the position. The short
+   name was here too and said ROMANCE FLAG twice in two type sizes. It
+   still does its job in the cell headers and the RACE box, which is
+   where a name has to be short. */
 .course-row .lib-main span{font-size:16px;letter-spacing:.03em;color:var(--label);
   white-space:nowrap}
 .course-row.line .lib-main b{color:var(--label)}
@@ -7505,7 +7506,7 @@ function renderCourse(){
     const grip= courseEdit ? '<div class="grip">≡</div>' : '';
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b>
-      <span>${esc(m.hdr)} · ${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
+      <span>${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
   box.innerHTML=lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }

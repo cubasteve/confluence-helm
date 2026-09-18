@@ -392,10 +392,12 @@ the box as you close on it. With no course set, the only leg is back
 to the line.
 
 **Every row carries its position**, under the name, as a chart writes
-it — `CB 12 · 28 49.284N · 081 16.508W`. The hemisphere is a letter and
-the degrees are padded, because nothing on a list read at arm's length
+it — `28 49.284N · 081 16.508W`. The hemisphere is a letter and the
+degrees are padded, because nothing on a list read at arm's length
 should turn on spotting a minus sign at 16 px. The club's marks and
-your own read the same way.
+your own read the same way. The short name is not repeated here — the
+name is directly above it — but it is still what the cell headers and
+the RACE box use, where a name has to fit in 32 px.
 
 ![Adding a mark of your own](img/course-form.png)
 
