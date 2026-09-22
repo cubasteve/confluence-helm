@@ -258,6 +258,30 @@ The screen lock is held while the page is up, on any device that
 supports it, so a phone propped in the companionway does not go dark
 mid-beat.
 
+### With no Pi at all
+
+The file runs on its own. Mail it to yourself and open it out of Files,
+or put it on any web host and open the URL — one HTML file with no
+dependencies is the point of the whole thing, and this is where it pays.
+
+Everything that lives in the page still works: both pages, the panel,
+the countdown and its signals, the RACE box, the course sheet and the
+marks, the race library, the finish card and its QR. Turn **DEMO** on in
+the panel and it has a boat to draw — the feed writes into the same
+store the real sensors do, and it is a saved preference, so it is still
+on after a reload.
+
+Hosting it beats a local file. `file://` works in some browsers and has
+its storage quietly disabled in others, and this page keeps your marks
+in `localStorage` and your races in `IndexedDB`. Off a URL both are
+reliable.
+
+**It will not read the phone's own GPS.** The page speaks Signal K and
+nothing else, so with no boat to talk to there is no position, no speed
+and no wind — DEMO or nothing. It is a bench test of the real thing
+rather than a cut-down version of it, which is useful for learning the
+gestures or setting a course up on the sofa, and is not an instrument.
+
 ## Golden hour
 
 The icon is a half sun on the horizon with its light on the water — half
