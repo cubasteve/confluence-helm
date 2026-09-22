@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<!-- Laid out at 1080 CSS px, always, and left to the browser to zoom
+     to whatever glass it is on. The dial is an SVG and scaled by its
+     viewBox whatever we did here, but EVERY HTML overlay on top of it
+     - the panel sheet, the alert banner, the cards, the keyboards -
+     is authored in the same 1080 pixels and did not scale at all. On
+     a 430 px phone the 600 px sheet hung 85 px off each side and its
+     665 px of content spilled down over the dial. On the panel this
+     changes nothing: the glass IS 1080, so width=1080 and
+     width=device-width are the same instruction. -->
+<meta name="viewport" content="width=1080,user-scalable=no">
 <title>CONFLUENCE · Helm</title>
 <style>
 /* ==================================================================
@@ -2150,8 +2159,19 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
 <script>
 /* ================================================================== */
+/* Signal K's address, DERIVED rather than written down.
+   It used to read localhost:3000, which is right on the Pi and wrong
+   on anything else: localhost on a phone means the phone. The page
+   loaded off the boat's WiFi, drew its whole face, and then sat there
+   with no data and nothing saying why - the worst way to fail.
+   location.hostname is whatever served this page: localhost in the
+   kiosk, the boat's address on a phone or a tablet. So one string is
+   correct from both, and a phone at the rail is a second screen rather
+   than a picture of one. file:// has no hostname, which is the fallback
+   the kiosk uses when AvNav is slow to come up. */
+const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
-  host:'localhost:3000', theme:'auto', demo:false,
+  host:SK_HOST, theme:'auto', demo:false,
 
   /* ---- feature switches -------------------------------------------
      There is no race switch: the start-line pings, the polar target and

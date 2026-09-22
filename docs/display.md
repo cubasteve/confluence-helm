@@ -203,6 +203,61 @@ already has, so a restart shows the old panel for a moment before the
 network catches up. The query string does not change the origin, so chart
 tiles and the track library in browser storage survive it.
 
+## On a phone
+
+The same page, off the boat's own WiFi:
+`http://<the Pi>:8080/confluence_helm.html`. It is a second screen at
+the rail, or a way to watch the instruments from the foredeck — not a
+bench test of something different, it is the same file the helm is
+running.
+
+**The address of Signal K is derived, not written down.** It used to
+read `localhost:3000`, which is right on the Pi and wrong on anything
+else: `localhost` on a phone means the phone. The page loaded off the
+boat's WiFi, drew its whole face, and sat there with no data and nothing
+saying why — the worst way to fail. It is `location.hostname + ':3000'`
+now, which is whatever address served the page, so one string is right
+from both.
+
+**The page lays out at 1080 CSS px whatever the glass is**, and the
+browser zooms it to fit. That is the whole of `<meta viewport>`:
+
+```html
+<meta name="viewport" content="width=1080,user-scalable=no">
+```
+
+The dial is an SVG and was scaled by its own `viewBox` whatever this
+said. Every HTML overlay on top of it — the panel sheet, the alert
+banner, the score and held-race cards, both keyboards — is authored in
+the same 1080 pixels and did not scale at all. On a 430 px phone the
+600 px sheet hung 85 px off each side, and its 665 px of content spilled
+down over the dial. Now the whole thing scales as one.
+
+On the helm this changes nothing. The glass *is* 1080, so `width=1080`
+and `width=device-width` are the same instruction — the tests assert
+that the panel comes out at exactly 1080 either way.
+
+Note that a **desktop** browser ignores `<meta viewport>` entirely, so a
+narrow desktop window still clips. Phones and tablets honour it, which
+is the case this is for.
+
+**What a phone does not get**, because `netd` is bound to loopback and
+nothing off the Pi can reach it: the radio tiles, the brightness
+slider's hardware half, the sounder, the score submission and publishing
+a GPX to the boat. Each hides itself rather than sitting there dead. The
+countdown still flashes; it just cannot beep.
+
+**And browser storage is per device.** The course, your own marks, the
+slot layout, the saved races and the track are all `localStorage` and
+`IndexedDB` on whichever machine you are looking at. A course set on the
+helm is not on your phone, and a mark added on your phone is not on the
+helm. The phone is a second view of the *instruments*, not of the
+helm's state.
+
+The screen lock is held while the page is up, on any device that
+supports it, so a phone propped in the companionway does not go dark
+mid-beat.
+
 ## Golden hour
 
 The icon is a half sun on the horizon with its light on the water — half
