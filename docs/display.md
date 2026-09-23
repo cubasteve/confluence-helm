@@ -276,11 +276,59 @@ its storage quietly disabled in others, and this page keeps your marks
 in `localStorage` and your races in `IndexedDB`. Off a URL both are
 reliable.
 
-**It will not read the phone's own GPS.** The page speaks Signal K and
-nothing else, so with no boat to talk to there is no position, no speed
-and no wind — DEMO or nothing. It is a bench test of the real thing
-rather than a cut-down version of it, which is useful for learning the
-gestures or setting a course up on the sofa, and is not an instrument.
+### PHONE mode
+
+A second pill beside the sensor glyphs, opposite DEMO. It feeds the
+page from **the phone's own GPS**, and from nothing else:
+
+| | |
+|---|---|
+| Written | position, speed over ground, course over ground |
+| Not written | wind, depth, heel, pitch, rate of turn, heading |
+
+That second row is the point. A phone has one instrument worth having,
+so one instrument is what it publishes. No wind means the bezel band,
+AWA, TWS, TWD, the shift and the polar target all sit at dashes; no
+depth means the sounder reads nothing and **the shallow alarm cannot
+fire**, because `depthWatch` clears the alert outright on a null. A
+phone that invented a depth would be worse than a phone with no depth.
+
+What is left is a real instrument: speed and course, the countdown and
+its signals, the start line, distance and bearing to every mark,
+rounding, the track, and the finish time on the score card. The line's
+*bias* still needs a wind direction, so that one reads nothing.
+
+It is not DEMO and does not look like it. DEMO is amber because its
+glyphs are lying; PHONE is the accent colour because nothing it draws
+is invented. Turning either on turns the other off — invented wind over
+a real position would be the worst of both.
+
+**Speed and course come from the device when it has them** and from two
+fixes and a clock when it does not, which is often: a phone lying flat,
+or one that has just woken, reports `speed` and `heading` as `null`.
+Below about a knot no course is derived — the bearing between two fixes
+is mostly the GPS wandering. Above about 48 knots the pair is refused
+instead: a phone that slept through a leg or lost its fix under a
+bridge resumes with two fixes far apart and a short clock between them,
+and 190 knots on the face is worse than no speed at all. The position
+itself is always used.
+
+**It stands down for the boat.** Both feeds stamp what they write, so
+the moment Signal K publishes a real value for a path, the feed stops
+writing it — and takes it up again if the boat goes quiet for longer
+than `staleAfter`. Walk aboard with phone mode on and it simply gets
+out of the way.
+
+**It needs a secure context.** Browsers hand out a position over HTTPS
+or from localhost, and nowhere else. A page opened from a file, or
+served over plain `http` from anything but localhost, is refused before
+it is even asked — so the pill says `NEEDS HTTPS` rather than sitting
+there doing nothing. The same line carries `LOCATION REFUSED`,
+`LOOKING FOR A FIX` and `NO GPS ON THIS DEVICE`, and clears itself on
+the next fix.
+
+Like DEMO, it is a saved preference, so a phone you race with comes back
+up reading its own GPS without being told again.
 
 ## Golden hour
 

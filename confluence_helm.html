@@ -507,13 +507,20 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Absolutely placed rather than laid out in a flex row, so the four
    glyphs stay centred on the sheet exactly where they were and the
    toggle takes the slack that was already there beside them. */
-.demo-tog{position:absolute;right:0;top:8px;height:44px;padding:0 20px;
+.demo-tog{position:absolute;right:0;top:8px;height:44px;padding:0 16px;
   border:2px solid var(--hairline);border-radius:22px;background:none;
   color:var(--label);font:600 21px/1 inherit;letter-spacing:.14em;
   opacity:.5;transition:opacity .2s,color .2s,border-color .2s,background .2s}
 .demo-tog:active{background:var(--chip)}
 /* On, it is a warning and reads like one: these glyphs are lying. */
 .demo-tog.on{opacity:1;color:var(--warn);border-color:var(--warn)}
+/* Phone mode is not lying, so it is not amber. Amber when it cannot do
+   what it says, which is the one state worth noticing. */
+#phone-btn{left:0;right:auto}
+.demo-tog.gps.on{color:var(--accent);border-color:var(--accent)}
+.demo-tog.gps.on.bad{color:var(--warn);border-color:var(--warn)}
+.phone-why{margin:-16px 0 20px;text-align:center;color:var(--warn);opacity:1}
+.phone-why:empty{display:none}
 
 /* --- connectivity ------------------------------------------------
    A row of radios at the top of the panel. No words on them, because
@@ -1783,8 +1790,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          are lit green by numbers nobody measured - and this is the only
          thing on the panel that says so. A slab and a row of its own put
          that admission somewhere you had to go looking for it. -->
+    <!-- One each side of the glyphs rather than a pair on the right:
+         there is only one pill's worth of slack beside them, and two
+         identical pills touching is an invitation to tap the wrong one.
+         They are mutually exclusive, so they sit apart. -->
+    <button class="demo-tog gps" id="phone-btn" aria-pressed="false">PHONE</button>
     <button class="demo-tog" id="demo-btn" aria-pressed="false">DEMO</button>
     </div>
+    <!-- Only ever filled when phone mode is on and something is stopping
+         it: no permission, no fix, or a page served over plain http,
+         where a browser will not hand out a position at all. -->
+    <div class="hint phone-why" id="phone-why"></div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
          does not: on a phone loading this same page over boat WiFi the
@@ -2171,7 +2187,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
    the kiosk uses when AvNav is slow to come up. */
 const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
-  host:SK_HOST, theme:'auto', demo:false,
+  host:SK_HOST, theme:'auto', demo:false, phoneGps:false,
 
   /* ---- feature switches -------------------------------------------
      There is no race switch: the start-line pings, the polar target and
@@ -2321,6 +2337,24 @@ function bootReady(){
 }
 
 const put=(p,v)=>S[p]={v,t:Date.now()};
+/* ---- a feed that defers to a real instrument --------------------------
+   Two things write into this store without being instruments: the demo
+   sail, and the phone's own GPS. Both must yield the moment a real
+   reading for that path turns up, or the demo's Sanford fights the boat's
+   fix at 8 Hz and the track recorder draws both.
+
+   `get(p)===null` was the test, and it was wrong in a way that hid: the
+   moment the feed wrote a path, get() stopped returning null and the
+   feed skipped it until its OWN value went stale. Measured: the demo
+   boat's position and speed held one value for the whole of staleAfter
+   while the wind changed 8 times a second - the boat did not move.
+
+   So the feed stamps what it wrote and asks whether the entry is its
+   own. Anything from the socket carries no stamp, which is what makes
+   deferring work. */
+const feedPut =(p,v,src)=>S[p]={v,t:Date.now(),src:src};
+const feedOwns=(p,src)=>{ const e=S[p];
+  return !e || e.src===src || Date.now()-e.t>CFG.staleAfter; };
 function get(p){const e=S[p];if(!e)return null;
   return Date.now()-e.t>CFG.staleAfter?null:e.v;}
 /* ---- smoothing ---------------------------------------------------------
@@ -2659,7 +2693,13 @@ function render(){
      which is precisely when someone is looking at them. The writes are
      cached, so a frame where nothing changed costs nothing. */
   const live=(el,ok)=>wCls(el,'live',ok);
-  live('s-gps', get('navigation.position')!==null||sogR!==null);
+  /* pos.lat, not navigation.position: the socket splits a position
+     delta into pos.lat and pos.lon and never stores the path itself, so
+     that half of the test has always been false. It went unnoticed
+     because a real GPS publishes speed too - but a phone with a fix and
+     no movement publishes neither, and the glyph sat dark next to a
+     working position. */
+  live('s-gps', get('pos.lat')!==null||sogR!==null);
   live('s-dpt', d!==null);
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
@@ -4347,7 +4387,10 @@ const PREF_DEFS={
      source-code default with no panel control at all: the only way off
      was to edit the file, and until someone did, the shallow alarm was
      firing on invented depth. */
-  windDemo:   v=>typeof v==='boolean' ? v : null
+  windDemo:   v=>typeof v==='boolean' ? v : null,
+  /* Persisted for the same reason: a phone you race with should come
+     back up reading its own GPS without being told again. */
+  phoneGps:   v=>typeof v==='boolean' ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5844,6 +5887,10 @@ const DEMO_REAL=['environment.wind.angleApparent',
 function demoSet(on, why){
   if(!!CFG.windDemo===!!on) return;
   CFG.windDemo=!!on;
+  /* One feed at a time. Invented wind over a real position would be the
+     worst of both, and the shallow alarm would be firing on a depth
+     nobody measured while you sailed by the other numbers. */
+  if(on) phoneSet(false, 'demo on');
   if(!on){
     /* Drop what it wrote rather than waiting out staleAfter, and drop the
        filter state with it - a filter fed null does not decay, it FREEZES
@@ -5873,13 +5920,13 @@ function windDemoTick(){
      and no vane keeps its own position and course and gets only the wind
      made up. Written unconditionally, the demo's Sanford would fight the
      real fix at 8 Hz and the track recorder would draw both. */
-  const own=p=>get(p)===null;
-  if(own('pos.lat')){ put('pos.lat',P.lat); put('pos.lon',P.lon); }
-  if(own('navigation.speedOverGround'))     put('navigation.speedOverGround',P.sog);
-  if(own('navigation.courseOverGroundTrue')) put('navigation.courseOverGroundTrue',P.crs/DEG);
+  const own=p=>feedOwns(p,'demo'), set=(p,v)=>feedPut(p,v,'demo');
+  if(own('pos.lat')){ set('pos.lat',P.lat); set('pos.lon',P.lon); }
+  if(own('navigation.speedOverGround'))      set('navigation.speedOverGround',P.sog);
+  if(own('navigation.courseOverGroundTrue')) set('navigation.courseOverGroundTrue',P.crs/DEG);
   if(own('navigation.headingMagnetic'))
-    put('navigation.headingMagnetic',((P.crs+DEMO_DECL)%360)/DEG);
-  if(own('navigation.rateOfTurn'))          put('navigation.rateOfTurn',P.rot/DEG);
+    set('navigation.headingMagnetic',((P.crs+DEMO_DECL)%360)/DEG);
+  if(own('navigation.rateOfTurn'))           set('navigation.rateOfTurn',P.rot/DEG);
   /* apparent = true wind vector minus boat velocity, in the boat's
      frame. Wind "from" F blows TOWARD F+180; the boat moves along its
      course at sog. */
@@ -5914,6 +5961,145 @@ function windDemoTick(){
    constant; at 8 Hz the bezel moves the way the boat did. */
 setInterval(windDemoTick, 120);
 $('demo-btn').addEventListener('click',()=>demoSet(!CFG.windDemo));
+
+/* ---- phone mode (CFG.phoneGps) ----------------------------------------
+   The page off a phone with no boat behind it. A phone has exactly one
+   instrument worth having - its GPS - so that is all this feeds, and it
+   feeds it as itself rather than as a simulation: real position, real
+   speed over ground, real course.
+
+   NOTHING ELSE IS WRITTEN. No wind, so the bezel band, AWA, TWS, TWD,
+   the shift and the polar target all sit at dashes. No depth, so the
+   sounder reads nothing and the shallow alarm cannot fire - depthWatch
+   clears the alert outright on a null, which is the behaviour we want
+   and already had. A phone that invented a depth would be worse than a
+   phone with no depth at all.
+
+   What that leaves is a real instrument: speed and course, the
+   countdown and its signals, the start line and its bias, distance and
+   bearing to every mark, rounding, the track, and the finish time on
+   the score card. Which is most of a race.
+
+   It defers to the boat, path by path, the same way the demo does. Walk
+   aboard with this on and the moment Signal K starts publishing a fix,
+   the phone's own is stood down - and taken up again if the boat goes
+   quiet for longer than staleAfter. */
+const PHONE_PATHS=['pos.lat','pos.lon',
+                   'navigation.speedOverGround',
+                   'navigation.courseOverGroundTrue'];
+/* Below this, the bearing between two fixes is mostly the GPS wandering
+   on its own. A drifting boat has no course over the ground worth
+   printing, so none is printed. */
+const PHONE_MIN_MS=0.5;                       /* ~1 knot */
+/* And above this it was not a boat. A phone that slept through a leg,
+   lost its fix under a bridge, or simply jumped, resumes with two fixes
+   far apart and a short clock between them - 190 knots on the face is
+   worse than no speed at all. The POSITION is still good and still
+   used; only the pair is refused. */
+const PHONE_MAX_MS=25;                        /* ~48 knots */
+let phoneWatch=null, phoneWhy='', phoneLast=null;
+
+function phoneFix(f){
+  const c=f&&f.coords; if(!c || !isFinite(c.latitude) || !isFinite(c.longitude)) return;
+  const t=f.timestamp||Date.now();
+  phoneWhy='';
+  const own=p=>feedOwns(p,'gps'), set=(p,v)=>feedPut(p,v,'gps');
+
+  /* Speed and course: the device's own when it has them - those come off
+     a Doppler solution and are better than anything we can work out -
+     and from two fixes and a clock when it does not, which is often.
+     A phone lying flat, or one that has just woken, reports both as
+     null, and a plotter derives them from position anyway. */
+  let sog = (typeof c.speed==='number'   && isFinite(c.speed)   && c.speed>=0)
+            ? c.speed : null;
+  let cog = (typeof c.heading==='number' && isFinite(c.heading))
+            ? c.heading : null;
+  if((sog===null || cog===null) && phoneLast){
+    const dt=(t-phoneLast.t)/1000;
+    if(dt>0.3 && dt<30){
+      const m=seaNm(phoneLast.la,phoneLast.lo,c.latitude,c.longitude)*1852;
+      const v=m/dt;
+      if(v<=PHONE_MAX_MS){
+      if(sog===null) sog=v;
+      if(cog===null && v>=PHONE_MIN_MS){
+        /* Flat earth over a few metres, which is every pair of fixes a
+           second apart. */
+        const y=(c.latitude-phoneLast.la)*111320;
+        const x=(c.longitude-phoneLast.lo)*111320*Math.cos(c.latitude/DEG);
+        cog=(Math.atan2(x,y)*DEG+360)%360;
+      }
+      }
+    }
+  }
+  phoneLast={la:c.latitude, lo:c.longitude, t:t};
+
+  if(own('pos.lat')){
+    set('pos.lat', c.latitude); set('pos.lon', c.longitude);
+    CFG.lat=c.latitude; CFG.lon=c.longitude;     /* golden hour, as the socket does */
+  }
+  if(sog!==null && own('navigation.speedOverGround'))
+    set('navigation.speedOverGround', sog);              /* m/s, as Signal K */
+  if(cog!==null && own('navigation.courseOverGroundTrue'))
+    set('navigation.courseOverGroundTrue', cog/DEG);
+  bootReady();                        /* a fix is a boat, for these purposes */
+  drawPhone();
+}
+
+function phoneFail(e){
+  /* PERMISSION_DENIED is the end of it; a timeout is not, and
+     watchPosition keeps trying, so the line says so and clears itself
+     on the next fix. */
+  phoneWhy = !e ? 'GPS UNAVAILABLE'
+           : e.code===1 ? 'LOCATION REFUSED · ALLOW IT IN THE BROWSER'
+           : e.code===3 ? 'LOOKING FOR A FIX'
+                        : 'GPS UNAVAILABLE';
+  drawPhone();
+}
+
+function phoneStart(){
+  if(phoneWatch!==null) return;
+  if(!navigator.geolocation){ phoneWhy='NO GPS ON THIS DEVICE'; return drawPhone(); }
+  /* A browser hands out a position only in a secure context. Off the
+     boat that means HTTPS - a page opened from a file, or served over
+     plain http from somewhere that is not localhost, is refused before
+     it is even asked, and saying so beats a silent nothing. */
+  if(typeof isSecureContext!=='undefined' && !isSecureContext){
+    phoneWhy='NEEDS HTTPS · OPEN IT OVER A SECURE LINK'; return drawPhone(); }
+  phoneWhy='LOOKING FOR A FIX'; drawPhone();
+  phoneWatch=navigator.geolocation.watchPosition(phoneFix, phoneFail,
+    {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
+}
+
+function phoneStop(){
+  if(phoneWatch!==null && navigator.geolocation){
+    navigator.geolocation.clearWatch(phoneWatch); }
+  phoneWatch=null; phoneWhy=''; phoneLast=null;
+  /* Drop what it wrote and the filters fed from it, for the reason
+     demoSet gives: a filter fed null freezes rather than decaying. */
+  PHONE_PATHS.forEach(p=>{ delete S[p]; });
+  ['sog','vmg','hdg'].forEach(k=>{ delete sm[k]; delete smA[k]; });
+  MUS_CELLS.forEach(c=>{ delete sm['r_'+c.k]; delete smA['r_'+c.k]; });
+  bezelCont=null;
+}
+
+function phoneSet(on, why){
+  on=!!on;
+  if(!!CFG.phoneGps===on) return;
+  CFG.phoneGps=on;
+  if(on){ demoSet(false,'phone gps on'); phoneStart(); }
+  else phoneStop();
+  drawPhone(); prefsSave();
+  if(why) console.log('[helm] phone gps '+(on?'on':'off')+':', why);
+}
+
+function drawPhone(){
+  const on=!!CFG.phoneGps;
+  wCls('phone-btn','on',on);
+  wCls('phone-btn','bad',on&&!!phoneWhy);
+  wAttr('phone-btn','aria-pressed', on?'true':'false');
+  wText('phone-why', on?phoneWhy:'');
+}
+$('phone-btn').addEventListener('click',()=>phoneSet(!CFG.phoneGps,'tapped'));
 
 /* ---- the sensor readout on the music page --------------------------
    It was one thin row of 32px numbers above the album art, which is
@@ -10065,6 +10251,11 @@ prefsLoad(); applyDim(CFG.dim,false); layoutPages();
    panel with the demo saved off came up with the pill lit until the next
    toggle. */
 drawDemo();
+/* Same reason as drawDemo: CFG is only right after prefsLoad. If phone
+   mode was left on, this is where the watch starts - and where the
+   browser asks for location, which is the right moment because you
+   asked for it last time. */
+drawPhone(); if(CFG.phoneGps) phoneStart();
 /* A race held from a previous session, for the same reason: HELD is
    read at its declaration, but the card it draws is markup, and this
    is where persisted state gets painted. */
