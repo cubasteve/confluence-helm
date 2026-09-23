@@ -12,6 +12,30 @@
      changes nothing: the glass IS 1080, so width=1080 and
      width=device-width are the same instruction. -->
 <meta name="viewport" content="width=1080,user-scalable=no">
+
+<!-- ---- the home screen ----
+     The three waves off the boot screen, the accent one standing.
+     Added to a phone's home screen this opens without the browser
+     around it, which is most of why it is worth doing: no address
+     bar, no toolbar sliding in and out over the dial.
+
+     The favicon is inline, so the tab is right even when this file
+     is opened on its own with nothing beside it. Apple will not
+     take a data URI for a touch icon, so that one is a real PNG:
+     mail yourself the single file and everything still works, you
+     just get a screenshot on the home screen instead of the mark.
+     deploy.sh copies the set to the boat alongside the page. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0C0E'/%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M1 11q4-4 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%236C757C' stroke-width='2.2' opacity='.58'/%3E%3Cpath d='M1 16q4-5 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%234A9EFF' stroke-width='3'/%3E%3Cpath d='M1 21q4-4 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%236C757C' stroke-width='2.2' opacity='.58'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Helm">
+<!-- black-translucent puts the page under the status bar rather
+     than beside it, which is what a full-bleed round face wants;
+     theme-color paints the notch area to match. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0B0C0E">
 <title>CONFLUENCE · Helm</title>
 <style>
 /* ==================================================================

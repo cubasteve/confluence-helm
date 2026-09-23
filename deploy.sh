@@ -60,6 +60,19 @@ else
   exit 1
 fi
 
+# The home-screen set, which sits beside the page rather than inside it:
+# Apple will not take a data URI for a touch icon. Copied plainly - they
+# are small, they change about once a year, and cmp keeps the write off
+# the SD card when they have not. The page itself works without them.
+for f in icon-180.png icon-192.png icon-512.png icon-maskable-512.png \
+         manifest.webmanifest; do
+  src="$(dirname "$SRC")/$f"
+  [ -f "$src" ] || continue
+  cmp -s "$src" "$DST_DIR/$f" && continue
+  cp -f "$src" "$DST_DIR/$f.new" && mv -f "$DST_DIR/$f.new" "$DST_DIR/$f" \
+    && echo "  also  $f"
+done
+
 # A quick liveness check, since a deploy that AvNav cannot serve is not a
 # deploy. Non-fatal: AvNav might legitimately be down while you work.
 if command -v curl >/dev/null 2>&1; then

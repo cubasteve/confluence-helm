@@ -258,6 +258,31 @@ The screen lock is held while the page is up, on any device that
 supports it, so a phone propped in the companionway does not go dark
 mid-beat.
 
+### On the home screen
+
+Add to Home Screen and it opens without the browser around it — no
+address bar, no toolbar sliding in and out over the dial — labelled
+**Helm**, with the notch painted to match the face.
+
+The icon is the boot screen's three waves, the accent one standing:
+
+| File | For |
+|---|---|
+| `icon-180.png` | Apple's touch icon |
+| `icon-192.png`, `icon-512.png` | the manifest |
+| `icon-maskable-512.png` | Android, which may crop it to a circle — so the art sits inside the middle 72% |
+| `icon.svg` | the source the set is drawn from |
+
+These sit *beside* the page rather than inside it, which is the one
+place the single-file rule bends: Apple will not take a `data:` URI for
+a touch icon. `deploy.sh` copies the set to the boat alongside the page,
+and the page works perfectly well without them — mail yourself the one
+file and the only thing you lose is the mark on the home screen, where
+you get a screenshot instead.
+
+**The favicon is inline**, a `data:` URI of the same waves, so a tab is
+right even when the file is opened on its own with nothing beside it.
+
 ### With no Pi at all
 
 The file runs on its own. Mail it to yourself and open it out of Files,
