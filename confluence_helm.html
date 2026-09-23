@@ -3525,6 +3525,13 @@ $('held-yes').addEventListener('click', e=>{
    submit: the entry form carries an invisible captcha, which is there
    precisely to stop something like this posting on your behalf.       */
 const SCORE_URL='https://vuduwave.com/lmsa';
+/* The same endpoint the page's own Add Result button posts to.
+   It answers a CORS preflight by reflecting whatever Origin asked, so a
+   POST straight from here is allowed - off the panel, off a phone, off
+   anywhere this file is served from. That is the better path for the
+   obvious reason: the helper only exists on the Pi, and the phone is
+   exactly where you are standing when the race ends. */
+const SCORE_API='https://vuduwave.com/api/add_scratch_time';
 /* From the club's roster - GET /api/racers, which is public. Both are
    this boat and this skipper; the answer to the question picks between
    them. The id is what the API wants and nothing you would recognise at
@@ -3558,14 +3565,15 @@ function scoreAsk(){
   heldPaint();                     /* stand the held card down meanwhile */
 }
 
-/* The answer picks the entry, and then the second question - unless
-   there is no helper to send with, in which case there is nothing to
-   ask and the card goes straight to telling you what to type. On a
-   phone loading this same page that is always the way it goes. */
+/* The answer picks the entry, and then the second question - which is
+   asked wherever the page is running, because the post goes from the
+   page itself now. The one case worth not asking in is a device that
+   already knows it has no network: offering to send and then failing
+   is worse than saying up front what to type. */
 function scoreKite(kind){
   const r=SCORE_CLASS[kind]; if(!r) return;
   scorePick=r;
-  if(!((NET.st&&NET.st.score)||{}).available) return scoreShow();
+  if(navigator.onLine===false) return scoreShow('OFFLINE · TYPE IT IN');
   scoreStep='send';
   $('sc-t').textContent='SUBMIT TO VUDU WAVE?';
   $('sc-s').textContent=SCORE_ME+' · G4 · '+r.cls;
@@ -3573,8 +3581,9 @@ function scoreKite(kind){
   scoreFace('told');
 }
 
-/* What to type, and a code to open the page with. Where NO goes, and
-   where a refusal goes - the number still has to get in either way. */
+/* What to type, and a code to open the page with. Where NO goes, where
+   a refusal goes, and where a device with no network goes - the number
+   still has to get in either way. */
 function scoreShow(why){
   scoreStep='done';
   $('sc-t').textContent = why ? 'NOT SENT · TYPE IT IN' : ('G4 · '+scorePick.cls);
@@ -3586,13 +3595,44 @@ function scoreShow(why){
   scoreFace('qr');
 }
 
+/* Straight from the page, with the helper behind it for the day the
+   other end stops answering a preflight. Mirrors netd's own guard: the
+   last result that actually went in is remembered, so a second tap on
+   the same one is refused - but a retry after a FAILURE is not, because
+   nothing went in to repeat. */
+let scoreSent='', scoreSentAt=0;
+async function scorePost(racer_id, elapsed_time){
+  if(scoreSent===racer_id+':'+elapsed_time && Date.now()-scoreSentAt<300000)
+    return {ok:false, error:'ALREADY SENT'};
+  const body={elapsed_time:elapsed_time, racer_id:racer_id};
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(), 20000);
+  let out;
+  try{
+    const r=await fetch(SCORE_API,{ method:'POST', signal:ctl.signal,
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    let msg='';
+    try{ msg=String(((await r.json())||{}).message||''); }catch(e){}
+    out = r.ok ? {ok:true, message:msg}
+               : {ok:false, error:'REFUSED '+r.status, message:msg};
+  }catch(e){
+    /* Blocked, offline, or the endpoint moved. On the panel the helper
+       is a second way out; anywhere else this is the end of it. */
+    const j=((NET.st&&NET.st.score)||{}).available
+            ? await netApi('/score', body) : null;
+    out = j || {ok:false, error:'NO CONNECTION'};
+  }finally{ clearTimeout(timer); }
+  if(out.ok){ scoreSent=racer_id+':'+elapsed_time; scoreSentAt=Date.now(); }
+  return out;
+}
+
 async function scoreSend(){
   const r=scorePick, t=scoreTime(tFinal);
   scoreStep='busy';
   $('sc-t').textContent='SENDING…';
   $('sc-s').textContent='G4 · '+r.cls+' · '+t;
   scoreFace('sent'); $('score').classList.add('busy');
-  const j=await netApi('/score',{racer_id:r.id, elapsed_time:t});
+  const j=await scorePost(r.id, t);
   if(j && j.ok){
     scoreStep='done';
     $('sc-t').textContent='SENT · '+t;
@@ -3602,7 +3642,7 @@ async function scoreSend(){
     scoreFace('sent');
     return;
   }
-  scoreShow(((j&&(j.error||j.message))||'NO HELPER').toUpperCase().slice(0,64));
+  scoreShow(((j&&(j.error||j.message))||'NOT SENT').toUpperCase().slice(0,64));
 }
 
 function scoreHide(){

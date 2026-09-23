@@ -320,31 +320,40 @@ finish asks again rather than assuming.
 
 ### How the submission goes
 
-Through `netd`, not from the page. The helm is served off the Pi and
-vuduwave.com sends no CORS headers, so a `fetch` from the page is
-refused before it leaves the machine — the same reason the radios live
-in the helper. On a phone loading this page there is no helper, so the
-second question is not asked at all and the card goes straight to
-telling you what to type.
+**Straight from the page.** `vuduwave.com` answers a CORS preflight by
+reflecting whatever `Origin` asked, so a `POST` from here is allowed
+wherever this file is served from — the panel, a phone, GitHub Pages:
 
 ```
-POST /score  {"racer_id": 201, "elapsed_time": "1.04.15"}
+POST https://vuduwave.com/api/add_scratch_time
+{"racer_id": 201, "elapsed_time": "1.04.15"}
 ```
 
-`netd` checks the time against the same formats the form does — an
-unsendable string should not cost a round trip — and forwards it to
-`/api/add_scratch_time`, which is what the page's own Add Result button
-posts to. `HELM_SCORE_URL` points it somewhere else; empty switches
-scoring off and the card stops offering it.
+That is the endpoint the page's own *Add Result* button posts to.
 
-Two limits, neither of them for this boat's benefit. It is somebody
-else's small server, and a bug in a loop here would be a bug in a loop
-pointed at them:
+It used to go through `netd`, on the assumption that the browser would
+be blocked. That assumption was wrong, and it cost the phone the whole
+feature: the helper only exists on the Pi, and the phone is exactly
+where you are standing when the race ends. **`netd` is the backstop
+now, not the road** — if the direct post is blocked or the connection
+dies, and the helper is there, the card tries `POST /score` before
+giving up. On a phone there is no helper and no second chance, and the
+card says so rather than pretending.
 
-- **Ten seconds** between any two submissions.
-- **Five minutes** before the *same* racer and time may go again, so a
-  double tap cannot post twice. A corrected time goes straight through
-  — the form itself says an incorrect time can be resubmitted.
+A device that already knows it has no network is not offered the
+choice at all: the card goes straight to what to type, marked
+`OFFLINE`.
+
+`HELM_SCORE_URL` repoints the helper's copy; empty switches its half
+off.
+
+**The same result cannot go twice.** The last one that actually landed
+is remembered for five minutes, so a second tap on an identical result
+is refused with `ALREADY SENT` — but a retry after a *failure* goes
+through, because nothing went in to repeat. A corrected time always
+goes: the form itself says an incorrect time can be resubmitted. The
+helper keeps its own ten-second floor between any two submissions, for
+when it is the one doing the posting.
 
 **No CAPTCHA token is sent.** The entry form runs an invisible
 reCAPTCHA — you would never see it, which is the point of an invisible
