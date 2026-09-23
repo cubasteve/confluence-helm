@@ -519,8 +519,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #phone-btn{left:0;right:auto}
 .demo-tog.gps.on{color:var(--accent);border-color:var(--accent)}
 .demo-tog.gps.on.bad{color:var(--warn);border-color:var(--warn)}
-.phone-why{margin:-16px 0 20px;text-align:center;color:var(--warn);opacity:1}
-.phone-why:empty{display:none}
+.phone-row{display:none;align-items:center;gap:18px;margin:-10px 0 22px}
+.phone-row.on{display:flex}
+.phone-row .demo-tog{position:static;flex:none}
+.phone-why{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.06em;
+  color:var(--warn);text-transform:uppercase;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 
 /* --- connectivity ------------------------------------------------
    A row of radios at the top of the panel. No words on them, because
@@ -1797,10 +1801,16 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <button class="demo-tog gps" id="phone-btn" aria-pressed="false">PHONE</button>
     <button class="demo-tog" id="demo-btn" aria-pressed="false">DEMO</button>
     </div>
-    <!-- Only ever filled when phone mode is on and something is stopping
-         it: no permission, no fix, or a page served over plain http,
-         where a browser will not hand out a position at all. -->
-    <div class="hint phone-why" id="phone-why"></div>
+    <!-- Shown only while phone mode is on. MOUNT is an assertion, not a
+         preference: tapping it says the phone is fixed to the boat and
+         is level NOW, and that is what makes its compass the boat's
+         heading and its tilt the boat's heel. In a hand or a pocket it
+         is never true, so it is never tapped, and nothing is published.
+         The line beside it carries whatever is stopping either half. -->
+    <div class="phone-row" id="phone-row">
+      <button class="demo-tog gps" id="mount-btn" aria-pressed="false">MOUNT</button>
+      <span class="phone-why" id="phone-why"></span>
+    </div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
          does not: on a phone loading this same page over boat WiFi the
@@ -6071,6 +6081,7 @@ function phoneStart(){
 }
 
 function phoneStop(){
+  if(mountOn) mountStop();           /* the compass was only ever half of it */
   if(phoneWatch!==null && navigator.geolocation){
     navigator.geolocation.clearWatch(phoneWatch); }
   phoneWatch=null; phoneWhy=''; phoneLast=null;
@@ -6092,12 +6103,130 @@ function phoneSet(on, why){
   if(why) console.log('[helm] phone gps '+(on?'on':'off')+':', why);
 }
 
+/* ---- the other two instruments a phone has ----------------------------
+   A compass and an accelerometer, and both are worth having - but only
+   if the phone is FIXED TO THE BOAT. In a hand or a pocket they report
+   the hand and the pocket: a heading that swings as you look around, a
+   heel angle that is how you happen to be holding it. There is no way
+   to tell from the numbers which of the two it is.
+
+   So MOUNT is an assertion rather than a preference. Tapping it says
+   two things - the phone is fixed to the boat, and it is level right
+   now - and the tap is what captures the level. Until it is tapped,
+   nothing here is published at all, on the same rule as the wind and
+   the depth: a phone that invented a heel would be worse than a phone
+   with no heel.
+
+   The compass earns its place before the gun. Under way, course over
+   the ground is the better number and the GPS already has it; drifting
+   about waiting for a sequence, COG is noise and the compass is the
+   only thing that knows which way the boat is pointing - which is what
+   the line bias and the first beat are about.
+
+   Mount it PORTRAIT, TOP FORWARD, screen facing aft. Landscape works:
+   the screen angle is taken off. And keep it away from the engine, a
+   speaker magnet or a steel bulkhead, all of which a magnetometer
+   believes completely. */
+const MOUNT_PATHS=['navigation.headingMagnetic','att.roll','att.pitch'];
+let mountOn=false, mountOff=null, mountAbs=false, mountFn=null, mountWhy='';
+
+function mountEvent(e){
+  if(!mountOn || !CFG.phoneGps) return;
+  /* Android fires both events; the absolute one is the only one whose
+     alpha means north. Once one has been seen, the other is ignored
+     rather than allowed to overwrite it. */
+  const abs = e.type==='deviceorientationabsolute' || e.absolute===true
+              || typeof e.webkitCompassHeading==='number';
+  if(mountAbs && !abs) return;
+  if(abs) mountAbs=true;
+
+  let hdg=null;
+  if(typeof e.webkitCompassHeading==='number' && isFinite(e.webkitCompassHeading))
+    hdg=e.webkitCompassHeading;                  /* iOS: degrees from north */
+  else if(abs && typeof e.alpha==='number' && isFinite(e.alpha))
+    hdg=(360-e.alpha)%360;                       /* alpha counts the other way */
+
+  const b=e.beta, g=e.gamma;
+  if(typeof b!=='number'||typeof g!=='number'||!isFinite(b)||!isFinite(g)) return;
+  /* beta is the top-to-bottom tilt and gamma the side-to-side one, both
+     of the DEVICE - so a phone turned in its bracket swaps them. The
+     screen's own angle says by how much. */
+  const sa=(((screen.orientation||{}).angle||0)+360)%360;
+  let roll=g, pitch=b;
+  if(sa===90)      { roll=-b; pitch= g; }
+  else if(sa===180){ roll=-g; pitch=-b; }
+  else if(sa===270){ roll= b; pitch=-g; }
+  if(hdg!==null) hdg=(hdg+sa)%360;
+
+  /* The first reading after MOUNT is what level means. */
+  if(!mountOff){ mountOff={r:roll,p:pitch}; mountWhy=''; }
+
+  const own=p=>feedOwns(p,'gps'), set=(p,v)=>feedPut(p,v,'gps');
+  /* headingMagnetic because that is what a magnetometer measures and
+     what the panel's own compass node publishes; nothing here knows the
+     local variation. */
+  if(hdg!==null && own('navigation.headingMagnetic'))
+    set('navigation.headingMagnetic', hdg/DEG);
+  /* Signal K's sign: + roll is starboard down, + pitch is bow up. A
+     phone mounted top-forward has its right side to starboard, which is
+     + gamma, and raises its top as the bow comes up, which is + beta. */
+  if(own('att.roll'))  set('att.roll',  (roll -mountOff.r)/DEG);
+  if(own('att.pitch')) set('att.pitch', (pitch-mountOff.p)/DEG);
+  drawPhone();
+}
+
+/* iOS will not give orientation without a permission asked for from a
+   real tap, which is exactly what this is. */
+function mountStart(){
+  const D=window.DeviceOrientationEvent;
+  if(!D){ mountWhy='NO COMPASS ON THIS DEVICE'; return drawPhone(); }
+  const go=()=>{
+    mountOff=null; mountAbs=false; mountWhy='LEVELLING';
+    mountFn=mountEvent; mountOn=true;
+    addEventListener('deviceorientationabsolute', mountFn, true);
+    addEventListener('deviceorientation', mountFn, true);
+    drawPhone();
+  };
+  if(typeof D.requestPermission==='function'){
+    D.requestPermission().then(r=>{
+      if(r==='granted') go();
+      else { mountWhy='MOTION ACCESS REFUSED'; drawPhone(); }
+    }).catch(()=>{ mountWhy='MOTION ACCESS REFUSED'; drawPhone(); });
+    return;
+  }
+  go();
+}
+
+function mountStop(){
+  if(mountFn){
+    removeEventListener('deviceorientationabsolute', mountFn, true);
+    removeEventListener('deviceorientation', mountFn, true);
+  }
+  mountFn=null; mountOn=false; mountOff=null; mountAbs=false; mountWhy='';
+  MOUNT_PATHS.forEach(p=>{ delete S[p]; });
+  ['heel','pitch','hdg'].forEach(k=>{ delete sm[k]; delete smA[k]; });
+  MUS_CELLS.forEach(c=>{ delete sm['r_'+c.k]; delete smA['r_'+c.k]; });
+  bezelCont=null;
+  drawPhone();
+}
+/* Not persisted, and deliberately. Whether the phone is in its bracket
+   is a fact about right now, not a setting - and coming up claiming to
+   be level when it is face down on a bunk is exactly the lie this is
+   built to avoid. */
+$('mount-btn').addEventListener('click',()=>{
+  if(mountOn) mountStop(); else mountStart();
+});
+
 function drawPhone(){
-  const on=!!CFG.phoneGps;
+  const on=!!CFG.phoneGps, why=phoneWhy||(on&&mountWhy)||'';
   wCls('phone-btn','on',on);
   wCls('phone-btn','bad',on&&!!phoneWhy);
   wAttr('phone-btn','aria-pressed', on?'true':'false');
-  wText('phone-why', on?phoneWhy:'');
+  wCls('phone-row','on',on);
+  wCls('mount-btn','on',on&&mountOn);
+  wCls('mount-btn','bad',on&&mountOn&&!!mountWhy);
+  wAttr('mount-btn','aria-pressed', (on&&mountOn)?'true':'false');
+  wText('phone-why', on?why:'');
 }
 $('phone-btn').addEventListener('click',()=>phoneSet(!CFG.phoneGps,'tapped'));
 

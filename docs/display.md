@@ -330,6 +330,57 @@ the next fix.
 Like DEMO, it is a saved preference, so a phone you race with comes back
 up reading its own GPS without being told again.
 
+### MOUNT — the compass and the accelerometer
+
+A phone has two more instruments worth having, and both are worth
+exactly nothing unless the phone is **fixed to the boat**. In a hand or
+a pocket they report the hand and the pocket: a heading that swings as
+you look around, a heel angle that is how you happen to be holding it.
+Nothing in the numbers says which of the two it is.
+
+So `MOUNT` is an assertion rather than a preference. Tapping it says two
+things — the phone is fixed to the boat, and it is level *right now* —
+and the tap is what captures the level. Until it is tapped nothing here
+is published at all, on the same rule as the wind and the depth.
+
+| | |
+|---|---|
+| Adds | magnetic heading, heel, pitch |
+| Needs | the phone in a bracket, portrait, top forward |
+| Zeroed | at the moment you tap `MOUNT` |
+
+**It is not remembered**, and deliberately: whether the phone is in its
+bracket is a fact about right now, not a setting, and coming up claiming
+to be level while face down on a bunk is exactly the lie this exists to
+avoid. Turning phone mode off takes it with it. To re-level — the
+bracket knocked, the boat trimmed — tap it off and on.
+
+**The compass earns its place before the gun.** Under way, course over
+the ground is the better number and the GPS already has it. Drifting
+about waiting for a sequence, `COG` is noise and the compass is the only
+thing that knows which way the boat is pointing, which is what the line
+bias and the first beat are about.
+
+Mount it **portrait, top forward, screen facing aft**. Landscape works
+— the screen's own angle is taken off the reading — and so does a phone
+sitting a little crooked in its bracket, because levelling absorbs any
+fixed offset. What it cannot absorb is a **magnet**: keep it away from
+the engine, a speaker and any steel, all of which a magnetometer
+believes completely.
+
+It publishes `navigation.headingMagnetic` rather than true, because that
+is what a magnetometer measures and nothing here knows the local
+variation.
+
+**iOS asks permission**, and only from a real tap — which is what the
+`MOUNT` button is. Refused, the line says `MOTION ACCESS REFUSED`.
+
+Worth checking on the water the first time: heel to starboard and the
+`HEEL` cell should say `STBD`. The sign convention is Signal K's — plus
+roll is starboard down, plus pitch is bow up — mapped from a top-forward
+mount, but it is one line to flip if a bracket turns out to sit the
+other way round.
+
 ## Golden hour
 
 The icon is a half sun on the horizon with its light on the water — half
