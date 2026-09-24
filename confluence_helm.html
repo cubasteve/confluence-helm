@@ -799,6 +799,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row .grip{width:44px;height:52px;display:flex;align-items:center;justify-content:center;
   font-size:32px;color:var(--label);flex:none}
 .course-row.lift{background:var(--chip)}
+/* A corrected club mark says so on its own line, in the accent: you are
+   no longer looking at what the sailing instructions printed. */
+.course-row .lib-main span.moved{color:var(--accent)}
+.course-row .del.undo{border-color:var(--accent);color:var(--accent);font-size:30px}
 .course-row .del{width:50px;height:50px;border-radius:25px;border:2px solid var(--alarm);color:var(--alarm);
   display:flex;align-items:center;justify-content:center;font-size:22px;flex:none;margin-right:14px}
 
@@ -2967,6 +2971,48 @@ try{ USER_MARKS=JSON.parse(localStorage.getItem('marks')||'[]'); if(!Array.isArr
 USER_MARKS.forEach(m=>{ if(m&&m.id&&!MARKS.some(x=>x.id===m.id)) MARKS.push(m); });
 const marksSave=()=>localStorage.setItem('marks',JSON.stringify(USER_MARKS));
 const isUserMark=id=>USER_MARKS.some(m=>m.id===id);
+
+/* ---- the club's marks, corrected ---------------------------------------
+   The coordinates above come from the sailing instructions, and the
+   sailing instructions are not a survey. They are given to a tenth of a
+   minute, which is 185 m of latitude before anyone mistypes anything; a
+   buoy swings its rode around its anchor all day; and one gets dragged
+   and reset a boat length from where it was and nobody writes it down.
+
+   So a club mark can be corrected from the boat, standing at it, with
+   HERE - which is the only instrument aboard that actually knows where
+   the thing is. The correction is an OVERRIDE rather than an edit: the
+   compiled coordinate stays where it is, the override sits over it in
+   storage, and dropping the override puts the book's number back. That
+   matters the day the club re-lays a mark and republishes - the file
+   updates, and you find out whether your correction still agrees.
+
+   Marks of your own are not in here. Those ARE their position, and are
+   edited in place; there is nothing underneath them to go back to. */
+let MARK_MOVES={};
+try{ const o=JSON.parse(localStorage.getItem('markMoves')||'{}');
+  if(o && typeof o==='object' && !Array.isArray(o)) MARK_MOVES=o; }catch(e){}
+const markMovesSave=()=>{
+  try{ localStorage.setItem('markMoves',JSON.stringify(MARK_MOVES)); }catch(e){}
+};
+const isMoved=id=>Object.prototype.hasOwnProperty.call(MARK_MOVES,id);
+/* Applied once, here, over whatever the file says. A stored id the file
+   no longer has - a mark the club retired - is simply skipped, and kept,
+   because the next version may bring it back. */
+Object.keys(MARK_MOVES).forEach(id=>{
+  const m=MARKS.find(x=>x.id===id), v=MARK_MOVES[id];
+  if(!m || !v || !isFinite(v.lat) || !isFinite(v.lon)) return;
+  m.lat=v.lat; m.lon=v.lon;
+  if(v.name){ m.name=v.name; m.hdr=v.name.slice(0,8).trim(); }
+});
+/* Back to the book. The compiled values are not kept anywhere to restore
+   FROM, so this reloads - which is honest about what it is doing and
+   costs a second on a page that is one file. */
+function markRevert(id){
+  if(!isMoved(id)) return;
+  delete MARK_MOVES[id]; markMovesSave();
+  location.reload();
+}
 /* The order of the list is yours too - EDIT on the course sheet drags
    marks about, the club's included - and it is kept under 'markOrder'
    as a list of ids: marks it names come first in that order, any it
@@ -7901,11 +7947,16 @@ function renderCourse(){
     const sd=markSide(m.id);
     const side= i<0 ? '' : `<div class="side"><span class="sb${sd==='P'?' on':''}" data-side="P">P</span>`
                           +`<span class="sb${sd==='S'?' on':''}" data-side="S">S</span></div>`;
-    const del = courseEdit&&isUserMark(m.id) ? '<div class="del">✕</div>' : '';
+    /* Edit mode puts one button on the right of a row: a bin on a mark
+       of your own, and on a club mark you have corrected, a way back to
+       the book. A club mark nobody has touched gets neither. */
+    const del = !courseEdit ? ''
+      : isUserMark(m.id) ? '<div class="del">✕</div>'
+      : isMoved(m.id)    ? '<div class="del undo">↺</div>' : '';
     const grip= courseEdit ? '<div class="grip">≡</div>' : '';
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b>
-      <span>${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
+      <span class="${isMoved(m.id)?'moved':''}">${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
   box.innerHTML=lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
@@ -7920,17 +7971,15 @@ $('course-list').addEventListener('click',e=>{
   const sb=e.target.closest('.sb');
   if(sb){ COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
+  if(e.target.closest('.undo')){ markRevert(row.dataset.mark); return; }
   if(e.target.closest('.del')){ markDelete(row.dataset.mark); return; }
   if(e.target.closest('.grip')) return;
   /* EDIT is the mode for changing the LIST rather than the course, so a
-     tap in it opens the mark instead of adding or removing it. Only
-     your own: the club's are compiled in and there is nothing to save
-     them to - their position is on the row either way, which is the
-     half of this that everything needs. */
-  if(courseEdit && !row.dataset.line){
-    if(isUserMark(row.dataset.mark)) mkOpen(row.dataset.mark);
-    return;
-  }
+     tap in it opens the mark instead of adding or removing it. ANY mark:
+     a club coordinate is a number off a sheet of paper, and the boat
+     standing at the buoy knows better. What that writes is an override -
+     see MARK_MOVES - so the book is still there to go back to. */
+  if(courseEdit && !row.dataset.line){ mkOpen(row.dataset.mark); return; }
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
   else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
@@ -8022,7 +8071,8 @@ function mkOpen(id){
   MK={f:'name', id:m?m.id:null,
       name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
       kb:{shift:false,sym:false,num:false}};
-  $('course-title').textContent = m ? 'Edit mark' : 'New mark';
+  $('course-title').textContent = !m ? 'New mark'
+    : isUserMark(m.id) ? 'Edit mark' : 'Correct mark';
   $('course-main').style.display='none'; $('course-add').style.display='';
   $('mk-msg').textContent=''; mkPaint();
 }
@@ -8068,6 +8118,19 @@ function mkSave(){
     const m=USER_MARKS.find(x=>x.id===MK.id);
     if(m){ m.name=name; m.hdr=name.slice(0,8).trim(); m.lat=lat; m.lon=lon;
            marksSave(); mkClose(); drawMap(shownTrack()); return; }
+    /* One of the club's. The compiled coordinate is left alone and an
+       override written over it - see MARK_MOVES. The name is stored only
+       when you actually changed it, so a correction stays a correction
+       and does not quietly freeze the club's name for this mark too. */
+    const c=MARKS.find(x=>x.id===MK.id);
+    if(c){
+      const v={lat:lat, lon:lon};
+      if(name && name!==c.name) v.name=name;
+      MARK_MOVES[MK.id]=v; markMovesSave();
+      c.lat=lat; c.lon=lon;
+      if(v.name){ c.name=v.name; c.hdr=v.name.slice(0,8).trim(); }
+      mkClose(); drawMap(shownTrack()); return;
+    }
   }
   const id='u'+Date.now().toString(36);
   const m={id, name, hdr:name.slice(0,8).trim(), lat, lon};

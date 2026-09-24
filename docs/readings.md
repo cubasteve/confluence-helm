@@ -388,9 +388,9 @@ water.
 
 A mark more than 200 m from where the boat actually sails never arms.
 That is not a tolerance to widen: it means the position is wrong, and
-the fix is to stand at the buoy, take a new mark with `HERE`, and put
-that one in the course. Meanwhile `BRG` in the RACE box advances the
-course on a double tap.
+the fix is to stand at the buoy and correct the mark with `HERE` —
+see below, it works on the club's marks too. Meanwhile `BRG` in the
+RACE box advances the course on a double tap.
 
 The next mark comes from the course set in the Tracks app: tap marks
 on the course sheet in the order you will sail them; the numbers on
@@ -431,17 +431,45 @@ onto another row and the mark takes that place in the list, the club's
 marks included, and the order is kept. A mark of your own gets a ✕ in
 edit mode, which removes it from the course and from storage.
 
-**Tapping a mark of your own in edit mode opens it**, with its name and
-position already in the fields, and `SAVE` writes over it rather than
-making a second one. Outside edit mode a tap still adds and removes
+**Tapping a mark in edit mode opens it**, with its name and position
+already in the fields. Outside edit mode a tap still adds and removes
 marks from the course, which is what that tap is for the rest of the
-time. The club's marks do not open: they are compiled into the page and
-there is nowhere to save them to — their position is on the row either
-way, which is the half of this that everything needs.
+time. `DONE` leaves edit mode.
 
-Before this a position could be written and never read back, so a mark
-typed slightly wrong could only be deleted and entered again. `DONE`
-leaves edit mode. Target speed and the wind
+What `SAVE` then does depends on whose mark it is.
+
+### Correcting the club's marks
+
+The coordinates in the file come from the sailing instructions, and the
+sailing instructions are not a survey. They are given to a tenth of a
+minute — 185 m of latitude before anyone mistypes anything — a buoy
+swings its rode around its anchor all day, and one gets dragged and
+reset a boat length from where it was without anybody writing it down.
+
+So **a club mark can be corrected from the boat, standing at it, with
+`HERE`** — the only instrument aboard that actually knows where the
+thing is. Tap `EDIT`, tap the mark, tap `HERE`, tap `SAVE`.
+
+| | |
+|---|---|
+| A mark of your own | edited in place — it *is* its position, there is nothing underneath |
+| A club mark | **overridden** — the compiled coordinate stays, the correction sits over it |
+
+A corrected mark writes its position in the accent colour on the sheet,
+so you can see at a glance you are no longer looking at what the book
+printed, and its row carries a **↺** where a mark of your own carries a
+bin. That puts the sailing instructions' number back.
+
+The override is stored by mark id, so it survives a reload and follows
+into the course, the map, the readings and the rounding. The compiled
+value is never touched — which matters the day the club re-lays a mark
+and republishes: the file updates, and you find out whether your
+correction still agrees with theirs.
+
+Only the position is stored unless you change the name too, so a
+correction stays a correction rather than quietly freezing the club's
+name for that mark as well. An override for a mark the file no longer
+has is kept rather than discarded — the club may bring it back. Target speed and the wind
 shift are not in the box: they are readings, picked into any slot like
 the rest.
 
