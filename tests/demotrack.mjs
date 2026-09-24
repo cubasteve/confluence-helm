@@ -49,6 +49,39 @@ ok(D.bands.length>=2, 'and holds bearings: the bands it spent the race on',
 ok(D.bands.some(x=>x>=290&&x<=360) && D.bands.some(x=>x>=100&&x<=160),
    'up the lake in the 300s, back down through the 120s', JSON.stringify(D.bands));
 
+console.log('\n=== the wind agrees with the track ===');
+const W=await p.evaluate(()=>{
+  const T=DEMO_TRACK, n=T.dlat.length;
+  let lo=999, hi=-999, kt=[], twa={};
+  for(let i=0;i<n;i+=2){
+    const t=i*T.step, w=demoWind(t), d=demoTrack(t);
+    const f=((w.from%360)+360)%360;
+    /* unwrapped about 022 so the oscillation reads as a range */
+    const rel=((f-22+540)%360)-180;
+    lo=Math.min(lo,rel); hi=Math.max(hi,rel); kt.push(w.kt);
+    if(d.sog*1.94384>3){
+      const a=Math.abs(((d.crs-f+540)%360)-180);
+      const b=Math.round(a/10)*10; twa[b]=(twa[b]||0)+1;
+    }
+  }
+  const band=(a,z)=>Object.keys(twa).filter(k=>+k>=a&&+k<=z)
+                     .reduce((s,k)=>s+twa[k],0);
+  return {lo, hi, min:Math.min(...kt), max:Math.max(...kt),
+          beat:band(30,50), reach:band(80,110), run:band(150,180),
+          between:band(60,70)};
+});
+ok(Math.abs(W.lo+W.hi)<3 && W.hi<14, 'it oscillates about NNE rather than wandering off',
+   W.lo.toFixed(0)+' to +'+W.hi.toFixed(0)+' deg of 022');
+ok(W.min>5.5 && W.max<13.1, 'between a lull and the reported gust',
+   W.min.toFixed(1)+' - '+W.max.toFixed(1)+' kt');
+/* The real check: resolve the courses she held against that wind and a
+   boat's three modes should fall out. They do, which is what says the
+   wind and the track are the same evening. */
+ok(W.beat>W.between*1.5, 'close-hauled is a mode, not a smear',
+   W.beat+' steps at 30-50 vs '+W.between+' at 60-70');
+ok(W.reach>60, 'so is reaching', W.reach+' steps at 80-110');
+ok(W.run>50, 'and so is running', W.run+' steps at 150-180');
+
 console.log('\n=== and the feed plays it ===');
 await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); demoSet(true); });
 await p.waitForTimeout(1500);

@@ -5933,15 +5933,14 @@ function paintBezel(){
 
    What the file has is position, time and GPS course. Everything else a
    boat publishes is reconstructed so that it AGREES with the track:
-   - true wind is NOT this evening's. It is the curve from the sail this
-     replaced - Open-Meteo's history for 2026-09-09, 4.8 kt from 047
-     falling to 2.3 kt from 024 - retimed onto this one, because the
-     archive would not answer when this track went in. The tacks in the
-     track say the breeze was somewhere in the north-west, which does
-     not agree with it. Everything derived from the wind is therefore
-     internally consistent and not what was actually felt: apparent wind
-     still flips at each tack, target speed and the shift still respond,
-     but the numbers are a different evening's;
+   - true wind is what was reported from the boat: north-north-east at
+     8 mph gusting 15, so 7.0 kt from 022 gusting 13.0, steady all
+     evening. It agrees with the track, which is the test that matters:
+     resolve every course she held against 022 and the angles pile up at
+     40 degrees off the wind, at 100, and at 160 to 170 - close-hauled,
+     reaching, running. Three modes where a boat has three. An earlier
+     pass here guessed north-west off the same histogram and was wrong;
+     it had read the reaching legs as beats;
    - apparent wind is the vector difference of that and the boat's own
      velocity, so it flips sides at each tack on the right bearing;
    - heading is the GPS course plus the local declination (6.6 W), so
@@ -5955,8 +5954,12 @@ const DEMO_TRACK={lat0:28.81525,lon0:-81.2663,crs0:307,step:8,
  dcrs:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,-10,-3,-1,2,-1,0,-3,-5,-12,-14,-7,16,45,45,16,0,-14,-14,-8,0,1,3,-1,2,1,14,20,19,12,4,4,2,3,2,-5,-3,-6,-1,-4,0,-4,0,-1,2,1,11,17,11,2,-1,3,2,9,-1,-2,-12,3,8,5,-5,6,6,7,2,1,1,2,5,8,4,-5,-9,-9,-4,-15,-23,-60,-21,29,60,21,11,4,7,2,3,-3,-3,-6,-7,-7,-4,-1,-3,-2,-6,-11,-41,-60,-20,-2,-2,-4,-3,-4,3,0,3,-6,-5,-5,3,2,5,3,4,1,-6,-6,-4,2,8,4,1,-7,-3,-2,-2,-4,-2,3,8,9,5,-2,-3,-3,-1,-3,-3,-1,2,4,4,0,-2,0,-1,1,0,3,2,-1,-1,1,-4,-8,-10,-4,0,7,11,13,6,0,-21,-39,-60,-52,-12,4,5,2,1,0,-2,-1,-2,0,-1,-1,-1,-1,-1,1,3,2,1,1,2,0,-1,2,0,0,-6,-1,-5,-2,-2,0,4,4,5,1,0,-3,-3,-1,2,-1,-2,-2,2,3,5,1,0,-3,0,-2,-1,-4,0,-1,0,-4,-2,-2,1,1,1,1,1,-1,-3,-3,-1,17,33,57,51,31,14,-1,-2,-11,-8,-13,-1,9,9,9,4,3,1,-1,3,-2,1,-2,4,2,4,-7,-20,-30,-60,-55,-20,6,8,6,-3,-1,-5,-6,-7,-2,0,1,1,2,2,1,-2,-3,-7,-18,-60,-56,-11,-3,-2,0,2,1,-1,-2,2,2,3,-3,-2,0,1,1,0,1,2,2,0,-1,-4,-5,-1,6,6,3,-12,-7,-6,3,2,-2,0,-2,-1,-3,-5,2,2,8,0,-1,-2,0,3,0,1,-2,-1,-1,4,3,3,-2,-2,0,0,2,2,0,-1,-3,-2,-1,2,5,2,-1,-2,1,4,0,-2,-1,0,0,-1,0,3,1,1,-1,-2,-1,-2,0,1,1,-1,0,2,3,-2,-1,-1,0,2,-1,0,-1,4,5,4,1,-5,-10,-9,5,21,60,50,14,-3,5,-1,0,-1,-1,-1,-5,0,1,2,2,0,1,-1,0,-1,-1,-1,0,-1,0,-1,1,0,2,3,2,-4,0,-1,2,-1,1,2,-1,-1,-1,2,2,1,-3,-1,-2,2,0,0,-1,-1,-1,3,3,3,2,2,2,-2,-2,-3,0,0,0,-1,1,1,-2,-4,-5,2,2,5,0,1,1,0,2,1,2,0,-1,-4,-4,-5,0,0,3,3,2,0,-1,0,4,2,1,1,-4,0,-4,1,-1,-1,3,3,2,-2,-3,0,2,1,0,-2,-2,-2,0,3,2,-1,-3,-3,0,0,0,-1,-2,-2,-3,-1,0,2,0,-5,-2,-3,4,-1,0,-24,-31,-31,-13,-14,-9,-5,-2,-2,1,-3,2,-1,2,0,4,0,0,-2,-1,-1,1,3,2,-1,0,-1,0,-1,3,4,2,2,3,3,-2,-6,-10,-6,0,2,0,-2,-1,0,2,-1,-3,-7,-2,-1,-2,-9,-14,-20,-28,-17,-3,2,-3,-3,-2,-2,2,1,-4,-7,-1,3,5,2,0,2,0,2,-2,0,-3,-2,0,2,1,0,1,1,-2,-3,-3,-1,1,2,3,-1,1,-1,2,0,3,-1,0,-4,0,-1,-1,0,-3,0,0,1,0,-1,-1,-1,-4,-1,-2,0,-2,0,4,4,4,1,-1,-1,-1,0,1,1,1,-1,-3,-1,0,-2,-1,0,4,0,2,2,5,-3,-8,-17,-12,-10,-10,-12,-13,-9,-12,-16,0,0,-60,-10,-12,-16,-24,-38,-34,-21,-13,1,1,1,4,4,8,11,9,9,-3,-9,-19,-22,-21,-11,-8,0,1,6,3,6,6,9,-2,-4,-4,1,-2,1,-1,12,7,31,52,59,29,16,5,1,-3,-3,1,0,0,-2,3,3,4,-1,0,0,1,-1,-3,-1,0,2,-2,0,-5,0,-2,1,-1,1,2,2,0,-1,3,2,0,-6,-11,-20,-20,-18,1,0,4,-4,-2,-3,-6,-3,-2,-3,-4,-4,-1,1,6,10,-7,-36,-57,-14,12,11,5,-1,1,-3,0,-1,3,1,0,-3,3,10,7,23,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]};
 const DEMO_SPEED=1;                  /* real time: the race is 116 minutes, as sailed */
 const DEMO_DECL=6.6;                 /* magnetic declination at Sanford, 2026, west */
-const DEMO_WIND=[                    /* [minutes after 18:00, kt, from deg, gust kt] */
-  [0, 4.8, 47, 9.5], [60, 2.3, 24, 7.2], [120, 1.2, 24, 3.9]];
+/* As sailed, reported from the boat: north-north-east at 8 mph gusting
+   15, which is 7.0 kt gusting 13.0. Steady - one breeze, all evening -
+   so the table is two identical ends and the oscillation below is what
+   makes it a breeze rather than a number.
+   [minutes after 18:00, kt, from deg, gust kt] */
+const DEMO_WIND=[[-30, 7.0, 22, 13.0], [120, 7.0, 22, 13.0]];
 const DEMO_T0_MIN=-19.05;            /* the watch started at 17:40:57 local */
 const demo=()=>demoSet(true);         /* what CFG.demo used to call by name */
 
@@ -5983,12 +5986,14 @@ function demoWind(t){                /* seconds into the sail -> true wind */
   for(let i=0;i<W.length-1;i++) if(m>=W[i][0]&&m<=W[i+1][0]){ a=W[i]; b=W[i+1]; break; }
   const f=Math.max(0,Math.min(1,(m-a[0])/(b[0]-a[0]||1)));
   const kt=a[1]+(b[1]-a[1])*f, gust=a[3]+(b[3]-a[3])*f;
-  /* Direction only interpolates while there is wind to have one -
-     between 047 and 024 - and drifts a little either side after, the way
-     a dying breeze wanders. Speed carries a slow pulse up towards the
-     gust figure, so the light air is not a flat line. */
-  const from=(m<=60 ? a[2]+(b[2]-a[2])*f : W[1][2]) + 9*Math.sin(t/95) + 4*Math.sin(t/23);
-  const spd=kt + (gust-kt)*0.35*(0.5+0.5*Math.sin(t/41)) + 0.4*Math.sin(t/7);
+  /* A steady breeze is not a constant. It oscillates, and the whole
+     point of the SHIFT reading is to show you which phase you are on -
+     so the direction carries two beats, about ten degrees either side
+     over three minutes with a shorter one inside it. Speed pulses up
+     towards the gust figure on its own rhythm, so the puffs and the
+     shifts do not arrive together the way an invented feed's would. */
+  const from=a[2]+(b[2]-a[2])*f + 7*Math.sin(t/190) + 3.5*Math.sin(t/47);
+  const spd=kt + (gust-kt)*0.45*(0.5+0.5*Math.sin(t/41)) + 0.4*Math.sin(t/7);
   return {kt:Math.max(0.3,spd), from:(from+360)%360};
 }
 

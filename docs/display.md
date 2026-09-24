@@ -300,10 +300,16 @@ What it plays is a **real race**: 116 minutes and 9.0 NM out of Lake
 Monroe Marina on the evening of 2026-09-23, beating up the lake on the
 300s and running back down through the 120s. Delta-encoded onto an
 8-second grid inside the page, within 3 m of the fixes it came from.
-The wind over it is *not* that evening's — the archive would not answer
-when the track went in, so it is the previous sail's curve retimed, and
-everything derived from it is internally consistent rather than what was
-actually felt.
+
+The wind over it is the one that was blowing: **north-north-east at
+8 mph gusting 15**, reported from the boat — 7.0 kt from 022 gusting
+13.0, oscillating about ten degrees either side the way a steady breeze
+does, so the shift reading has phases to show.
+
+It agrees with the track, which is the test worth doing. Resolve every
+course she held against 022 and the angles pile up in three places —
+40° off the wind, 100°, and 160 to 170. Close-hauled, reaching,
+running. Three modes where a boat has three.
 
 Hosting it beats a local file. `file://` works in some browsers and has
 its storage quietly disabled in others, and this page keeps your marks
