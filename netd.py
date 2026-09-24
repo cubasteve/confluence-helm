@@ -1153,10 +1153,17 @@ def buzz(ms, n, gap, kind=None, arm=False):
 
 # ----------------------------------------------------------------- score
 #
-# The club scores on Vudu Wave, and the browser cannot post to it. The
-# helm page is served off the Pi and vuduwave.com sends no CORS headers,
-# so a fetch from the page is refused before it leaves the machine. Same
-# reason the radios are here: a browser cannot do it, so this does.
+# The club scores on Vudu Wave, and this is the FALLBACK way to reach
+# it, not the only one. The page posts to vuduwave.com itself: the
+# server reflects whatever Origin it is asked from, so a browser's
+# fetch goes straight through, and a phone with no helper behind it can
+# submit exactly like the helm can. This was built on the opposite
+# belief - that the server sent no CORS headers - and that belief was
+# wrong, and cost the phone the feature until a preflight said so.
+#
+# What is left for this to do is the case the page cannot cover: a
+# proxy in the way, a TLS failure, a browser that refuses for its own
+# reasons. The page tries itself first and comes here when that throws.
 #
 # ONE race, ONE submission, and only ever because a hand on the glass
 # said yes. The two limits below are not for this boat's benefit - it is
