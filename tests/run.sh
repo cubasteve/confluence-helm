@@ -27,6 +27,7 @@ rc=0
 for f in tests/${1:-*}.mjs; do
   [ -e "$f" ] || { echo "no such probe: ${1:-}" >&2; exit 2; }
   n=$(basename "$f" .mjs)
+  [ "$n" = helpers ] && continue   # shared code, not a probe
   printf '%-12s ' "$n"
   if out=$(node "$f" 2>&1); then
     echo "OK   $(printf '%s' "$out" | tail -1)"
