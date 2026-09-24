@@ -239,12 +239,18 @@ moment, is a start on one night and a foul on the other.
 
 | | during the countdown | at zero | after |
 |---|---|---|---|
-| `GUN` | the line is **shut**. A crossing is being over early, and starts nothing | the gun goes, the race starts | the latest crossing within three minutes moves the start to it |
-| `WINDOW` | the line is **live**. Crossing is your gun, and the clock runs from that instant | if you never crossed, it starts anyway | same |
+| `GUN` | the line is **shut**. A crossing is being over early, and starts nothing | the gun goes, the race starts | **the gun stands.** Crossing twenty seconds late is twenty seconds of lost time |
+| `WINDOW` | the line is **live**. Crossing is your gun, and the clock runs from that instant | if you never crossed, it starts anyway | the latest crossing within three minutes moves the start to it |
 
 `GUN` is a proper sequence — Saturday. `WINDOW` is an open five minutes
 you go when you are ready — Wednesday. It is remembered across a
 restart, because it is a fact about the series and not about today.
+
+The difference *after* the gun is the one that reaches the scoreboard.
+On a gun start the fleet's time runs from the gun whoever was where, so
+a late crossing is lost time — the cost of a bad start, and not
+something an instrument gets to refund. On a window start your own
+crossing is your start, so the clock follows it.
 
 Either way, crossing **onto the course side** is what counts. Turning
 back across the line never starts the race — that crossing changes the

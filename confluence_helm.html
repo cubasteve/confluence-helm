@@ -54,18 +54,25 @@ body{                                   /* DAY - built to beat sun   */
   --bg:#F4F6F7; --ink:#080A0C; --ink-dim:#3A4248; --label:#5A636A;
   --hairline:#B9C1C7; --accent:#0B4FD6; --port:#C81E1E; --stbd:#0E7A43;
   --warn:#B36A00; --alarm:#C81E1E; --panel:#E4E8EA; --chip:#D2D8DC;
+  --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
   --bg:#0B0C0E; --ink:#F2F4F6; --ink-dim:#9AA2A9; --label:#6C757C;
   --hairline:#242A2F; --accent:#4A9EFF; --port:#FF4D4D; --stbd:#24D17E;
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
+  --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
   --bg:#050303; --ink:#C8342E; --ink-dim:#8A2723; --label:#5E1A17;
   --hairline:#1C0A09; --accent:#E04A3F; --port:#C8342E; --stbd:#C8342E;
   --warn:#C8342E; --alarm:#FF5A4E; --panel:#0E0605; --chip:#1A0A09;
+  /* Night keeps its one colour. Port and starboard are already the same
+     red here - that is the whole point of the theme - and a green pill
+     for a starboard rounding would undo an hour of dark adaptation for
+     a fact the box states in words two lines below it. */
+  --port-g1:#7A201C; --port-g2:#C8342E; --stbd-g1:#7A201C; --stbd-g2:#C8342E;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 
@@ -1688,6 +1695,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <linearGradient id="rp-g-racing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0E7A43"/><stop offset="1" stop-color="#24D17E"/></linearGradient>
     <linearGradient id="rp-g-mark"   x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C2410C"/><stop offset="1" stop-color="#FF8A1E"/></linearGradient>
     <linearGradient id="rp-g-finish" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2B3238"/><stop offset="1" stop-color="#6C757C"/></linearGradient>
+    <!-- Which way the next mark is to be left. These two take their
+         colours from the theme rather than carrying their own, because
+         the answer at night is that there is no colour - see body.night. -->
+    <linearGradient id="rp-g-port" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--port-g1)"/><stop offset="1" stop-color="var(--port-g2)"/></linearGradient>
+    <linearGradient id="rp-g-stbd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--stbd-g1)"/><stop offset="1" stop-color="var(--stbd-g2)"/></linearGradient>
   </defs>
   <g id="race">
     <!-- The pill says the race's state. Its width follows the word:
@@ -3265,13 +3277,28 @@ const RP_STATE={
   toFin:  {txt:'FINISH',    g:'rp-g-mark',   ic:'ic-finish'},   /* closing on the line */
   finish: {txt:'FINISHED',  g:'rp-g-finish', ic:'ic-finish'},
 };
+/* The pill and the box border carry which way the next mark is to be
+   left: RED for port, GREEN for starboard. It is the one thing about a
+   leg you have to have right before you get there and cannot work out
+   from the water, and the box spells it out in words - TO PORT - only
+   while the box is open. The pill is always up.
+   The finish line has no side, and neither has a race with no course
+   set, so both keep the plain racing green. That does mean a green
+   pill means starboard OR no course, which is only ambiguous on a rig
+   that never sets one - where it has always just meant racing. */
+const sideGrad = id => markSide(id)==='P' ? 'rp-g-port' : 'rp-g-stbd';
 function raceStatus(){
   if(tState==='idle') return RP_STATE.idle;
   if(tState==='countdown') return RP_STATE.count;
   if(tState==='finished') return RP_STATE.finish;
-  if(markNear){ const n=courseNext();
-    return n.id==='finish' ? RP_STATE.toFin : Object.assign({}, RP_STATE.mark, {txt:n.hdr}); }
-  return RP_STATE.racing;
+  const n=courseNext();
+  if(n.id==='finish') return markNear ? RP_STATE.toFin : RP_STATE.racing;
+  /* Near it the pill names the mark; on the leg it says RACING. Both
+     are coloured by the side, which is the question the whole leg is
+     sailed around. */
+  return Object.assign({}, markNear ? RP_STATE.mark : RP_STATE.racing,
+                       {g:sideGrad(n.id)},
+                       markNear ? {txt:n.hdr} : {});
 }
 let rpTxtW=null;                              /* the last word measured */
 function paintRace(met){
@@ -3352,9 +3379,10 @@ const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
    position, the speed or the clock can tell them apart, so this is a
    setting and not a guess - the START pills on the control panel.
 
-   Both end the same way. If the countdown reaches zero without a
-   crossing, the gun goes and the race starts regardless, and from
-   there the latest crossing within startWindow moves the start to it. */
+   Both sound the gun at zero and start the race there if no crossing
+   has done it already. They part again afterwards: on a WINDOW night
+   the crossing is still your start and the clock moves to it, and on a
+   GUN night the gun stands and a late crossing is lost time. */
 const START_MODES=['gun','window'];
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
@@ -3412,10 +3440,17 @@ function lineWatch(){
       else console.log('[helm] crossed the line,',
                        COURSE.marks.length-COURSE.next, 'mark(s) to go');
     }
-    /* The LATEST crossing inside the window is the start: a boat that
-       crosses, is recalled, comes back and crosses again started the
-       second time. */
-    else if(was.d>0 && now-tGun<LINE_AUTO.startWindow){
+    /* On a WINDOW night the latest crossing inside the window is the
+       start: a boat that crosses, thinks better of it, comes back and
+       crosses again started the second time.
+       On a GUN night it is not. The gun is the gun and the clock runs
+       from it whoever was where - crossing twenty seconds late is
+       twenty seconds of lost time, which is the whole cost of a bad
+       start and not something an instrument gets to refund. Moving the
+       start to the crossing would have handed back exactly the seconds
+       the fleet just took off you, and submitted the short figure. */
+    else if(CFG.startMode==='window'
+            && was.d>0 && now-tGun<LINE_AUTO.startWindow){
       tGun=at; console.log('[helm] started on the line'); }
   }
 }

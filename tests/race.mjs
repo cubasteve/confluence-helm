@@ -63,31 +63,35 @@ const twice=await p.evaluate(()=>{
 });
 t.ok(twice.length===1, 'eight ticks on 0:10 sound once', JSON.stringify(twice));
 
-t.head('the line starts the race');
+t.head('after the gun, what a crossing is worth depends on the night');
 const start=await p.evaluate(()=>{
   LINE={pin:{lat:28.8000,lon:-81.2700}, boat:{lat:28.8000,lon:-81.2670}}; saveLine();
   COURSE.marks=[]; COURSE.next=0; courseSave();
   const feed=(la,lo)=>{ put('pos.lat',la); put('pos.lon',lo);
                         put('environment.wind.directionTrue',0); };
-  /* Onto the course side, a minute after the gun. Positive distance is
-     the PRE-START side, so this is the direction that counts as
-     starting - the other way is coming back for a recall. */
-  tState='racing'; tGun=Date.now()-60000; lineArmed=false; lineWas=null;
-  feed(28.79975,-81.2690); lineWatch();
-  feed(28.80025,-81.2690); lineWatch();
-  const moved=Math.round((Date.now()-tGun)/1000);
-  /* the same two fixes the other way round: back over the line is a
-     boat returning, not one starting */
-  tState='racing'; tGun=Date.now()-60000; lineArmed=false; lineWas=null;
-  feed(28.80025,-81.2690); lineWatch();
-  feed(28.79975,-81.2690); lineWatch();
-  return {gunMovedBy:moved, back:Math.round((Date.now()-tGun)/1000), state:tState};
+  /* Positive distance is the PRE-START side, so south-then-north is the
+     direction that counts as starting; the other way is turning back. */
+  const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
+  const run=(mode, from, to)=>{
+    CFG.startMode=mode;
+    tState='racing'; tGun=Date.now()-60000; lineArmed=false; lineWas=null;
+    feed(from[0],from[1]); lineWatch();
+    feed(to[0],to[1]);     lineWatch();
+    return {since:Math.round((Date.now()-tGun)/1000), state:tState};
+  };
+  const out={ win:run('window',S,N), winBack:run('window',N,S),
+              gun:run('gun',S,N) };
+  CFG.startMode='gun'; return out;
 });
-t.ok(start.state==='racing', 'crossing does not finish it');
-t.ok(start.gunMovedBy<5, 'it moves the gun to the crossing - a recall costs you nothing',
-     start.gunMovedBy+' s since the gun');
-t.ok(start.back===60, 'and crossing back the other way does not',
-     start.back+' s since the gun');
+t.ok(start.win.state==='racing', 'crossing does not finish it');
+t.ok(start.win.since<5,
+     'WINDOW: your crossing is your start, so the clock moves to it',
+     start.win.since+' s since the gun');
+t.ok(start.winBack.since===60, 'but only onto the course side, not back off it',
+     start.winBack.since+' s since the gun');
+t.ok(start.gun.since===60,
+     'GUN: the gun stands, and crossing a minute late is a minute lost',
+     start.gun.since+' s since the gun');
 
 t.head('the two kinds of start, which only a setting tells apart');
 /* Saturday's line is shut until zero; Wednesday's is open from the off.
@@ -169,9 +173,12 @@ const zero=await p.evaluate(()=>{
 });
 t.ok(zero.gun==='racing' && zero.window==='racing',
      'a countdown that runs out starts the race in both', JSON.stringify(zero));
-t.ok(zero.gunMoved<5 && zero.windowMoved<5,
-     'and the crossing after it is still the start, in both',
-     zero.gunMoved+' / '+zero.windowMoved+' s since the gun');
+t.ok(zero.windowMoved<5,
+     'WINDOW: the crossing after it is still your start, so the clock moves to it',
+     zero.windowMoved+' s since the gun');
+t.ok(zero.gunMoved===60,
+     'GUN: the gun stands, and crossing a minute late is a minute of lost time',
+     zero.gunMoved+' s since the gun');
 
 t.head('the pills say which, and are remembered');
 const pills=await p.evaluate(()=>{

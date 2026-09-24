@@ -71,6 +71,65 @@ t.head('and the finish');
 await p.evaluate(()=>{ tState='finished'; tFinal=2895000; paintRace(); });
 t.ok((await pill()).txt==='FINISHED', 'once it is over', (await pill()).txt);
 
+t.head('the pill and the border carry which way to leave the mark');
+/* The one thing about a leg you have to have right before you get
+   there. raceStatus() is pure; markNear belongs to the render loop, so
+   it is set and asked in the same turn - nothing runs in between. */
+const side=(sd,near,done)=>p.evaluate(([sd,near,done])=>{
+  COURSE.marks=['rum','gosling']; COURSE.next=done?2:0;
+  COURSE.side={rum:sd,gosling:sd}; courseSave();
+  tState='racing'; markNear=near;
+  const r=raceStatus(); paintRace();
+  return {g:r.g, txt:r.txt, pill:$('rp-pill').getAttribute('fill'),
+          face:$('rp-face').getAttribute('stroke')};
+},[sd,near,done]);
+let S=await side('P',false,false);
+t.ok(S.g==='rp-g-port', 'a port rounding is red, the whole leg', S.g);
+t.ok(S.pill==='url(#rp-g-port)' && S.face==='url(#rp-g-port)',
+     'on the pill AND on the box border', S.pill+' / '+S.face);
+t.ok(S.txt==='RACING', 'and the pill still says what state it is in', S.txt);
+S=await side('S',false,false);
+t.ok(S.g==='rp-g-stbd', 'a starboard rounding is green', S.g);
+t.ok(S.pill==='url(#rp-g-stbd)' && S.face==='url(#rp-g-stbd)', 'both, again');
+S=await side('P',true,false);
+t.ok(S.g==='rp-g-port' && S.txt==='RUM',
+     'close to it the pill names the mark and keeps the colour',
+     S.g+' '+S.txt);
+t.ok((await side('S',true,false)).g==='rp-g-stbd', 'the other way too');
+S=await side('S',false,true);
+t.ok(S.g==='rp-g-racing', 'a finish line has no side, so it is the plain racing green',
+     S.g);
+S=await side('S',true,true);
+t.ok(S.g==='rp-g-mark' && S.txt==='FINISH', 'and closing on it is its own thing',
+     S.g+' '+S.txt);
+const none=await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; courseSave();
+  tState='racing'; markNear=false; return raceStatus().g; });
+t.ok(none==='rp-g-racing', 'and so is a race with no course set at all', none);
+
+t.head('at night neither of them is a colour');
+/* The night theme is one red so an hour of dark adaptation survives
+   looking at the screen. A green pill would undo it for a fact the box
+   states in words two lines below. */
+const dark=await p.evaluate(()=>{
+  COURSE.marks=['rum']; COURSE.next=0; COURSE.side={rum:'S'}; courseSave();
+  const read=th=>{ CFG.theme=th; applyTheme();
+    const g=getComputedStyle(document.body);
+    return {p1:g.getPropertyValue('--port-g1').trim(),
+            p2:g.getPropertyValue('--port-g2').trim(),
+            s1:g.getPropertyValue('--stbd-g1').trim(),
+            s2:g.getPropertyValue('--stbd-g2').trim()}; };
+  const out={day:read('day'), night:read('night')};
+  CFG.theme='day'; applyTheme(); return out;
+});
+t.ok(dark.day.p1!==dark.day.s1 && dark.day.p2!==dark.day.s2,
+     'by day the two are different colours', JSON.stringify(dark.day));
+t.ok(dark.night.p1===dark.night.s1 && dark.night.p2===dark.night.s2,
+     'at night they are the same one', JSON.stringify(dark.night));
+t.ok(!/#(0E7A43|24D17E)/i.test(JSON.stringify(dark.night)),
+     'and no green survives into it', JSON.stringify(dark.night));
+t.ok((await side('S',false,false)).g==='rp-g-stbd',
+     'the gradient is still chosen by side - the theme decides what it looks like');
+
 t.head('the pill is a button in every state');
 /* Pointer events, not a click: the pill claims the gesture on
    pointerdown so the judge cannot also read the tap as a swipe. */
