@@ -296,9 +296,11 @@ the panel and it has a boat to draw — the feed writes into the same
 store the real sensors do, and it is a saved preference, so it is still
 on after a reload.
 
-What it plays is a **real race**: 116 minutes and 9.0 NM out of Lake
+What it plays is a **real race**: 74 minutes and 5.65 NM out of Lake
 Monroe Marina on the evening of 2026-09-23, beating up the lake on the
-300s and running back down through the 120s. Delta-encoded onto an
+300s and running back down through the 120s. It opens at the gun,
+18:23 — the 42 minutes before it, the sail out and whatever was
+happening before the start, are not in the file. Delta-encoded onto an
 8-second grid inside the page, within 3 m of the fixes it came from.
 
 The wind over it is the one that was blowing: **north-north-east at
