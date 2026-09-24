@@ -232,9 +232,20 @@ Both fixes have to fall between the ends, so a boat rounding outside
 the pin is not a crossing, and a jump of more than 80 m between them is
 discarded as a bad fix rather than believed.
 
-*The start.* The latest crossing within three minutes of the gun moves
-the start time to it — a boat that crosses, is recalled, comes back and
-crosses again started the second time.
+*The start.* Crossing **onto the course side** is what counts; coming
+back the other way, as a boat over early does, never is.
+
+- **In the last minute of the countdown**, the crossing *is* the gun —
+  the clock stops counting down, sounds the gun and starts counting up
+  from the instant you crossed. A countdown started late, or set a
+  minute long, has you crossing a real start line while the app still
+  says `COUNTDOWN`; the line is right and the clock is not. Earlier than
+  the last minute nothing happens, because a bow over the line at four
+  minutes is a dip or a timed run, and starting the race on one would
+  cost you the start it was rehearsing.
+- **Within three minutes after the gun**, the latest crossing moves the
+  start time to it — a boat that crosses, is recalled, comes back and
+  crosses again started the second time.
 
 *The finish* needs two more things to be true:
 

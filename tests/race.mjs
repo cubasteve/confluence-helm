@@ -89,6 +89,52 @@ t.ok(start.gunMovedBy<5, 'it moves the gun to the crossing - a recall costs you 
 t.ok(start.back===60, 'and crossing back the other way does not',
      start.back+' s since the gun');
 
+t.head('and starts it from the countdown, when the line beats the clock');
+/* The countdown is your own timer; the line is the committee's. A
+   countdown started late has the boat crossing a real start line while
+   the app still says COUNTDOWN. */
+const early=await p.evaluate(()=>{
+  const feed=(la,lo)=>{ put('pos.lat',la); put('pos.lon',lo);
+                        put('environment.wind.directionTrue',0); };
+  const guns=[]; const realSig=window.signal;
+  window.signal=k=>{ guns.push(k); };
+  /* south of this line is the pre-start side, north the course side */
+  const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
+  const run=(left, from, to)=>{
+    tState='countdown'; tEnd=Date.now()+left; lineArmed=false; lineWas=null;
+    guns.length=0;
+    feed(from[0],from[1]); lineWatch();
+    feed(to[0],to[1]);     lineWatch();
+    return {state:tState, since:Date.now()-tGun, guns:guns.slice(),
+            armed:lineArmed};
+  };
+  const out={ atThirty:run(30000, S, N),
+              back:    run(30000, N, S),
+              fourMin: run(240000, S, N) };
+  /* and with no countdown at all, the line is not a starter */
+  tState='idle'; lineWas=null;
+  feed(S[0],S[1]); lineWatch(); feed(N[0],N[1]); lineWatch();
+  out.idle=tState;
+  window.signal=realSig; tState='idle';
+  return out;
+});
+t.ok(early.atThirty.state==='racing',
+     'crossing onto the course side at 0:30 starts the race', early.atThirty.state);
+t.ok(early.atThirty.since>=0 && early.atThirty.since<2000,
+     'and the clock runs from the crossing, not from the countdown\'s zero',
+     early.atThirty.since+' ms elapsed');
+t.ok(early.atThirty.guns.join()==='gun', 'the gun goes with it',
+     JSON.stringify(early.atThirty.guns));
+t.ok(early.atThirty.armed===false,
+     'and the line is not armed, so the next crossing is not a finish');
+t.ok(early.back.state==='countdown',
+     'a boat over early coming BACK is not a start', early.back.state);
+t.ok(early.back.guns.length===0, 'and sounds nothing');
+t.ok(early.fourMin.state==='countdown',
+     'nor is a dip at four minutes - that is a timed run, not a start',
+     early.fourMin.state);
+t.ok(early.idle==='idle', 'and with no countdown running, the line starts nothing');
+
 t.head('and finishes it, but only when the course is sailed');
 const fin=await p.evaluate(()=>{
   const feed=(la,lo)=>{ put('pos.lat',la); put('pos.lon',lo);

@@ -3308,14 +3308,23 @@ function paintRace(met){
   }
 }
 
-const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
+/* startWindow: after the gun, how long a crossing still counts as the
+     start rather than a lap.
+   early: before the gun, how long a crossing counts as the start at
+     all. The countdown is your own timer and the line is the committee's
+     - when they disagree the line is right, but only near the gun. A
+     bow over the line at four minutes is a dip or a timed run, and
+     starting the race on one would cost you the start it was
+     rehearsing. Earlier than this, the double-tap on the clock is
+     still there and is unambiguous. */
+const LINE_AUTO={startWindow:180000, early:60000, away:60, slack:0.1, maxJump:80};
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
-   hand, and nothing after the finish or a reset. That was already true
-   of the start - the only ways into RACING are the countdown reaching
-   zero or the double-tap during it - but it is stated here rather than
-   implied, and the course watcher below leans on the same test so that
-   rounding a mark on a Sunday potter, clock idle, does not move it. */
+   hand, and nothing after the finish or a reset. The countdown itself
+   is always started by a hand on the glass; from there the line can
+   start the race, move the gun to where it really went, and end it.
+   The course watcher below leans on the same test so that rounding a
+   mark on a Sunday potter, clock idle, does not move it. */
 const raceOn=()=>tState==='countdown'||tState==='racing';
 function lineWatch(){
   if(!raceOn()){ lineWas=null; return; }
@@ -3336,6 +3345,25 @@ function lineWatch(){
   if(!crossed) return;
   /* the instant: where between the two fixes the distance passed zero */
   const f=was.d/(was.d-d), at=was.t+(now-was.t)*f;
+  /* THE GUN, when the line beats the clock to it. The countdown running
+     to zero is one way into RACING and this is the other: a countdown
+     started late, or set a minute long, has the boat crossing a real
+     start line while the app still says COUNTDOWN, and the crossing is
+     the true start - so the clock takes it and runs from there.
+     Only ONTO the course side. A boat that is over early comes back
+     across the other way, and that crossing changes the sign just the
+     same; taking it would start the race as she retreats from the line.
+     Coming back does nothing, and the crossing that follows it starts
+     her, which is the outcome anyone would want. */
+  if(tState==='countdown'){
+    if(was.d>0 && d<=0 && tEnd-now < LINE_AUTO.early){
+      signal('gun'); sigSec=null;
+      startRace(); tGun=at;       /* the crossing, not the moment we noticed */
+      console.log('[helm] started on the line,',
+        ((tEnd-at)/1000).toFixed(1), 's before the clock would have');
+    }
+    return;
+  }
   if(tState==='racing'){
     if(lineArmed){
       /* The course has to be sailed first. Plenty of club courses bring
