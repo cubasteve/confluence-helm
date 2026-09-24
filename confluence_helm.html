@@ -526,6 +526,16 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   letter-spacing:.14em;color:var(--label)}
 /* :active handled by the single .mini:active rule above */
 
+/* The lit one of a pair, where both choices stay on the glass: the
+   setting has to read at a glance from the wheel, and a single pill
+   that says only what it is now cannot say what the other one would
+   be. Accent rather than amber - neither mode is a warning. */
+.mini.wide.on{color:var(--accent);border-color:var(--accent)}
+/* Under the pair rather than beside it: what the mode means is a
+   sentence, and a sentence does not fit in a row of two pills. */
+.startwhy{margin-top:14px;font-size:20px;letter-spacing:.1em;
+  text-transform:uppercase;line-height:1.5}
+
 .senrow{position:relative;margin-bottom:26px}
 #sen-svg{display:block;width:340px;height:60px;margin:0 auto}
 /* Absolutely placed rather than laid out in a flex row, so the four
@@ -1876,6 +1886,18 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       </div>
     </div>
 
+    <!-- Which club night this is. GUN is a proper sequence with the
+         line shut until zero; WINDOW is an open five minutes you go
+         when you are ready. The line cannot tell them apart - the same
+         crossing is a start on one night and a foul on the other - so
+         it is asked here, once, before the sequence. -->
+    <div class="slab">Start</div>
+    <div class="steprow">
+      <button class="mini wide" id="st-gun">GUN</button>
+      <button class="mini wide" id="st-win">WINDOW</button>
+    </div>
+    <div class="hint startwhy" id="st-why"></div>
+
     <!-- Shown only when netd reports a sounder. Its whole job is the
          question you cannot answer from the cockpit any other way: is
          the thing plugged in, and can I hear it from back there. So it
@@ -2296,6 +2318,10 @@ const CFG={
   dim:100,                           /* brightness, 25-100 - see applyDim */
   grooveMin:35, grooveMax:50,
   staleAfter:8000, startMins:5,
+  /* Which kind of start the line is watching for - see lineWatch. The
+     two club nights want opposite things from the same crossing, and
+     nothing in the data tells them apart. */
+  startMode:'gun',
   /* smoothing time constant in ms. Longer = calmer but laggier. Must stay
      above the SignalK feed period (250 ms) or the steps show through. */
   smoothTau:420,
@@ -3309,15 +3335,27 @@ function paintRace(met){
 }
 
 /* startWindow: after the gun, how long a crossing still counts as the
-     start rather than a lap.
-   early: before the gun, how long a crossing counts as the start at
-     all. The countdown is your own timer and the line is the committee's
-     - when they disagree the line is right, but only near the gun. A
-     bow over the line at four minutes is a dip or a timed run, and
-     starting the race on one would cost you the start it was
-     rehearsing. Earlier than this, the double-tap on the clock is
-     still there and is unambiguous. */
-const LINE_AUTO={startWindow:180000, early:60000, away:60, slack:0.1, maxJump:80};
+     start rather than a lap. */
+const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
+/* ---- the two kinds of start -------------------------------------------
+   Saturday is a GUN start: the sequence runs down and the line is shut
+   until zero. A bow over it before then is being over early, and the
+   boat has to come back - so a crossing during the countdown means the
+   opposite of starting, and the clock ignores it.
+
+   Wednesday is a WINDOW start: the five minutes is a window that is
+   OPEN, and you go when you are ready. The line is live from the off,
+   your own crossing is the gun, and the clock runs from it.
+
+   The same crossing, at the same place, at the same moment: on one
+   night it is a start and on the other it is a foul. Nothing in the
+   position, the speed or the clock can tell them apart, so this is a
+   setting and not a guess - the START pills on the control panel.
+
+   Both end the same way. If the countdown reaches zero without a
+   crossing, the gun goes and the race starts regardless, and from
+   there the latest crossing within startWindow moves the start to it. */
+const START_MODES=['gun','window'];
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
    hand, and nothing after the finish or a reset. The countdown itself
@@ -3345,22 +3383,17 @@ function lineWatch(){
   if(!crossed) return;
   /* the instant: where between the two fixes the distance passed zero */
   const f=was.d/(was.d-d), at=was.t+(now-was.t)*f;
-  /* THE GUN, when the line beats the clock to it. The countdown running
-     to zero is one way into RACING and this is the other: a countdown
-     started late, or set a minute long, has the boat crossing a real
-     start line while the app still says COUNTDOWN, and the crossing is
-     the true start - so the clock takes it and runs from there.
-     Only ONTO the course side. A boat that is over early comes back
-     across the other way, and that crossing changes the sign just the
-     same; taking it would start the race as she retreats from the line.
-     Coming back does nothing, and the crossing that follows it starts
-     her, which is the outcome anyone would want. */
+  /* THE GUN, on a window start, is your own crossing - see START_MODES.
+     Only ONTO the course side. A boat that thinks better of it turns
+     back across the line, and that crossing changes the sign exactly as
+     a start does; taking it would start the race as she retreats. Going
+     back does nothing, and the crossing that follows it starts her. */
   if(tState==='countdown'){
-    if(was.d>0 && d<=0 && tEnd-now < LINE_AUTO.early){
+    if(CFG.startMode==='window' && was.d>0 && d<=0){
       signal('gun'); sigSec=null;
       startRace(); tGun=at;       /* the crossing, not the moment we noticed */
-      console.log('[helm] started on the line,',
-        ((tEnd-at)/1000).toFixed(1), 's before the clock would have');
+      console.log('[helm] started in the window,',
+        ((tEnd-at)/1000).toFixed(1), 's of it left');
     }
     return;
   }
@@ -4538,7 +4571,9 @@ const PREF_DEFS={
   windDemo:   v=>typeof v==='boolean' ? v : null,
   /* Persisted for the same reason: a phone you race with should come
      back up reading its own GPS without being told again. */
-  phoneGps:   v=>typeof v==='boolean' ? v : null
+  phoneGps:   v=>typeof v==='boolean' ? v : null,
+  /* And this one because it is a fact about the series, not the day. */
+  startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -8020,6 +8055,26 @@ function renderCourse(){
   box.innerHTML=lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
+/* ---- which start ------------------------------------------------------
+   Persisted, because it is a fact about the series you are sailing and
+   not about today: whoever races Wednesdays races them every Wednesday,
+   and a setting that forgets over a restart is one you find out about
+   at the gun. */
+function startModePaint(){
+  const w=CFG.startMode==='window';
+  wCls('st-gun','on',!w); wCls('st-win','on',w);
+  wAttr('st-gun','aria-pressed', w?'false':'true');
+  wAttr('st-win','aria-pressed', w?'true':'false');
+  wText('st-why', w ? 'THE LINE IS LIVE · CROSS WHEN READY'
+                    : 'THE LINE IS SHUT UNTIL ZERO');
+}
+function startModeSet(m){
+  if(START_MODES.indexOf(m)<0 || CFG.startMode===m) return;
+  CFG.startMode=m; startModePaint(); prefsSave();
+}
+$('st-gun').addEventListener('click',()=>startModeSet('gun'));
+$('st-win').addEventListener('click',()=>startModeSet('window'));
+
 $('trk-course').addEventListener('click',()=>{
   if($('t-course').classList.contains('on')) closeLib(); else { hideQR(); $('t-lib').classList.remove('on'); openCourse(); } });
 $('course-list').addEventListener('click',e=>{
@@ -10572,6 +10627,7 @@ drawDemo();
    browser asks for location, which is the right moment because you
    asked for it last time. */
 drawPhone(); if(CFG.phoneGps) phoneStart();
+startModePaint();      /* stored before this session; the pills say which */
 /* A race held from a previous session, for the same reason: HELD is
    read at its declaration, but the card it draws is markup, and this
    is where persisted state gets painted. */

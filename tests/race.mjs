@@ -89,51 +89,107 @@ t.ok(start.gunMovedBy<5, 'it moves the gun to the crossing - a recall costs you 
 t.ok(start.back===60, 'and crossing back the other way does not',
      start.back+' s since the gun');
 
-t.head('and starts it from the countdown, when the line beats the clock');
-/* The countdown is your own timer; the line is the committee's. A
-   countdown started late has the boat crossing a real start line while
-   the app still says COUNTDOWN. */
-const early=await p.evaluate(()=>{
+t.head('the two kinds of start, which only a setting tells apart');
+/* Saturday's line is shut until zero; Wednesday's is open from the off.
+   The SAME crossing, at the same place and moment, means opposite
+   things - so the probe runs one fixture through both modes. */
+const both=await p.evaluate(()=>{
   const feed=(la,lo)=>{ put('pos.lat',la); put('pos.lon',lo);
                         put('environment.wind.directionTrue',0); };
   const guns=[]; const realSig=window.signal;
   window.signal=k=>{ guns.push(k); };
   /* south of this line is the pre-start side, north the course side */
   const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
-  const run=(left, from, to)=>{
+  const run=(mode, left, from, to)=>{
+    CFG.startMode=mode;
     tState='countdown'; tEnd=Date.now()+left; lineArmed=false; lineWas=null;
     guns.length=0;
     feed(from[0],from[1]); lineWatch();
     feed(to[0],to[1]);     lineWatch();
     return {state:tState, since:Date.now()-tGun, guns:guns.slice(),
-            armed:lineArmed};
+            armed:lineArmed, left:Math.round((tEnd-Date.now())/1000)};
   };
-  const out={ atThirty:run(30000, S, N),
-              back:    run(30000, N, S),
-              fourMin: run(240000, S, N) };
-  /* and with no countdown at all, the line is not a starter */
-  tState='idle'; lineWas=null;
+  const out={
+    /* a window start, taken early and taken late */
+    winEarly: run('window', 240000, S, N),
+    winLate:  run('window',  20000, S, N),
+    winBack:  run('window',  20000, N, S),
+    /* the same crossings on a gun night */
+    gunFour:  run('gun',    240000, S, N),
+    gunLate:  run('gun',     20000, S, N) };
+  /* and with no countdown running, neither mode starts anything */
+  CFG.startMode='window'; tState='idle'; lineWas=null;
   feed(S[0],S[1]); lineWatch(); feed(N[0],N[1]); lineWatch();
   out.idle=tState;
-  window.signal=realSig; tState='idle';
+  window.signal=realSig; CFG.startMode='gun'; tState='idle';
   return out;
 });
-t.ok(early.atThirty.state==='racing',
-     'crossing onto the course side at 0:30 starts the race', early.atThirty.state);
-t.ok(early.atThirty.since>=0 && early.atThirty.since<2000,
-     'and the clock runs from the crossing, not from the countdown\'s zero',
-     early.atThirty.since+' ms elapsed');
-t.ok(early.atThirty.guns.join()==='gun', 'the gun goes with it',
-     JSON.stringify(early.atThirty.guns));
-t.ok(early.atThirty.armed===false,
+t.ok(both.winEarly.state==='racing',
+     'WINDOW: crossing with four minutes left is a start - the window is open',
+     both.winEarly.state+' with '+both.winEarly.left+' s left');
+t.ok(both.winEarly.since>=0 && both.winEarly.since<2000,
+     'and the clock runs from the crossing, not from the window\'s end',
+     both.winEarly.since+' ms elapsed');
+t.ok(both.winEarly.guns.join()==='gun', 'your own gun goes with it',
+     JSON.stringify(both.winEarly.guns));
+t.ok(both.winEarly.armed===false,
      'and the line is not armed, so the next crossing is not a finish');
-t.ok(early.back.state==='countdown',
-     'a boat over early coming BACK is not a start', early.back.state);
-t.ok(early.back.guns.length===0, 'and sounds nothing');
-t.ok(early.fourMin.state==='countdown',
-     'nor is a dip at four minutes - that is a timed run, not a start',
-     early.fourMin.state);
-t.ok(early.idle==='idle', 'and with no countdown running, the line starts nothing');
+t.ok(both.winLate.state==='racing', 'WINDOW: and so is one with twenty seconds left',
+     both.winLate.state);
+t.ok(both.winBack.state==='countdown',
+     'WINDOW: turning back across the line is not a start', both.winBack.state);
+t.ok(both.winBack.guns.length===0, 'and sounds nothing');
+t.ok(both.gunFour.state==='countdown',
+     'GUN: the identical crossing is being over early, and starts nothing',
+     both.gunFour.state);
+t.ok(both.gunLate.state==='countdown',
+     'GUN: still nothing at twenty seconds - the line is shut until zero',
+     both.gunLate.state);
+t.ok(both.gunLate.guns.length===0, 'and the gun is the clock\'s to fire, not the line\'s');
+t.ok(both.idle==='idle', 'and with no countdown running, neither mode starts anything');
+
+t.head('either way, zero starts the race and the line then moves it');
+const zero=await p.evaluate(()=>{
+  const feed=(la,lo)=>{ put('pos.lat',la); put('pos.lon',lo);
+                        put('environment.wind.directionTrue',0); };
+  const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
+  const out={};
+  const realSig=window.signal; window.signal=()=>{};
+  for(const mode of ['gun','window']){
+    CFG.startMode=mode;
+    tState='countdown'; tEnd=Date.now()-1; lineWas=null;
+    tick();                                   /* the clock reaches zero */
+    out[mode]=tState;
+    /* and a crossing a minute later still moves the gun to it */
+    tGun=Date.now()-60000; lineArmed=false; lineWas=null;
+    feed(S[0],S[1]); lineWatch(); feed(N[0],N[1]); lineWatch();
+    out[mode+'Moved']=Math.round((Date.now()-tGun)/1000);
+  }
+  window.signal=realSig; CFG.startMode='gun'; tState='idle'; return out;
+});
+t.ok(zero.gun==='racing' && zero.window==='racing',
+     'a countdown that runs out starts the race in both', JSON.stringify(zero));
+t.ok(zero.gunMoved<5 && zero.windowMoved<5,
+     'and the crossing after it is still the start, in both',
+     zero.gunMoved+' / '+zero.windowMoved+' s since the gun');
+
+t.head('the pills say which, and are remembered');
+const pills=await p.evaluate(()=>{
+  const read=()=>({gun:$('st-gun').classList.contains('on'),
+                   win:$('st-win').classList.contains('on'),
+                   why:$('st-why').textContent});
+  const out={start:read()};
+  $('st-win').click(); out.win=read();
+  out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
+  $('st-gun').click(); out.back=read();
+  return out;
+});
+t.ok(pills.start.gun && !pills.start.win, 'a gun start until told otherwise');
+t.ok(pills.win.win && !pills.win.gun, 'tapping WINDOW lights it and puts GUN out');
+t.ok(/LIVE/.test(pills.win.why) && /SHUT/.test(pills.start.why),
+     'and each says what the line will do', pills.win.why+' | '+pills.start.why);
+t.ok(pills.stored==='window', 'it is remembered across a restart', String(pills.stored));
+t.ok(pills.back.gun && !pills.back.win, 'and it goes back');
 
 t.head('and finishes it, but only when the course is sailed');
 const fin=await p.evaluate(()=>{

@@ -14,7 +14,8 @@ const store=k=>p.evaluate(k=>localStorage.getItem(k), k);
 
 t.head('the preferences');
 await p.evaluate(()=>{ CFG.theme='night'; CFG.depthUnit='m'; CFG.depthAlarm=4;
-  CFG.depthWarn=8; CFG.dim=55; CFG.windDemo=false; prefsSave(); });
+  CFG.depthWarn=8; CFG.dim=55; CFG.windDemo=false; CFG.startMode='window';
+  prefsSave(); });
 await reboot();
 let C=await p.evaluate(()=>({theme:CFG.theme, u:CFG.depthUnit, a:CFG.depthAlarm,
   w:CFG.depthWarn, dim:CFG.dim, wd:CFG.windDemo}));
@@ -24,6 +25,11 @@ t.ok(C.w===8, 'the warning, derived from the alarm rather than stored', String(C
 t.ok(C.dim===55, 'the brightness', String(C.dim));
 t.ok(C.wd===false, 'and the invented wind, off - which is the point of storing it',
      String(C.wd));
+t.ok(await p.evaluate(()=>CFG.startMode)==='window',
+     'and which club night this is - found out at the gun otherwise',
+     await p.evaluate(()=>CFG.startMode));
+t.ok(await p.evaluate(()=>$('st-win').classList.contains('on')),
+     'with the pill lit to say so');
 t.ok(await p.evaluate(()=>document.body.className)==='night',
      'and the theme is actually applied, not just remembered',
      await p.evaluate(()=>document.body.className));
@@ -33,7 +39,7 @@ t.ok(await p.evaluate(()=>$('theme-lbl').textContent)==='NIGHT',
 t.head('a stored value that is nonsense is ignored, not obeyed');
 await p.evaluate(()=>localStorage.setItem('helmPrefs', JSON.stringify(
   {theme:'chartreuse', depthUnit:'fathoms', depthAlarm:900, dim:-40,
-   windDemo:'yes', phoneGps:1})));
+   windDemo:'yes', phoneGps:1, startMode:'pursuit'})));
 await reboot();
 C=await p.evaluate(()=>({theme:CFG.theme, u:CFG.depthUnit, a:CFG.depthAlarm,
   dim:CFG.dim, wd:CFG.windDemo, ph:CFG.phoneGps}));
@@ -43,6 +49,9 @@ t.ok(C.a>=1 && C.a<=60, 'a depth alarm out of range is refused', String(C.a));
 t.ok(C.dim>=25, 'and so is a brightness that would black the screen', String(C.dim));
 t.ok(C.wd===true && C.ph===false, 'a string where a boolean belongs is not a boolean',
      C.wd+' '+C.ph);
+t.ok(await p.evaluate(()=>CFG.startMode)==='gun',
+     'and a start format nobody wrote falls back to the strict one',
+     await p.evaluate(()=>CFG.startMode));
 t.ok(t.errs.length===0, 'and none of it throws on the way up',
      t.errs.join(' | '));
 
