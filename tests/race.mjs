@@ -280,39 +280,37 @@ t.ok(zero.gunMoved===60,
      'GUN: the gun stands, and crossing a minute late is a minute of lost time',
      zero.gunMoved+' s since the gun');
 
-t.head('the pair says which, on the course sheet with the rest of the start');
-/* It lived on the control panel until the start time arrived; the two
-   belong together, and the panel is where the boat is set up rather
-   than where a race is. */
+t.head('which one it is, on the course sheet with the rest of the start');
+/* It lived on the control panel until the start time arrived; everything
+   about a start is one thing, and the panel is where the boat is set up
+   rather than where a race is. */
 const pills=await p.evaluate(()=>{
   startModeSet('gun'); renderCourse();
-  const r=()=>{ const row=$('cv-mode');
-    return {title:row.querySelector('b').textContent,
-            sub:row.querySelector('s').textContent,
-            lit:[...row.querySelectorAll('.sb.on')].map(x=>x.textContent).join()}; };
-  const tap=m=>{ document.querySelector(
-    '#cv-mode .sb[data-mode="'+m+'"]').click(); };
+  const r=()=>({lbl:$('cv-mode').querySelector('s').textContent,
+                val:$('cv-mode').querySelector('b').textContent.trim()});
+  const rows=()=>[...$('cv-pk').querySelectorAll('.pr')]
+    .map(x=>x.querySelector('b').textContent+(x.classList.contains('sel')?'*':''));
   const out={start:r()};
-  tap('window'); out.win=r();
+  $('cv-mode').click();                       /* the menu it opens */
+  out.menu=rows();
+  out.says=[...$('cv-pk').querySelectorAll('.pr s')].map(x=>x.textContent);
+  document.querySelector('#cv-pk .pr[data-mode="window"]').click();
+  out.win=r(); out.shut=!$('cv-pick').classList.contains('on');
   out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
-  /* anywhere on the chip is the other one, because a control that only
-     answers a 12 mm word is one you miss in a seaway */
-  $('cv-mode').querySelector('b').click();
-  out.row=r();
   out.panel=!document.getElementById('st-gun');
   return out;
 });
-t.ok(pills.start.lit==='GUN', 'a gun start until told otherwise', pills.start.lit);
-t.ok(pills.start.title==='SEQUENCE',
-     'headed SEQUENCE, not START - the rows either side of it are the start '
-     +'time and the start line', pills.start.title);
-t.ok(pills.win.lit==='WINDOW', 'tapping WINDOW lights it and puts GUN out',
-     pills.win.lit);
-t.ok(/OPEN THROUGHOUT/.test(pills.win.sub) && /OPENS AT ZERO/.test(pills.start.sub),
-     'and the row says what it does to the line',
-     pills.start.sub+' | '+pills.win.sub);
+t.ok(pills.start.val==='GUN', 'a gun start until told otherwise', pills.start.val);
+t.ok(pills.start.lbl==='SEQUENCE',
+     'headed SEQUENCE, not START - the settings either side of it are the '
+     +'start line and the countdown', pills.start.lbl);
+t.ok(pills.menu.join()==='GUN*,WINDOW', 'the menu offers both, on the one in force',
+     pills.menu.join());
+t.ok(/OPENS AT ZERO/.test(pills.says[0]) && /OPEN THROUGHOUT/.test(pills.says[1]),
+     'each saying what it does to the line', pills.says.join(' | '));
+t.ok(pills.win.val==='WINDOW' && pills.shut,
+     'choosing WINDOW sets it and shuts the menu', pills.win.val);
 t.ok(pills.stored==='window', 'it is remembered across a restart', String(pills.stored));
-t.ok(pills.row.lit==='GUN', 'a tap anywhere on the row is the other one', pills.row.lit);
 t.ok(pills.panel, 'and it is gone from the control panel');
 
 t.head('and finishes it, but only when the course is sailed');

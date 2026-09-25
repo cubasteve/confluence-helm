@@ -29,9 +29,8 @@ t.ok(await p.evaluate(()=>CFG.startMode)==='window',
      'and which club night this is - found out at the gun otherwise',
      await p.evaluate(()=>CFG.startMode));
 t.ok(await p.evaluate(()=>{ renderCourse();
-       return document.querySelector('#cv-mode .sb.on')
-                .textContent==='WINDOW'; }),
-     'with the course sheet lit to say so');
+       return $('cv-mode').querySelector('b').textContent.trim()==='WINDOW'; }),
+     'with the course sheet reading it back');
 t.ok(await p.evaluate(()=>document.body.className)==='night',
      'and the theme is actually applied, not just remembered',
      await p.evaluate(()=>document.body.className));

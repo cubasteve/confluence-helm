@@ -895,25 +895,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .cv-start s{text-decoration:none;font-size:15px;letter-spacing:.1em;color:var(--label)}
 .cv-start.in{border-color:var(--accent)}
 .cv-start.in b{color:var(--accent)}
-/* ---- the club's course ----
-   Above the heading, centred, with air of its own: it is the one control
-   on this sheet that fills the whole page in a tap, so it is not buried
-   in a row of marks. It comes first because it is what you do first -
-   before you look at what the course says, you ask the club what it is.
-   In the club's own colour rather than the accent for the same reason,
-   and an outline rather than a lit block: it is the only thing above the
-   heading, and a filled pill up there shouts across the whole sheet. */
-.sync-wrap{display:flex;justify-content:center;flex:none;margin:0 0 2px}
-.sync{display:inline-flex;align-items:center;gap:12px;height:62px;padding:0 28px;
-  border-radius:31px;border:2px solid var(--club);background:none;color:var(--club);
-  font-family:var(--font);font-size:20px;font-weight:600;letter-spacing:.14em;
-  white-space:nowrap}
-.sync svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;
-  stroke-linecap:round;stroke-linejoin:round}
-.sync:active{background:var(--chip)}
-.sync.busy{opacity:.55}
-/* What it found, or why it found nothing. One line, ellipsised: the
-   club's note can be longer than the face is wide. */
+/* What the club found, or why it found nothing. One line, ellipsised:
+   the club's note can be longer than the face is wide. */
 .cv-note{flex:none;font-size:17px;letter-spacing:.08em;color:var(--label);
   text-transform:uppercase;text-align:center;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;width:100%}
@@ -976,19 +959,93 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   color:var(--label)}
 .cv-tile.edit{padding-bottom:22px}
 .cv-tile.lift{opacity:.45}
-/* The two things about a start that are not the time: which procedure,
-   and which line. Under the marks, because they are set once a season
-   and the course is what changes every evening. */
-.cv-set{display:flex;gap:14px;justify-content:center;flex:none}
-.cvs{display:flex;align-items:center;gap:14px;height:62px;padding:0 20px;
-  border-radius:20px;border:2px solid var(--hairline);background:none;
-  font-family:var(--font);text-align:left}
-.cvs i{font-style:normal;font-size:24px;color:var(--label);flex:none}
-.cvs b{display:block;font-size:19px;font-weight:600;letter-spacing:.12em;color:var(--ink)}
-.cvs s{display:block;text-decoration:none;font-size:14px;letter-spacing:.08em;
-  color:var(--label);white-space:nowrap}
-.cvs .side{display:flex;gap:8px}
-.cvs .sb{height:46px;font-size:17px}
+/* ---- the four settings, as readings ----
+   Everything about the evening that is not the course itself, on one
+   row under the marks, each saying what it is set to now: the sequence,
+   the line, the club and the countdown. They are drawn like the dial's
+   readings - a small label over a value - because that is what they
+   are: things you read at a glance and only occasionally change.
+
+   Three of them open a menu. The fourth does not: a countdown is 5, 10
+   or 15 minutes, and a tap that steps through three values beats a menu
+   you have to open, scroll and dismiss. */
+/* Above the veil, so an open menu can be moved from one setting to the
+   next with one tap instead of two: the veil dismisses everything else,
+   but these four are the row the menu belongs to. */
+.cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:100%;
+  position:relative;z-index:19}
+.cvr{flex:1;min-width:0;height:76px;padding:0 34px 0 16px;border-radius:18px;
+  border:2px solid var(--hairline);background:none;font-family:var(--font);
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:2px;position:relative;overflow:hidden}
+.cvr s{text-decoration:none;font-size:14px;letter-spacing:.16em;color:var(--label);
+  white-space:nowrap}
+.cvr b{font-size:22px;font-weight:600;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;
+  align-items:center;gap:8px}
+/* The corner glyph says which kind of control this is: a chevron opens a
+   menu, a plus steps. */
+.cvr u{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  text-decoration:none;font-size:19px;color:var(--label)}
+.cvr:active{background:var(--chip)}
+.cvr.picking{border-color:var(--accent)}
+/* The club keeps its colour and its cloud now that it is one of four:
+   it is still the only one of them that reaches off the boat. */
+.cvr.club{border-color:var(--club)}
+.cvr.club b,.cvr.club u{color:var(--club)}
+.cvr.club svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+/* ---- and the menu three of them open ----
+   The same menu as the dial's readings picker, and for the same reasons:
+   painted in --panel over a hairline so it reads as something in front,
+   swiped to scroll because nothing under #stage scrolls itself, tapped
+   to choose. It opens ABOVE its readout - the row is a hundred px off
+   the bottom of the glass, and there is nothing below it to open into. */
+.cv-veil{position:absolute;inset:0;z-index:17;display:none}
+.cv-veil.on{display:block}
+.cv-pick{position:absolute;z-index:18;width:330px;display:none;
+  flex-direction:column;border-radius:26px;background:var(--panel);
+  border:2px solid var(--hairline);box-shadow:0 20px 48px rgba(0,0,0,.30);
+  overflow:hidden}
+.cv-pick.on{display:flex}
+.cvp{overflow-y:auto;max-height:296px}
+.cvp::-webkit-scrollbar{width:0}
+.prhd{padding:14px 16px 6px;font-size:15px;font-weight:700;letter-spacing:.22em;
+  color:var(--label)}
+/* Baseline, so the name and what it is line up along one edge - and
+   padded off the top, because baseline alignment otherwise hangs the
+   text from the ceiling of a 78 px row. */
+.pr{display:flex;align-items:baseline;gap:10px;width:100%;padding:26px 16px 0;
+  height:78px;background:none;border:none;font-family:var(--font);
+  color:var(--ink);text-align:left}
+/* Two lines instead of two columns, for a choice whose description is a
+   sentence rather than a name. */
+.pr.two{flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:4px;padding:0 16px}
+.pr.two s{margin-left:0}
+.pr b{font-size:26px;font-weight:600}
+.pr s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
+  margin-left:auto;text-align:right;white-space:nowrap}
+.pr.sel b,.pr.sel s{color:var(--accent)}
+.pr:active{background:var(--chip)}
+/* Which end of the line the list is choosing. Both ends are named on it,
+   so the menu says what the line IS while you are changing it. */
+.prends{display:flex;gap:8px;padding:12px 12px 4px}
+.prend{flex:1;min-width:0;height:64px;border-radius:16px;border:2px solid var(--hairline);
+  background:none;font-family:var(--font);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px}
+.prend s{text-decoration:none;font-size:13px;letter-spacing:.16em;color:var(--label)}
+.prend b{font-size:20px;font-weight:600;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.prend.on{border-color:var(--accent)}
+.prend.on b,.prend.on s{color:var(--accent)}
+.prfoot{width:100%;height:74px;flex:none;border:none;border-top:2px solid var(--hairline);
+  background:none;font-family:var(--font);font-size:19px;font-weight:600;
+  letter-spacing:.12em;color:var(--accent)}
+.prfoot:active{background:var(--chip)}
+.prfoot.club{color:var(--club)}
+.prnote{padding:12px 16px 16px;font-size:16px;letter-spacing:.06em;color:var(--label);
+  text-align:center;line-height:1.5}
 /* ---- the start time's pad ----
    Sized for a thumb rather than for the page. At 56 px - what it
    borrowed from the mark keyboard - a key is 22 px on a 430 px phone,
@@ -2344,18 +2401,20 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
-        <!-- Tonight's course, off the members' site. Centred above the
-             heading, in the club's own colour: see --club. -->
-        <div class="sync-wrap"><button class="sync" id="cv-sync"></button></div>
-        <div class="cv-note" id="cv-say"></div>
         <div class="cv-hd"><span id="cv-count">Course</span>
           <button class="cv-start" id="cv-start"></button></div>
         <div class="cv-strip" id="cv-strip"></div>
         <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
         <div class="cv-grid" id="course-list"></div>
+        <div class="cv-note" id="cv-say"></div>
+        <!-- The evening's four settings, read at a glance and changed in
+             the menu three of them open. The club is one of them now,
+             keeping its own colour: see --club. -->
         <div class="cv-set">
-          <button class="cvs" id="cv-mode"></button>
-          <button class="cvs" id="cv-line"></button>
+          <button class="cvr" id="cv-mode"></button>
+          <button class="cvr" id="cv-line"></button>
+          <button class="cvr club" id="cv-sync"></button>
+          <button class="cvr" id="cv-mins"></button>
         </div>
       </div>
       <div class="course-bar">
@@ -2365,6 +2424,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="cbtn on" id="course-done">DONE</button>
       </div>
     </div>
+    <!-- The settings menu and the tap that dismisses it. Outside
+         #course-main, because it is over the sheet rather than in it -
+         and #t-course is the positioned ancestor, so its coordinates are
+         the glass's. -->
+    <div class="cv-veil" id="cv-veil"></div>
+    <div class="cv-pick" id="cv-pick"><div id="cv-phd"></div>
+      <div class="cvp" id="cv-pk"></div><div id="cv-pft"></div></div>
     <!-- A mark of your own: a name, and a position typed or taken from
          the GPS. Degrees and decimal minutes as the sailing instructions
          give them, or decimal degrees; west and south are minus.
@@ -2589,7 +2655,13 @@ const CFG={
   depthAlarm:3, depthWarn:6, depthUnit:'ft',
   dim:100,                           /* brightness, 25-100 - see applyDim */
   grooveMin:35, grooveMax:50,
-  staleAfter:8000, startMins:5,
+  staleAfter:8000,
+  /* How long the countdown is. Five is the club's sequence; the course
+     sheet steps it 5, 10, 15 for a regatta that runs a longer one. */
+  startMins:5,
+  /* The two marks the start line runs between, until they are pinged -
+     see lineEnds. */
+  linePin:'flag', lineBoat:'ball',
   /* Which kind of start the line is watching for - see lineWatch. The
      two club nights want opposite things from the same crossing, and
      nothing in the data tells them apart. */
@@ -3324,14 +3396,21 @@ const markOrderSave=()=>localStorage.setItem('markOrder',JSON.stringify(MARKS.ma
 
 let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
 const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
-/* The line is the pinged one if both ends have been pinged, else the
-   club's: Romance Flag at the pin end, the Sail Ball at the boat end.
-   Pinging still wins, for a day the committee sets it somewhere else;
-   the course sheet has the way back. */
-const LINE_MARKS={pin:'flag', boat:'ball'};
+/* The line is the pinged one if both ends have been pinged, else the two
+   marks the course sheet's START LINE is set to - Romance Flag at the
+   pin end and the Sail Ball at the boat end until it is told otherwise,
+   which is where LMSA leaves them. Pinging still wins, for a day the
+   committee sets it somewhere else; the course sheet has the way back.
+
+   It was a source constant. Two marks out of ten is a choice the boat
+   should be able to make on the water, and a club that moves its line
+   for a regatta should not need the file edited. */
+const LINE_DEF={pin:'flag', boat:'ball'};
+const lineMark=which=>markOf(CFG[which==='pin'?'linePin':'lineBoat'])
+                    || markOf(LINE_DEF[which]);
 function lineEnds(){
   if(LINE.pin && LINE.boat) return {pin:LINE.pin, boat:LINE.boat, pinged:true};
-  const P=markOf(LINE_MARKS.pin), B=markOf(LINE_MARKS.boat);
+  const P=lineMark('pin'), B=lineMark('boat');
   return {pin:{lat:P.lat,lon:P.lon}, boat:{lat:B.lat,lon:B.lon}, pinged:false};
 }
 function pingEnd(which){
@@ -3654,6 +3733,9 @@ const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
    has done it already. They part again afterwards: on a WINDOW night
    the crossing is still your start and the clock moves to it, and on a
    GUN night the gun stands and a late crossing is lost time. */
+/* The countdown's three lengths. A tap on the readout steps them, which
+   is quicker than a menu for three values. */
+const START_MINS=[5,10,15];
 const START_MODES=['gun','window'];
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
@@ -4927,7 +5009,14 @@ const PREF_DEFS={
      back up reading its own GPS without being told again. */
   phoneGps:   v=>typeof v==='boolean' ? v : null,
   /* And this one because it is a fact about the series, not the day. */
-  startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null
+  startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null,
+  /* Five, ten or fifteen minutes - the three sequences anyone runs. */
+  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
+  /* Checked against the marks this boat actually has: a stored end whose
+     mark has been deleted falls back to the club's line rather than
+     leaving the readings without one. */
+  linePin:    v=>(typeof v==='string' && markOf(v)) ? v : null,
+  lineBoat:   v=>(typeof v==='string' && markOf(v)) ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -8512,6 +8601,7 @@ $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
 const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
   courseEdit=false; $('course-edit').classList.remove('on');
+  cvpClose();
   if(MK) mkClose(); if(GN) gnClose(); };
 /* ---- the course sheet --------------------------------------------------
    The course reads across the top as chips, in the order it is rounded;
@@ -8558,14 +8648,8 @@ function renderCourse(){
     : '<b>START TIME</b><s>TAP TO SET</s>';
   wCls('cv-start','in', GUNAT!==null);
 
-  /* The club's button, and the one line under it that has something to
-     say. */
+  /* What the club had to say about it, if anything. */
   const c=CLUB, cn=c.got ? c.got.marks.length : 0;
-  $('cv-sync').innerHTML=ICO_SYNC+'<span>'+(
-      c.step==='busy'  ? 'CHECKING…'
-    : c.step==='ready' ? 'LOAD '+cn+' MARK'+(cn===1?'':'S')+'?'
-    :                    'CLUB SYNC')+'</span>';
-  wCls('cv-sync','busy', c.step==='busy');
   $('cv-say').textContent=clubSay();
   wCls('cv-say','bad', !!c.bad);
 
@@ -8604,21 +8688,24 @@ function renderCourse(){
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
 
-  /* Which procedure, and which line. GUN and WINDOW are drawn the way
-     the marks' P and S are - both showing, the one in force lit: the
-     pair says which without a line of prose to read every time. */
-  const w=CFG.startMode==='window';
-  $('cv-mode').innerHTML='<i>⚑</i><div><b>SEQUENCE</b><s>'
-    +(w?'LINE OPEN THROUGHOUT':'LINE OPENS AT ZERO')+'</s></div>'
-    +'<div class="side wide"><span class="sb'+(w?'':' on')+'" data-mode="gun">GUN</span>'
-    +'<span class="sb'+(w?' on':'')+'" data-mode="window">WINDOW</span></div>';
+  /* The four settings, read at a glance. A chevron says the readout
+     opens a menu; a plus says a tap steps it. */
+  const rd=(id,lbl,val,glyph)=>{ $(id).innerHTML='<s>'+lbl+'</s><b>'+val+'</b>'
+    +'<u>'+glyph+'</u>'; };
+  rd('cv-mode','SEQUENCE', CFG.startMode==='window'?'WINDOW':'GUN','⌄');
+  /* Which line the race starts and finishes on. It is the one thing on
+     this sheet you cannot work out from anything else on it, so it names
+     both ends rather than saying that a line exists. */
   const E=lineEnds();
-  /* Which line the race starts and finishes on, said in full: the two
-     ends by name, or PINGED and the two ends you pinged. It is the one
-     thing on this sheet you cannot work out from anything else. */
-  $('cv-line').innerHTML='<i>↔</i><div><b>START LINE</b><s>'
-    +esc(E.pinged ? 'PINGED · TAP FOR THE MARKS'
-        : markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr)+'</s></div>';
+  rd('cv-line','START LINE',
+     E.pinged ? 'PINGED' : esc(lineMark('pin').hdr+' – '+lineMark('boat').hdr), '⌄');
+  const c2=CLUB;
+  rd('cv-sync','CLUB', ICO_SYNC+'<span>'+(
+       c2.step==='busy'  ? 'CHECKING…'
+     : c2.step==='ready' ? cn+' MARK'+(cn===1?'':'S')+'?'
+     :                     'SYNC')+'</span>', '⌄');
+  rd('cv-mins','COUNTDOWN', CFG.startMins+' MIN','＋');
+  if(CVP) cvpPaint();
 }
 /* The sheet's title is what the sub-views are called. The course view's
    own heading already says COURSE, so the title is off for it rather
@@ -8645,23 +8732,11 @@ function openCourse(){ $('t-course').classList.add('on'); crsTitle(''); renderCo
 const CLUB_COURSE='https://lmsa.pages.dev/api/race/helm';
 let CLUB={step:'idle', got:null, say:'', bad:false};
 
-/* The line under the button. What it FOUND is not in here - those are
-   the ghost chips up in the strip, which is where you can actually read
-   the course it is offering. This says where it came from, what the
-   second tap will do, and anything the committee wrote on it; or, when
-   there is nothing to load, why not. */
-function clubSay(){
-  const c=CLUB;
-  if(c.step==='busy') return '';
-  if(c.step!=='ready') return c.say||'';
-  const g=c.got.raw||{}, bits=[];
-  /* Epoch milliseconds from the site. Anything smaller than a plausible
-     instant is a placeholder, not half past seven in 1970. */
-  if(g.posted>1e12) bits.push('POSTED '+gunTxt(g.posted));
-  bits.push('TAP AGAIN TO REPLACE THE COURSE');
-  if(g.note) bits.push(String(g.note).toUpperCase());
-  return bits.join(' · ');
-}
+/* The line over the settings row: what came of the last sync. What it
+   FOUND is not in here - those are the ghost chips up in the strip,
+   which is where you can read the course it is offering, and the menu
+   under the CLUB readout is where you load it. */
+const clubSay=()=>CLUB.step==='ready' ? '' : (CLUB.say||'');
 
 async function clubFetch(){
   CLUB={step:'busy', got:null, say:'', bad:false}; renderCourse();
@@ -8701,7 +8776,156 @@ function clubApply(){
   renderCourse(); drawMap(shownTrack());
 }
 
-const clubTap=()=>{ if(CLUB.step==='ready') clubApply(); else if(CLUB.step!=='busy') clubFetch(); };
+/* ---- the settings menu -------------------------------------------------
+   SEQUENCE, START LINE and CLUB open one; COUNTDOWN does not - 5, 10 or
+   15 minutes is three values, and a tap that steps them beats a menu you
+   have to open, scroll and dismiss.
+
+   It is the dial's readings picker in every respect that matters: it is
+   painted in --panel over a hairline so it reads as something in front
+   rather than a hole, it is swiped to scroll because nothing under
+   #stage scrolls itself, and it is tapped to choose. It opens ABOVE its
+   readout: the row is a hundred px off the bottom of the glass and there
+   is nothing below it to open into.
+
+   The head and the foot are outside the scroller. Which end of the line
+   you are choosing, and the button that loads the club's course, are not
+   things that should scroll away from under the finger. */
+let CVP=null;                            /* {kind, end} while one is open */
+const cvpDragged=dragScroll($('cv-pk'));
+const CVP_GAP=12, CVP_R=539;
+const cvpBtn=k=>$('cv-'+(k==='club'?'sync':k));
+
+function cvpOpen(kind){
+  if(CVP && CVP.kind===kind) return cvpClose();
+  CVP={kind:kind, end:'pin'};
+  $('cv-veil').classList.add('on'); $('cv-pick').classList.add('on');
+  cvpPaint();
+}
+function cvpClose(){
+  if(!CVP) return;
+  CVP=null;
+  $('cv-pick').classList.remove('on'); $('cv-veil').classList.remove('on');
+  document.querySelectorAll('.cvr').forEach(e=>e.classList.remove('picking'));
+}
+function cvpPaint(){
+  if(!CVP) return;
+  const k=CVP.kind, pk=$('cv-pk');
+  $('cv-phd').innerHTML=cvpHead();
+  pk.innerHTML = k==='mode' ? cvpMode() : k==='line' ? cvpMarks() : cvpClub();
+  $('cv-pft').innerHTML=cvpFoot();
+  document.querySelectorAll('.cvr').forEach(e=>
+    e.classList.toggle('picking', e===cvpBtn(k)));
+  /* Opened on what it is set to rather than at the top, and centred, so
+     the choice already in force is under the finger and you can see
+     which way the others lie. */
+  const sel=pk.querySelector('.pr.sel');
+  pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(pk.clientHeight-sel.offsetHeight)/2) : 0;
+  cvpPlace();
+}
+/* Above the readout it belongs to, centred on it, and pulled back inside
+   the glass by the chord at whichever of its edges is furthest from the
+   middle - the same arithmetic the readings picker does, for the same
+   round reason. */
+function cvpPlace(){
+  if(!CVP) return;
+  const pk=$('cv-pick'), host=$('stage').getBoundingClientRect();
+  const r=cvpBtn(CVP.kind).getBoundingClientRect();
+  const w=pk.offsetWidth, h=pk.offsetHeight;
+  const want=r.left-host.left+r.width/2-w/2;
+  const y=Math.max(8, r.top-host.top-h-CVP_GAP);
+  const dy=Math.max(Math.abs(y-540), Math.abs(y+h-540));
+  const half=Math.sqrt(Math.max(0, CVP_R*CVP_R-dy*dy));
+  /* Held inside the sheet's own column where that is narrower than the
+     glass, which it is here: a menu hanging out over the rim beside the
+     sheet reads as something that has come loose. */
+  const m=$('course-main').getBoundingClientRect();
+  let lo=Math.max(540-half, m.left-host.left), hi=Math.min(540+half-w, m.right-host.left-w);
+  if(lo>hi){ lo=540-half; hi=540+half-w; }
+  pk.style.left=Math.round(Math.max(lo, Math.min(hi, want)))+'px';
+  pk.style.top =Math.round(y)+'px';
+}
+function cvpHead(){
+  const k=CVP.kind;
+  if(k==='mode') return '<div class="prhd">WHICH SEQUENCE</div>';
+  if(k==='club') return '<div class="prhd">TONIGHT, FROM THE CLUB</div>';
+  const tab=(w,lbl)=>'<button class="prend'+(CVP.end===w?' on':'')+'" data-end="'+w+'">'
+    +'<s>'+lbl+'</s><b>'+esc(lineMark(w).hdr)+'</b></button>';
+  return '<div class="prhd">THE LINE RUNS BETWEEN</div>'
+    +'<div class="prends">'+tab('pin','PIN END')+tab('boat','BOAT END')+'</div>';
+}
+const cvpMode=()=>[['gun','GUN','LINE OPENS AT ZERO'],
+                   ['window','WINDOW','LINE OPEN THROUGHOUT']]
+  .map(([k,n,w])=>'<button class="pr two'+(CFG.startMode===k?' sel':'')+'" data-mode="'+k+'">'
+      +'<b>'+n+'</b><s>'+w+'</s></button>').join('');
+/* Every mark, for whichever end the head has lit. */
+const cvpMarks=()=>{ const cur=lineMark(CVP.end).id;
+  return MARKS.map(m=>'<button class="pr'+(m.id===cur?' sel':'')+'" data-end-mark="'+m.id+'">'
+    +'<b>'+esc(m.hdr)+'</b><s>'+esc(m.name)+'</s></button>').join(''); };
+function cvpClub(){
+  const c=CLUB;
+  if(c.step==='busy') return '<div class="prnote">CHECKING THE CLUB SITE…</div>';
+  if(c.step!=='ready') return '<div class="prnote">'+esc(c.say||'TAP AGAIN TO ASK THE '
+    +'CLUB SITE FOR TONIGHT’S COURSE')+'</div>';
+  const g=c.got.raw||{}, out=[];
+  if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
+  out.push('DASHED IN THE STRIP ABOVE, IN THE ORDER IT IS SAILED');
+  const miss=(g.unknown||[]).length;
+  if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
+  if(g.startsOnLine===false) out.push('IT DOES NOT START ON THE LINE');
+  if(g.note) out.push(String(g.note).toUpperCase());
+  return '<div class="prnote">'+out.map(esc).join('<br>')+'</div>';
+}
+function cvpFoot(){
+  const k=CVP.kind, c=CLUB;
+  if(k==='club'){
+    if(c.step==='ready') return '<button class="prfoot club" data-load="1">LOAD '
+      +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')+'</button>';
+    if(c.step==='busy') return '';
+    return '<button class="prfoot club" data-again="1">ASK THE CLUB</button>';
+  }
+  /* The way back from a ping taken at the wrong end. */
+  if(k==='line' && lineEnds().pinged)
+    return '<button class="prfoot" data-unping="1">PINGED · USE THE MARKS</button>';
+  return '';
+}
+$('cv-pick').addEventListener('pointerdown',()=>gClaim());
+$('cv-pick').addEventListener('click',e=>{
+  if(!CVP) return;
+  if(cvpDragged()) return;                    /* a scroll, not a choice */
+  const end=e.target.closest('[data-end]');
+  if(end){ CVP.end=end.dataset.end; cvpPaint(); return; }
+  const md=e.target.closest('[data-mode]');
+  if(md){ startModeSet(md.dataset.mode); cvpClose(); return; }
+  const mk=e.target.closest('[data-end-mark]');
+  if(mk){ CFG[CVP.end==='pin'?'linePin':'lineBoat']=mk.dataset.endMark; prefsSave();
+          renderCourse(); drawMap(shownTrack()); cvpClose(); return; }
+  if(e.target.closest('[data-unping]')){
+    LINE={}; saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
+    renderCourse(); drawMap(shownTrack()); cvpPaint(); return; }
+  if(e.target.closest('[data-load]')){ clubApply(); cvpClose(); return; }
+  if(e.target.closest('[data-again]')){ clubFetch(); return; }
+});
+$('cv-veil').addEventListener('pointerdown',()=>gClaim());
+$('cv-veil').addEventListener('click',e=>{ e.stopPropagation(); cvpClose(); });
+
+/* Tap the CLUB readout and it asks, with the menu open on the answer;
+   the LOAD in the menu is the second tap, and still the only thing that
+   replaces a course. */
+function clubTap(){
+  const was=CVP && CVP.kind==='club';
+  cvpOpen('club');
+  if(CVP && !was && CLUB.step==='idle') clubFetch();
+}
+/* Five, ten, fifteen, five. Three values a thumb can step through. */
+function minsStep(){
+  CFG.startMins=START_MINS[(START_MINS.indexOf(CFG.startMins)+1)%START_MINS.length];
+  prefsSave();
+  /* The pill counts this down while nothing is running, so the change
+     has to reach it now rather than at the next reset. */
+  if(tState==='idle') tLeft=CFG.startMins*60000;
+  renderCourse();
+}
 /* ---- the scheduled gun -------------------------------------------------
    A club race has a start time printed on the sailing instructions.
    Typed in once, the countdown starts itself CFG.startMins before it
@@ -8763,7 +8987,7 @@ function gnOpen(){
     pm = h>=12;
     v = String((h%12)||12) + String(d.getMinutes()).padStart(2,'0'); }
   GN={v:v, pm:pm, built:false};
-  crsTitle('Start time');
+  cvpClose(); crsTitle('Start time');
   $('course-main').style.display='none'; $('course-gun').style.display='';
   $('gn-msg').textContent=''; gnPaint();
 }
@@ -8847,6 +9071,9 @@ $('course-list').addEventListener('click',e=>{
    one sheet - the bar's four buttons have their own, and nothing here
    matches them. */
 $('course-main').addEventListener('click',e=>{
+  /* Anything else on the sheet is an answer of 'not that' to an open
+     menu, the same as the veil. */
+  if(CVP && !e.target.closest('.cvr')) cvpClose();
   /* A chip carries one mark's side. One tap flips it: two buttons per
      chip would have made the strip half again as long, and P or S is a
      choice between exactly two things. */
@@ -8854,22 +9081,12 @@ $('course-main').addEventListener('click',e=>{
   if(chip){ const id=chip.dataset.chip;
     COURSE.side=COURSE.side||{}; COURSE.side[id]=markSide(id)==='P'?'S':'P';
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
-  if(e.target.closest('#cv-sync')){ clubTap(); return; }
   if(e.target.closest('#cv-start')){ gnOpen(); return; }
-  if(e.target.closest('#cv-mode')){
-    /* The pair, or anywhere on the chip: a control that only answers a
-       12 mm word is one you miss in a seaway. */
-    const m=e.target.closest('.sb');
-    startModeSet(m ? m.dataset.mode
-                   : (CFG.startMode==='window' ? 'gun' : 'window'));
-    return; }
-  /* The line's chip says which line is in force, and tapping it while a
-     pinged line is drops the pings and goes back to the marks. */
-  if(e.target.closest('#cv-line')){
-    if(lineEnds().pinged){ LINE={}; saveLine();
-      ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
-      renderCourse(); drawMap(shownTrack()); }
-    return; }
+  /* The settings row. Three open their menu; the countdown steps. */
+  if(e.target.closest('#cv-mode')){ cvpOpen('mode'); return; }
+  if(e.target.closest('#cv-line')){ cvpOpen('line'); return; }
+  if(e.target.closest('#cv-sync')){ clubTap(); return; }
+  if(e.target.closest('#cv-mins')){ minsStep(); return; }
 });
 /* The bearing's double tap: the course moves on. Only while racing,
    which is the only time the leg face is up with a course to move. */
@@ -8954,7 +9171,7 @@ function mkOpen(id){
   MK={f:'name', id:m?m.id:null,
       name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
       kb:{shift:false,sym:false,num:false}};
-  crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
+  cvpClose(); crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
   $('course-main').style.display='none'; $('course-add').style.display='';
   $('mk-msg').textContent=''; mkPaint();
 }

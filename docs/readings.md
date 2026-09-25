@@ -235,9 +235,10 @@ discarded as a bad fix rather than believed.
 *The gun can be scheduled.* Top right of the course sheet is
 `START TIME`: type the time off the sailing instructions — three or
 four digits and `AM`/`PM`, so `6` `2` `5` `PM` — and the countdown
-starts itself `CFG.startMins` before it and runs out exactly on it. The
-button then says when the gun is and when the countdown will begin, and
-the RACE pill carries the time while it is armed, so you can see it
+starts itself a countdown before it — five minutes, or whatever
+`COUNTDOWN` in the settings row is set to — and runs out exactly on it.
+The button then says when the gun is and when the countdown will begin,
+and the RACE pill carries the time while it is armed, so you can see it
 without opening anything.
 
 - Set it **inside** the window — three minutes before a five minute
@@ -483,56 +484,88 @@ sign at 15 px. The club's marks and your own read the same way. Tiles
 carry the short name — the one the cell headers and the RACE box use,
 where a name has to fit in 32 px.
 
-**Everything about the start is on this sheet.** The time is top right,
-and the two chips under the marks are the other two things:
+### The four settings
 
-| | |
-|---|---|
-| `SEQUENCE` | `GUN` or `WINDOW` — which procedure tonight is, above |
-| `START LINE` | which line the race starts *and* finishes on: the club's two marks by name, `FLAG – BALL`, or `PINGED · TAP FOR THE MARKS` once you have pinged the ends yourself with `P` and `B` on the dial |
+**Everything about the evening that is not the course itself is one row
+under the marks**, drawn the way the dial's readings are — a small label
+over a value — because that is what they are: things you read at a
+glance and only occasionally change. The start *time* is top right in
+the heading, since it is the one you look at most.
 
-Tapping `START LINE` while a pinged line is in force **drops the pings**
-and goes back to the club's marks — the way back from a ping taken at
-the wrong end. It is the one fact on this sheet you cannot work out from
-anything else on it, which is why it says both ends rather than just
-that a line exists.
+| | reads | a tap |
+|---|---|---|
+| `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
+| `START LINE` | `FLAG – BALL`, or `PINGED` | opens a menu: every mark, for whichever end of the line its head has lit |
+| `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
+| `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, and round again |
+
+The countdown is the only one with no menu. Three values is not worth
+opening, scrolling and dismissing something for. It is how long the
+countdown runs — the club's sequence is five minutes, and a regatta that
+runs ten or fifteen needs saying once. Change it while nothing is
+running and the RACE pill carries the new length at once rather than at
+the next reset.
+
+**The menu** is the dial's readings picker in every respect that
+matters: painted in `--panel` over a hairline so it reads as something
+in front rather than a hole, **swiped to scroll** because nothing under
+`#stage` scrolls itself, and **tapped to choose**. It opens *above* its
+readout — the row is a hundred px off the bottom of the glass — on the
+value already in force, so the choice you have is under your finger.
+With one open, a tap on another of the four moves it; a tap anywhere
+else puts it away.
+
+**`START LINE` is which line the race starts *and* finishes on**, and it
+is the one fact on this sheet you cannot work out from anything else on
+it — so it names both ends rather than saying that a line exists. Its
+menu heads with `PIN END` and `BOAT END`, showing both and lighting the
+one you are choosing; under them is every mark this boat knows. The club
+leaves the line between the Romance Flag and the Sail Ball, which is
+where it starts, and a club that moves its line for a regatta no longer
+needs the file edited. It is kept across a restart, and an end whose
+mark has since been deleted falls back to the club's line rather than
+leaving the readings without one.
+
+Pinging still beats both: ping the ends with `P` and `B` on the dial and
+the readout says `PINGED`. Its menu then carries `PINGED · USE THE
+MARKS` at the foot — the way back from a ping taken at the wrong end.
+
+![Choosing which marks the line runs between](img/course-line.png)
 
 ### CLUB SYNC
 
 ![The club's course, found and waiting](img/course-club.png)
 
 The club posts the evening's marks on the members' site by 5:30, the
-same ones that go on the clubhouse door. **CLUB SYNC**, centred at the
-top of the sheet above the heading, fetches them: they are these marks under three different
-names, so the site does the translating and hands back ids this file
-already knows.
+same ones that go on the clubhouse door. The **`CLUB`** readout fetches
+them: they are these marks under three different names, so the site does
+the translating and hands back ids this file already knows.
 
-**Two taps, never one.** The first fetches and shows what it found —
-the club's course drawn in the strip in dashed outline, in the place it
-would take, with the button now reading `LOAD 4 MARKS?` and the line
-under it saying when it was posted. The second tap is the one that
+**Two taps, never one.** The first asks, and shows what came back — the
+club's course drawn in the strip in dashed outline, in the place it
+would take, the readout reading `4 MARKS?`, and its menu open on when it
+was posted and anything the committee wrote on it. The second tap is
+`LOAD 4 MARKS` at the foot of that menu, and it is the only thing that
 replaces your course. Tapping a control and having the course you are
-three marks into vanish is not something this sheet should be able to
-do by accident.
+three marks into vanish is not something this sheet should be able to do
+by accident.
 
-What did not come across is said on load rather than found out at the
-mark: `LOADED · 1 MISSING` for a mark this boat has no coordinate for,
-and `NOT OFF THE LINE` for a course that does not start on the line,
-which is not a start this sheet can draw. A site that does not answer
-says `NO ANSWER · IS THERE WIFI?` and changes nothing.
+What did not come across is said before you load rather than found out
+at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START ON
+THE LINE` for a course this sheet cannot draw a start for; both are
+repeated over the settings row once it is loaded. A site that does not
+answer says `NO ANSWER · IS THERE WIFI?`, changes nothing, and offers
+`ASK THE CLUB` to try again.
 
 It has to be *us* that asks. The helper binds loopback, so nothing off
 the Pi can reach in and set a course — the right way round for a box on
 a boat. The read at the other end is open, because a posted course is
 public by the time it matters, so there is no login to carry.
 
-The button wears its own colour — `--club`, a teal, as an outline with a
-cloud the course comes down out of. It is not one of the app's blue
-actions and it is not a lit block sitting above the heading: it is the
-only tap on this sheet that reaches off the boat, and the only one that
-can replace a course you are already sailing. It comes first because it
-is what you do first — before reading what the course says, you ask the
-club what it is.
+It keeps its own colour among the four — `--club`, a teal, with a cloud
+the course comes down out of. It is not one of the app's blue actions:
+it is the only one of the four that reaches off the boat, and the only
+tap on this sheet that can replace a course you are already sailing.
 
 ![Adding a mark of your own](img/course-form.png)
 
