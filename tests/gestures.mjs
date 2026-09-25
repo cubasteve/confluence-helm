@@ -7,8 +7,11 @@ const NETS=[
   {ssid:'Marina Guest', secure:true, saved:false, active:false, signal:64},
   {ssid:'Steve iPhone', secure:true, saved:true,  active:false, signal:81}];
 const {b,p,posts}=await open(t,{demo:true,
+  /* A boat with everything wired, which is also the panel that does not
+     fit the glass - see the scrolling checks at the foot of this file. */
   status:{wifi:{available:true, devices:[{dev:'wlan0',up:true,ap:true,ssid:'Confluence'}]},
-          bt:{available:true,powered:true}, power:{available:true}},
+          bt:{available:true,powered:true}, power:{available:true},
+          buzzer:{available:true, mode:'audio', device:'plughw:CARD=Headphones,DEV=0'}},
   reply:{'/wifi/list':{ok:true, up:true, ap:true, nets:NETS}}});
 
 t.head('the drawers');
@@ -88,5 +91,41 @@ s=await state(p);
 t.ok(!s.sheet && s.panel, 'DONE closes the picker, not the panel', JSON.stringify(s));
 await fling(p,1,0,-260);
 t.ok(!(await state(p)).panel, 'and the dial is back');
+
+t.head('a panel taller than the glass scrolls, and still closes');
+/* The panel is 600 px wide on a circle of radius 540, so the column is
+   only lit between y=91 and y=989. It outgrew that, and centring meant
+   the top row and the build stamp were simply outside the glass. */
+await p.evaluate(()=>openPanel());
+await p.waitForTimeout(700);
+const sh=()=>p.evaluate(()=>{ const e=$('p-sheet');
+  return {over:e.classList.contains('over'), top:Math.round(e.scrollTop),
+          room:e.scrollHeight-e.clientHeight,
+          first:Math.round(document.querySelector('#p-sheet .senrow').getBoundingClientRect().y),
+          last:Math.round([...document.querySelectorAll('#p-sheet .hint')]
+                 .filter(x=>x.offsetHeight).pop().getBoundingClientRect().bottom)}; });
+/* A drag on the sheet, which is not the flinging the judge reads. */
+const pull=(y0,y1)=>p.evaluate(([y0,y1])=>{ const el=$('p-sheet');
+  const ev=(t,y)=>el.dispatchEvent(new PointerEvent(t,{pointerId:1,clientX:540,
+    clientY:y,bubbles:true,pointerType:'touch'}));
+  ev('pointerdown',y0);
+  const st=y1>y0?40:-40;
+  for(let y=y0; y1>y0?y<=y1:y>=y1; y+=st) ev('pointermove',y);
+  ev('pointermove',y1); ev('pointerup',y1); },[y0,y1]);
+let S=await sh();
+t.ok(S.room>0, 'it is taller than the glass, and knows it', S.room+' px over');
+t.ok(S.over, 'so the edges fade rather than cutting off at a chord');
+t.ok(S.first>=80, 'and the first row starts inside the circle, not above it',
+     'y='+S.first);
+await pull(720,320); await p.waitForTimeout(500);
+S=await sh();
+t.ok(S.top>200, 'a drag up scrolls it', S.top+' px down');
+t.ok((await state(p)).panel, 'and does NOT close the panel under the finger');
+t.ok(S.last<=1000, 'the foot of it is now reachable', 'y='+S.last);
+await pull(720,320); await p.waitForTimeout(500);
+t.ok((await sh()).room-(await sh()).top < 2, 'and again takes it to the end');
+await pull(720,320); await p.waitForTimeout(700);
+t.ok(!(await state(p)).panel,
+     'at the end the drag is handed back, and the same swipe closes it');
 
 await t.done(b);

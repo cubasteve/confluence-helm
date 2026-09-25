@@ -30,8 +30,13 @@ t.ok(v.s2[0]==='LINE' && /^\d+$/.test(v.s2[1]), 'with the range to it',
 t.ok(v.s3[0]==='BURN', 'and the seconds in hand beside it', JSON.stringify(v.s3));
 t.ok(/^[\d.]+$/.test(v.c0[1]), 'and the reading the box covered, carried along',
      JSON.stringify(v.c0));
-await p.evaluate(()=>{ startRace(); paintRace(); });
-v=await pill();
+/* Read in the SAME turn as the gun. Between two evaluates the render
+   loop gets a frame, and a frame is enough for lineWatch to arm the
+   line - after which, on a rig with no course set, the finish IS the
+   line and markWatch quite correctly reopens the box on it. One in six
+   runs caught that and called it a failure. */
+v=await p.evaluate(()=>{ startRace(); paintRace();
+  return {txt:$('rp-txt').textContent, open:$('rp-box').classList.contains('on')}; });
 t.ok(v.txt==='RACING', 'after the gun', v.txt);
 t.ok(!v.open, 'and the gun closes the box - the numbers are the face again');
 

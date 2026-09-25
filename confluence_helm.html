@@ -438,7 +438,23 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    very hitch will-change was meant to prevent. JS adds .sliding as the
    slide starts and drops it once the transition has had time to finish. */
 #panel.sliding,#music.sliding{will-change:transform}
-.sheet{width:600px;display:flex;flex-direction:column;align-items:stretch}
+/* The panel outgrew the glass. It is 600 px wide on a circle of radius
+   540, so the column is only fully lit between y=91 and y=989 - about
+   900 px - and the sheet passed that the moment it gained a section.
+   What happened then was not a scrollbar: the panel centres its child,
+   so the top of the sensor row and the build stamp at the foot were
+   simply outside the glass, with no way to reach either.
+   max-height rather than height, so a sheet that DOES fit still gets
+   centred exactly as it always did. The mask fades whatever is crossing
+   the edge, which on a round panel is the honest signal that there is
+   more - a hard cut at a chord just looks like the layout is wrong. */
+.sheet{width:600px;display:flex;flex-direction:column;align-items:stretch;
+  max-height:1080px;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:none;-ms-overflow-style:none}
+.sheet::-webkit-scrollbar{display:none}
+.sheet.over{padding:92px 0 128px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 72px,
+    #000 calc(100% - 96px),transparent 100%)}
 /* The mark on the overlay's leading edge - the edge that travels, and
    the one your thumb pulls. The panel comes DOWN from the top now, so
    its leading edge is the bottom; this sat at the top for as long as the
@@ -1808,7 +1824,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
 <div id="panel">
   <div class="grab"></div>
-  <div class="sheet">
+  <div class="sheet" id="p-sheet">
 
     <!-- The sensor row lives here now rather than on the face. It answers
          "is anything actually feeding me", which is a question you ask
@@ -4228,7 +4244,7 @@ function goPage(i){
    behind the panel leaves it pointing at nothing. */
 const openPanel =()=>{ if(APP.on) return; closeApps(); musPickClose();
                        markSlide('panel-open');  panel.classList.add('open');
-                       netPanelOpen();  };
+                       netPanelOpen(); sheetFit(); };
 const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
                        netPanelClose(); };
 const openApps  =()=>{ if(APP.on) return; closePanel();
@@ -4845,7 +4861,10 @@ function paintTiles(){
     o+='<button class="cbtn" data-k="power">'+ICO_POWER+'</button>';
   /* Rewriting innerHTML on every poll would kill the :active flash
      under a finger and repaint for nothing. Only when it changed. */
-  if(o!==NET.tilesHtml){ $('conn-sec').innerHTML=o; NET.tilesHtml=o; }
+  if(o!==NET.tilesHtml){ $('conn-sec').innerHTML=o; NET.tilesHtml=o;
+    /* The radios and the sounder row only appear once netd has answered,
+       which is usually after the panel has been opened at least once. */
+    sheetFit(); }
 }
 
 async function netStatus(){
@@ -5173,6 +5192,7 @@ function paintSounder(st){
   const on=!!(st&&st.available);
   $('snd-slab').style.display=on?'':'none';
   $('snd-row') .style.display=on?'':'none';
+  sheetFit();                    /* two more rows, or two fewer */
   if(!on) return;
   /* Which output, in the words you would need to go and check it: the
      jack's ALSA name, or the pin number. plughw:CARD=Headphones,DEV=0
@@ -7138,7 +7158,14 @@ $('mus-veil').addEventListener('click',e=>{ e.stopPropagation(); musPickClose();
    drag? A yes clears itself, so one scroll swallows one tap and no
    more. Defined here rather than beside the lists because it needs
    PK_SLOP and PK_FLICK, which live above. */
-function dragScroll(list){
+/* `lazy` is for a list that shares its glass with the gesture judge.
+   The panel is the case: a swipe up closes it, and a swipe up is also
+   how you scroll down, so claiming every drag on pointerdown would have
+   left no way to shut the thing. Lazily, it takes only the part of the
+   drag it can actually absorb - and at the end of its travel it hands
+   the gesture back, which is how a swipe up from the bottom still
+   closes the panel. */
+function dragScroll(list, lazy){
   const st={drag:null, moved:0, glide:null};
   const stop=()=>{ if(st.glide) cancelAnimationFrame(st.glide); st.glide=null; };
   const coast=v=>{ let last=performance.now();
@@ -7146,9 +7173,19 @@ function dragScroll(list){
       const was=list.scrollTop; list.scrollTop+=v*dt; v*=Math.pow(0.994,dt);
       st.glide=(Math.abs(v)>0.02 && list.scrollTop!==was)?requestAnimationFrame(step):null; };
     st.glide=requestAnimationFrame(step); };
-  list.addEventListener('pointerdown',e=>{ gClaim(); stop(); st.moved=0;
-    st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(), top:list.scrollTop, v:0}; });
+  list.addEventListener('pointerdown',e=>{ if(!lazy) gClaim(); stop(); st.moved=0;
+    st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(),
+             top:list.scrollTop, v:0, held:!lazy}; });
   addEventListener('pointermove',e=>{ const d=st.drag; if(!d||e.pointerId!==d.id) return;
+    if(!d.held){
+      const dy=e.clientY-d.y0;
+      if(Math.abs(dy)<5) return;              /* too early to tell */
+      /* A finger going UP pulls the content up, which needs room below. */
+      const room = dy<0 ? list.scrollHeight-list.clientHeight-list.scrollTop
+                        : list.scrollTop;
+      if(room<=1){ st.drag=null; return; }    /* nothing left: not ours */
+      d.held=true; gClaim();
+    }
     const now=performance.now(), dt=now-d.t; if(dt>0) d.v=(d.y-e.clientY)/dt;
     d.y=e.clientY; d.t=now; st.moved=Math.max(st.moved, Math.abs(e.clientY-d.y0));
     list.scrollTop=d.top-(e.clientY-d.y0); });
@@ -7159,6 +7196,16 @@ function dragScroll(list){
 }
 const courseDragged=dragScroll($('course-list'));
 const libDragged=dragScroll($('lib-list'));
+dragScroll($('p-sheet'), true);
+/* The fades and the room for them are only worth having when there is
+   something under them. Re-asked whenever the panel opens, because what
+   is in it changes: the sounder row and the radios both appear only
+   once netd has answered. */
+function sheetFit(){
+  const el=$('p-sheet');
+  el.classList.remove('over');
+  if(el.scrollHeight>el.clientHeight+1) el.classList.add('over');
+}
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
