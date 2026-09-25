@@ -208,6 +208,33 @@ supported path.
 
 The repo is the source of truth; the Pi is a deployment target.
 
+## Pairing, and what a slow one looks like
+
+`netd` allows a Bluetooth pair 35 seconds and the connect after it 30,
+and on the water it uses a good part of that. All of it used to pass
+with the row still reading `AVAILABLE`, the only sign of life a line of
+text under the `SCAN` and `DONE` buttons — nowhere near the finger that
+started it, and easy to read as nothing happening at all.
+
+The **row** carries it now. Tap a device and its sub-line goes from
+`AVAILABLE` to `PAIRING`, then to `CONNECTING` once the pair has had
+long enough to be the step that is happening — which is the order `netd`
+does them in, not a guess. The name and the line go accent, the row
+takes the chip background, and the unpair `✕` is out of reach until it
+is over. The dots turn over about three times a second, because a line
+that never changes reads as a hang and there is nothing else to report
+until the round trip returns.
+
+The line under the buttons is left for **failure**. Two places saying
+the same thing was one too many, and the wrong one of them at that.
+
+The same applies to everything else that takes a moment: `JOINING`,
+`STOPPING`, `DISCONNECTING`, `FORGETTING`, `UNPAIRING`.
+
+The working row is keyed by **identity** — the MAC or the SSID — not by
+its index. A scan finishing mid-connect reorders the list, and an index
+would then be lighting up whichever device had taken that place.
+
 ## Power
 
 Two tiers, not a list. Three actions that give the panel back in seconds

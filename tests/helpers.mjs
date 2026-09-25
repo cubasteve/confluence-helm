@@ -53,7 +53,7 @@ export async function open(t, opts={}){
 
   /* The helper. `netd:false` is a phone - nothing is listening. */
   const posts=[]; p.__posts=posts;
-  await p.route('http://127.0.0.1:8091/**', r=>{
+  await p.route('http://127.0.0.1:8091/**', async r=>{
     if(opts.netd===false) return r.abort('connectionrefused');
     const path=new URL(r.request().url()).pathname;
     let body={}; try{ body=JSON.parse(r.request().postData()||'{}'); }catch(e){}
@@ -66,8 +66,11 @@ export async function open(t, opts={}){
       buzzer:{available:false, mode:'off', why:'OFF'},
       score:{available:false}, gpx:{}, spotify:{}, fit:{}}, opts.status||{});
     if(path==='/status') return json(st);
+    /* Awaited, so a reply can take its time. A pair on the water is
+       tens of seconds, and what the panel does while it waits is worth
+       being able to test. */
     const r2=(opts.reply||{})[path];
-    return json(typeof r2==='function' ? r2(body) : (r2||{ok:true}));
+    return json(typeof r2==='function' ? await r2(body) : (r2||{ok:true}));
   });
 
   /* The club's scorer. */

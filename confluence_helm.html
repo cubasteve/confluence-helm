@@ -692,6 +692,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .ns-name{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:.03em;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .ns-row.live .ns-name{color:var(--accent)}
+/* Working: the name goes to the accent like a live one, and the line
+   under it too, so the row reads as the thing that is happening. */
+.ns-row.working .ns-name,.ns-row.working .ns-sub{color:var(--accent)}
+.ns-row.working{background:var(--chip)}
 .ns-sub{font-size:20px;font-weight:600;color:var(--label);letter-spacing:.1em;
   margin-top:6px;text-transform:uppercase}
 .ns-empty{height:448px;display:flex;align-items:center;justify-content:center;
@@ -4940,7 +4944,9 @@ $('t-plus') .addEventListener('pointerup',()=>nudge( 60));
 const netsheet=$('netsheet');
 const NET={ kind:'wifi', dev:null, page:0, rows:[], powered:false, ap:false,
             scanning:false, busy:'', pw:null, st:{}, tilesHtml:'', probed:false,
-            confirm:'', confirmT:null, poll:null, tick:null };
+            confirm:'', confirmT:null, poll:null, tick:null,
+            /* the row an action is happening to, and what to say on it */
+            workKey:'', workTxt:'', workAt:0, workNext:null };
 const PAGE=4;                      /* rows per page - matches .ns-list height */
 
 /* SSIDs and Bluetooth names come off the air and go into innerHTML.
@@ -5295,18 +5301,50 @@ function renderRows(){
                                       : NET.rows.length+(wifi?' NETWORKS':' DEVICES');
 }
 
+/* ---- the row that is working ------------------------------------------
+   Pairing a speaker is a pair and then a connect, and netd allows those
+   35 and 30 seconds. All of that used to happen with the row still
+   reading AVAILABLE and the only sign of life a line of text under the
+   SCAN and DONE buttons, which is nowhere near what your finger just
+   touched. The row says what it is doing now, in the place you are
+   already looking.
+   Keyed by identity rather than by index: a scan finishing mid-connect
+   reorders the list, and an index would then be lighting up whichever
+   device had taken that place. */
+const rowKey=(r,wifi)=>wifi ? 'w:'+(r.ssid||'') : 'b:'+(r.mac||'');
+let workT=null;
+function workStart(key,txt,next){
+  NET.workKey=key; NET.workTxt=txt; NET.workAt=Date.now(); NET.workNext=next||null;
+  renderRows();
+  clearInterval(workT);
+  /* The dots are the point: a line that never changes reads as a hang,
+     and there is nothing else to report until the round trip returns. */
+  workT=setInterval(()=>{
+    if(!NET.workKey) return;
+    if(NET.workNext && Date.now()-NET.workAt>=NET.workNext.at){
+      NET.workTxt=NET.workNext.txt; NET.workNext=null; }
+    const el=document.querySelector('#ns-list .ns-row.working .ns-sub');
+    if(el) el.textContent=NET.workTxt+workDots();
+  }, 380);
+}
+function workEnd(){ NET.workKey=''; NET.workTxt=''; NET.workNext=null;
+  clearInterval(workT); workT=null; }
+const workDots=()=>'·'.repeat(1+Math.floor((Date.now()-NET.workAt)/380)%3);
+
 function rowHtml(r,idx,wifi){
   const live = wifi ? r.active : r.connected;
   const hot  = wifi && r.active && NET.ap;      /* our own hotspot, not a network we joined */
-  const sub  = wifi
+  const work = NET.workKey && NET.workKey===rowKey(r,wifi);
+  const sub  = work ? NET.workTxt+workDots()
+    : wifi
     ? (hot ? 'HOTSPOT · THE BOAT IS ON THIS'
            : r.active ? 'CONNECTED · '+r.signal+'%'
            : (r.saved?'SAVED · ':'')+(r.secure?'SECURED':'OPEN')+' · '+r.signal+'%')
     : (r.connected?'CONNECTED':(r.paired?'PAIRED':'AVAILABLE'));
   /* ✕ only on things the Pi remembers - and never on the running
      hotspot, where it would delete the profile the boat runs on. */
-  const known = (wifi ? r.saved : r.paired) && !hot;
-  return '<div class="ns-row'+(live?' live':'')+'" data-i="'+idx+'">'
+  const known = (wifi ? r.saved : r.paired) && !hot && !work;
+  return '<div class="ns-row'+(live?' live':'')+(work?' working':'')+'" data-i="'+idx+'">'
     +(hot?AP_GLYPH:(wifi?bars(r.signal):BT_GLYPH))
     +'<div class="ns-main"><div class="ns-name">'+esc(wifi?r.ssid:r.name)+'</div>'
     +'<div class="ns-sub">'+sub+'</div></div>'
@@ -5315,10 +5353,16 @@ function rowHtml(r,idx,wifi){
 }
 
 /* ---- doing things ---- */
-async function netDo(label,path,body){
-  NET.busy=label; setMsg(label+'…');
+/* `work` is the row this is happening to - {key, txt, next} - and when
+   it is given, the row carries the progress and the line under the
+   buttons carries only failure. Two places saying the same thing was
+   one place too many, and the wrong one of them at that. */
+async function netDo(label,path,body,work){
+  NET.busy=label;
+  if(work){ setMsg(''); workStart(work.key, work.txt, work.next); }
+  else setMsg(label+'…');
   const j=await netApi(path,body||{});
-  NET.busy='';
+  NET.busy=''; workEnd();
   if(!j)         setMsg('HELPER NOT ANSWERING',true);
   else if(!j.ok) setMsg(j.error||'FAILED',true);
   else           setMsg('');
@@ -5345,25 +5389,38 @@ function netTap(i){
   const r=NET.rows[i]; if(!r||NET.busy) return;
   const dev=NET.dev?NET.dev.dev:'';
   if(NET.kind==='wifi'){
+    const key=rowKey(r,true);
     if(r.active){
       if(needsConfirm('off:'+r.ssid,'TAP AGAIN TO STOP THE HOTSPOT')) return;
-      return netDo('STOPPING '+r.ssid,'/wifi/disconnect',{dev:dev});
+      return netDo('STOPPING '+r.ssid,'/wifi/disconnect',{dev:dev},
+                   {key:key, txt:'STOPPING'});
     }
     if(needsConfirm('join:'+r.ssid,'TAP AGAIN · THIS DROPS THE HOTSPOT')) return;
     /* A saved profile already carries its key, and an open network has
        none to carry - either way there is nothing to type. */
     if(r.saved||!r.secure)
-      return netDo('JOINING '+r.ssid,'/wifi/connect',{dev:dev,ssid:r.ssid});
+      return netDo('JOINING '+r.ssid,'/wifi/connect',{dev:dev,ssid:r.ssid},
+                   {key:key, txt:'JOINING'});
     return showPw(true,r.ssid);
   }
-  if(r.connected) return netDo('DISCONNECTING','/bt/disconnect',{mac:r.mac});
-  netDo((r.paired?'CONNECTING TO ':'PAIRING ')+r.name,'/bt/connect',{mac:r.mac});
+  const key=rowKey(r,false);
+  if(r.connected)
+    return netDo('DISCONNECTING','/bt/disconnect',{mac:r.mac},
+                 {key:key, txt:'DISCONNECTING'});
+  /* Already paired is one step; a new device is a pair and THEN a
+     connect, in that order, which is what the second line says once the
+     first has had long enough to be the one happening. */
+  netDo((r.paired?'CONNECTING TO ':'PAIRING ')+r.name,'/bt/connect',{mac:r.mac},
+        r.paired ? {key:key, txt:'CONNECTING'}
+                 : {key:key, txt:'PAIRING', next:{at:7000, txt:'CONNECTING'}});
 }
 
 function netForget(i){
   const r=NET.rows[i]; if(!r||NET.busy) return;
-  if(NET.kind==='wifi') netDo('FORGETTING '+r.ssid,'/wifi/forget',{ssid:r.ssid});
-  else                  netDo('UNPAIRING '+r.name,'/bt/forget',{mac:r.mac});
+  if(NET.kind==='wifi') netDo('FORGETTING '+r.ssid,'/wifi/forget',{ssid:r.ssid},
+                              {key:rowKey(r,true), txt:'FORGETTING'});
+  else                  netDo('UNPAIRING '+r.name,'/bt/forget',{mac:r.mac},
+                              {key:rowKey(r,false), txt:'UNPAIRING'});
 }
 
 /* ---- the sounder row ----

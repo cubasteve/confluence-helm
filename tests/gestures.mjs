@@ -95,6 +95,63 @@ t.ok(!s.sheet && s.panel, 'DONE closes the picker, not the panel', JSON.stringif
 await fling(p,1,0,-260);
 t.ok(!(await state(p)).panel, 'and the dial is back');
 
+t.head('a slow pair says so on the row it is happening to');
+/* netd allows a pair 35 seconds and the connect after it 30. All of
+   that used to pass with the row still reading AVAILABLE and the only
+   sign of life a line under the SCAN and DONE buttons - nowhere near
+   the finger that started it. */
+let release=null;
+await p.evaluate(()=>{ closeNet(); }); await p.waitForTimeout(300);
+await p.route('http://127.0.0.1:8091/bt/list', r=>r.fulfill({status:200,
+  contentType:'application/json', body:JSON.stringify({ok:true, powered:true,
+  devices:[{mac:'AA:BB:CC:DD:EE:01', name:'JBL Flip 6', paired:false, connected:false},
+           {mac:'AA:BB:CC:DD:EE:02', name:'Cockpit Bar', paired:true, connected:false}]})}));
+await p.route('http://127.0.0.1:8091/bt/connect', r=>{ release=r; });
+await p.evaluate(()=>openNet('bt')); await p.waitForTimeout(1000);
+const btRows=()=>p.evaluate(()=>[...document.querySelectorAll('#ns-list .ns-row')]
+  .map(r=>({name:r.querySelector('.ns-name').textContent,
+            sub:r.querySelector('.ns-sub').textContent,
+            work:r.classList.contains('working'),
+            bin:!!r.querySelector('[data-forget]')})));
+let R=await btRows();
+t.ok(R[0].sub==='AVAILABLE' && R[1].sub==='PAIRED',
+     'a device says where it stands before you touch it',
+     R.map(x=>x.sub).join(' | '));
+await p.evaluate(()=>document.querySelectorAll('#ns-list .ns-row')[0].click());
+await p.waitForTimeout(700);
+R=await btRows();
+t.ok(/^PAIRING/.test(R[0].sub) && R[0].work,
+     'and AVAILABLE becomes PAIRING the moment it is tapped', R[0].sub);
+t.ok(await p.evaluate(()=>$('ns-msg').textContent)==='',
+     'with nothing repeating it under the buttons',
+     await p.evaluate(()=>$('ns-msg').textContent));
+t.ok(R[1].sub==='PAIRED' && !R[1].work, 'and the rest of the list left alone');
+/* Sampled across a whole cycle rather than at two points: the dots
+   turn over every three ticks, and two samples a cycle apart are the
+   same two dots. */
+const seen=new Set();
+for(let i=0;i<8;i++){ seen.add((await btRows())[0].sub);
+                      await p.waitForTimeout(200); }
+t.ok(seen.size>=3, 'the line moves, because one that never does reads as a hang',
+     [...seen].join(' '));
+await p.waitForTimeout(5400);
+t.ok(/^CONNECTING/.test((await btRows())[0].sub),
+     'and a pair is followed by a connect, which is what netd is doing',
+     (await btRows())[0].sub);
+t.ok(!(await btRows())[0].bin, 'the unpair bin is out of reach while it works');
+if(release) release.fulfill({status:200, contentType:'application/json',
+  body:JSON.stringify({ok:false, error:'CONNECT FAILED'})});
+await p.waitForTimeout(1200);
+R=await btRows();
+t.ok(!R[0].work && R[0].sub==='AVAILABLE',
+     'when it is over the row goes back to what it is', R[0].sub);
+t.ok(/FAILED/.test(await p.evaluate(()=>$('ns-msg').textContent)),
+     'and the line under the buttons is left for what went wrong',
+     await p.evaluate(()=>$('ns-msg').textContent));
+await p.unroute('http://127.0.0.1:8091/bt/connect');
+await p.unroute('http://127.0.0.1:8091/bt/list');
+await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);
+
 t.head('the sounder says where it comes out, and can be pointed elsewhere');
 /* aplay only addresses ALSA, so a Bluetooth speaker is reached through
    whatever sits in front of it - which is why this is a list and not a
