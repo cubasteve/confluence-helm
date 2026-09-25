@@ -476,13 +476,32 @@ The side shows on the map by the mark's number and in the box as you
 close on it. Two buttons on every chip would have made the strip half
 again as long, and it is a choice between exactly two things.
 
-The tile says where each mark stands in the course, and in **EDIT** it
-says its position instead, as a chart writes it — `28 49.284N ·
-081 16.508W`. The hemisphere is a letter and the degrees are padded,
-because nothing read at arm's length should turn on spotting a minus
-sign at 15 px. The club's marks and your own read the same way. Tiles
-carry the short name — the one the cell headers and the RACE box use,
-where a name has to fit in 32 px.
+**Each tile is the buoy, its short name, and where it stands in the
+course** — and the buoy is drawn as it looks on the water, because that
+is how it is found:
+
+| | |
+|---|---|
+| **yellow special, X topmark** | `RUM`, `GOSLING` — the club's own inflatables. Marks of the *course*, which is what the X says |
+| **red nun** | `CB 2`, `CB 8`, `CB 10`, `CB 12` — the channel |
+| **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks |
+| **flag** and **ball** | `FLAG` and `BALL`: the Romance flag and its sail ball, which are the two ends of the line |
+| **the accent** | a mark of your own — there is no club drawing to copy |
+
+On the **night** theme every one of them is the same red, as everything
+there is; the shapes still tell them apart, which is what tells them
+apart out on the water in the dark anyway.
+
+The drawing says in a glance what a line of type was spelling out, so
+the tiles are smaller than they were — four across, and the ten club
+marks fit without scrolling. Tiles carry the short name, the one the
+cell headers and the RACE box use, where a name has to fit in 32 px.
+
+In **EDIT** the tile says the mark's position instead of its place in
+the course, as a chart writes it — `28 49.284N · 081 16.508W` — and the
+grid goes to three across to fit it. The hemisphere is a letter and the
+degrees are padded, because nothing read at arm's length should turn on
+spotting a minus sign at 13 px.
 
 ### The five settings
 
@@ -592,11 +611,10 @@ readings like the club's — and adds it to the course.
 ![The course in edit mode](img/course-edit.png)
 
 **EDIT** is for the list itself, not the course — the course's order is
-the strip, set by tapping. It puts a band along the bottom of every
-tile: drag it onto another tile and the mark takes that place in the
-grid, the club's marks included, and the order is kept. A mark of your
-own gets a ✕ in edit mode, which removes it from the course and from
-storage.
+the strip, set by tapping. It puts a band down the right of every tile:
+drag it onto another tile and the mark takes that place in the grid, the
+club's marks included, and the order is kept. A mark of your own gets a
+✕ in edit mode, which removes it from the course and from storage.
 
 **Tapping a mark in edit mode opens it**, with its name and position
 already in the fields. Outside edit mode a tap still adds and removes

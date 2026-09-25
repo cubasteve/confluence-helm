@@ -61,6 +61,9 @@ body{                                   /* DAY - built to beat sun   */
      buttons do, and it is the only tap here that can replace a course
      you are already sailing. */
   --club:#0E7A7A;
+  /* The marks as they are on the water. The yellow is knocked down from
+     a buoy's own yellow, which on a light panel in sun is a smear. */
+  --buoy-y:#D89400; --buoy-r:#C81E1E; --buoy-w:#FFFFFF;
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
@@ -69,6 +72,7 @@ body.dusk{
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
   --club:#19A8A8;                       /* lifted off a dark panel     */
+  --buoy-y:#F5B72E; --buoy-r:#FF4D4D; --buoy-w:#E6EAEE;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
@@ -81,8 +85,11 @@ body.night{
      a fact the box states in words two lines below it. */
   --port-g1:#7A201C; --port-g2:#C8342E; --stbd-g1:#7A201C; --stbd-g2:#C8342E;
   /* And the club's colour is red too here, for the same reason - it goes
-     to an outline at night rather than a lit block. */
+     to an outline at night rather than a lit block. A yellow special and
+     a red nun are the same red at 2 a.m.; their SHAPES still differ,
+     which is what a buoy is told apart by in the dark anyway. */
   --club:#C8342E;
+  --buoy-y:#C8342E; --buoy-r:#C8342E; --buoy-w:#8A2723;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 
@@ -916,39 +923,60 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .cv-chip.ghost i{background:var(--club)}
 .cv-empty{font-size:20px;letter-spacing:.12em;color:var(--label)}
 .cv-arrow{color:var(--label);font-size:22px}
-/* The marks. 112 tall for the same reason the start pad's keys are: 45 px
-   on a 430 px phone, and 44 is the least a thumb should be asked to hit.
-   This is the one part of the view that scrolls. */
-.cv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;
+/* The marks: what the buoy looks like, what it is called, and where it
+   stands in the course. Four across and 92 tall - smaller than they
+   were, because a drawing of the buoy says in a glance what a line of
+   type was spelling out, and ten marks then fit without scrolling.
+   Edit mode goes to three across: it swaps the course line for the
+   position, which is a long number, and adds two controls. */
+.cv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;width:100%;
   flex:1 1 auto;min-height:0;align-content:start;
   overflow-y:auto;overscroll-behavior:contain}
-.cv-tile{position:relative;height:112px;border-radius:18px;overflow:hidden;
+.cv-grid.edit{grid-template-columns:repeat(3,1fr)}
+.cv-tile{position:relative;height:92px;border-radius:16px;overflow:hidden;
   border:2px solid var(--hairline);background:none;font-family:var(--font);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-.cv-tile b{font-size:22px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
-.cv-tile s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  display:flex;align-items:center;gap:9px;padding:0 9px;text-align:left}
+.cv-tile .tx{min-width:0;flex:1}
+.cv-tile b{display:block;font-size:21px;font-weight:600;letter-spacing:.03em;
+  color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-tile s{display:block;text-decoration:none;font-size:13px;letter-spacing:.05em;
+  color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cv-tile.in{border-color:var(--accent);background:var(--chip)}
 .cv-tile.in b{color:var(--accent)}
+/* The one being sailed to, ringed the way its chip in the strip is. */
+.cv-tile.next{box-shadow:inset 0 0 0 3px var(--accent)}
 /* A corrected mark says so in the accent: you are no longer looking at
    what the sailing instructions printed. */
 .cv-tile s.moved{color:var(--accent)}
-.cv-tile .seq{position:absolute;left:10px;top:10px;width:34px;height:34px;
-  border-radius:17px;background:var(--accent);color:#fff;font-size:19px;
-  font-weight:600;display:flex;align-items:center;justify-content:center}
-.cv-tile.next .seq{box-shadow:0 0 0 3px var(--panel),0 0 0 6px var(--accent)}
 /* edit mode: a bin on a mark of your own, a way back to the book on a
-   club mark you have corrected, and a band along the bottom to drag the
+   club mark you have corrected, and a band down the right to drag the
    tile by - which reorders the LIST, not the course. */
-.cv-tile .del{position:absolute;right:8px;top:8px;width:44px;height:44px;
-  border-radius:22px;border:2px solid var(--alarm);color:var(--alarm);font-size:20px;
+.cv-tile .del{flex:none;width:40px;height:40px;border-radius:20px;
+  border:2px solid var(--alarm);color:var(--alarm);font-size:18px;
   display:flex;align-items:center;justify-content:center}
-.cv-tile .del.undo{border-color:var(--accent);color:var(--accent);font-size:26px}
-.cv-tile .grip{position:absolute;left:0;right:0;bottom:0;height:28px;
-  display:flex;align-items:center;justify-content:center;font-size:24px;
+.cv-tile .del.undo{border-color:var(--accent);color:var(--accent);font-size:24px}
+.cv-tile .grip{flex:none;width:26px;align-self:stretch;margin-right:-9px;
+  display:flex;align-items:center;justify-content:center;font-size:22px;
   color:var(--label)}
-.cv-tile.edit{padding-bottom:22px}
 .cv-tile.lift{opacity:.45}
+/* ---- the buoys ----
+   Drawn as they are on the water, because that is how they are found:
+   the club's own marks are yellow specials with an X topmark, the
+   channel is red, the manatee zone's regulatory cans are white, and the
+   line's two ends are the Romance flag and its sail ball. At night they
+   are all the same red - that is the theme's whole point - and the
+   SHAPES still tell them apart, which is what tells them apart out
+   there in the dark anyway. */
+.bu{width:34px;height:34px;flex:none}
+.bu .bd{stroke:var(--ink);stroke-opacity:.28;stroke-width:1}
+.bu .ln{fill:none;stroke-width:2.2;stroke-linecap:round}
+/* White on a light panel is nothing without an edge. */
+.bu.w .bd{stroke-opacity:.55}
+.bu.y .bd{fill:var(--buoy-y)} .bu.y .ln{stroke:var(--buoy-y)}
+.bu.r .bd{fill:var(--buoy-r)} .bu.r .ln{stroke:var(--buoy-r)}
+.bu.w .bd{fill:var(--buoy-w)} .bu.w .ln{stroke:var(--buoy-w)}
+.bu.f .bd,.bu.b .bd{fill:var(--ink-dim)} .bu.f .ln,.bu.b .ln{stroke:var(--ink-dim)}
+.bu.o .bd{fill:var(--accent)} .bu.o .ln{stroke:var(--accent)}
 /* ---- the four settings, as readings ----
    Everything about the evening that is not the course itself, on one
    row under the marks, each saying what it is set to now: the sequence,
@@ -990,8 +1018,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    it is still the only one of them that reaches off the boat. */
 .cvr.club{border-color:var(--club)}
 .cvr.club b,.cvr.club u{color:var(--club)}
-.cvr.club svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;
+/* The cloud costs the club's value 28 px that the other four spend on
+   type, so its type gives that back rather than running under the
+   chevron. */
+.cvr.club svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;
   stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.cvr.club b{font-size:19px;gap:6px}
+.cvr.club b span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* ---- and the menu three of them open ----
    The same menu as the dial's readings picker, and for the same reasons:
    painted in --panel over a hairline so it reads as something in front,
@@ -3309,17 +3342,23 @@ function windShift(twd, awa){
    Gosling, so these are right to the metre. hdr is the short name a
    32 px cell header can carry; name is what the course sheet shows. */
 const DM=(d,m)=>d+m/60;
+/* `buoy` is what it looks like on the water, and the course sheet draws
+   it: y a yellow special with an X topmark - the club's inflatables,
+   which are marks of the course and not of the channel - r a red
+   channel buoy, w the white regulatory cans of the manatee zone, f the
+   Romance flag and b its sail ball, which are the two ends of the line.
+   A mark of your own gets the accent. */
 const MARKS=[
-  {id:'flag',   name:'ROMANCE FLAG',      hdr:'FLAG',   lat:DM(28,49.123), lon:-DM(81,15.874)},
-  {id:'ball',   name:'ROMANCE SAIL BALL', hdr:'BALL',   lat:DM(28,49.150), lon:-DM(81,15.721)},
-  {id:'rum',    name:'RUM MARK',          hdr:'RUM',    lat:DM(28,50.130), lon:-DM(81,15.840)},
-  {id:'gosling',name:'GOSLING MARK',      hdr:'GOSLING',lat:DM(28,49.800), lon:-DM(81,15.150)},
-  {id:'cb8',    name:'CHANNEL BUOY 8',    hdr:'CB 8',   lat:DM(28,49.881), lon:-DM(81,17.193)},
-  {id:'cb10',   name:'CHANNEL BUOY 10',   hdr:'CB 10',  lat:DM(28,49.501), lon:-DM(81,16.897)},
-  {id:'cb12',   name:'CHANNEL BUOY 12',   hdr:'CB 12',  lat:DM(28,49.284), lon:-DM(81,16.508)},
-  {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', lat:DM(28,49.004), lon:-DM(81,14.566)},
-  {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  lat:DM(28,50.851), lon:-DM(81,14.916)},
-  {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  lat:DM(28,51.201), lon:-DM(81,15.212)},
+  {id:'flag',   name:'ROMANCE FLAG',      hdr:'FLAG',   buoy:'f', lat:DM(28,49.123), lon:-DM(81,15.874)},
+  {id:'ball',   name:'ROMANCE SAIL BALL', hdr:'BALL',   buoy:'b', lat:DM(28,49.150), lon:-DM(81,15.721)},
+  {id:'rum',    name:'RUM MARK',          hdr:'RUM',    buoy:'y', lat:DM(28,50.130), lon:-DM(81,15.840)},
+  {id:'gosling',name:'GOSLING MARK',      hdr:'GOSLING',buoy:'y', lat:DM(28,49.800), lon:-DM(81,15.150)},
+  {id:'cb8',    name:'CHANNEL BUOY 8',    hdr:'CB 8',   buoy:'r', lat:DM(28,49.881), lon:-DM(81,17.193)},
+  {id:'cb10',   name:'CHANNEL BUOY 10',   hdr:'CB 10',  buoy:'r', lat:DM(28,49.501), lon:-DM(81,16.897)},
+  {id:'cb12',   name:'CHANNEL BUOY 12',   hdr:'CB 12',  buoy:'r', lat:DM(28,49.284), lon:-DM(81,16.508)},
+  {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', buoy:'r', lat:DM(28,49.004), lon:-DM(81,14.566)},
+  {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  buoy:'w', lat:DM(28,50.851), lon:-DM(81,14.916)},
+  {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  buoy:'w', lat:DM(28,51.201), lon:-DM(81,15.212)},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
 /* Marks of your own, from the course sheet's NEW MARK: kept in browser
@@ -8602,6 +8641,40 @@ const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').
    not a mark, and the grid scrolls. */
 let courseEdit=false;
 
+/* ---- the buoys -------------------------------------------------------
+   One drawing each, in a 24 box standing on a waterline at y=21, so they
+   line up with each other in a column of tiles. The colour is the
+   theme's - see --buoy-y and its neighbours - and the class on the svg
+   picks it; what is drawn here is the SHAPE, which is what still tells
+   them apart on the night theme where all of them are red.
+
+   .bd is the body, filled. .ln is drawn in outline: a topmark, a staff,
+   a flag's fly. */
+const BUOY={
+  /* A special mark: pillar, X topmark. A mark of the COURSE rather than
+     of the channel, which is exactly what the club's inflatables are,
+     and the X is the shape that says so. */
+  y:'<path class="ln" d="M7 2.8l10 8M17 2.8l-10 8"/>'
+   +'<path class="bd" d="M11.1 10.6h1.8v2.6h-1.8z"/>'
+   +'<path class="bd" d="M8.4 13.2h7.2L17.6 22H6.4z"/>',
+  /* A red nun, the cone the even-numbered side of a channel is. */
+  r:'<path class="bd" d="M12 2.6L18.2 22H5.8z"/>',
+  /* A regulatory can - the white ones round the manatee zone. */
+  w:'<path class="bd" d="M7 9.5h10V22H7z"/>'
+   +'<path class="ln" d="M7 14.5h10"/>',
+  /* The Romance flag, on its staff. */
+  f:'<path class="ln" d="M7 2.6V22"/>'
+   +'<path class="bd" d="M7.9 3.4L19.2 7.6 7.9 11.8z"/>',
+  /* And its sail ball, which is a ball on a staff. */
+  b:'<path class="ln" d="M12 11V22"/>'
+   +'<circle class="bd" cx="12" cy="7" r="5"/>',
+  /* One of your own: no club drawing to copy, so it wears the accent. */
+  o:'<path class="ln" d="M12 4.5v6"/>'
+   +'<path class="bd" d="M8.2 10.8h7.6L17.6 22H6.4z"/>'
+};
+const buoySvg=m=>{ const k=BUOY[m.buoy] ? m.buoy : 'o';
+  return '<svg class="bu '+k+'" viewBox="0 0 24 24">'+BUOY[k]+'</svg>'; };
+
 /* A cloud with the course coming down out of it. Circling arrows would
    say 'sync' too, but they say it about two things kept level with each
    other - and this only ever comes one way, off the site and onto the
@@ -8642,6 +8715,7 @@ function renderCourse(){
     : '<span class="cv-empty">NOTHING YET · TAP A MARK, OR SYNC THE CLUB’S</span>';
 
   wText('cv-hint', courseEdit ? 'TAP TO CORRECT · DRAG TO REORDER' : 'TAP TO ADD');
+  wCls('course-list','edit', courseEdit);
   const tile=m=>{
     const i=COURSE.marks.indexOf(m.id), moved=isMoved(m.id);
     const sub = courseEdit ? posDM(m)
@@ -8652,9 +8726,9 @@ function renderCourse(){
       : isUserMark(m.id) ? '<div class="del">✕</div>'
       : moved            ? '<div class="del undo">↺</div>' : '';
     return '<button class="cv-tile'+(i>=0?' in':'')+(i===COURSE.next?' next':'')
-      +(courseEdit?' edit':'')+'" data-mark="'+m.id+'">'
-      +(i>=0?'<div class="seq">'+(i+1)+'</div>':'')
-      +'<b>'+esc(m.hdr)+'</b><s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s>'
+      +'" data-mark="'+m.id+'">'+buoySvg(m)
+      +'<div class="tx"><b>'+esc(m.hdr)+'</b>'
+      +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
 

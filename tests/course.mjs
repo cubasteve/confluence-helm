@@ -20,7 +20,9 @@ await p.waitForTimeout(400);
 /* Every mark this boat knows, as the grid draws it. */
 const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-tile')]
   .map(r=>({mark:r.dataset.mark,
-            seq:(r.querySelector('.seq')||{textContent:''}).textContent.trim(),
+            /* the tile's place in the course is what its info line says */
+            seq:(/IN COURSE . (\d+)/.exec(r.querySelector('s').textContent)||['',''])[1],
+            buoy:[...r.querySelector('svg').classList].filter(c=>c!=='bu')[0]||null,
             name:r.querySelector('b').textContent,
             sub:r.querySelector('s').textContent,
             moved:!!r.querySelector('s.moved'),
@@ -63,6 +65,20 @@ t.ok(marks(S).length===10, 'all ten of the club\'s marks, as tiles', String(S.le
 let L=await rd('cv-line');
 t.ok(L.lbl==='START LINE', 'the line is one of the five settings', L.lbl);
 t.ok(L.val==='FLAG – BALL', 'and says which two marks it runs between', L.val);
+/* The buoy each mark actually is, drawn on its tile: the club's
+   inflatables are yellow specials, the channel is red, the manatee
+   zone's cans are white, and the line's ends are the flag and the
+   ball. */
+t.ok(S.find(r=>r.mark==='rum').buoy==='y'
+     && S.find(r=>r.mark==='gosling').buoy==='y',
+     'the club\'s own marks are drawn as yellow specials',
+     S.find(r=>r.mark==='rum').buoy);
+t.ok(['cb2','cb8','cb10','cb12'].every(id=>S.find(r=>r.mark===id).buoy==='r'),
+     'every channel buoy is a red nun');
+t.ok(['man1','man2'].every(id=>S.find(r=>r.mark===id).buoy==='w'),
+     'the manatee marks are the white regulatory cans');
+t.ok(S.find(r=>r.mark==='flag').buoy==='f' && S.find(r=>r.mark==='ball').buoy==='b',
+     'and the line\'s two ends are the flag and the ball themselves');
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join())
      ==='START TIME,COUNTDOWN,SEQUENCE,START LINE,CLUB',
@@ -85,7 +101,7 @@ t.ok(T.map(c=>c.name).join()==='RUM,GOSLING,CB 12,FINISH',
 t.ok(T[2].n==='3' && T[3].fin, 'the chips are numbered and the finish is not a mark');
 const seqOf=id=>S.find(r=>r.mark===id).seq;
 t.ok(seqOf('rum')==='1'&&seqOf('gosling')==='2'&&seqOf('cb12')==='3',
-     'and the tiles carry the same numbers',
+     'and the tiles say the same places',
      [seqOf('rum'),seqOf('gosling'),seqOf('cb12')].join(''));
 t.ok(S.find(r=>r.mark==='rum').in, 'a mark in the course is marked as in');
 t.ok(S.find(r=>r.mark==='ball').seq==='' && !S.find(r=>r.mark==='ball').in,
@@ -285,6 +301,12 @@ t.head('the scheduled gun: typed once, and it starts itself');
 /* A club race has a time on the sailing instructions. Typing it beats
    watching a clock for the moment to press a button with a boat to
    sail at the same time. */
+/* The clock is pinned to six in the evening for this section. The times
+   below are 'forty minutes out', and forty minutes out from half past
+   eleven at night is tomorrow - which the pad is right to refuse, and
+   which would otherwise make this probe fail once a day. */
+await p.evaluate(()=>{ const d=new Date(); d.setHours(18,0,0,0);
+  window.__realNow=Date.now; Date.now=()=>d.getTime(); });
 const gunRow=()=>p.evaluate(()=>({b:$('cv-start').querySelector('b').textContent,
   sub:$('cv-mins').querySelector('b').textContent,
   set:$('cv-start').classList.contains('in')}));
@@ -378,6 +400,8 @@ t.ok(pad.set===1, 'ONE set, on the pad where the last digit leaves your thumb',
 t.ok(pad.bar.join('|')==='BACK|NO START TIME',
      'and the bar says what it does rather than CLEAR, which is what '
      +'backspace does to a digit', pad.bar.join('|'));
+
+await p.evaluate(()=>{ Date.now=window.__realNow; rAt=rBase=Date.now(); });
 
 t.head('and what it does when the moment comes');
 const fired=await p.evaluate(()=>{
