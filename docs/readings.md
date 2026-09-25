@@ -232,12 +232,13 @@ Both fixes have to fall between the ends, so a boat rounding outside
 the pin is not a crossing, and a jump of more than 80 m between them is
 discarded as a bad fix rather than believed.
 
-*The gun can be scheduled.* The first row of the course sheet is
+*The gun can be scheduled.* Top right of the course sheet is
 `START TIME`: type the time off the sailing instructions — three or
 four digits and `AM`/`PM`, so `6` `2` `5` `PM` — and the countdown
-starts itself `CFG.startMins` before it and runs out exactly on it. The row then says when the gun is and when the countdown will
-begin, and the RACE pill carries the time while it is armed, so you can
-see it without opening anything.
+starts itself `CFG.startMins` before it and runs out exactly on it. The
+button then says when the gun is and when the countdown will begin, and
+the RACE pill carries the time while it is armed, so you can see it
+without opening anything.
 
 - Set it **inside** the window — three minutes before a five minute
   sequence — and the countdown starts at once, still ending on the gun.
@@ -265,8 +266,8 @@ the bar, which is the same action twice. And the bar's other button says
 clears the whole scheduled gun, and two very different consequences were
 wearing the same word.
 
-*Which kind of start* it is comes from the **SEQUENCE** row of the
-course sheet, one under the start time — `GUN` or `WINDOW`. Nothing on the water
+*Which kind of start* it is comes from the **SEQUENCE** chip under the
+marks on the course sheet — `GUN` or `WINDOW`. Nothing on the water
 tells them apart: the same crossing, at the same place, at the same
 moment, is a start on one night and a foul on the other.
 
@@ -277,10 +278,9 @@ moment, is a start on one night and a foul on the other.
 
 `GUN` is a proper sequence — Saturday. `WINDOW` is an open five minutes
 you go when you are ready — Wednesday. The pair is drawn the way the
-marks' `P` and `S` are a few rows down: both showing, the one in force
-lit, and a tap anywhere on the row is the other one. It is remembered
-across a restart, because it is a fact about the series and not about
-today.
+marks' `P` and `S` are: both showing, the one in force lit, and a tap
+anywhere on the chip is the other one. It is remembered across a
+restart, because it is a fact about the series and not about today.
 
 It lived on the control panel until the start time arrived. Everything
 about a start is one thing, and the panel is where the boat is set up
@@ -454,21 +454,69 @@ the fix is to stand at the buoy and correct the mark with `HERE` —
 see below, it works on the club's marks too. Meanwhile `BRG` in the
 RACE box advances the course on a double tap.
 
-The next mark comes from the course set in the Tracks app: tap marks
-on the course sheet in the order you will sail them; the numbers on
-the left are that order. Each mark in the course gets a `P` and an `S` beside it for the side you
-will leave it — port unless you say otherwise, red and green the way
-the lights are. The side shows on the map by the mark's number and in
-the box as you close on it. With no course set, the only leg is back
-to the line.
+![The course sheet](img/course-sheet.png)
 
-**Every row carries its position**, under the name, as a chart writes
-it — `28 49.284N · 081 16.508W`. The hemisphere is a letter and the
-degrees are padded, because nothing on a list read at arm's length
-should turn on spotting a minus sign at 16 px. The club's marks and
-your own read the same way. The short name is not repeated here — the
-name is directly above it — but it is still what the cell headers and
-the RACE box use, where a name has to fit in 32 px.
+The next mark comes from the course set in the Tracks app. **The course
+reads across the top as a strip**, in the order you will sail it —
+`1 RUM › 2 GOSLING › 3 CB 12 › FINISH` — and every mark this boat knows
+sits under it as a tile. Tap a tile to put that mark on the end of the
+course, and tap it again to take it out; the rest close up. The mark
+being sailed to is the chip with the ring round it. With no course set,
+the only leg is back to the line.
+
+It was a list of rows, one to a mark, with the course's order given as
+numbers down the left margin. Every mark was legible and the one thing
+the sheet exists for — what the course *is*, in order — was the one
+thing you had to assemble in your head.
+
+**A tap on a chip flips which side that mark is left on**, `P` or `S` —
+port unless you say otherwise, red and green the way the lights are.
+The side shows on the map by the mark's number and in the box as you
+close on it. Two buttons on every chip would have made the strip half
+again as long, and it is a choice between exactly two things.
+
+The tile says where each mark stands in the course, and in **EDIT** it
+says its position instead, as a chart writes it — `28 49.284N ·
+081 16.508W`. The hemisphere is a letter and the degrees are padded,
+because nothing read at arm's length should turn on spotting a minus
+sign at 15 px. The club's marks and your own read the same way. Tiles
+carry the short name — the one the cell headers and the RACE box use,
+where a name has to fit in 32 px.
+
+### CLUB SYNC
+
+![The club's course, found and waiting](img/course-club.png)
+
+The club posts the evening's marks on the members' site by 5:30, the
+same ones that go on the clubhouse door. **CLUB SYNC**, centred under
+the heading, fetches them: they are these marks under three different
+names, so the site does the translating and hands back ids this file
+already knows.
+
+**Two taps, never one.** The first fetches and shows what it found —
+the club's course drawn in the strip in dashed outline, in the place it
+would take, with the button now reading `LOAD 4 MARKS?` and the line
+under it saying when it was posted. The second tap is the one that
+replaces your course. Tapping a control and having the course you are
+three marks into vanish is not something this sheet should be able to
+do by accident.
+
+What did not come across is said on load rather than found out at the
+mark: `LOADED · 1 MISSING` for a mark this boat has no coordinate for,
+and `NOT OFF THE LINE` for a course that does not start on the line,
+which is not a start this sheet can draw. A site that does not answer
+says `NO ANSWER · IS THERE WIFI?` and changes nothing.
+
+It has to be *us* that asks. The helper binds loopback, so nothing off
+the Pi can reach in and set a course — the right way round for a box on
+a boat. The read at the other end is open, because a posted course is
+public by the time it matters, so there is no login to carry.
+
+The button wears its own colour — `--club`, a violet by day, an outline
+at night where a lit block of anything costs an hour of dark adaptation.
+It is not one of the app's blue actions: it is the only tap on this
+sheet that reaches off the boat, and the only one that can replace a
+course you are already sailing.
 
 ![Adding a mark of your own](img/course-form.png)
 
@@ -487,11 +535,12 @@ readings like the club's — and adds it to the course.
 
 ![The course in edit mode](img/course-edit.png)
 
-**EDIT** is for the list itself, not the course — the course's order
-is the numbers, set by tapping. It puts a grip on every row: drag it
-onto another row and the mark takes that place in the list, the club's
-marks included, and the order is kept. A mark of your own gets a ✕ in
-edit mode, which removes it from the course and from storage.
+**EDIT** is for the list itself, not the course — the course's order is
+the strip, set by tapping. It puts a band along the bottom of every
+tile: drag it onto another tile and the mark takes that place in the
+grid, the club's marks included, and the order is kept. A mark of your
+own gets a ✕ in edit mode, which removes it from the course and from
+storage.
 
 **Tapping a mark in edit mode opens it**, with its name and position
 already in the fields. Outside edit mode a tap still adds and removes

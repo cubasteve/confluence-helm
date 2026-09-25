@@ -68,7 +68,7 @@ t.head('a saved mark is a mark like any other');
 const m=await p.evaluate(()=>{ const u=USER_MARKS[0];
   return {id:u.id, name:u.name, hdr:u.hdr, inMarks:!!markOf(u.id),
           inCourse:COURSE.marks.includes(u.id), user:isUserMark(u.id),
-          onSheet:!!document.querySelector('.course-row[data-mark="'+u.id+'"]'),
+          onSheet:!!document.querySelector('.cv-tile[data-mark="'+u.id+'"]'),
           disk:JSON.parse(localStorage.getItem('marks')||'[]').length}; });
 t.ok(m.name==='GREEN BUOY', 'named as typed', m.name);
 t.ok(m.hdr==='GREEN BU', 'with a short name a 32 px header can carry', m.hdr);
@@ -88,7 +88,7 @@ const del=await p.evaluate(()=>{ const id=USER_MARKS[1].id;
   markDelete(id);
   return {left:USER_MARKS.length, inMarks:!!markOf(id),
           inCourse:COURSE.marks.includes(id),
-          onSheet:!!document.querySelector('.course-row[data-mark="'+id+'"]'),
+          onSheet:!!document.querySelector('.cv-tile[data-mark="'+id+'"]'),
           disk:JSON.parse(localStorage.getItem('marks')||'[]').length}; });
 t.ok(del.left===1 && del.disk===1, 'gone from storage', JSON.stringify(del));
 t.ok(!del.inMarks && !del.onSheet, 'and off the sheet', JSON.stringify(del));

@@ -1,5 +1,5 @@
-/* The club course row: what it asks for, what it says it found, and the
-   second tap that is the only thing allowed to replace a course. */
+/* CLUB SYNC: what it asks for, what it says it found, and the second
+   tap that is the only thing allowed to replace a course. */
 import {open, tally} from './helpers.mjs';
 const t=tally();
 
@@ -19,15 +19,23 @@ const {b,p}=await open(t,{demo:true, routes:{'https://lmsa.pages.dev/**': r=>
                body:JSON.stringify(reply.body)})}});
 
 const tap=async(sel)=>{ await p.click(sel); await p.waitForTimeout(400); };
-const CLUB='#course-list .course-row.club';
-const said=()=>p.evaluate(()=>{ const r=document.querySelector('#course-list .course-row.club');
-  return r ? {head:r.querySelector('b').textContent,
-              sub:r.querySelector('.lib-main span').textContent,
-              lit:r.classList.contains('in')} : null; });
+const CLUB='#cv-sync';
+/* The button says what it would do; the line under it says where it came
+   from and why; and what it FOUND is the strip, in dashed outline, drawn
+   where the course it would replace is. */
+const said=()=>p.evaluate(()=>({
+  head:$('cv-sync').querySelector('span').textContent,
+  sub:$('cv-say').textContent,
+  count:$('cv-count').textContent,
+  ghost:[...document.querySelectorAll('#cv-strip .cv-chip.ghost')]
+          .map(c=>[...c.childNodes].filter(n=>n.nodeType===3)
+                .map(n=>n.textContent).join('').trim()).join(' · '),
+  bad:$('cv-say').classList.contains('bad')}));
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
                                   side:Object.assign({},COURSE.side||{})}));
 const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:{}}; courseSave();
-                                 CLUB={step:'idle',got:null,say:''}; renderCourse(); });
+                                 CLUB={step:'idle',got:null,say:'',bad:false};
+                                 renderCourse(); });
 
 /* The course sheet hangs off the tracks app, as it does for the probe
    next door. */
@@ -35,18 +43,22 @@ await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
 await p.waitForTimeout(700);
 await tap('#trk-course');
 
-t.head('the row is on the sheet and says what it is for');
+t.head('the button is on the sheet and says what it is for');
 let S=await said();
-t.ok(S && /CLUB COURSE/.test(S.head), 'it is there', S&&S.head);
-t.ok(S && /POSTED ON THE SITE/.test(S.sub), 'and what a tap does', S&&S.sub);
-t.ok(!S.lit, 'unlit until there is something to load');
+t.ok(/CLUB SYNC/.test(S.head), 'it is there', S.head);
+t.ok(S.sub==='', 'and says nothing until it has something to say', S.sub);
+t.ok(!S.ghost, 'with no course previewed in the strip');
 
 t.head('the first tap fetches, and changes nothing');
 await tap(CLUB);
 S=await said();
 t.ok(/LOAD 3 MARKS\?/.test(S.head), 'it says what it found', S.head);
-t.ok(/CB 10 . GOSLING . RUM/.test(S.sub), 'and names them in this sheet words', S.sub);
-t.ok(S.lit, 'and lights, because there is now something to load');
+t.ok(S.ghost==='CB 10 · GOSLING · RUM',
+     'and draws them in the strip, in this sheet\'s own words', S.ghost);
+t.ok(/CLUB COURSE . 3 MARKS/.test(S.count),
+     'the heading says whose course the strip is showing', S.count);
+t.ok(/TAP AGAIN TO REPLACE THE COURSE/.test(S.sub),
+     'and what the second tap would do', S.sub);
 let C=await course();
 t.ok(C.marks.length===0, 'the course is still untouched', JSON.stringify(C.marks));
 
@@ -58,7 +70,8 @@ t.ok(C.side.cb10==='P' && C.side.gosling==='S' && C.side.rum==='P',
      'and the side each is left on', JSON.stringify(C.side));
 t.ok(C.next===0, 'starting at the first one', String(C.next));
 S=await said();
-t.ok(/CLUB COURSE/.test(S.head) && /LOADED/.test(S.sub), 'and it says so', S.sub);
+t.ok(/CLUB SYNC/.test(S.head) && /LOADED/.test(S.sub), 'and it says so', S.sub);
+t.ok(!S.ghost, 'with nothing left previewed - the strip is yours again');
 
 t.head('a course three marks in is not replaced by one tap');
 await p.evaluate(()=>{ COURSE.next=2; courseSave(); renderCourse(); });
@@ -74,13 +87,14 @@ reply={status:200, body:{date:'2026-10-07', course:null}};
 await tap(CLUB);
 S=await said();
 t.ok(/NOTHING POSTED/.test(S.sub), 'it says so rather than emptying the course', S.sub);
+t.ok(S.bad, 'in the colour of something that did not work');
 t.ok((await course()).marks.length===0, 'and nothing was loaded');
 
 t.head('no wifi');
 reply='dead';
 await tap(CLUB);
 S=await said();
-t.ok(/NO ANSWER/.test(S.sub), 'the row says why', S.sub);
+t.ok(/NO ANSWER/.test(S.sub), 'the line under the button says why', S.sub);
 
 t.head('a course with a mark this boat has not got');
 reply={status:200, body:{date:'2026-09-30', course:{

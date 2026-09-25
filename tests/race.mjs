@@ -286,18 +286,18 @@ t.head('the pair says which, on the course sheet with the rest of the start');
    than where a race is. */
 const pills=await p.evaluate(()=>{
   startModeSet('gun'); renderCourse();
-  const r=()=>{ const row=document.querySelector('#course-list .course-row.mode');
+  const r=()=>{ const row=$('cv-mode');
     return {title:row.querySelector('b').textContent,
-            sub:row.querySelector('span').textContent,
+            sub:row.querySelector('s').textContent,
             lit:[...row.querySelectorAll('.sb.on')].map(x=>x.textContent).join()}; };
   const tap=m=>{ document.querySelector(
-    '#course-list .sb[data-mode="'+m+'"]').click(); };
+    '#cv-mode .sb[data-mode="'+m+'"]').click(); };
   const out={start:r()};
   tap('window'); out.win=r();
   out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
-  /* anywhere on the row is the other one, because a row that only
-     answers a 12 mm word is a row you miss in a seaway */
-  document.querySelector('#course-list .course-row.mode .lib-main').click();
+  /* anywhere on the chip is the other one, because a control that only
+     answers a 12 mm word is one you miss in a seaway */
+  $('cv-mode').querySelector('b').click();
   out.row=r();
   out.panel=!document.getElementById('st-gun');
   return out;

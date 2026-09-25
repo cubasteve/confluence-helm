@@ -48,11 +48,13 @@ await fling(3,260,0);  ok((await p.evaluate(()=>PAGE_I))===1, 'and back');
 await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks'))); await p.waitForTimeout(800);
 ok(await p.evaluate(()=>tmap.classList.contains('open')), 'the track map');
 await p.evaluate(()=>openCourse()); await p.waitForTimeout(600);
-const rows=await p.$$eval('#course-list .course-row',n=>n.length);
-ok(rows>=11, 'the course sheet, with every mark on it', String(rows));
+const rows=await p.$$eval('#course-list .cv-tile',n=>n.length);
+ok(rows>=10, 'the course sheet, with every mark on it', String(rows));
+await p.evaluate(()=>{ courseEdit=true; renderCourse(); });
 ok(/\d+ \d+\.\d+N · \d+ \d+\.\d+W/.test(
-   await p.$eval('.course-row[data-mark="cb12"] span',e=>e.textContent)),
+   await p.$eval('.cv-tile[data-mark="cb12"] s',e=>e.textContent)),
    'each reading its position back');
+await p.evaluate(()=>{ courseEdit=false; renderCourse(); });
 await p.evaluate(()=>{ closeLib(); closeApp(); }); await p.waitForTimeout(500);
 
 console.log('\n=== the race runs ===');

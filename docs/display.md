@@ -588,8 +588,8 @@ second app arrives.
 The panel is a **grid**, not a column. Everything it has is on the glass
 at once: DISPLAY and SHALLOW ALARM on one row, SOUNDER under them, with
 the sensor glyphs and the radios full-width above. A START card sat
-beside the sounder until the start time arrived; it is a row of the
-course sheet now, with the rest of the start.
+beside the sounder until the start time arrived; it is on the course
+sheet now, with the rest of the start.
 
 It was a single 600 px column of sections, and it outgrew the circle.
 600 px wide on a radius of 540 is only lit between y=91 and y=989 —

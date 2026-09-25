@@ -29,7 +29,7 @@ t.ok(await p.evaluate(()=>CFG.startMode)==='window',
      'and which club night this is - found out at the gun otherwise',
      await p.evaluate(()=>CFG.startMode));
 t.ok(await p.evaluate(()=>{ renderCourse();
-       return document.querySelector('#course-list .course-row.mode .sb.on')
+       return document.querySelector('#cv-mode .sb.on')
                 .textContent==='WINDOW'; }),
      'with the course sheet lit to say so');
 t.ok(await p.evaluate(()=>document.body.className)==='night',

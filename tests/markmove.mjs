@@ -18,9 +18,9 @@ await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
 await p.waitForTimeout(700);
 await p.evaluate(()=>openCourse()); await p.waitForTimeout(600);
 let pass=0,fail=0; const ok=(c,m,x='')=>{console.log((c?'  PASS  ':'  FAIL  ')+m+(x?'   '+x:''));c?pass++:fail++;};
-const row=id=>p.evaluate(i=>{ const r=document.querySelector('.course-row[data-mark="'+i+'"]');
-  return { sub:r.querySelector('span').textContent,
-           moved:r.querySelector('span').classList.contains('moved'),
+const row=id=>p.evaluate(i=>{ const r=document.querySelector('.cv-tile[data-mark="'+i+'"]');
+  return { sub:r.querySelector('s').textContent,
+           moved:r.querySelector('s').classList.contains('moved'),
            undo:!!r.querySelector('.undo'), del:!!r.querySelector('.del:not(.undo)') }; }, id);
 const mark=id=>p.evaluate(i=>{ const m=markOf(i);
   return {lat:m.lat, lon:m.lon, name:m.name, hdr:m.hdr,
@@ -34,7 +34,7 @@ ok((await row('cb12')).undo===false, 'so there is nothing to put back');
 
 console.log('\n=== a club mark opens in EDIT now ===');
 await p.click('#course-edit'); await p.waitForTimeout(400);
-await p.click('.course-row[data-mark="cb12"] .lib-main'); await p.waitForTimeout(500);
+await p.click('.cv-tile[data-mark="cb12"] b'); await p.waitForTimeout(500);
 let f=await p.evaluate(()=>({open:$('course-add').style.display!=='none',
   title:$('course-title').textContent, id:MK&&MK.id,
   name:$('mk-name').textContent, lat:$('mk-lat').textContent, lon:$('mk-lon').textContent}));
@@ -62,7 +62,7 @@ ok(!v.stored.name, 'with no name stored, because you did not change it',
    JSON.stringify(v.stored));
 ok(v.name==='CHANNEL BUOY 12', 'so it is still the club\'s name', v.name);
 let r=await row('cb12');
-ok(/16\.440W/.test(r.sub), 'the row says the new number', r.sub);
+ok(/16\.440W/.test(r.sub), 'the tile says the new number', r.sub);
 ok(r.moved, 'in the accent, so you know it is not the book any more');
 ok(r.undo && !r.del, 'and offers the way back rather than a bin',
    JSON.stringify(r));
@@ -82,7 +82,7 @@ ok(geo.dist<5, 'and the leg says we are standing on it, so it followed the corre
    JSON.stringify(geo));
 
 console.log('\n=== a mark of your own is still edited, not overridden ===');
-await p.click('.course-row[data-mark="u1abc"] .lib-main'); await p.waitForTimeout(500);
+await p.click('.cv-tile[data-mark="u1abc"] b'); await p.waitForTimeout(500);
 ok((await p.evaluate(()=>$('course-title').textContent))==='Edit mark',
    'and called what it is');
 await p.evaluate(()=>{ MK.f='lat'; MK.lat='28 50.000'; mkPaint(); });
@@ -93,7 +93,7 @@ ok(Math.abs(v.lat-(28+50/60))<1e-9, 'it just moves', String(v.lat));
 ok((await row('u1abc')).del, 'and keeps its bin');
 
 console.log('\n=== the book is one tap away ===');
-await p.click('.course-row[data-mark="cb12"] .undo');
+await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(2600);                     /* markRevert reloads */
 await p.evaluate(()=>bootSettle());
 await p.evaluate(()=>{ openApp(APPS.find(a=>a.id==='tracks')); openCourse(); });

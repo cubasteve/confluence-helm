@@ -1,5 +1,5 @@
-/* The course sheet: what a tap on a row means, what the numbers say,
-   what EDIT changes, and what the line row is for. */
+/* The course sheet: what a tap on a mark means, what the strip says,
+   what EDIT changes, and what the line chip is for. */
 import {open, tally} from './helpers.mjs';
 const t=tally();
 const {b,p}=await open(t,{demo:true});
@@ -17,18 +17,30 @@ const seed=()=>p.evaluate(()=>{ const t0=Date.now()-600e3;
 await seed();
 await p.waitForTimeout(400);
 
-/* Everything the sheet says, in the sheet's own order. */
-const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .course-row')]
-  .map(r=>({mark:r.dataset.mark||null, line:!!r.dataset.line, gun:!!r.dataset.gun,
-            seq:r.querySelector('.seq').textContent.trim(),
+/* Every mark this boat knows, as the grid draws it. */
+const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-tile')]
+  .map(r=>({mark:r.dataset.mark,
+            seq:(r.querySelector('.seq')||{textContent:''}).textContent.trim(),
             name:r.querySelector('b').textContent,
-            sub:r.querySelector('.lib-main span').textContent,
+            sub:r.querySelector('s').textContent,
+            moved:!!r.querySelector('s.moved'),
             in:r.classList.contains('in'), next:r.classList.contains('next'),
-            side:[...r.querySelectorAll('.sb.on')].map(s=>s.dataset.side)[0]||null,
             del:!!r.querySelector('.del'), undo:!!r.querySelector('.del.undo'),
             grip:!!r.querySelector('.grip')})));
+/* And the course itself, as the strip reads it across the top. */
+const strip=()=>p.evaluate(()=>[...document.querySelectorAll('#cv-strip .cv-chip')]
+  .map(c=>({mark:c.dataset.chip||null,
+            n:(c.querySelector('i')||{textContent:''}).textContent,
+            name:[...c.childNodes].filter(n=>n.nodeType===3)
+                   .map(n=>n.textContent).join('').trim(),
+            side:(c.querySelector('.sd')||{textContent:null}).textContent,
+            next:c.classList.contains('next'), ghost:c.classList.contains('ghost'),
+            fin:c.classList.contains('fin')})));
+const lineChip=()=>p.evaluate(()=>({b:$('cv-line').querySelector('b').textContent,
+                                    s:$('cv-line').querySelector('s').textContent}));
 const tap=async(sel)=>{ await p.click(sel); await p.waitForTimeout(250); };
-const row=m=>`#course-list .course-row[data-mark="${m}"]`;
+const row=m=>`#course-list .cv-tile[data-mark="${m}"]`;
+const chip=m=>`#cv-strip .cv-chip[data-chip="${m}"]`;
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
                                   side:Object.assign({},COURSE.side||{})}));
 
@@ -36,27 +48,31 @@ t.head('the sheet opens on the course button, and closes on it');
 await tap('#trk-course');
 let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
-const marks=x=>x.filter(r=>r.mark), lineOf=x=>x.find(r=>r.line);
-t.ok(marks(S).length===10 && S.length===14,
-     'the start time, the sequence, the line, the club course and all ten club marks',
-     String(S.length));
-t.ok(/START . FINISH LINE/.test(lineOf(S).name), 'the line has its own row',
-     lineOf(S).name);
-t.ok(lineOf(S).sub==='FLAG – BALL', 'and says which two marks it is', lineOf(S).sub);
-t.ok(/^\d\d \d\d\.\d\d\d[NS] · \d\d\d \d\d\.\d\d\d[EW]$/.test(marks(S)[0].sub),
-     'every mark row carries its position', marks(S)[0].sub);
+const marks=x=>x.filter(r=>r.mark);
+t.ok(marks(S).length===10, 'all ten of the club\'s marks, as tiles', String(S.length));
+let L=await lineChip();
+t.ok(L.b==='LINE', 'the line has a chip of its own', L.b);
+t.ok(L.s==='FLAG – BALL', 'and says which two marks it is', L.s);
+t.ok(await p.evaluate(()=>!!$('cv-sync') && !!$('cv-start') && !!$('cv-mode')),
+     'and the club, the start time and the sequence are all on the sheet');
 await tap('#course-done');
 t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
      'and DONE puts it away');
 await tap('#trk-course');
 
-t.head('a tap puts a mark in the course, and the numbers are the order');
+t.head('a tap puts a mark in the course, and the strip is the order');
 await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; COURSE.side={}; courseSave(); renderCourse(); });
 await tap(row('rum')); await tap(row('gosling')); await tap(row('cb12'));
 S=await sheet();
+let T=await strip();
+t.ok(T.map(c=>c.name).join()==='RUM,GOSLING,CB 12,FINISH',
+     'first tapped is first rounded, and the line is last',
+     T.map(c=>c.name).join());
+t.ok(T[2].n==='3' && T[3].fin, 'the chips are numbered and the finish is not a mark');
 const seqOf=id=>S.find(r=>r.mark===id).seq;
 t.ok(seqOf('rum')==='1'&&seqOf('gosling')==='2'&&seqOf('cb12')==='3',
-     'first tapped is first rounded', [seqOf('rum'),seqOf('gosling'),seqOf('cb12')].join(''));
+     'and the tiles carry the same numbers',
+     [seqOf('rum'),seqOf('gosling'),seqOf('cb12')].join(''));
 t.ok(S.find(r=>r.mark==='rum').in, 'a mark in the course is marked as in');
 t.ok(S.find(r=>r.mark==='ball').seq==='' && !S.find(r=>r.mark==='ball').in,
      'and one that is not carries no number');
@@ -74,25 +90,26 @@ await tap(row('rum'));                    /* back on the end, not where it was *
 C=await course();
 t.ok(C.marks.join()==='gosling,cb12,rum', 'it comes back last, not where it was', C.marks.join());
 
-t.head('P or S says which side to leave it, and is not a tap on the row');
-S=await sheet();
-t.ok(S.find(r=>r.mark==='gosling').side==='P', 'port until told otherwise');
-t.ok(S.find(r=>r.mark==='ball').side===null, 'a mark out of the course is asked no side');
-await p.click(row('gosling')+' .sb[data-side="S"]'); await p.waitForTimeout(250);
-S=await sheet(); C=await course();
-t.ok(S.find(r=>r.mark==='gosling').side==='S', 'the S lights');
+t.head('a tap on a chip flips which side that mark is left on');
+T=await strip();
+t.ok(T.find(c=>c.mark==='gosling').side==='P', 'port until told otherwise');
+t.ok(T.every(c=>c.fin||c.side), 'every mark in the course carries a side');
+await tap(chip('gosling'));
+T=await strip(); C=await course();
+t.ok(T.find(c=>c.mark==='gosling').side==='S', 'the chip now says S');
 t.ok(C.side.gosling==='S', 'and is kept with the course', String(C.side.gosling));
-t.ok(C.marks.join()==='gosling,cb12,rum', 'and the mark is still in the course', C.marks.join());
+t.ok(C.marks.join()==='gosling,cb12,rum',
+     'and flipping a side did not take the mark out of the course', C.marks.join());
 await p.evaluate(()=>drawMap(shownTrack())); await p.waitForTimeout(250);
 t.ok(await p.evaluate(()=>[...$('t-path').querySelectorAll('text')]
        .some(x=>x.textContent==='S')), 'the map letters it too');
 
 t.head('the mark being sailed to is the one lit');
-S=await sheet();
-t.ok(S.find(r=>r.mark==='gosling').next, 'the first, before any is rounded');
+T=await strip();
+t.ok(T.find(c=>c.mark==='gosling').next, 'the first, before any is rounded');
 await p.evaluate(()=>{ courseAdvance(); renderCourse(); }); await p.waitForTimeout(200);
-S=await sheet();
-t.ok(!S.find(r=>r.mark==='gosling').next && S.find(r=>r.mark==='cb12').next,
+T=await strip();
+t.ok(!T.find(c=>c.mark==='gosling').next && T.find(c=>c.mark==='cb12').next,
      'and the next one once that is behind');
 t.ok(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)===3,
      'all three are on the map',
@@ -117,6 +134,7 @@ C=await course(); S=await sheet();
 t.ok(C.marks.length===0 && C.next===0, 'nothing left to sail', C.marks.join()+' @'+C.next);
 t.ok(marks(S).length===10 && marks(S).every(r=>r.seq===''),
      'the marks are all still there, unnumbered');
+t.ok((await strip()).length===0, 'and the strip has nothing to show');
 await tap(row('gosling')); await tap(row('cb12'));
 await p.evaluate(()=>{ COURSE.side={gosling:'S'}; courseSave(); renderCourse(); });
 
@@ -124,7 +142,9 @@ t.head('EDIT is for the list, not the course');
 await tap('#course-edit');
 S=await sheet();
 t.ok(await p.evaluate(()=>courseEdit), 'edit mode is on');
-t.ok(marks(S).every(r=>r.grip), 'every mark gets a grip to drag by');
+t.ok(marks(S).every(r=>r.grip), 'every mark gets a band to drag by');
+t.ok(/^\d\d \d\d\.\d\d\d[NS] · \d\d\d \d\d\.\d\d\d[EW]$/.test(marks(S)[0].sub),
+     'and shows its position, which is what edit mode is about', marks(S)[0].sub);
 t.ok(!S.find(r=>r.mark==='cb8').del, 'a club mark nobody has touched gets no button');
 await tap(row('cb8'));
 t.ok(await p.evaluate(()=>MK&&MK.id==='cb8'), 'a tap opens the mark instead');
@@ -132,29 +152,54 @@ t.ok((await course()).marks.join()==='gosling,cb12',
      'and does not add it to the course', (await course()).marks.join());
 await p.evaluate(()=>mkClose()); await p.waitForTimeout(250);
 
+t.head('and the band along the bottom drags a mark to a new place in the list');
+/* The list's order, not the course's - the course is the strip. */
+const where=id=>p.evaluate(i=>MARKS.findIndex(m=>m.id===i), id);
+const grab=async id=>p.evaluate(i=>{ const e=document.querySelector(
+    '.cv-tile[data-mark="'+i+'"]');
+  const g=e.querySelector('.grip').getBoundingClientRect();
+  const q=e.getBoundingClientRect();
+  return {gx:g.left+g.width/2, gy:g.top+g.height/2,
+          cx:q.left+q.width/2, cy:q.top+q.height/2}; }, id);
+/* Back to the top of the grid: a click earlier in this probe may have
+   scrolled a tile into view, and a tile half out of the scroller is not
+   a tile a pointer can be put on. */
+await p.evaluate(()=>{ $('course-list').scrollTop=0; });
+await p.waitForTimeout(150);
+const was=await where('flag');
+const A=await grab('flag'), B=await grab('rum');
+await p.mouse.move(A.gx,A.gy); await p.mouse.down();
+await p.mouse.move(B.cx,B.cy,{steps:12}); await p.waitForTimeout(200);
+await p.mouse.up(); await p.waitForTimeout(400);
+t.ok(await where('flag') > was, 'the mark takes the place it was dragged onto',
+     was+' -> '+await where('flag'));
+t.ok(/flag/.test(await p.evaluate(()=>localStorage.getItem('markOrder')||'')),
+     'and the order is kept');
+t.ok((await course()).marks.join()==='gosling,cb12',
+     'while the course itself is untouched', (await course()).marks.join());
+
 t.head('a corrected club mark can be put back');
 await p.evaluate(()=>{ MARK_MOVES={cb8:{lat:28.8200,lon:-81.2900}}; markMovesSave();
                        const m=markOf('cb8'); m.lat=28.8200; m.lon=-81.2900; renderCourse(); });
 S=await sheet();
 t.ok(S.find(r=>r.mark==='cb8').undo, 'it gets the way back to the book');
-t.ok(await p.evaluate(()=>document
-       .querySelector('#course-list .course-row[data-mark="cb8"] .lib-main span')
-       .classList.contains('moved')), 'and its position is marked as corrected');
+t.ok(S.find(r=>r.mark==='cb8').moved,
+     'and its position is marked as corrected', S.find(r=>r.mark==='cb8').sub);
 await p.evaluate(()=>{ MARK_MOVES={}; markMovesSave(); });
 
-t.head('the line row says which line is in force');
+t.head('the line chip says which line is in force');
 await p.evaluate(()=>{ courseEdit=false; $('course-edit').classList.remove('on');
                        LINE={pin:{lat:28.8190,lon:-81.2648},boat:{lat:28.8195,lon:-81.2622}};
                        saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.add('set'));
                        renderCourse(); });
 await p.waitForTimeout(200);
-S=await sheet();
-t.ok(/PINGED/.test(lineOf(S).sub), 'a pinged line says so', lineOf(S).sub);
+L=await lineChip();
+t.ok(/PINGED/.test(L.b), 'a pinged line says so', L.b);
 t.ok(await p.evaluate(()=>lineEnds().pinged), 'and is the line the readings use');
-await tap('#course-list .course-row.line');
-S=await sheet();
-t.ok(lineOf(S).sub==='FLAG – BALL',
-     'tapping it drops the pings and goes back to the club marks', lineOf(S).sub);
+await tap('#cv-line');
+L=await lineChip();
+t.ok(L.s==='FLAG – BALL',
+     'tapping it drops the pings and goes back to the club marks', L.s);
 t.ok(await p.evaluate(()=>!lineEnds().pinged
        && !$('ping-pin').classList.contains('set')
        && !$('ping-boat').classList.contains('set')),
@@ -164,8 +209,8 @@ t.head('the scheduled gun: typed once, and it starts itself');
 /* A club race has a time on the sailing instructions. Typing it beats
    watching a clock for the moment to press a button with a boat to
    sail at the same time. */
-const gunRow=()=>p.evaluate(()=>{ const r=document.querySelector('.course-row.gun');
-  return {b:r.querySelector('b').textContent, sub:r.querySelector('span').textContent,
+const gunRow=()=>p.evaluate(()=>{ const r=$('cv-start');
+  return {b:r.querySelector('b').textContent, sub:r.querySelector('s').textContent,
           set:r.classList.contains('in')}; });
 /* Typed on the pad, and the half of the day chosen on its pair - the
    same two taps a thumb makes. */
@@ -185,12 +230,12 @@ const want=await p.evaluate(()=>{ const d=new Date(Date.now()+40*60000), h=d.get
           mer:h<12?'am':'pm', hhmm:gunTxt(d.getTime())}; });
 await p.evaluate(()=>{ GUNAT=null; gunSave(); renderCourse(); });
 let G=await gunRow();
-t.ok(/START TIME/.test(G.b) && !G.set, 'unset, the row invites one', G.b);
+t.ok(/START TIME/.test(G.b) && !G.set, 'unset, the button invites one', G.b);
 let r=await type(want.d, want.mer);
 t.ok(r.at!==null && !r.open, 'four digits and it is armed', String(r.at));
 G=await gunRow();
-t.ok(G.b==='GUN AT '+want.hhmm, 'the row says when the gun is', G.b);
-t.ok(/COUNTDOWN STARTS/.test(G.sub), 'and when the countdown will start itself', G.sub);
+t.ok(G.b===want.hhmm && G.set, 'the button says when the gun is', G.b);
+t.ok(/^COUNTDOWN /.test(G.sub), 'and when the countdown will start itself', G.sub);
 t.ok(await p.evaluate(()=>raceStatus().txt)===want.hhmm,
      'and the pill carries it, so an armed gun shows on the face',
      await p.evaluate(()=>raceStatus().txt));

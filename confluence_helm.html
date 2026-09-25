@@ -55,6 +55,12 @@ body{                                   /* DAY - built to beat sun   */
   --hairline:#B9C1C7; --accent:#0B4FD6; --port:#C81E1E; --stbd:#0E7A43;
   --warn:#B36A00; --alarm:#C81E1E; --panel:#E4E8EA; --chip:#D2D8DC;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
+  /* The club's colour, worn by the one control in this file that reaches
+     off the boat. Deliberately not the accent: pulling tonight's course
+     off the members' site is not the kind of thing the app's blue
+     buttons do, and it is the only tap here that can replace a course
+     you are already sailing. */
+  --club:#6C3FD6;
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
@@ -62,6 +68,7 @@ body.dusk{
   --hairline:#242A2F; --accent:#4A9EFF; --port:#FF4D4D; --stbd:#24D17E;
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
+  --club:#7C5CE6;                       /* lifted off a dark panel     */
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
@@ -73,6 +80,9 @@ body.night{
      for a starboard rounding would undo an hour of dark adaptation for
      a fact the box states in words two lines below it. */
   --port-g1:#7A201C; --port-g2:#C8342E; --stbd-g1:#7A201C; --stbd-g2:#C8342E;
+  /* And the club's colour is red too here, for the same reason - it goes
+     to an outline at night rather than a lit block. */
+  --club:#C8342E;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 
@@ -862,8 +872,122 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Seven on the rail now, so each is 84 wide rather than 92: 7 x 84 sits
    inside the 600 the rail spans. */
 .rbtn{width:84px}
-#course-list{max-height:560px}
-#course-main,#course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
+/* ---- the course sheet ----
+   The course reads across the face as a strip of chips in the order they
+   are rounded, and the marks sit under it as tiles to tap into it. That
+   wants more room than the other sheets get, so this one is 816 wide -
+   which the round glass only allows near mid-height. Hence the fixed
+   580: the view is a known height, centred, and the marks are what give
+   way when a five-mark course wraps the strip onto a second line. */
+#course-main{display:flex;flex-direction:column;align-items:center;gap:14px;width:816px}
+#course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
+.cv{display:flex;flex-direction:column;gap:14px;width:100%;height:580px}
+.cv-hd{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label);
+  text-transform:uppercase;flex:none}
+/* The start time, top right. It is the fact about the evening this sheet
+   is asked for most often, and it is also the way into the pad that sets
+   it - so it is a button and not a caption. */
+.cv-start{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+  gap:2px;height:66px;padding:0 22px;border-radius:20px;flex:none;
+  border:2px solid var(--hairline);background:none;font-family:var(--font)}
+.cv-start b{font-size:26px;font-weight:600;letter-spacing:.04em;color:var(--label)}
+.cv-start s{text-decoration:none;font-size:15px;letter-spacing:.1em;color:var(--label)}
+.cv-start.in{border-color:var(--accent)}
+.cv-start.in b{color:var(--accent)}
+/* ---- the club's course ----
+   Centred under the heading with air of its own: it is the one control
+   on this sheet that fills the whole page in a tap, so it is not buried
+   in a row of marks. In the club's own colour rather than the accent for
+   the same reason - and at night it goes to an outline, because a lit
+   block of anything costs an hour of dark adaptation. */
+.sync-wrap{display:flex;justify-content:center;flex:none;margin:2px 0}
+.sync{display:inline-flex;align-items:center;gap:12px;height:62px;padding:0 28px;
+  border-radius:31px;border:2px solid transparent;background:var(--club);color:#fff;
+  font-family:var(--font);font-size:20px;font-weight:600;letter-spacing:.14em;
+  white-space:nowrap}
+.sync svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round}
+.sync:active{opacity:.7}
+.sync.busy{opacity:.55}
+body.night .sync{background:none;border-color:var(--club);color:var(--club)}
+/* What it found, or why it found nothing. One line, ellipsised: the
+   club's note can be longer than the face is wide. */
+.cv-note{flex:none;font-size:17px;letter-spacing:.08em;color:var(--label);
+  text-transform:uppercase;text-align:center;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;width:100%}
+.cv-note.bad{color:var(--warn)}
+.cv-note:empty{display:none}
+/* the course itself, in the order it is rounded */
+.cv-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:none}
+.cv-chip{display:flex;align-items:center;gap:10px;height:72px;padding:0 8px 0 14px;
+  border-radius:36px;background:var(--chip);font-size:23px;font-weight:600;
+  letter-spacing:.01em;color:var(--ink)}
+.cv-chip i{font-style:normal;width:30px;height:30px;border-radius:15px;flex:none;
+  background:var(--accent);color:#fff;font-size:17px;font-weight:600;
+  display:flex;align-items:center;justify-content:center}
+.cv-chip.next{box-shadow:inset 0 0 0 3px var(--accent)}
+/* Which side to leave it on, on the chip: one tap flips it, and the
+   letter wears the colour of the light it is - P red, S green, the way
+   they are on the water. */
+.cv-chip .sd{width:46px;height:46px;border-radius:23px;flex:none;font-size:21px;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  background:var(--port)}
+.cv-chip .sd.s{background:var(--stbd)}
+.cv-chip.fin{background:none;border:2px dashed var(--hairline);color:var(--label);
+  font-size:18px;letter-spacing:.1em;padding:0 16px}
+/* The club's course before it is loaded - dashed, in the club's colour,
+   so what the second tap would replace the strip with is the strip. */
+.cv-chip.ghost{background:none;border:2px dashed var(--club);color:var(--club)}
+.cv-chip.ghost i{background:var(--club)}
+.cv-empty{font-size:20px;letter-spacing:.12em;color:var(--label)}
+.cv-arrow{color:var(--label);font-size:22px}
+/* The marks. 112 tall for the same reason the start pad's keys are: 45 px
+   on a 430 px phone, and 44 is the least a thumb should be asked to hit.
+   This is the one part of the view that scrolls. */
+.cv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;
+  flex:1 1 auto;min-height:0;align-content:start;
+  overflow-y:auto;overscroll-behavior:contain}
+.cv-tile{position:relative;height:112px;border-radius:18px;overflow:hidden;
+  border:2px solid var(--hairline);background:none;font-family:var(--font);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.cv-tile b{font-size:22px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
+.cv-tile s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-tile.in{border-color:var(--accent);background:var(--chip)}
+.cv-tile.in b{color:var(--accent)}
+/* A corrected mark says so in the accent: you are no longer looking at
+   what the sailing instructions printed. */
+.cv-tile s.moved{color:var(--accent)}
+.cv-tile .seq{position:absolute;left:10px;top:10px;width:34px;height:34px;
+  border-radius:17px;background:var(--accent);color:#fff;font-size:19px;
+  font-weight:600;display:flex;align-items:center;justify-content:center}
+.cv-tile.next .seq{box-shadow:0 0 0 3px var(--panel),0 0 0 6px var(--accent)}
+/* edit mode: a bin on a mark of your own, a way back to the book on a
+   club mark you have corrected, and a band along the bottom to drag the
+   tile by - which reorders the LIST, not the course. */
+.cv-tile .del{position:absolute;right:8px;top:8px;width:44px;height:44px;
+  border-radius:22px;border:2px solid var(--alarm);color:var(--alarm);font-size:20px;
+  display:flex;align-items:center;justify-content:center}
+.cv-tile .del.undo{border-color:var(--accent);color:var(--accent);font-size:26px}
+.cv-tile .grip{position:absolute;left:0;right:0;bottom:0;height:28px;
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  color:var(--label)}
+.cv-tile.edit{padding-bottom:22px}
+.cv-tile.lift{opacity:.45}
+/* The two things about a start that are not the time: which procedure,
+   and which line. Under the marks, because they are set once a season
+   and the course is what changes every evening. */
+.cv-set{display:flex;gap:14px;justify-content:center;flex:none}
+.cvs{display:flex;align-items:center;gap:14px;height:62px;padding:0 20px;
+  border-radius:20px;border:2px solid var(--hairline);background:none;
+  font-family:var(--font);text-align:left}
+.cvs i{font-style:normal;font-size:24px;color:var(--label);flex:none}
+.cvs b{display:block;font-size:19px;font-weight:600;letter-spacing:.12em;color:var(--ink)}
+.cvs s{display:block;text-decoration:none;font-size:14px;letter-spacing:.08em;
+  color:var(--label);white-space:nowrap}
+.cvs .side{display:flex;gap:8px}
+.cvs .sb{height:46px;font-size:17px}
 /* ---- the start time's pad ----
    Sized for a thumb rather than for the page. At 56 px - what it
    borrowed from the mark keyboard - a key is 22 px on a 430 px phone,
@@ -910,39 +1034,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mk-field .pw-cur{display:none;height:32px}.mk-field.on .pw-cur{display:block}
 .mk-row .cbtn{height:64px;padding:0 22px}
 .kb.small .kk{height:56px;font-size:24px}
-/* edit mode: a grip to drag a course mark by, a delete on your own */
-.course-row .grip{width:44px;height:52px;display:flex;align-items:center;justify-content:center;
-  font-size:32px;color:var(--label);flex:none}
-.course-row.lift{background:var(--chip)}
-/* A corrected club mark says so on its own line, in the accent: you are
-   no longer looking at what the sailing instructions printed. */
-.course-row .lib-main span.moved{color:var(--accent)}
-.course-row .del.undo{border-color:var(--accent);color:var(--accent);font-size:30px}
-.course-row .del{width:50px;height:50px;border-radius:25px;border:2px solid var(--alarm);color:var(--alarm);
-  display:flex;align-items:center;justify-content:center;font-size:22px;flex:none;margin-right:14px}
-
-.course-row .seq{width:52px;height:52px;border-radius:26px;flex:0 0 52px;
-  display:flex;align-items:center;justify-content:center;font-size:24px;
-  font-weight:600;color:var(--label);border:2px solid var(--hairline)}
-.course-row.in .seq{background:var(--accent);border-color:var(--accent);color:#fff}
-.course-row.next .seq{box-shadow:0 0 0 4px var(--accent) inset}
-.course-row .lib-main b{display:block;font-size:26px;font-weight:600;color:var(--ink)}
-/* The position rides on this line - and only the position. The short
-   name was here too and said ROMANCE FLAG twice in two type sizes. It
-   still does its job in the cell headers and the RACE box, which is
-   where a name has to be short. */
-.course-row .lib-main span{font-size:16px;letter-spacing:.03em;color:var(--label);
-  white-space:nowrap}
-.course-row.line .lib-main b{color:var(--label)}
-/* The club row says what it found, and what it found can be longer than
-   the face is wide - so this one line ellipsises rather than running off
-   the circle. Its heading sits in label colour until there is something
-   to load, like the line row's. */
-.course-row.club .lib-main span{overflow:hidden;text-overflow:ellipsis;display:block}
-.course-row.club:not(.in) .lib-main b{color:var(--label)}
-/* which side to leave a mark: P red, S green, the way the lights are.
-   Only on rows that are in the course. */
-.course-row .side{display:flex;gap:10px;margin-right:14px;flex:none}
+/* which side to leave a mark, and which start procedure: the same pair
+   of buttons in two shapes. P red, S green, the way the lights are. */
 .sb{width:50px;height:50px;border-radius:25px;border:2px solid var(--hairline);
   display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--label)}
 /* The start row's pair says GUN and WINDOW rather than P and S, so it
@@ -2241,12 +2334,29 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/>
       <circle cx="17" cy="17" r="2.5"/><path d="M8 16.5L16 7.5M18 8.5v6"/></svg><b>COURSE</b></button>
   </div>
-  <!-- The course sheet: the club's marks, tapped into an order. Same
-       sheet as the library, same rows. -->
+  <!-- The course sheet: the course across the top in the order it is
+       rounded, the marks under it to tap into it. The heading carries the
+       count and the start time, so the sheet's own title is off for this
+       view - COURSE said twice, once in each type size, was one too
+       many. -->
   <div id="t-course">
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
-      <div class="lib-list" id="course-list"></div>
+      <div class="cv">
+        <div class="cv-hd"><span id="cv-count">Course</span>
+          <button class="cv-start" id="cv-start"></button></div>
+        <!-- Tonight's course, off the members' site. Centred, in the
+             club's own colour: see --club. -->
+        <div class="sync-wrap"><button class="sync" id="cv-sync"></button></div>
+        <div class="cv-note" id="cv-say"></div>
+        <div class="cv-strip" id="cv-strip"></div>
+        <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
+        <div class="cv-grid" id="course-list"></div>
+        <div class="cv-set">
+          <button class="cvs" id="cv-mode"></button>
+          <button class="cvs" id="cv-line"></button>
+        </div>
+      </div>
       <div class="course-bar">
         <button class="cbtn" id="course-add-btn">+ MARK</button>
         <button class="cbtn" id="course-clr">CLEAR</button>
@@ -8403,67 +8513,114 @@ const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').
   courseEdit=false; $('course-edit').classList.remove('on');
   if(MK) mkClose(); if(GN) gnClose(); };
 /* ---- the course sheet --------------------------------------------------
-   Every mark, in the club's order. Tap one to add it to the course - it
-   takes the next number - and tap it again to take it out. The line's
-   row says which line is in force, and tapping it while a pinged line
-   is drops the pings and goes back to the marks. */
-/* Every mark, in the list's own order; the numbers on the left say
-   the course's. In edit mode every row gets a grip to drag by - that
-   reorders the LIST, which is kept - and a mark of your own gets a
-   delete. + MARK is on the bar, not a row at the foot of the list:
-   twelve rows in a 560 window put a foot row off the screen. */
+   The course reads across the top as chips, in the order it is rounded;
+   every mark this boat knows sits under it as a tile. Tap a tile to put
+   that mark on the end of the course and tap it again to take it out;
+   tap a chip to flip which side that mark is left on. The heading
+   carries the count and the start time, and the two things about a
+   start that are not the time - which procedure, and which line - sit
+   under the marks.
+
+   It was a list of rows, one to a mark, the course's order given as
+   numbers down the left margin. Every mark was legible and the one thing
+   the sheet exists for - what the course IS, in order - was the one
+   thing you had to assemble in your head. Hence the strip.
+
+   In edit mode the tiles change what they show: the position instead of
+   the course, a band along the bottom to drag by - that reorders the
+   LIST, which is kept - and a way out of a mark of your own or of a
+   correction. + MARK is on the bar rather than a tile at the end: it is
+   not a mark, and the grid scrolls. */
 let courseEdit=false;
+
+/* Two circling arrows - the mark every piece of software uses for a
+   sync, and the only glyph in this file that means 'from somewhere
+   else'. */
+const ICO_SYNC='<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4.5L4 9"/>'
+  +'<path d="M4 5v4h4"/><path d="M4 13a8 8 0 0 0 14 4.5L20 15"/>'
+  +'<path d="M20 19v-4h-4"/></svg>';
+
 function renderCourse(){
   const box=$('course-list'); if(!box) return;
-  const E=lineEnds();
-  const lineRow=`<div class="lib-row course-row line" data-line="1">
-      <div class="seq">↔</div><div class="lib-main">
-      <b>START · FINISH LINE</b><span>${E.pinged?'PINGED · TAP TO USE THE MARKS':
-        markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr}</span></div></div>`;
-  /* Above the line, because they come first in the evening. The two
-     start rows live here rather than on the control panel: everything
-     about a start is one thing, and the panel is where the boat is set
-     up rather than where a race is.
-     WINDOW and GUN are drawn the way the marks' P and S are, on the
-     same sheet a few rows down - both showing, the one in force lit.
-     That was what replaced the sentence under them: the pair says
-     which without a line of prose to read every time. */
-  const gunRow=`<div class="lib-row course-row gun${GUNAT!==null?' in':''}" data-gun="1">
-      <div class="seq">⏱</div><div class="lib-main">
-      <b>${GUNAT!==null ? 'GUN AT '+gunTxt(GUNAT) : 'START TIME'}</b><span>${
-        GUNAT!==null
-          ? 'COUNTDOWN STARTS '+gunTxt(GUNAT-CFG.startMins*60000)
-          : 'TAP TO SET · THE COUNTDOWN STARTS ITSELF'}</span></div></div>`;
-  const w=CFG.startMode==='window';
-  /* SEQUENCE, not START: the row under it is the START line and the one
-     above is the START time, and three rows opening on the same word is
-     three rows you have to read to tell apart. It is the sailing word
-     for the procedure anyway, and GUN or WINDOW is exactly which
-     procedure this is. */
-  const modeRow=`<div class="lib-row course-row mode in" data-mode="1">
-      <div class="seq">⚑</div><div class="lib-main">
-      <b>SEQUENCE</b><span>${w?'LINE OPEN THROUGHOUT':'LINE OPENS AT ZERO'}</span></div>
-      <div class="side wide"><span class="sb${w?'':' on'}" data-mode="gun">GUN</span>`
-     +`<span class="sb${w?' on':''}" data-mode="window">WINDOW</span></div></div>`;
-  const row=m=>{
-    const i=COURSE.marks.indexOf(m.id);
-    const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
-    const sd=markSide(m.id);
-    const side= i<0 ? '' : `<div class="side"><span class="sb${sd==='P'?' on':''}" data-side="P">P</span>`
-                          +`<span class="sb${sd==='S'?' on':''}" data-side="S">S</span></div>`;
-    /* Edit mode puts one button on the right of a row: a bin on a mark
-       of your own, and on a club mark you have corrected, a way back to
-       the book. A club mark nobody has touched gets neither. */
-    const del = !courseEdit ? ''
+  /* The heading counts what the strip is showing, which while the club's
+     course is previewed there is the club's and not yours. */
+  const n=CLUB.step==='ready' ? CLUB.got.marks.length : COURSE.marks.length;
+  wText('cv-count', (CLUB.step==='ready'?'CLUB COURSE · ':'COURSE · ')
+        +(n ? n+' MARK'+(n===1?'':'S') : 'EMPTY'));
+
+  /* The start time, and the way into the pad that sets it. The countdown
+     it implies is on the line under it: CFG.startMins before, which is
+     the number the sheet cannot show you anywhere else. */
+  $('cv-start').innerHTML = GUNAT!==null
+    ? '<b>'+gunTxt(GUNAT)+'</b><s>COUNTDOWN '+gunTxt(GUNAT-CFG.startMins*60000)+'</s>'
+    : '<b>START TIME</b><s>TAP TO SET</s>';
+  wCls('cv-start','in', GUNAT!==null);
+
+  /* The club's button, and the one line under it that has something to
+     say. */
+  const c=CLUB, cn=c.got ? c.got.marks.length : 0;
+  $('cv-sync').innerHTML=ICO_SYNC+'<span>'+(
+      c.step==='busy'  ? 'CHECKING…'
+    : c.step==='ready' ? 'LOAD '+cn+' MARK'+(cn===1?'':'S')+'?'
+    :                    'CLUB SYNC')+'</span>';
+  wCls('cv-sync','busy', c.step==='busy');
+  $('cv-say').textContent=clubSay();
+  wCls('cv-say','bad', !!c.bad);
+
+  /* The strip: the course - or, while there is one waiting, the club's
+     in dashed outline, drawn in the place it would replace. What the
+     second tap does to this sheet is then the thing you are looking at
+     when you make it. */
+  const ghost=c.step==='ready';
+  const ids=ghost ? c.got.marks : COURSE.marks;
+  const chip=(id,i)=>{
+    const hdr=(markOf(id)||{hdr:id.toUpperCase()}).hdr;
+    if(ghost) return '<div class="cv-chip ghost"><i>'+(i+1)+'</i>'+esc(hdr)+'</div>';
+    const sd=markSide(id);
+    return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+id+'">'
+      +'<i>'+(i+1)+'</i>'+esc(hdr)
+      +'<span class="sd'+(sd==='S'?' s':'')+'">'+sd+'</span></div>'; };
+  $('cv-strip').innerHTML = ids.length
+    ? ids.map(chip).join('<span class="cv-arrow">›</span>')
+      +'<span class="cv-arrow">›</span><div class="cv-chip fin">FINISH</div>'
+    : '<span class="cv-empty">NOTHING YET · TAP A MARK, OR SYNC THE CLUB’S</span>';
+
+  wText('cv-hint', courseEdit ? 'TAP TO CORRECT · DRAG TO REORDER' : 'TAP TO ADD');
+  const tile=m=>{
+    const i=COURSE.marks.indexOf(m.id), moved=isMoved(m.id);
+    const sub = courseEdit ? posDM(m)
+              : i>=0      ? 'IN COURSE · '+(i+1)+(moved?' · CORRECTED':'')
+              : moved     ? 'CORRECTED'
+              :             'TAP TO ADD';
+    const badge = !courseEdit ? ''
       : isUserMark(m.id) ? '<div class="del">✕</div>'
-      : isMoved(m.id)    ? '<div class="del undo">↺</div>' : '';
-    const grip= courseEdit ? '<div class="grip">≡</div>' : '';
-    return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
-      <div class="lib-main"><b>${esc(m.name)}</b>
-      <span class="${isMoved(m.id)?'moved':''}">${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
-  box.innerHTML=gunRow+modeRow+lineRow+clubRow()+MARKS.map(row).join('');
+      : moved            ? '<div class="del undo">↺</div>' : '';
+    return '<button class="cv-tile'+(i>=0?' in':'')+(i===COURSE.next?' next':'')
+      +(courseEdit?' edit':'')+'" data-mark="'+m.id+'">'
+      +(i>=0?'<div class="seq">'+(i+1)+'</div>':'')
+      +'<b>'+esc(m.hdr)+'</b><s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s>'
+      +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
+  box.innerHTML=MARKS.map(tile).join('');
+
+  /* Which procedure, and which line. GUN and WINDOW are drawn the way
+     the marks' P and S are - both showing, the one in force lit: the
+     pair says which without a line of prose to read every time. */
+  const w=CFG.startMode==='window';
+  $('cv-mode').innerHTML='<i>⚑</i><div><b>SEQUENCE</b><s>'
+    +(w?'LINE OPEN THROUGHOUT':'LINE OPENS AT ZERO')+'</s></div>'
+    +'<div class="side wide"><span class="sb'+(w?'':' on')+'" data-mode="gun">GUN</span>'
+    +'<span class="sb'+(w?' on':'')+'" data-mode="window">WINDOW</span></div>';
+  const E=lineEnds();
+  $('cv-line').innerHTML='<i>↔</i><div><b>'+(E.pinged?'LINE · PINGED':'LINE')
+    +'</b><s>'+esc(E.pinged ? 'TAP TO USE THE MARKS'
+        : markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr)+'</s></div>';
 }
-function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
+/* The sheet's title is what the sub-views are called. The course view's
+   own heading already says COURSE, so the title is off for it rather
+   than saying it twice in two type sizes. */
+const crsTitle=t=>{ const e=$('course-title');
+  e.textContent=t||''; e.style.display=t?'':'none'; };
+function openCourse(){ $('t-course').classList.add('on'); crsTitle(''); renderCourse(); }
 
 /* ---- the course the committee posted -----------------------------------
    The club posts the evening's marks on the members' site by 5:30, the
@@ -8481,32 +8638,33 @@ function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
    course you are three marks into vanish is not something this sheet
    should be able to do by accident. */
 const CLUB_COURSE='https://lmsa.pages.dev/api/race/helm';
-let CLUB={step:'idle', got:null, say:''};
+let CLUB={step:'idle', got:null, say:'', bad:false};
 
-function clubRow(){
-  const c=CLUB, n=c.got?c.got.marks.length:0;
-  const head = c.step==='busy'  ? 'CHECKING…'
-             : c.step==='ready' ? 'LOAD '+n+' MARK'+(n===1?'':'S')+'?'
-             : 'CLUB COURSE';
-  const sub  = c.say ? c.say
-             : c.step==='ready' ? 'TAP AGAIN TO REPLACE THE COURSE'
-             : "TAP FOR TONIGHT'S, POSTED ON THE SITE";
-  return `<div class="lib-row course-row club${c.step==='ready'?' in':''}" data-club="1">
-      <div class="seq">⇩</div><div class="lib-main">
-      <b>${esc(head)}</b><span>${esc(sub)}</span></div></div>`;
+/* The line under the button. What it FOUND is not in here - those are
+   the ghost chips up in the strip, which is where you can actually read
+   the course it is offering. This says where it came from, what the
+   second tap will do, and anything the committee wrote on it; or, when
+   there is nothing to load, why not. */
+function clubSay(){
+  const c=CLUB;
+  if(c.step==='busy') return '';
+  if(c.step!=='ready') return c.say||'';
+  const g=c.got.raw||{}, bits=[];
+  /* Epoch milliseconds from the site. Anything smaller than a plausible
+     instant is a placeholder, not half past seven in 1970. */
+  if(g.posted>1e12) bits.push('POSTED '+gunTxt(g.posted));
+  bits.push('TAP AGAIN TO REPLACE THE COURSE');
+  if(g.note) bits.push(String(g.note).toUpperCase());
+  return bits.join(' · ');
 }
 
-/* The names as this sheet says them, so you see what you are about to
-   load before you load it. */
-const clubNames=ids=>ids.map(id=>(markOf(id)||{hdr:id.toUpperCase()}).hdr).join(' · ');
-
 async function clubFetch(){
-  CLUB={step:'busy', got:null, say:''}; renderCourse();
+  CLUB={step:'busy', got:null, say:'', bad:false}; renderCourse();
   let j=null;
   try{ const r=await fetchT(CLUB_COURSE, 9000); j=r.ok?await r.json():null; }
   catch(e){ j=null; }
 
-  const stop=say=>{ CLUB={step:'idle', got:null, say:say}; renderCourse(); };
+  const stop=say=>{ CLUB={step:'idle', got:null, say:say, bad:true}; renderCourse(); };
   if(!j) return stop('NO ANSWER · IS THERE WIFI?');
   if(!j.course) return stop('NOTHING POSTED FOR '+(j.date||'TODAY'));
 
@@ -8516,7 +8674,7 @@ async function clubFetch(){
      nothing to say why, so the count goes in the message on load. */
   const marks=(g.marks||[]).filter(id=>markOf(id));
   if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
-  CLUB={step:'ready', got:{marks:marks, side:g.side||{}, raw:g}, say:clubNames(marks)};
+  CLUB={step:'ready', got:{marks:marks, side:g.side||{}, raw:g}, say:'', bad:false};
   renderCourse();
 }
 
@@ -8533,7 +8691,8 @@ function clubApply(){
   const out=[], missing=(g.raw.unknown||[]).length;
   if(missing) out.push(missing+' MISSING');
   if(g.raw.startsOnLine===false) out.push('NOT OFF THE LINE');
-  CLUB={step:'idle', got:null, say:out.length?('LOADED · '+out.join(' · ')):'LOADED'};
+  CLUB={step:'idle', got:null, bad:out.length>0,
+        say:out.length?('LOADED · '+out.join(' · ')):'LOADED'};
   renderCourse(); drawMap(shownTrack());
 }
 
@@ -8599,12 +8758,12 @@ function gnOpen(){
     pm = h>=12;
     v = String((h%12)||12) + String(d.getMinutes()).padStart(2,'0'); }
   GN={v:v, pm:pm, built:false};
-  $('course-title').textContent='Start time';
+  crsTitle('Start time');
   $('course-main').style.display='none'; $('course-gun').style.display='';
   $('gn-msg').textContent=''; gnPaint();
 }
 function gnClose(){ GN=null; $('course-gun').style.display='none';
-  $('course-title').textContent='Course';
+  crsTitle('');
   $('course-main').style.display=''; renderCourse(); }
 /* Digits and nothing else, five to a row. kbHtml's numeric layer carries
    the point, the minus and NSEW, which are there for a coordinate and
@@ -8660,43 +8819,53 @@ $('trk-course').addEventListener('click',()=>{
   if($('t-course').classList.contains('on')) closeLib(); else { hideQR(); $('t-lib').classList.remove('on'); openCourse(); } });
 $('course-list').addEventListener('click',e=>{
   if(courseDragged()) return;                 /* a scroll, not a choice */
-  const row=e.target.closest('.course-row'); if(!row) return;
-  /* P or S on a mark in the course sets its side; it is not a tap on
-     the row, which would take the mark out. Nor is the delete, nor the
-     grip. */
-  /* A side belongs to a MARK. The start row's pair is the same control
-     in a wider shape and carries no data-side, so without this it fell
-     into here and wrote COURSE.side[undefined]. */
-  const sb=e.target.closest('.sb');
-  if(sb && row.dataset.mark){
-    COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
-    courseSave(); renderCourse(); drawMap(shownTrack()); return; }
-  if(e.target.closest('.undo')){ markRevert(row.dataset.mark); return; }
-  if(e.target.closest('.del')){ markDelete(row.dataset.mark); return; }
-  if(e.target.closest('.grip')) return;
+  const tile=e.target.closest('.cv-tile'); if(!tile) return;
+  const id=tile.dataset.mark;
+  if(e.target.closest('.undo')){ markRevert(id); return; }
+  if(e.target.closest('.del')){ markDelete(id); return; }
+  if(e.target.closest('.grip')) return;       /* a handle to drag by */
   /* EDIT is the mode for changing the LIST rather than the course, so a
      tap in it opens the mark instead of adding or removing it. ANY mark:
      a club coordinate is a number off a sheet of paper, and the boat
      standing at the buoy knows better. What that writes is an override -
      see MARK_MOVES - so the book is still there to go back to. */
-  if(row.dataset.club){ clubTap(); return; }
-  if(row.dataset.gun){ gnOpen(); return; }
-  if(row.dataset.mode){
+  if(courseEdit){ mkOpen(id); return; }
+  const i=COURSE.marks.indexOf(id);
+  if(i>=0){ COURSE.marks.splice(i,1);
+            if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length;
+            if(COURSE.side) delete COURSE.side[id]; }
+  else COURSE.marks.push(id);
+  courseSave(); renderCourse(); drawMap(shownTrack()); });
+
+/* Everything on the sheet that is not a mark: the strip, the club, the
+   start time, the procedure and the line. One listener, because they are
+   one sheet - the bar's four buttons have their own, and nothing here
+   matches them. */
+$('course-main').addEventListener('click',e=>{
+  /* A chip carries one mark's side. One tap flips it: two buttons per
+     chip would have made the strip half again as long, and P or S is a
+     choice between exactly two things. */
+  const chip=e.target.closest('.cv-chip[data-chip]');
+  if(chip){ const id=chip.dataset.chip;
+    COURSE.side=COURSE.side||{}; COURSE.side[id]=markSide(id)==='P'?'S':'P';
+    courseSave(); renderCourse(); drawMap(shownTrack()); return; }
+  if(e.target.closest('#cv-sync')){ clubTap(); return; }
+  if(e.target.closest('#cv-start')){ gnOpen(); return; }
+  if(e.target.closest('#cv-mode')){
+    /* The pair, or anywhere on the chip: a control that only answers a
+       12 mm word is one you miss in a seaway. */
     const m=e.target.closest('.sb');
-    /* The pair, or anywhere on the row: a row that only answers a
-       12 mm word is a row you miss in a seaway. */
     startModeSet(m ? m.dataset.mode
                    : (CFG.startMode==='window' ? 'gun' : 'window'));
     return; }
-  if(courseEdit && !row.dataset.line && row.dataset.mark){ mkOpen(row.dataset.mark); return; }
-  if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
-      ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
-  else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
-    if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length;
-              if(COURSE.side) delete COURSE.side[id]; }
-    else COURSE.marks.push(id);
-    courseSave(); }
-  renderCourse(); drawMap(shownTrack()); });
+  /* The line's chip says which line is in force, and tapping it while a
+     pinged line is drops the pings and goes back to the marks. */
+  if(e.target.closest('#cv-line')){
+    if(lineEnds().pinged){ LINE={}; saveLine();
+      ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
+      renderCourse(); drawMap(shownTrack()); }
+    return; }
+});
 /* The bearing's double tap: the course moves on. Only while racing,
    which is the only time the leg face is up with a course to move. */
 let rpAdvAt=0;
@@ -8720,18 +8889,18 @@ let mkDrag=null;
 $('course-list').addEventListener('pointerdown',e=>{
   const g=e.target.closest('.grip'); if(!g) return;
   e.stopPropagation(); gClaim();
-  const row=g.closest('.course-row'); row.classList.add('lift');
+  const row=g.closest('.cv-tile'); row.classList.add('lift');
   mkDrag={id:e.pointerId, mark:row.dataset.mark};
 },true);
 addEventListener('pointermove',e=>{
   if(!mkDrag||e.pointerId!==mkDrag.id) return;
   const el=document.elementFromPoint(e.clientX,e.clientY);
-  const row=el&&el.closest('.course-row[data-mark]'); if(!row||row.dataset.mark===mkDrag.mark) return;
+  const row=el&&el.closest('.cv-tile[data-mark]'); if(!row||row.dataset.mark===mkDrag.mark) return;
   const a=MARKS.findIndex(m=>m.id===mkDrag.mark), b=MARKS.findIndex(m=>m.id===row.dataset.mark);
   if(a<0||b<0) return;
   const [m]=MARKS.splice(a,1); MARKS.splice(b,0,m);
   renderCourse();
-  const lifted=$('course-list').querySelector(`.course-row[data-mark="${mkDrag.mark}"]`);
+  const lifted=$('course-list').querySelector(`.cv-tile[data-mark="${mkDrag.mark}"]`);
   if(lifted) lifted.classList.add('lift');
 });
 ['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
@@ -8780,13 +8949,12 @@ function mkOpen(id){
   MK={f:'name', id:m?m.id:null,
       name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
       kb:{shift:false,sym:false,num:false}};
-  $('course-title').textContent = !m ? 'New mark'
-    : isUserMark(m.id) ? 'Edit mark' : 'Correct mark';
+  crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
   $('course-main').style.display='none'; $('course-add').style.display='';
   $('mk-msg').textContent=''; mkPaint();
 }
 function mkClose(){ MK=null; $('course-add').style.display='none';
-  $('course-title').textContent='Course';
+  crsTitle('');
   $('course-main').style.display=''; renderCourse(); }
 function mkPaint(){
   if(!MK) return;
