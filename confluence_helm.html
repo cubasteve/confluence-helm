@@ -64,6 +64,7 @@ body{                                   /* DAY - built to beat sun   */
   /* The marks as they are on the water. The yellow is knocked down from
      a buoy's own yellow, which on a light panel in sun is a smear. */
   --buoy-y:#D89400; --buoy-r:#C81E1E; --buoy-w:#FFFFFF; --buoy-g:#0E7A43;
+  --buoy-gy:#8A9298;                    /* the sail ball, which is grey */
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
@@ -73,6 +74,7 @@ body.dusk{
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
   --club:#19A8A8;                       /* lifted off a dark panel     */
   --buoy-y:#F5B72E; --buoy-r:#FF4D4D; --buoy-w:#E6EAEE; --buoy-g:#24D17E;
+  --buoy-gy:#79838B;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
@@ -90,6 +92,7 @@ body.night{
      which is what a buoy is told apart by in the dark anyway. */
   --club:#C8342E;
   --buoy-y:#C8342E; --buoy-r:#C8342E; --buoy-w:#8A2723; --buoy-g:#C8342E;
+  --buoy-gy:#8A2723;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 
@@ -979,12 +982,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bu.r .bd{fill:var(--buoy-r)} .bu.r .ln{stroke:var(--buoy-r)}
 .bu.g .bd{fill:var(--buoy-g)} .bu.g .ln{stroke:var(--buoy-g)}
 .bu.w .bd{fill:var(--buoy-w)} .bu.w .ln{stroke:var(--buoy-w)}
-/* The line's two ends are white as well - see BUOY.f and BUOY.b - so
-   they take the white one's heavier edge for the same reason it has it.
-   The light on top is drawn in the ink, not in white: a white lamp on a
-   white buoy is nothing. */
-.bu.f .bd,.bu.b .bd{fill:var(--buoy-w);stroke-opacity:.55}
+/* The pin end is white, so it takes the white can's heavier edge for the
+   same reason the can has one. Its light is drawn in the ink rather than
+   in white: a white lamp on a white buoy is nothing. The sail ball is
+   grey and needs no help. */
+.bu.f .bd{fill:var(--buoy-w);stroke-opacity:.55}
 .bu.f .ln{stroke:var(--ink-dim)}
+.bu.b .bd{fill:var(--buoy-gy)}
 .bu.o .bd{fill:var(--accent)} .bu.o .ln{stroke:var(--accent)}
 /* ---- the four settings, as readings ----
    Everything about the evening that is not the course itself, on one
@@ -8702,7 +8706,7 @@ const BUOY={
    +'<path class="bd" d="M9.4 8h5.2v10.6H9.4z"/>'
    +'<circle class="bd" cx="12" cy="5.4" r="2.8"/>'
    +'<path class="ln" d="M6.6 5.4h1.6M15.8 5.4h1.6"/>',
-  /* And the sail ball is one big white ball. */
+  /* And the sail ball is one big grey ball. */
   b:'<circle class="bd" cx="12" cy="12.4" r="8.6"/>',
   /* One of your own: no club drawing to copy, so it wears the accent. */
   o:'<path class="ln" d="M12 4.5v6"/>'

@@ -487,7 +487,7 @@ is how it is found:
 | **green board on a tripod** | the green ones, which are three wooden sticks leaned together in a teepee with the board across the top. Two pilings apart at a glance, which is the whole reason for drawing them |
 | **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks, floating, on a waterline |
 | **white lighted buoy** | `FLAG`, the pin end. Not a flag at all: a donut of a float, a cylinder standing out of it, and the light on top |
-| **one big white ball** | `BALL`, the boat end — the Romance sail ball |
+| **one big grey ball** | `BALL`, the boat end — the Romance sail ball |
 | **a plain pillar in the accent** | a mark of your own that has not said what it is |
 
 **A mark of your own can say which buoy it is.** The form carries all

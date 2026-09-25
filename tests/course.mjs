@@ -78,7 +78,7 @@ t.ok(['cb2','cb8','cb10','cb12'].every(id=>S.find(r=>r.mark===id).buoy==='r'),
 t.ok(['man1','man2'].every(id=>S.find(r=>r.mark===id).buoy==='w'),
      'the manatee marks are the white regulatory cans');
 t.ok(S.find(r=>r.mark==='flag').buoy==='f' && S.find(r=>r.mark==='ball').buoy==='b',
-     'and the line\'s two ends are the white lighted buoy and the white ball '
+     'and the line\'s two ends are the white lighted buoy and the grey ball '
      +'they actually are');
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join())
