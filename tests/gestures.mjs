@@ -115,6 +115,23 @@ t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
 t.ok(!S.over, 'so nothing is faded off an edge');
 t.ok(S.outside.length===0, 'and no card corner is out in the black',
      S.outside.join(' '));
+/* A row of two reads as one row only if it IS one row. */
+const row=await p.evaluate(()=>{
+  const h=[...document.querySelectorAll('#p-sheet .card')]
+    .filter(k=>k.offsetHeight).map(k=>Math.round(k.getBoundingClientRect().height));
+  const mid=el=>{ const q=el.getBoundingClientRect(); return Math.round(q.top+q.height/2); };
+  const card=$('dim').closest('.card').getBoundingClientRect();
+  const tr=$('dim').getBoundingClientRect();
+  return {h, slider:mid($('dim')), stepper:mid($('d-down')),
+          thumbClear:Math.round(card.bottom-(tr.top+tr.height/2+38))}; });
+t.ok(row.h[0]===row.h[1] && row.h[2]===row.h[3],
+     'each row is one height, not two', JSON.stringify(row.h));
+t.ok(Math.abs(row.slider-row.stepper)<=1,
+     'the brightness slider sits on the depth steppers\' line',
+     row.slider+' vs '+row.stepper);
+t.ok(row.thumbClear>0,
+     'and its thumb, which stands 31 px proud of a 14 px track, clears the border',
+     row.thumbClear+' px');
 
 t.head('and scrolls if it ever stops fitting');
 /* The backstop. Forced here rather than waited for: the layout above

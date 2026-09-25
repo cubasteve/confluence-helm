@@ -529,11 +529,16 @@ not a scrollbar: the panel centres its child, so the sensor row hung off
 the top at y=−33 and the build stamp sat eight px past the bottom, with
 no way to reach either.
 
-Two columns is 669 px for the same content, which is the round glass
-being used where it is widest instead of wasted. Each card sizes to its
-own content rather than stretching to the taller of its row — the first
-pass stretched them, and the short one got a lake of empty border under
-it that read as padding rather than density.
+Two columns is 600 px for the same content, which is the round glass
+being used where it is widest instead of wasted.
+
+Both cards in a row take the height of the taller one, and the shorter
+one **spreads** into it rather than leaving a lake of empty border under
+its content — stretching without spreading was the first pass, and it
+read as padding rather than density. The payoff is that the brightness
+slider lands on the same centreline as the depth steppers beside it,
+which is what makes a row of two read as one row rather than two things
+that happen to be adjacent.
 
 The sensor row and the radios keep the **narrow** 600 px column. They
 sit at the top of the circle, where 880 px has its ends out in the

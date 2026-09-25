@@ -454,10 +454,23 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   scrollbar-width:none;-ms-overflow-style:none}
 .sheet::-webkit-scrollbar{display:none}
 .sheet > *{min-width:0}
-/* Cards size to their own content. Stretching both to the taller of a
-   row left the short one with a lake of empty border under it, which is
-   what made the first pass at this look padded rather than dense. */
-.sheet > .card{align-self:start}
+/* Both cards in a row take the height of the taller, and the shorter
+   one SPREADS into it rather than leaving a lake of empty border under
+   its content - which is what stretching did on the first pass, and why
+   it was sizing to content for a while instead.
+   The effect is that the brightness slider and the depth steppers sit
+   on the same line across the two cards, which is the thing that makes
+   a row of two read as one row. */
+.sheet > .card{align-self:stretch}
+.card > .slab{flex:none}
+/* The slider's thumb is 76 px on a 14 px track, so it stands 31 px
+   proud of the line it runs on. Pushed to the foot of the card by
+   space-between, that put half of it through the border.
+   30 rather than the 24 that would just clear it: it also lands the
+   track on the same centreline as the depth steppers in the card
+   beside it, which is the thing that makes the two read as one row. */
+.card > .dimrow{flex:1; align-content:space-between; padding-bottom:30px}
+.card > .depthwrap{flex:1; justify-content:space-between}
 .sheet.over{padding:84px 0 116px;
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 66px,
     #000 calc(100% - 88px),transparent 100%)}
