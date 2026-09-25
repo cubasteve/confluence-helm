@@ -571,7 +571,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    driving - is the half of the answer a silent test does not give. */
 .sndrow{display:flex;align-items:center;gap:18px;margin-top:4px}
 .sndrow .mini.wide{flex:none;width:168px;height:74px}
-.sndwho{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.08em;
+.sndwho{display:block;width:100%;margin-top:12px;
+  font-size:19px;font-weight:600;letter-spacing:.08em;
   color:var(--label);text-transform:uppercase;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
   background:none;border:none;font-family:var(--font);text-align:left;padding:0}
@@ -2007,12 +2008,14 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="slab">Sounder</div>
     <div class="sndrow" id="snd-row">
       <button class="mini wide" id="snd-test">TEST</button>
-      <!-- Where it comes out. A tap cycles whatever netd says this Pi
-           has: the jack, and anything in front of ALSA - which is how a
-           Bluetooth speaker is reached. Not a button on a GPIO rig,
-           where there is one wire and no choice. -->
-      <button class="sndwho" id="snd-who"></button>
     </div>
+    <!-- Where it comes out. A tap cycles whatever netd says this Pi has:
+         the jack, and anything in front of ALSA - which is how a
+         Bluetooth speaker is reached. Not a button on a GPIO rig, where
+         there is one wire and no choice.
+         On its own line: beside the button it had 225 px, and PIPEWIRE /
+         PULSE · TAP is not a thing that fits in 225 px. -->
+    <button class="sndwho" id="snd-who"></button>
     </div>
 
     <!-- deploy.sh rewrites __BUILD__ with the commit it published. A panel
