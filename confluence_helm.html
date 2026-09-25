@@ -63,7 +63,7 @@ body{                                   /* DAY - built to beat sun   */
   --club:#0E7A7A;
   /* The marks as they are on the water. The yellow is knocked down from
      a buoy's own yellow, which on a light panel in sun is a smear. */
-  --buoy-y:#D89400; --buoy-r:#C81E1E; --buoy-w:#FFFFFF;
+  --buoy-y:#D89400; --buoy-r:#C81E1E; --buoy-w:#FFFFFF; --buoy-g:#0E7A43;
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
@@ -72,7 +72,7 @@ body.dusk{
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
   --club:#19A8A8;                       /* lifted off a dark panel     */
-  --buoy-y:#F5B72E; --buoy-r:#FF4D4D; --buoy-w:#E6EAEE;
+  --buoy-y:#F5B72E; --buoy-r:#FF4D4D; --buoy-w:#E6EAEE; --buoy-g:#24D17E;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
@@ -89,7 +89,7 @@ body.night{
      a red nun are the same red at 2 a.m.; their SHAPES still differ,
      which is what a buoy is told apart by in the dark anyway. */
   --club:#C8342E;
-  --buoy-y:#C8342E; --buoy-r:#C8342E; --buoy-w:#8A2723;
+  --buoy-y:#C8342E; --buoy-r:#C8342E; --buoy-w:#8A2723; --buoy-g:#C8342E;
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 
@@ -970,10 +970,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bu{width:34px;height:34px;flex:none}
 .bu .bd{stroke:var(--ink);stroke-opacity:.28;stroke-width:1}
 .bu .ln{fill:none;stroke-width:2.2;stroke-linecap:round}
+/* The pilings a daybeacon is built on are wood, whatever colour the
+   board on top of them is. */
+.bu .st{fill:none;stroke:var(--ink-dim);stroke-width:2.2;stroke-linecap:round}
 /* White on a light panel is nothing without an edge. */
 .bu.w .bd{stroke-opacity:.55}
 .bu.y .bd{fill:var(--buoy-y)} .bu.y .ln{stroke:var(--buoy-y)}
 .bu.r .bd{fill:var(--buoy-r)} .bu.r .ln{stroke:var(--buoy-r)}
+.bu.g .bd{fill:var(--buoy-g)} .bu.g .ln{stroke:var(--buoy-g)}
 .bu.w .bd{fill:var(--buoy-w)} .bu.w .ln{stroke:var(--buoy-w)}
 .bu.f .bd,.bu.b .bd{fill:var(--ink-dim)} .bu.f .ln,.bu.b .ln{stroke:var(--ink-dim)}
 .bu.o .bd{fill:var(--accent)} .bu.o .ln{stroke:var(--accent)}
@@ -1115,6 +1119,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mk-val{font-size:26px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;flex:1}
 .mk-field .pw-cur{display:none;height:32px}.mk-field.on .pw-cur{display:block}
 .mk-row .cbtn{height:64px;padding:0 22px}
+/* Which buoy the mark is, for the sheet to draw. Seven of them across
+   the form: the club's own marks are already drawn from the table, and
+   this is how one of yours says what it looks like. */
+.mk-buoys{display:flex;gap:8px;width:100%}
+.mkb{flex:1;min-width:0;height:72px;border-radius:14px;border:2px solid var(--hairline);
+  background:none;display:flex;align-items:center;justify-content:center}
+.mkb.on{border-color:var(--accent);background:var(--chip)}
+.mkb .bu{width:36px;height:36px}
 .kb.small .kk{height:56px;font-size:24px}
 /* which side to leave a mark, and which start procedure: the same pair
    of buttons in two shapes. P red, S green, the way the lights are. */
@@ -2469,6 +2481,9 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <div class="mk-field" data-f="lon"><span class="mk-lbl">LON</span><span class="mk-val" id="mk-lon"></span><span class="pw-cur"></span></div>
         <button class="cbtn" id="mk-here">HERE</button>
       </div>
+      <!-- Which buoy it is. A mark you made on the water is a thing you
+           are looking at; the sheet can draw it if it is told which. -->
+      <div class="mk-buoys" id="mk-buoy"></div>
       <div class="kb small" id="mk-kb"></div>
       <div class="ns-msg" id="mk-msg"></div>
       <div class="course-bar">
@@ -3402,6 +3417,7 @@ Object.keys(MARK_MOVES).forEach(id=>{
   if(!m || !v || !isFinite(v.lat) || !isFinite(v.lon)) return;
   m.lat=v.lat; m.lon=v.lon;
   if(v.name){ m.name=v.name; m.hdr=v.name.slice(0,8).trim(); }
+  if(v.buoy) m.buoy=v.buoy;
 });
 /* Back to the book. The compiled values are not kept anywhere to restore
    FROM, so this reloads - which is honest about what it is doing and
@@ -8657,11 +8673,22 @@ const BUOY={
   y:'<path class="ln" d="M7 2.8l10 8M17 2.8l-10 8"/>'
    +'<path class="bd" d="M11.1 10.6h1.8v2.6h-1.8z"/>'
    +'<path class="bd" d="M8.4 13.2h7.2L17.6 22H6.4z"/>',
-  /* A red nun, the cone the even-numbered side of a channel is. */
-  r:'<path class="bd" d="M12 2.6L18.2 22H5.8z"/>',
-  /* A regulatory can - the white ones round the manatee zone. */
-  w:'<path class="bd" d="M7 9.5h10V22H7z"/>'
-   +'<path class="ln" d="M7 14.5h10"/>',
+  /* The channel here is not buoyed, it is BEACONED: a piling out of the
+     water with a board on top. Red is the one on a single stick. */
+  r:'<path class="st" d="M12 8v14"/>'
+   +'<path class="bd" d="M6.9 2.2h10.2v10.2H6.9z"/>',
+  /* And green is three of them, leaned together in a teepee with the
+     board across the top. Two pilings apart at a glance from a boat,
+     which is the whole reason for drawing them at all. */
+  g:'<path class="st" d="M5.6 22l5.6-10.4M18.4 22l-5.6-10.4M12 22v-10.4"/>'
+   +'<path class="st" d="M8.1 17.4h7.8"/>'
+   +'<path class="bd" d="M6.9 1.8h10.2v10.2H6.9z"/>',
+  /* A regulatory can, floating: the white ones round the manatee zone.
+     Rounded and sitting on a waterline, so it is plainly not another
+     board on a stick. */
+  w:'<path class="bd" d="M7.2 8.4h9.6v8.2a4.8 4.8 0 0 1-9.6 0z"/>'
+   +'<path class="ln" d="M7.2 12.4h9.6"/>'
+   +'<path class="st" d="M4.4 20.4h15.2"/>',
   /* The Romance flag, on its staff. */
   f:'<path class="ln" d="M7 2.6V22"/>'
    +'<path class="bd" d="M7.9 3.4L19.2 7.6 7.9 11.8z"/>',
@@ -9225,6 +9252,7 @@ function mkOpen(id){
   const m=id?markOf(id):null;
   MK={f:'name', id:m?m.id:null,
       name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
+      buoy:(m&&m.buoy)||'o',
       kb:{shift:false,sym:false,num:false}};
   cvpClose(); crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
   $('course-main').style.display='none'; $('course-add').style.display='';
@@ -9236,6 +9264,9 @@ function mkClose(){ MK=null; $('course-add').style.display='none';
 function mkPaint(){
   if(!MK) return;
   $('mk-name').textContent=MK.name; $('mk-lat').textContent=MK.lat; $('mk-lon').textContent=MK.lon;
+  $('mk-buoy').innerHTML=Object.keys(BUOY).map(k=>
+    '<button class="mkb'+(MK.buoy===k?' on':'')+'" data-b="'+k+'">'
+    +'<svg class="bu '+k+'" viewBox="0 0 24 24">'+BUOY[k]+'</svg></button>').join('');
   document.querySelectorAll('#course-add .mk-field').forEach(f=>f.classList.toggle('on',f.dataset.f===MK.f));
   MK.kb.num = MK.f!=='name';
   /* The keyboard is 45 buttons; rebuilt on every keystroke it is the
@@ -9271,6 +9302,7 @@ function mkSave(){
   if(MK.id){
     const m=USER_MARKS.find(x=>x.id===MK.id);
     if(m){ m.name=name; m.hdr=name.slice(0,8).trim(); m.lat=lat; m.lon=lon;
+           m.buoy=MK.buoy;
            marksSave(); mkClose(); drawMap(shownTrack()); return; }
     /* One of the club's. The compiled coordinate is left alone and an
        override written over it - see MARK_MOVES. The name is stored only
@@ -9280,14 +9312,20 @@ function mkSave(){
     if(c){
       const v={lat:lat, lon:lon};
       if(name && name!==c.name) v.name=name;
+      /* And which buoy it is, on the same terms as the name: stored
+         only when you changed it, so a correction stays a correction
+         and the table still says what the table says. The club can
+         re-lay a mark as a different thing. */
+      if(MK.buoy!==(c.buoy||'o')) v.buoy=MK.buoy;
       MARK_MOVES[MK.id]=v; markMovesSave();
       c.lat=lat; c.lon=lon;
       if(v.name){ c.name=v.name; c.hdr=v.name.slice(0,8).trim(); }
+      if(v.buoy) c.buoy=v.buoy;
       mkClose(); drawMap(shownTrack()); return;
     }
   }
   const id='u'+Date.now().toString(36);
-  const m={id, name, hdr:name.slice(0,8).trim(), lat, lon};
+  const m={id, name, hdr:name.slice(0,8).trim(), buoy:MK.buoy, lat, lon};
   USER_MARKS.push(m); marksSave(); MARKS.push(m);
   COURSE.marks.push(id); courseSave();
   mkClose(); drawMap(shownTrack());
@@ -9303,6 +9341,8 @@ function markDelete(id){
 }
 $('course-add').addEventListener('click',e=>{
   if(!MK) return;
+  const bu=e.target.closest('.mkb');
+  if(bu){ MK.buoy=bu.dataset.b; mkPaint(); return; }
   const f=e.target.closest('.mk-field'); if(f){ MK.f=f.dataset.f; mkPaint(); return; }
   const b=e.target.closest('#mk-kb button'); if(!b) return;
   const c=b.dataset.c, a=b.dataset.a;

@@ -483,10 +483,20 @@ is how it is found:
 | | |
 |---|---|
 | **yellow special, X topmark** | `RUM`, `GOSLING` — the club's own inflatables. Marks of the *course*, which is what the X says |
-| **red nun** | `CB 2`, `CB 8`, `CB 10`, `CB 12` — the channel |
-| **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks |
+| **red board on a piling** | `CB 2`, `CB 8`, `CB 10`, `CB 12`. The channel here is not buoyed, it is **beaconed**: a stick out of the water with a square board on top |
+| **green board on a tripod** | the green ones, which are three wooden sticks leaned together in a teepee with the board across the top. Two pilings apart at a glance, which is the whole reason for drawing them |
+| **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks, floating, on a waterline |
 | **flag** and **ball** | `FLAG` and `BALL`: the Romance flag and its sail ball, which are the two ends of the line |
-| **the accent** | a mark of your own — there is no club drawing to copy |
+| **a plain pillar in the accent** | a mark of your own that has not said what it is |
+
+**A mark of your own can say which buoy it is.** The form carries all
+seven, under the position: tap one and it is kept with the mark, in
+browser storage with everything else about it, and the sheet draws it.
+That is how the green tripod gets drawn — it is a mark of yours, not one
+of the club's ten. Correcting one of the club's marks can change its
+buoy too, on the same terms as its name: stored only if you changed it,
+so the correction stays a correction and the table still says what the
+table says.
 
 On the **night** theme every one of them is the same red, as everything
 there is; the shapes still tell them apart, which is what tells them
@@ -596,8 +606,8 @@ tap on this sheet that can replace a course you are already sailing.
 ![Adding a mark of your own](img/course-form.png)
 
 **Marks of your own.** `+ MARK` on the sheet's bar opens a form: a name,
-and a position typed on the app's own keyboard or taken from the GPS
-with `HERE`. Positions read as the sailing instructions write them,
+a position typed on the app's own keyboard or taken from the GPS with
+`HERE`, and which of the seven buoys it is. Positions read as the sailing instructions write them,
 degrees and decimal minutes with a space between, or as decimal
 degrees, with the hemisphere as a letter at either end or as a minus
 for west and south — `28 49.03 N` and `081 16.17 W` go in as the chart

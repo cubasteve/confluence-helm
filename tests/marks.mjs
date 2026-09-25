@@ -61,8 +61,29 @@ t.ok(here.lat===here.want[0] && here.lon===here.want[1],
 t.ok(here.lat==='28 49.290' && here.lon==='-81 16.440',
      'written the way the form reads it back', JSON.stringify(here));
 await type('name','GREEN BUOY');
+
+/* Which buoy it is. A mark you made standing at it is a thing you are
+   looking at, so the sheet can draw it if it is told which - and the
+   green one on Lake Monroe is three sticks in a teepee with a green
+   board on top, which is a drawing nothing else in this file is. */
+const buoys=await p.evaluate(()=>[...document.querySelectorAll('#mk-buoy .mkb')]
+  .map(x=>x.dataset.b));
+t.ok(buoys.join()==='y,r,g,w,f,b,o', 'every buoy the sheet can draw is on the form',
+     buoys.join());
+t.ok(await p.evaluate(()=>[...document.querySelectorAll('#mk-buoy .mkb.on')]
+       .map(x=>x.dataset.b).join())==='o',
+     'a new mark is a plain one until you say otherwise');
+await p.click('#mk-buoy .mkb[data-b="g"]'); await p.waitForTimeout(200);
+t.ok(await p.evaluate(()=>MK.buoy)==='g', 'tapping one chooses it');
 r=await save();
 t.ok(!r.open && r.n===1, 'and it saves', JSON.stringify(r));
+t.ok(await p.evaluate(()=>USER_MARKS[0].buoy)==='g', 'with the buoy on the mark');
+t.ok(await p.evaluate(()=>JSON.parse(localStorage.getItem('marks'))[0].buoy)==='g',
+     'and on disk, where the Pi keeps it');
+t.ok(await p.evaluate(()=>{ const e=document.querySelector(
+       '.cv-tile[data-mark="'+USER_MARKS[0].id+'"] svg');
+     return e && e.classList.contains('g'); }),
+     'so its tile is drawn as the green tripod, not the plain buoy');
 
 t.head('a saved mark is a mark like any other');
 const m=await p.evaluate(()=>{ const u=USER_MARKS[0];
