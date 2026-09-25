@@ -483,13 +483,27 @@ sign at 15 px. The club's marks and your own read the same way. Tiles
 carry the short name — the one the cell headers and the RACE box use,
 where a name has to fit in 32 px.
 
+**Everything about the start is on this sheet.** The time is top right,
+and the two chips under the marks are the other two things:
+
+| | |
+|---|---|
+| `SEQUENCE` | `GUN` or `WINDOW` — which procedure tonight is, above |
+| `START LINE` | which line the race starts *and* finishes on: the club's two marks by name, `FLAG – BALL`, or `PINGED · TAP FOR THE MARKS` once you have pinged the ends yourself with `P` and `B` on the dial |
+
+Tapping `START LINE` while a pinged line is in force **drops the pings**
+and goes back to the club's marks — the way back from a ping taken at
+the wrong end. It is the one fact on this sheet you cannot work out from
+anything else on it, which is why it says both ends rather than just
+that a line exists.
+
 ### CLUB SYNC
 
 ![The club's course, found and waiting](img/course-club.png)
 
 The club posts the evening's marks on the members' site by 5:30, the
-same ones that go on the clubhouse door. **CLUB SYNC**, centred under
-the heading, fetches them: they are these marks under three different
+same ones that go on the clubhouse door. **CLUB SYNC**, centred at the
+top of the sheet above the heading, fetches them: they are these marks under three different
 names, so the site does the translating and hands back ids this file
 already knows.
 
@@ -512,11 +526,13 @@ the Pi can reach in and set a course — the right way round for a box on
 a boat. The read at the other end is open, because a posted course is
 public by the time it matters, so there is no login to carry.
 
-The button wears its own colour — `--club`, a violet by day, an outline
-at night where a lit block of anything costs an hour of dark adaptation.
-It is not one of the app's blue actions: it is the only tap on this
-sheet that reaches off the boat, and the only one that can replace a
-course you are already sailing.
+The button wears its own colour — `--club`, a teal, as an outline with a
+cloud the course comes down out of. It is not one of the app's blue
+actions and it is not a lit block sitting above the heading: it is the
+only tap on this sheet that reaches off the boat, and the only one that
+can replace a course you are already sailing. It comes first because it
+is what you do first — before reading what the course says, you ask the
+club what it is.
 
 ![Adding a mark of your own](img/course-form.png)
 

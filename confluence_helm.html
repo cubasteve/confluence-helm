@@ -60,7 +60,7 @@ body{                                   /* DAY - built to beat sun   */
      off the members' site is not the kind of thing the app's blue
      buttons do, and it is the only tap here that can replace a course
      you are already sailing. */
-  --club:#6C3FD6;
+  --club:#0E7A7A;
   --w-huge:600; --w-val:600; --w-lbl:600;
 }
 body.dusk{
@@ -68,7 +68,7 @@ body.dusk{
   --hairline:#242A2F; --accent:#4A9EFF; --port:#FF4D4D; --stbd:#24D17E;
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
-  --club:#7C5CE6;                       /* lifted off a dark panel     */
+  --club:#19A8A8;                       /* lifted off a dark panel     */
   --w-huge:300; --w-val:300; --w-lbl:500;
 }
 body.night{
@@ -896,21 +896,22 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .cv-start.in{border-color:var(--accent)}
 .cv-start.in b{color:var(--accent)}
 /* ---- the club's course ----
-   Centred under the heading with air of its own: it is the one control
+   Above the heading, centred, with air of its own: it is the one control
    on this sheet that fills the whole page in a tap, so it is not buried
-   in a row of marks. In the club's own colour rather than the accent for
-   the same reason - and at night it goes to an outline, because a lit
-   block of anything costs an hour of dark adaptation. */
-.sync-wrap{display:flex;justify-content:center;flex:none;margin:2px 0}
+   in a row of marks. It comes first because it is what you do first -
+   before you look at what the course says, you ask the club what it is.
+   In the club's own colour rather than the accent for the same reason,
+   and an outline rather than a lit block: it is the only thing above the
+   heading, and a filled pill up there shouts across the whole sheet. */
+.sync-wrap{display:flex;justify-content:center;flex:none;margin:0 0 2px}
 .sync{display:inline-flex;align-items:center;gap:12px;height:62px;padding:0 28px;
-  border-radius:31px;border:2px solid transparent;background:var(--club);color:#fff;
+  border-radius:31px;border:2px solid var(--club);background:none;color:var(--club);
   font-family:var(--font);font-size:20px;font-weight:600;letter-spacing:.14em;
   white-space:nowrap}
 .sync svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;
   stroke-linecap:round;stroke-linejoin:round}
-.sync:active{opacity:.7}
+.sync:active{background:var(--chip)}
 .sync.busy{opacity:.55}
-body.night .sync{background:none;border-color:var(--club);color:var(--club)}
 /* What it found, or why it found nothing. One line, ellipsised: the
    club's note can be longer than the face is wide. */
 .cv-note{flex:none;font-size:17px;letter-spacing:.08em;color:var(--label);
@@ -2343,12 +2344,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
-        <div class="cv-hd"><span id="cv-count">Course</span>
-          <button class="cv-start" id="cv-start"></button></div>
-        <!-- Tonight's course, off the members' site. Centred, in the
-             club's own colour: see --club. -->
+        <!-- Tonight's course, off the members' site. Centred above the
+             heading, in the club's own colour: see --club. -->
         <div class="sync-wrap"><button class="sync" id="cv-sync"></button></div>
         <div class="cv-note" id="cv-say"></div>
+        <div class="cv-hd"><span id="cv-count">Course</span>
+          <button class="cv-start" id="cv-start"></button></div>
         <div class="cv-strip" id="cv-strip"></div>
         <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
         <div class="cv-grid" id="course-list"></div>
@@ -8533,12 +8534,13 @@ const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').
    not a mark, and the grid scrolls. */
 let courseEdit=false;
 
-/* Two circling arrows - the mark every piece of software uses for a
-   sync, and the only glyph in this file that means 'from somewhere
-   else'. */
-const ICO_SYNC='<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4.5L4 9"/>'
-  +'<path d="M4 5v4h4"/><path d="M4 13a8 8 0 0 0 14 4.5L20 15"/>'
-  +'<path d="M20 19v-4h-4"/></svg>';
+/* A cloud with the course coming down out of it. Circling arrows would
+   say 'sync' too, but they say it about two things kept level with each
+   other - and this only ever comes one way, off the site and onto the
+   boat. */
+const ICO_SYNC='<svg viewBox="0 0 24 24">'
+  +'<path d="M7 16a4 4 0 0 1 .6-7.96 5.5 5.5 0 0 1 10.6 1.46A3.5 3.5 0 0 1 17.5 16"/>'
+  +'<path d="M12 12v7"/><path d="M9 16.5l3 3 3-3"/></svg>';
 
 function renderCourse(){
   const box=$('course-list'); if(!box) return;
@@ -8611,8 +8613,11 @@ function renderCourse(){
     +'<div class="side wide"><span class="sb'+(w?'':' on')+'" data-mode="gun">GUN</span>'
     +'<span class="sb'+(w?' on':'')+'" data-mode="window">WINDOW</span></div>';
   const E=lineEnds();
-  $('cv-line').innerHTML='<i>↔</i><div><b>'+(E.pinged?'LINE · PINGED':'LINE')
-    +'</b><s>'+esc(E.pinged ? 'TAP TO USE THE MARKS'
+  /* Which line the race starts and finishes on, said in full: the two
+     ends by name, or PINGED and the two ends you pinged. It is the one
+     thing on this sheet you cannot work out from anything else. */
+  $('cv-line').innerHTML='<i>↔</i><div><b>START LINE</b><s>'
+    +esc(E.pinged ? 'PINGED · TAP FOR THE MARKS'
         : markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr)+'</s></div>';
 }
 /* The sheet's title is what the sub-views are called. The course view's

@@ -51,7 +51,7 @@ t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
 const marks=x=>x.filter(r=>r.mark);
 t.ok(marks(S).length===10, 'all ten of the club\'s marks, as tiles', String(S.length));
 let L=await lineChip();
-t.ok(L.b==='LINE', 'the line has a chip of its own', L.b);
+t.ok(L.b==='START LINE', 'the line has a chip of its own', L.b);
 t.ok(L.s==='FLAG – BALL', 'and says which two marks it is', L.s);
 t.ok(await p.evaluate(()=>!!$('cv-sync') && !!$('cv-start') && !!$('cv-mode')),
      'and the club, the start time and the sequence are all on the sheet');
@@ -194,7 +194,7 @@ await p.evaluate(()=>{ courseEdit=false; $('course-edit').classList.remove('on')
                        renderCourse(); });
 await p.waitForTimeout(200);
 L=await lineChip();
-t.ok(/PINGED/.test(L.b), 'a pinged line says so', L.b);
+t.ok(/PINGED/.test(L.s), 'a pinged line says so', L.s);
 t.ok(await p.evaluate(()=>lineEnds().pinged), 'and is the line the readings use');
 await tap('#cv-line');
 L=await lineChip();
