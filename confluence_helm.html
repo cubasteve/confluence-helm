@@ -885,16 +885,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .cv-hd{display:flex;align-items:center;justify-content:space-between;gap:16px;
   font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label);
   text-transform:uppercase;flex:none}
-/* The start time, top right. It is the fact about the evening this sheet
-   is asked for most often, and it is also the way into the pad that sets
-   it - so it is a button and not a caption. */
-.cv-start{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
-  gap:2px;height:66px;padding:0 22px;border-radius:20px;flex:none;
-  border:2px solid var(--hairline);background:none;font-family:var(--font)}
-.cv-start b{font-size:26px;font-weight:600;letter-spacing:.04em;color:var(--label)}
-.cv-start s{text-decoration:none;font-size:15px;letter-spacing:.1em;color:var(--label)}
-.cv-start.in{border-color:var(--accent)}
-.cv-start.in b{color:var(--accent)}
 /* What the club found, or why it found nothing. One line, ellipsised:
    the club's note can be longer than the face is wide. */
 .cv-note{flex:none;font-size:17px;letter-spacing:.08em;color:var(--label);
@@ -969,24 +959,31 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    Three of them open a menu. The fourth does not: a countdown is 5, 10
    or 15 minutes, and a tap that steps through three values beats a menu
    you have to open, scroll and dismiss. */
-/* Above the veil, so an open menu can be moved from one setting to the
+/* Wider than the sheet's own column, and it can be: the row sits low
+   enough on the glass that 940 is inside the circle where 816 is the
+   most the strip and the marks can have up at the heading.
+   Above the veil, so an open menu can be moved from one setting to the
    next with one tap instead of two: the veil dismisses everything else,
-   but these four are the row the menu belongs to. */
-.cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:100%;
-  position:relative;z-index:19}
-.cvr{flex:1;min-width:0;height:76px;padding:0 34px 0 16px;border-radius:18px;
+   but these five are the row the menu belongs to. */
+.cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:940px;
+  align-self:center;position:relative;z-index:19}
+.cvr{flex:1;min-width:0;height:76px;padding:0 30px 0 14px;border-radius:18px;
   border:2px solid var(--hairline);background:none;font-family:var(--font);
   display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
   gap:2px;position:relative;overflow:hidden}
-.cvr s{text-decoration:none;font-size:14px;letter-spacing:.16em;color:var(--label);
+.cvr s{text-decoration:none;font-size:13px;letter-spacing:.14em;color:var(--label);
   white-space:nowrap}
-.cvr b{font-size:22px;font-weight:600;color:var(--ink);white-space:nowrap;
+.cvr b{font-size:21px;font-weight:600;color:var(--ink);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;
   align-items:center;gap:8px}
 /* The corner glyph says which kind of control this is: a chevron opens a
    menu, a plus steps. */
-.cvr u{position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  text-decoration:none;font-size:19px;color:var(--label)}
+.cvr u{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  text-decoration:none;font-size:18px;color:var(--label)}
+/* The armed gun is the one setting that is either set or not, so it is
+   the one that lights. */
+.cvr.in{border-color:var(--accent)}
+.cvr.in b{color:var(--accent)}
 .cvr:active{background:var(--chip)}
 .cvr.picking{border-color:var(--accent)}
 /* The club keeps its colour and its cloud now that it is one of four:
@@ -1021,24 +1018,18 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Two lines instead of two columns, for a choice whose description is a
    sentence rather than a name. */
 .pr.two{flex-direction:column;align-items:flex-start;justify-content:center;
-  gap:4px;padding:0 16px}
-.pr.two s{margin-left:0}
+  gap:4px;padding:0 16px;height:auto;min-height:78px;padding-top:14px;padding-bottom:14px}
+.pr.two s{margin-left:0;white-space:normal;text-align:left;line-height:1.35}
 .pr b{font-size:26px;font-weight:600}
 .pr s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
   margin-left:auto;text-align:right;white-space:nowrap}
 .pr.sel b,.pr.sel s{color:var(--accent)}
 .pr:active{background:var(--chip)}
-/* Which end of the line the list is choosing. Both ends are named on it,
-   so the menu says what the line IS while you are changing it. */
-.prends{display:flex;gap:8px;padding:12px 12px 4px}
-.prend{flex:1;min-width:0;height:64px;border-radius:16px;border:2px solid var(--hairline);
-  background:none;font-family:var(--font);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:2px}
-.prend s{text-decoration:none;font-size:13px;letter-spacing:.16em;color:var(--label)}
-.prend b{font-size:20px;font-weight:600;color:var(--ink);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.prend.on{border-color:var(--accent)}
-.prend.on b,.prend.on s{color:var(--accent)}
+/* A choice that is not available yet, shown rather than hidden: the
+   pinged line is a line you make with P and B, and a menu that simply
+   left it out would not say so. */
+.pr.off b{color:var(--label)}
+.pr.off s{color:var(--label);opacity:.7}
 .prfoot{width:100%;height:74px;flex:none;border:none;border-top:2px solid var(--hairline);
   background:none;font-family:var(--font);font-size:19px;font-weight:600;
   letter-spacing:.12em;color:var(--accent)}
@@ -2401,8 +2392,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
-        <div class="cv-hd"><span id="cv-count">Course</span>
-          <button class="cv-start" id="cv-start"></button></div>
+        <div class="cv-hd"><span id="cv-count">Course</span></div>
         <div class="cv-strip" id="cv-strip"></div>
         <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
         <div class="cv-grid" id="course-list"></div>
@@ -2411,10 +2401,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
              the menu three of them open. The club is one of them now,
              keeping its own colour: see --club. -->
         <div class="cv-set">
+          <button class="cvr" id="cv-start"></button>
+          <button class="cvr" id="cv-mins"></button>
           <button class="cvr" id="cv-mode"></button>
           <button class="cvr" id="cv-line"></button>
           <button class="cvr club" id="cv-sync"></button>
-          <button class="cvr" id="cv-mins"></button>
         </div>
       </div>
       <div class="course-bar">
@@ -2659,9 +2650,6 @@ const CFG={
   /* How long the countdown is. Five is the club's sequence; the course
      sheet steps it 5, 10, 15 for a regatta that runs a longer one. */
   startMins:5,
-  /* The two marks the start line runs between, until they are pinged -
-     see lineEnds. */
-  linePin:'flag', lineBoat:'ball',
   /* Which kind of start the line is watching for - see lineWatch. The
      two club nights want opposite things from the same crossing, and
      nothing in the data tells them apart. */
@@ -3396,18 +3384,13 @@ const markOrderSave=()=>localStorage.setItem('markOrder',JSON.stringify(MARKS.ma
 
 let LINE = JSON.parse(localStorage.getItem('startline')||'{}');
 const saveLine=()=>localStorage.setItem('startline',JSON.stringify(LINE));
-/* The line is the pinged one if both ends have been pinged, else the two
-   marks the course sheet's START LINE is set to - Romance Flag at the
-   pin end and the Sail Ball at the boat end until it is told otherwise,
-   which is where LMSA leaves them. Pinging still wins, for a day the
-   committee sets it somewhere else; the course sheet has the way back.
-
-   It was a source constant. Two marks out of ten is a choice the boat
-   should be able to make on the water, and a club that moves its line
-   for a regatta should not need the file edited. */
-const LINE_DEF={pin:'flag', boat:'ball'};
-const lineMark=which=>markOf(CFG[which==='pin'?'linePin':'lineBoat'])
-                    || markOf(LINE_DEF[which]);
+/* Two lines, and only two: the club's, which is Romance Flag at the pin
+   end and the Sail Ball at the boat end and does not move, and the one
+   you pinged with P and B on the race box. Pinging wins while it is
+   there, for a day the committee lays it somewhere else; the course
+   sheet's START LINE is where you go back to the marks. */
+const LINE_MARKS={pin:'flag', boat:'ball'};
+const lineMark=which=>markOf(LINE_MARKS[which]);
 function lineEnds(){
   if(LINE.pin && LINE.boat) return {pin:LINE.pin, boat:LINE.boat, pinged:true};
   const P=lineMark('pin'), B=lineMark('boat');
@@ -5011,12 +4994,7 @@ const PREF_DEFS={
   /* And this one because it is a fact about the series, not the day. */
   startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null,
   /* Five, ten or fifteen minutes - the three sequences anyone runs. */
-  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
-  /* Checked against the marks this boat actually has: a stored end whose
-     mark has been deleted falls back to the club's line rather than
-     leaving the readings without one. */
-  linePin:    v=>(typeof v==='string' && markOf(v)) ? v : null,
-  lineBoat:   v=>(typeof v==='string' && markOf(v)) ? v : null
+  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -8640,14 +8618,6 @@ function renderCourse(){
   wText('cv-count', (CLUB.step==='ready'?'CLUB COURSE · ':'COURSE · ')
         +(n ? n+' MARK'+(n===1?'':'S') : 'EMPTY'));
 
-  /* The start time, and the way into the pad that sets it. The countdown
-     it implies is on the line under it: CFG.startMins before, which is
-     the number the sheet cannot show you anywhere else. */
-  $('cv-start').innerHTML = GUNAT!==null
-    ? '<b>'+gunTxt(GUNAT)+'</b><s>COUNTDOWN '+gunTxt(GUNAT-CFG.startMins*60000)+'</s>'
-    : '<b>START TIME</b><s>TAP TO SET</s>';
-  wCls('cv-start','in', GUNAT!==null);
-
   /* What the club had to say about it, if anything. */
   const c=CLUB, cn=c.got ? c.got.marks.length : 0;
   $('cv-say').textContent=clubSay();
@@ -8688,10 +8658,17 @@ function renderCourse(){
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
 
-  /* The four settings, read at a glance. A chevron says the readout
-     opens a menu; a plus says a tap steps it. */
+  /* The five settings, read at a glance. The corner glyph says what kind
+     of control it is: a chevron opens a menu, a plus steps, and the
+     keypad's three dots open a pad. */
   const rd=(id,lbl,val,glyph)=>{ $(id).innerHTML='<s>'+lbl+'</s><b>'+val+'</b>'
     +'<u>'+glyph+'</u>'; };
+  /* The gun, and how long the countdown to it runs. They are next to
+     each other because between them they say when the countdown starts,
+     which neither says alone. */
+  rd('cv-start','START TIME', GUNAT!==null ? gunTxt(GUNAT) : 'NOT SET','⋯');
+  wCls('cv-start','in', GUNAT!==null);
+  rd('cv-mins','COUNTDOWN', CFG.startMins+' MIN','＋');
   rd('cv-mode','SEQUENCE', CFG.startMode==='window'?'WINDOW':'GUN','⌄');
   /* Which line the race starts and finishes on. It is the one thing on
      this sheet you cannot work out from anything else on it, so it names
@@ -8704,7 +8681,6 @@ function renderCourse(){
        c2.step==='busy'  ? 'CHECKING…'
      : c2.step==='ready' ? cn+' MARK'+(cn===1?'':'S')+'?'
      :                     'SYNC')+'</span>', '⌄');
-  rd('cv-mins','COUNTDOWN', CFG.startMins+' MIN','＋');
   if(CVP) cvpPaint();
 }
 /* The sheet's title is what the sub-views are called. The course view's
@@ -8812,7 +8788,7 @@ function cvpPaint(){
   if(!CVP) return;
   const k=CVP.kind, pk=$('cv-pk');
   $('cv-phd').innerHTML=cvpHead();
-  pk.innerHTML = k==='mode' ? cvpMode() : k==='line' ? cvpMarks() : cvpClub();
+  pk.innerHTML = k==='mode' ? cvpMode() : k==='line' ? cvpLine() : cvpClub();
   $('cv-pft').innerHTML=cvpFoot();
   document.querySelectorAll('.cvr').forEach(e=>
     e.classList.toggle('picking', e===cvpBtn(k)));
@@ -8849,19 +8825,24 @@ function cvpHead(){
   const k=CVP.kind;
   if(k==='mode') return '<div class="prhd">WHICH SEQUENCE</div>';
   if(k==='club') return '<div class="prhd">TONIGHT, FROM THE CLUB</div>';
-  const tab=(w,lbl)=>'<button class="prend'+(CVP.end===w?' on':'')+'" data-end="'+w+'">'
-    +'<s>'+lbl+'</s><b>'+esc(lineMark(w).hdr)+'</b></button>';
-  return '<div class="prhd">THE LINE RUNS BETWEEN</div>'
-    +'<div class="prends">'+tab('pin','PIN END')+tab('boat','BOAT END')+'</div>';
+  return '<div class="prhd">WHICH LINE</div>';
 }
 const cvpMode=()=>[['gun','GUN','LINE OPENS AT ZERO'],
                    ['window','WINDOW','LINE OPEN THROUGHOUT']]
   .map(([k,n,w])=>'<button class="pr two'+(CFG.startMode===k?' sel':'')+'" data-mode="'+k+'">'
       +'<b>'+n+'</b><s>'+w+'</s></button>').join('');
-/* Every mark, for whichever end the head has lit. */
-const cvpMarks=()=>{ const cur=lineMark(CVP.end).id;
-  return MARKS.map(m=>'<button class="pr'+(m.id===cur?' sel':'')+'" data-end-mark="'+m.id+'">'
-    +'<b>'+esc(m.hdr)+'</b><s>'+esc(m.name)+'</s></button>').join(''); };
+/* The club's line, or the one you pinged. There is no third: the marks
+   the club's line runs between do not move, and a line laid somewhere
+   else is a line you ping. */
+function cvpLine(){
+  const pinged=lineEnds().pinged;
+  return '<button class="pr two'+(pinged?'':' sel')+'" data-line="marks">'
+      +'<b>'+esc(lineMark('pin').hdr+' – '+lineMark('boat').hdr)+'</b>'
+      +'<s>THE CLUB’S MARKS</s></button>'
+    +'<button class="pr two'+(pinged?' sel':' off')+'" data-line="pinged">'
+      +'<b>PINGED</b><s>'+(pinged ? 'FROM P AND B ON THE RACE BOX'
+          : 'PING BOTH ENDS WITH P AND B ON THE RACE BOX')+'</s></button>';
+}
 function cvpClub(){
   const c=CLUB;
   if(c.step==='busy') return '<div class="prnote">CHECKING THE CLUB SITE…</div>';
@@ -8884,25 +8865,24 @@ function cvpFoot(){
     if(c.step==='busy') return '';
     return '<button class="prfoot club" data-again="1">ASK THE CLUB</button>';
   }
-  /* The way back from a ping taken at the wrong end. */
-  if(k==='line' && lineEnds().pinged)
-    return '<button class="prfoot" data-unping="1">PINGED · USE THE MARKS</button>';
   return '';
 }
 $('cv-pick').addEventListener('pointerdown',()=>gClaim());
 $('cv-pick').addEventListener('click',e=>{
   if(!CVP) return;
   if(cvpDragged()) return;                    /* a scroll, not a choice */
-  const end=e.target.closest('[data-end]');
-  if(end){ CVP.end=end.dataset.end; cvpPaint(); return; }
   const md=e.target.closest('[data-mode]');
   if(md){ startModeSet(md.dataset.mode); cvpClose(); return; }
-  const mk=e.target.closest('[data-end-mark]');
-  if(mk){ CFG[CVP.end==='pin'?'linePin':'lineBoat']=mk.dataset.endMark; prefsSave();
-          renderCourse(); drawMap(shownTrack()); cvpClose(); return; }
-  if(e.target.closest('[data-unping]')){
-    LINE={}; saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
-    renderCourse(); drawMap(shownTrack()); cvpPaint(); return; }
+  const ln=e.target.closest('[data-line]');
+  if(ln){
+    /* Back to the marks is the only one of the two this menu can do.
+       The pinged line is made by pinging - the row is there so the menu
+       says what the other line would be, and how to get it. */
+    if(ln.dataset.line==='marks' && lineEnds().pinged){
+      LINE={}; saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
+      renderCourse(); drawMap(shownTrack()); cvpClose(); }
+    else if(ln.dataset.line==='marks') cvpClose();
+    return; }
   if(e.target.closest('[data-load]')){ clubApply(); cvpClose(); return; }
   if(e.target.closest('[data-again]')){ clubFetch(); return; }
 });
@@ -9081,8 +9061,9 @@ $('course-main').addEventListener('click',e=>{
   if(chip){ const id=chip.dataset.chip;
     COURSE.side=COURSE.side||{}; COURSE.side[id]=markSide(id)==='P'?'S':'P';
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
+  /* The settings row. Three open a menu, the countdown steps, and the
+     start time opens the pad that types it. */
   if(e.target.closest('#cv-start')){ gnOpen(); return; }
-  /* The settings row. Three open their menu; the countdown steps. */
   if(e.target.closest('#cv-mode')){ cvpOpen('mode'); return; }
   if(e.target.closest('#cv-line')){ cvpOpen('line'); return; }
   if(e.target.closest('#cv-sync')){ clubTap(); return; }

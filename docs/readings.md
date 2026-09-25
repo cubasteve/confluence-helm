@@ -232,14 +232,14 @@ Both fixes have to fall between the ends, so a boat rounding outside
 the pin is not a crossing, and a jump of more than 80 m between them is
 discarded as a bad fix rather than believed.
 
-*The gun can be scheduled.* Top right of the course sheet is
-`START TIME`: type the time off the sailing instructions — three or
-four digits and `AM`/`PM`, so `6` `2` `5` `PM` — and the countdown
-starts itself a countdown before it — five minutes, or whatever
-`COUNTDOWN` in the settings row is set to — and runs out exactly on it.
-The button then says when the gun is and when the countdown will begin,
-and the RACE pill carries the time while it is armed, so you can see it
-without opening anything.
+*The gun can be scheduled.* `START TIME` is the first of the five
+settings under the marks on the course sheet: type the time off the
+sailing instructions — three or four digits and `AM`/`PM`, so `6` `2`
+`5` `PM` — and the countdown starts itself `COUNTDOWN` before it and
+runs out exactly on it. The readout then says when the gun is and lights
+to show it is armed, the one beside it says how long the countdown runs,
+and the RACE pill carries the time, so you can see it without opening
+anything.
 
 - Set it **inside** the window — three minutes before a five minute
   sequence — and the countdown starts at once, still ending on the gun.
@@ -267,8 +267,8 @@ the bar, which is the same action twice. And the bar's other button says
 clears the whole scheduled gun, and two very different consequences were
 wearing the same word.
 
-*Which kind of start* it is comes from the **SEQUENCE** chip under the
-marks on the course sheet — `GUN` or `WINDOW`. Nothing on the water
+*Which kind of start* it is comes from the **SEQUENCE** readout under
+the marks on the course sheet — `GUN` or `WINDOW`. Nothing on the water
 tells them apart: the same crossing, at the same place, at the same
 moment, is a start on one night and a foul on the other.
 
@@ -278,10 +278,10 @@ moment, is a start on one night and a foul on the other.
 | `WINDOW` | the line is **live**. Crossing is your gun, and the clock runs from that instant | if you never crossed, it starts anyway | the latest crossing within three minutes moves the start to it |
 
 `GUN` is a proper sequence — Saturday. `WINDOW` is an open five minutes
-you go when you are ready — Wednesday. The pair is drawn the way the
-marks' `P` and `S` are: both showing, the one in force lit, and a tap
-anywhere on the chip is the other one. It is remembered across a
-restart, because it is a fact about the series and not about today.
+you go when you are ready — Wednesday. Its menu shows both with what
+each does to the line, opened on the one in force. It is remembered
+across a restart, because it is a fact about the series and not about
+today.
 
 It lived on the control panel until the start time arrived. Everything
 about a start is one thing, and the panel is where the boat is set up
@@ -484,25 +484,30 @@ sign at 15 px. The club's marks and your own read the same way. Tiles
 carry the short name — the one the cell headers and the RACE box use,
 where a name has to fit in 32 px.
 
-### The four settings
+### The five settings
 
 **Everything about the evening that is not the course itself is one row
 under the marks**, drawn the way the dial's readings are — a small label
 over a value — because that is what they are: things you read at a
-glance and only occasionally change. The start *time* is top right in
-the heading, since it is the one you look at most.
+glance and only occasionally change.
 
 | | reads | a tap |
 |---|---|---|
-| `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
-| `START LINE` | `FLAG – BALL`, or `PINGED` | opens a menu: every mark, for whichever end of the line its head has lit |
-| `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
+| `START TIME` | `6:25 PM`, or `NOT SET` | opens the pad that types it |
 | `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, and round again |
+| `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
+| `START LINE` | `FLAG – BALL`, or `PINGED` | opens a menu: the two lines there are |
+| `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
 
-The countdown is the only one with no menu. Three values is not worth
-opening, scrolling and dismissing something for. It is how long the
-countdown runs — the club's sequence is five minutes, and a regatta that
-runs ten or fifteen needs saying once. Change it while nothing is
+The two clock facts are next to each other because between them they say
+when the countdown starts, which neither says alone. The row is 940 wide
+where the strip and the marks above it are 816: it sits low enough on
+the glass that the circle allows it, and five readings want the room.
+
+The countdown is the only one that opens nothing. Three values is not
+worth opening, scrolling and dismissing something for. It is how long
+the countdown runs — the club's sequence is five minutes, and a regatta
+that runs ten or fifteen needs saying once. Change it while nothing is
 running and the RACE pill carries the new length at once rather than at
 the next reset.
 
@@ -512,25 +517,27 @@ in front rather than a hole, **swiped to scroll** because nothing under
 `#stage` scrolls itself, and **tapped to choose**. It opens *above* its
 readout — the row is a hundred px off the bottom of the glass — on the
 value already in force, so the choice you have is under your finger.
-With one open, a tap on another of the four moves it; a tap anywhere
+With one open, a tap on another of the five moves it; a tap anywhere
 else puts it away.
 
 **`START LINE` is which line the race starts *and* finishes on**, and it
 is the one fact on this sheet you cannot work out from anything else on
-it — so it names both ends rather than saying that a line exists. Its
-menu heads with `PIN END` and `BOAT END`, showing both and lighting the
-one you are choosing; under them is every mark this boat knows. The club
-leaves the line between the Romance Flag and the Sail Ball, which is
-where it starts, and a club that moves its line for a regatta no longer
-needs the file edited. It is kept across a restart, and an end whose
-mark has since been deleted falls back to the club's line rather than
-leaving the readings without one.
+it — so it names both ends rather than saying that a line exists. There
+are exactly two, and its menu is those two:
 
-Pinging still beats both: ping the ends with `P` and `B` on the dial and
-the readout says `PINGED`. Its menu then carries `PINGED · USE THE
-MARKS` at the foot — the way back from a ping taken at the wrong end.
+| | |
+|---|---|
+| `FLAG – BALL` | the club's marks. They do not move — that is the line at LMSA |
+| `PINGED` | the line you pinged with `P` and `B` on the race box, tapping each as you pass it |
 
-![Choosing which marks the line runs between](img/course-line.png)
+A pinged line wins while it is there, for a day the committee lays it
+somewhere else. Choosing `FLAG – BALL` **drops the pings** and goes back
+to the marks — the way back from a ping taken at the wrong end. Until
+both ends are pinged, `PINGED` is shown greyed rather than left out,
+with `PING BOTH ENDS WITH P AND B ON THE RACE BOX` under it: a menu that
+hid the other line would not say how to get it.
+
+![The two lines there are](img/course-line.png)
 
 ### CLUB SYNC
 

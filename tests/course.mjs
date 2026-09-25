@@ -61,13 +61,14 @@ t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
 const marks=x=>x.filter(r=>r.mark);
 t.ok(marks(S).length===10, 'all ten of the club\'s marks, as tiles', String(S.length));
 let L=await rd('cv-line');
-t.ok(L.lbl==='START LINE', 'the line is one of the four settings', L.lbl);
+t.ok(L.lbl==='START LINE', 'the line is one of the five settings', L.lbl);
 t.ok(L.val==='FLAG – BALL', 'and says which two marks it runs between', L.val);
-t.ok((await rd('cv-mode')).lbl==='SEQUENCE'
-     && (await rd('cv-sync')).lbl==='CLUB'
-     && (await rd('cv-mins')).lbl==='COUNTDOWN',
-     'beside the sequence, the club and the countdown');
-t.ok(await p.evaluate(()=>!!$('cv-start')), 'with the start time in the heading');
+t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
+       .map(e=>e.querySelector('s').textContent).join())
+     ==='START TIME,COUNTDOWN,SEQUENCE,START LINE,CLUB',
+     'the whole evening on one row, the two clock facts together',
+     await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
+       .map(e=>e.querySelector('s').textContent).join()));
 await tap('#course-done');
 t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
      'and DONE puts it away');
@@ -212,42 +213,31 @@ t.ok(await p.evaluate(()=>lineEnds().pinged), 'and is the line the readings use'
 await tap('#cv-line');
 let M=await menu();
 t.ok(M.on && M.lit==='cv-line', 'the readout opens its menu', String(M.lit));
-t.ok(/PINGED . USE THE MARKS/.test(M.foot),
-     'which carries the way back from a ping at the wrong end', M.foot);
-await tap('#cv-pft .prfoot');
+t.ok(M.sel==='PINGED', 'lit on the pinged line', String(M.sel));
+/* The way back from a ping taken at the wrong end: choose the marks. */
+await tap('#cv-pk .pr[data-line="marks"]');
 t.ok(await p.evaluate(()=>!lineEnds().pinged
        && !$('ping-pin').classList.contains('set')
        && !$('ping-boat').classList.contains('set')),
-     'the pings are dropped, and the ping buttons go out with them');
+     'choosing the marks drops the pings, and the ping buttons go out with them');
 t.ok((await rd('cv-line')).val==='FLAG – BALL', 'back on the club marks',
      (await rd('cv-line')).val);
-await p.evaluate(()=>cvpClose());
+t.ok(!(await menu()).on, 'and the menu is done');
 
-t.head('and the menu is where the two ends are chosen');
+t.head('and the menu offers the two lines there are');
 await tap('#cv-line');
 M=await menu();
-t.ok(M.rows.length===10 && M.sel==='FLAG',
-     'every mark, opened on the end in force', M.sel+' of '+M.rows.length);
-t.ok(/PIN END/.test(M.head) && /BOAT END/.test(M.head),
-     'with both ends of the line named on it', M.head);
-await tap('#cv-pk .pr[data-end-mark="cb10"]');
-t.ok(await p.evaluate(()=>CFG.linePin)==='cb10', 'a tap sets the pin end',
-     await p.evaluate(()=>CFG.linePin));
-t.ok((await rd('cv-line')).val==='CB 10 – BALL', 'the readout says so',
-     (await rd('cv-line')).val);
-t.ok(JSON.parse(await p.evaluate(()=>localStorage.getItem('helmPrefs'))).linePin==='cb10',
-     'and it is kept - a club that moves its line should not need the file edited');
-t.ok(Math.abs(await p.evaluate(()=>lineEnds().pin.lat) - (28+49.501/60))<1e-9,
-     'and the readings are measured off the new line',
-     String(await p.evaluate(()=>lineEnds().pin.lat)));
-await tap('#cv-line'); await tap('[data-end="boat"]');
-M=await menu();
-t.ok(M.sel==='BALL', 'the other end opens on its own mark', String(M.sel));
-await tap('#cv-pk .pr[data-end-mark="flag"]');
-t.ok(await p.evaluate(()=>CFG.lineBoat)==='flag'
-     && await p.evaluate(()=>CFG.linePin)==='cb10',
-     'and is set without disturbing the first');
-await p.evaluate(()=>{ CFG.linePin='flag'; CFG.lineBoat='ball'; prefsSave(); renderCourse(); });
+t.ok(M.rows.join()==='FLAG – BALL,PINGED', 'the club\'s marks, or the one you pinged',
+     M.rows.join());
+t.ok(M.sel==='FLAG – BALL', 'on the one in force', String(M.sel));
+t.ok(/P AND B/.test(await p.evaluate(()=>$('cv-pk').textContent)),
+     'and says where a pinged line comes from',
+     await p.evaluate(()=>$('cv-pk').textContent.trim()));
+t.ok(await p.evaluate(()=>!!$('cv-pk').querySelector('.pr.off')),
+     'with the pinged one shown but not available, rather than left out');
+await tap('#cv-pk .pr[data-line="marks"]');
+t.ok(!(await menu()).on && !await p.evaluate(()=>lineEnds().pinged),
+     'choosing the marks when they are already in force changes nothing');
 
 t.head('the sequence is chosen the same way');
 await tap('#cv-mode');
@@ -285,7 +275,9 @@ await p.evaluate(()=>{ CFG.startMins=5; prefsSave(); resetAll(); renderCourse();
 t.head('a tap anywhere else puts the menu away');
 await tap('#cv-mode');
 t.ok((await menu()).on, 'open');
-await tap('#cv-veil');
+/* High on the glass, clear of the menu itself - the veil is the whole
+   sheet and the menu is on top of the middle of it. */
+await p.click('#cv-veil',{position:{x:540,y:120}}); await p.waitForTimeout(250);
 t.ok(!(await menu()).on, 'and shut, with nothing changed',
      await p.evaluate(()=>CFG.startMode));
 
@@ -293,9 +285,9 @@ t.head('the scheduled gun: typed once, and it starts itself');
 /* A club race has a time on the sailing instructions. Typing it beats
    watching a clock for the moment to press a button with a boat to
    sail at the same time. */
-const gunRow=()=>p.evaluate(()=>{ const r=$('cv-start');
-  return {b:r.querySelector('b').textContent, sub:r.querySelector('s').textContent,
-          set:r.classList.contains('in')}; });
+const gunRow=()=>p.evaluate(()=>({b:$('cv-start').querySelector('b').textContent,
+  sub:$('cv-mins').querySelector('b').textContent,
+  set:$('cv-start').classList.contains('in')}));
 /* Typed on the pad, and the half of the day chosen on its pair - the
    same two taps a thumb makes. */
 const type=async (d,mer)=>{ await p.evaluate(()=>gnOpen()); await p.waitForTimeout(250);
@@ -314,12 +306,13 @@ const want=await p.evaluate(()=>{ const d=new Date(Date.now()+40*60000), h=d.get
           mer:h<12?'am':'pm', hhmm:gunTxt(d.getTime())}; });
 await p.evaluate(()=>{ GUNAT=null; gunSave(); renderCourse(); });
 let G=await gunRow();
-t.ok(/START TIME/.test(G.b) && !G.set, 'unset, the button invites one', G.b);
+t.ok(G.b==='NOT SET' && !G.set, 'unset, the readout says so', G.b);
 let r=await type(want.d, want.mer);
 t.ok(r.at!==null && !r.open, 'four digits and it is armed', String(r.at));
 G=await gunRow();
-t.ok(G.b===want.hhmm && G.set, 'the button says when the gun is', G.b);
-t.ok(/^COUNTDOWN /.test(G.sub), 'and when the countdown will start itself', G.sub);
+t.ok(G.b===want.hhmm && G.set, 'the readout says when the gun is, and lights', G.b);
+t.ok(G.sub==='5 MIN', 'and the one beside it how long the countdown runs, which is '
+     +'when it will start itself', G.sub);
 t.ok(await p.evaluate(()=>raceStatus().txt)===want.hhmm,
      'and the pill carries it, so an armed gun shows on the face',
      await p.evaluate(()=>raceStatus().txt));
