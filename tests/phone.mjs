@@ -36,10 +36,7 @@ const tapBtn=id=>p.evaluate(i=>$(i).click(), id);
 t.head('PHONE is off until it is asked for');
 t.ok(await p.evaluate(()=>CFG.phoneGps===false), 'the setting starts off');
 t.ok(await p.evaluate(()=>phoneWatch===null), 'and nothing is watching the GPS');
-/* The row itself, not MOUNT: it carries 3x for the demo as well, and
-   the demo is on by default, so the row can be up with nothing on it
-   that belongs to the phone. */
-t.ok(await p.evaluate(()=>getComputedStyle($('mount-btn')).display)==='none',
+t.ok(!await p.evaluate(()=>$('phone-row').classList.contains('on')),
      'MOUNT is not even offered yet');
 
 t.head('turning it on watches the phone and feeds the dial from it');

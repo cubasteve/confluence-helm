@@ -114,7 +114,9 @@ const fast=await p.evaluate(()=>{
   raceRate(1); out.gunHeld = tGun===gun;
   T+=5000; out.thenReal=Math.round((rnow()-tGun)/1000);
   /* the demo boat is wound on by the same amount, not a different one */
-  CFG.windDemo=true;
+  /* Nothing else aboard: with a foreign fix in the store the tick would
+     stand the fast clock down on its first pass, which is its job. */
+  CFG.windDemo=true; delete S['pos.lat']; delete S['pos.lon'];
   raceRate(1); demoT=0; for(let i=0;i<25;i++) windDemoTick(); out.boat1=+demoT.toFixed(3);
   raceRate(3); demoT=0; for(let i=0;i<25;i++) windDemoTick(); out.boat3=+demoT.toFixed(3);
   raceRate(1); CFG.windDemo=false; resetAll();
@@ -148,26 +150,48 @@ t.ok(fast.ntp===0, 'and a clock correction moves it by exactly as much - a Pi '
      +'that gets NTP hours after boot carries the race with it',
      fast.ntp+' ms of slip');
 
-t.head('and it cannot follow you onto the water');
-const safe=await p.evaluate(()=>{
-  const out={};
-  demoSet(false); demoSet(true);      /* it is on by default; make the edge real */
-  out.offered=getComputedStyle($('fast-btn')).display!=='none';
-  $('fast-btn').click(); out.on=RACE_RATE;
-  out.lit=$('fast-btn').classList.contains('on');
-  demoSet(false);
-  out.afterDemoOff=RACE_RATE;
-  out.hidden=getComputedStyle($('fast-btn')).display==='none';
-  out.stored=/fast|rate/i.test(localStorage.getItem('helmPrefs')||'');
+t.head('the DEMO pill is the speed: off, then three');
+const cyc=await p.evaluate(()=>{
+  const read=()=>({on:CFG.windDemo, x:RACE_RATE,
+    lit:[...$('demo-ff').children].filter(a=>a.classList.contains('on')).length,
+    arrows:getComputedStyle($('demo-ff')).display!=='none'});
+  demoSet(false); drawDemo();     /* the section above set the flag by hand */
+  const out=[read()];
+  for(let i=0;i<4;i++){ demoCycle(); out.push(read()); }
+  out.push({stored:/rate|fast|speed/i.test(localStorage.getItem('helmPrefs')||'')});
   return out;
 });
-t.ok(safe.offered, 'it is offered while the demo is driving');
-t.ok(safe.on===3 && safe.lit, 'a tap puts the clock at 3x, and says so', String(safe.on));
-t.ok(safe.afterDemoOff===1,
-     'turning the demo off puts it back to real time', String(safe.afterDemoOff));
-t.ok(safe.hidden, 'and takes the pill away with it');
-t.ok(!safe.stored, 'nothing about it is remembered - a panel that came up at 3x '
+t.ok(cyc[0].on===false && !cyc[0].arrows, 'off, and no arrows at all',
+     JSON.stringify(cyc[0]));
+t.ok(cyc[1].on && cyc[1].x===1 && cyc[1].lit===1, 'one tap: on, one arrow',
+     JSON.stringify(cyc[1]));
+t.ok(cyc[2].x===2 && cyc[2].lit===2, 'two: two', JSON.stringify(cyc[2]));
+t.ok(cyc[3].x===3 && cyc[3].lit===3, 'three: three', JSON.stringify(cyc[3]));
+t.ok(cyc[4].on===false && cyc[4].x===1,
+     'and the fourth is off again, at real time', JSON.stringify(cyc[4]));
+t.ok(!cyc[5].stored, 'the speed is never remembered - a panel that came up at 3x '
      +'would hand you a third of the time you sailed');
+
+t.head('and it cannot follow you onto the water');
+/* The demo is ON by default, on a real boat too, where it only fills
+   what nothing else publishes. So "the demo is on" cannot be what makes
+   a fast clock safe; owning the FIX is. */
+const safe=await p.evaluate(()=>{
+  demoSet(false); demoCycle(); demoCycle(); demoCycle();   /* on, at 3x */
+  const before=RACE_RATE;
+  /* a real boat starts publishing */
+  feedPut('pos.lat', 28.8190, 'sk'); feedPut('pos.lon', -81.2650, 'sk');
+  windDemoTick();
+  const after=RACE_RATE;
+  const lit=[...$('demo-ff').children].filter(a=>a.classList.contains('on')).length;
+  demoSet(false); delete S['pos.lat']; delete S['pos.lon'];
+  return {before, after, lit, still:CFG.windDemo};
+});
+t.ok(safe.before===3, 'wound on to 3x with nothing but the demo aboard',
+     String(safe.before));
+t.ok(safe.after===1, 'and the first real fix puts the clock back to real time',
+     String(safe.after));
+t.ok(safe.lit===1, 'the pill says so, without being asked', safe.lit+' arrow');
 
 t.head('the two kinds of start, which only a setting tells apart');
 /* Saturday's line is shut until zero; Wednesday's is open from the off.

@@ -427,10 +427,25 @@ other way round.
 
 A five minute sequence and a seventy four minute race is most of an
 evening, and the parts worth watching — the signals, the gun, the line,
-a rounding, the finish and the card — are minutes apart. While the demo
-is driving, a **3×** pill appears under `DEMO` and winds the race clock
-and the demo boat on together. The whole thing takes half an hour, and
-you can run it twice.
+a rounding, the finish and the card — are minutes apart.
+
+The **DEMO pill is the speed**. Four states, one control:
+
+| taps | | |
+|---|---|---|
+| off | `DEMO` | no arrows |
+| 1 | `DEMO ▶` | real time |
+| 2 | `DEMO ▶▶` | twice |
+| 3 | `DEMO ▶▶▶` | three times |
+| 4 | `DEMO` | off again, back to real time |
+
+All three arrows are always drawn and the ones past the speed you are
+on are ghosted — a glyph that changed width would shove the word beside
+it every tap, and the ghosts are what say a second and a third speed
+exist at all. It winds the race clock and the demo boat on **together**:
+a boat at 3× against a countdown at 1× would be a different race, not a
+faster one. At 3× the whole thing takes half an hour and you can run it
+twice.
 
 Everything the race measures reads `rnow()` and not `Date.now()`: the
 countdown, the gun, the elapsed time, the instant the line was crossed,
@@ -449,10 +464,15 @@ Wall-clock things stay on the wall clock: the screensaver's idle timer,
 the alert snooze, the page-slide guard, and the track's 1 Hz sampling.
 Those are about the panel, not the race.
 
-**It cannot follow you onto the water.** It is not persisted, and
-turning the demo off puts the clock back to 1× and takes the pill away.
-A panel that came up at 3× with a real boat under it would hand you a
-finish time a third of the one you sailed.
+**It cannot follow you onto the water.** It is not persisted, so a
+restart is always real time. And `CFG.windDemo` is *not* what makes it
+safe — that flag is `true` by default and set on a real boat too, where
+it only fills what nothing else publishes. What the tick actually
+watches is whether the demo still owns the **fix**: walk aboard with the
+clock wound on, and the first real position from Signal K puts it back
+to 1× and drops the pill to one arrow. A race clock at 3× over a boat
+that is genuinely moving would hand you a third of the time you
+sailed.
 
 ### A race nobody sailed does not reach the club
 
