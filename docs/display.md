@@ -539,6 +539,15 @@ The sensor row and the radios keep the **narrow** 600 px column. They
 sit at the top of the circle, where 880 px has its ends out in the
 black.
 
+START carried a line under its pills spelling out what each one did —
+`THE LINE IS SHUT UNTIL ZERO` and so on. It is gone, on the same
+reasoning as the paging captions above: the two words say it to anyone
+who races, and a panel that explains itself every time you open it is a
+panel you stop reading. `docs/readings.md` has the long version. It
+also took the last thing in the panel whose height changed as you used
+it — the two sentences were different lengths, so tapping the other
+pill shoved the right-hand column about.
+
 **It still scrolls** if it ever stops fitting — with the radios expanded
 and a section or two added it could. `max-height` rather than `height`,
 so a panel that fits is centred exactly as before, and the edges fade

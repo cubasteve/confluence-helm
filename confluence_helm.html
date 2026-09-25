@@ -581,12 +581,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mini.wide.on{color:var(--accent);border-color:var(--accent)}
 /* Under the pair rather than beside it: what the mode means is a
    sentence, and a sentence does not fit in a row of two pills. */
-/* Two lines of room whichever mode is on. The two sentences are not the
-   same length, and a card that changed height when you tapped the other
-   pill shoved the whole right-hand column about. */
-.startwhy{margin:10px 0 0;font-size:17px;letter-spacing:.06em;
-  text-transform:uppercase;line-height:1.35;min-height:46px;opacity:.75}
-
 .senrow{position:relative;margin-bottom:6px}
 #sen-svg{display:block;width:340px;height:60px;margin:0 auto}
 /* Absolutely placed rather than laid out in a flex row, so the four
@@ -763,10 +757,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* the status element is now the centred .t-status line above the rail */
 .hint{font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7;
   text-align:center;margin-top:10px}
-/* Reads as a caption on the pills above it, so it starts where they do.
-   Specificity, not source order: plain .hint centres, and this is the
-   one that does not. */
-.hint.startwhy{text-align:left}
 /* which build is on the glass. Small, permanent, and the only way to tell
    three copies of this file apart at a glance. */
 .build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
@@ -1960,14 +1950,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          line shut until zero; WINDOW is an open five minutes you go
          when you are ready. The line cannot tell them apart - the same
          crossing is a start on one night and a foul on the other - so
-         it is asked here, once, before the sequence. -->
+         it is asked here, once, before the sequence.
+         A line under the pills used to spell out what each one did. It
+         is gone: the two words say it to anyone who races, and a panel
+         that explains itself every time you open it is a panel you
+         stop reading. docs/readings.md has the long version. -->
     <div class="card">
     <div class="slab">Start</div>
     <div class="steprow">
       <button class="mini wide" id="st-gun">GUN</button>
       <button class="mini wide" id="st-win">WINDOW</button>
     </div>
-    <div class="hint startwhy" id="st-why"></div>
 
     </div>
 
@@ -8196,8 +8189,6 @@ function startModePaint(){
   wCls('st-gun','on',!w); wCls('st-win','on',w);
   wAttr('st-gun','aria-pressed', w?'false':'true');
   wAttr('st-win','aria-pressed', w?'true':'false');
-  wText('st-why', w ? 'THE LINE IS LIVE · CROSS WHEN READY'
-                    : 'THE LINE IS SHUT UNTIL ZERO');
 }
 function startModeSet(m){
   if(START_MODES.indexOf(m)<0 || CFG.startMode===m) return;

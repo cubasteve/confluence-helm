@@ -183,8 +183,7 @@ t.ok(zero.gunMoved===60,
 t.head('the pills say which, and are remembered');
 const pills=await p.evaluate(()=>{
   const read=()=>({gun:$('st-gun').classList.contains('on'),
-                   win:$('st-win').classList.contains('on'),
-                   why:$('st-why').textContent});
+                   win:$('st-win').classList.contains('on')});
   const out={start:read()};
   $('st-win').click(); out.win=read();
   out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
@@ -193,8 +192,8 @@ const pills=await p.evaluate(()=>{
 });
 t.ok(pills.start.gun && !pills.start.win, 'a gun start until told otherwise');
 t.ok(pills.win.win && !pills.win.gun, 'tapping WINDOW lights it and puts GUN out');
-t.ok(/LIVE/.test(pills.win.why) && /SHUT/.test(pills.start.why),
-     'and each says what the line will do', pills.win.why+' | '+pills.start.why);
+t.ok(await p.evaluate(()=>$('st-gun').getAttribute('aria-pressed'))==='true',
+     'and says which out loud, for anything that is not looking');
 t.ok(pills.stored==='window', 'it is remembered across a restart', String(pills.stored));
 t.ok(pills.back.gun && !pills.back.win, 'and it goes back');
 
