@@ -979,7 +979,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .bu.r .bd{fill:var(--buoy-r)} .bu.r .ln{stroke:var(--buoy-r)}
 .bu.g .bd{fill:var(--buoy-g)} .bu.g .ln{stroke:var(--buoy-g)}
 .bu.w .bd{fill:var(--buoy-w)} .bu.w .ln{stroke:var(--buoy-w)}
-.bu.f .bd,.bu.b .bd{fill:var(--ink-dim)} .bu.f .ln,.bu.b .ln{stroke:var(--ink-dim)}
+/* The line's two ends are white as well - see BUOY.f and BUOY.b - so
+   they take the white one's heavier edge for the same reason it has it.
+   The light on top is drawn in the ink, not in white: a white lamp on a
+   white buoy is nothing. */
+.bu.f .bd,.bu.b .bd{fill:var(--buoy-w);stroke-opacity:.55}
+.bu.f .ln{stroke:var(--ink-dim)}
 .bu.o .bd{fill:var(--accent)} .bu.o .ln{stroke:var(--accent)}
 /* ---- the four settings, as readings ----
    Everything about the evening that is not the course itself, on one
@@ -8689,12 +8694,16 @@ const BUOY={
   w:'<path class="bd" d="M7.2 8.4h9.6v8.2a4.8 4.8 0 0 1-9.6 0z"/>'
    +'<path class="ln" d="M7.2 12.4h9.6"/>'
    +'<path class="st" d="M4.4 20.4h15.2"/>',
-  /* The Romance flag, on its staff. */
-  f:'<path class="ln" d="M7 2.6V22"/>'
-   +'<path class="bd" d="M7.9 3.4L19.2 7.6 7.9 11.8z"/>',
-  /* And its sail ball, which is a ball on a staff. */
-  b:'<path class="ln" d="M12 11V22"/>'
-   +'<circle class="bd" cx="12" cy="7" r="5"/>',
+  /* The Romance flag is not a flag. It is a white lighted buoy: a donut
+     of a float sitting in the water, a cylinder standing out of it, and
+     the light on top of that. Drawn from the side, which is how it is
+     seen - from there the hole in the donut is behind the cylinder. */
+  f:'<ellipse class="bd" cx="12" cy="18.4" rx="8.4" ry="3.6"/>'
+   +'<path class="bd" d="M9.4 8h5.2v10.6H9.4z"/>'
+   +'<circle class="bd" cx="12" cy="5.4" r="2.8"/>'
+   +'<path class="ln" d="M6.6 5.4h1.6M15.8 5.4h1.6"/>',
+  /* And the sail ball is one big white ball. */
+  b:'<circle class="bd" cx="12" cy="12.4" r="8.6"/>',
   /* One of your own: no club drawing to copy, so it wears the accent. */
   o:'<path class="ln" d="M12 4.5v6"/>'
    +'<path class="bd" d="M8.2 10.8h7.6L17.6 22H6.4z"/>'

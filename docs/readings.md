@@ -486,7 +486,8 @@ is how it is found:
 | **red board on a piling** | `CB 2`, `CB 8`, `CB 10`, `CB 12`. The channel here is not buoyed, it is **beaconed**: a stick out of the water with a square board on top |
 | **green board on a tripod** | the green ones, which are three wooden sticks leaned together in a teepee with the board across the top. Two pilings apart at a glance, which is the whole reason for drawing them |
 | **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks, floating, on a waterline |
-| **flag** and **ball** | `FLAG` and `BALL`: the Romance flag and its sail ball, which are the two ends of the line |
+| **white lighted buoy** | `FLAG`, the pin end. Not a flag at all: a donut of a float, a cylinder standing out of it, and the light on top |
+| **one big white ball** | `BALL`, the boat end — the Romance sail ball |
 | **a plain pillar in the accent** | a mark of your own that has not said what it is |
 
 **A mark of your own can say which buoy it is.** The form carries all
