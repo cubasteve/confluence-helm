@@ -448,13 +448,25 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    centred exactly as it always did. The mask fades whatever is crossing
    the edge, which on a round panel is the honest signal that there is
    more - a hard cut at a chord just looks like the layout is wrong. */
-.sheet{width:600px;display:flex;flex-direction:column;align-items:stretch;
+.sheet{width:880px;display:grid;grid-template-columns:1fr 1fr;
+  gap:14px 18px;align-content:center;justify-items:stretch;
   max-height:1080px;overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:none;-ms-overflow-style:none}
 .sheet::-webkit-scrollbar{display:none}
-.sheet.over{padding:92px 0 128px;
-  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 72px,
-    #000 calc(100% - 96px),transparent 100%)}
+.sheet > *{min-width:0}
+/* Cards size to their own content. Stretching both to the taller of a
+   row left the short one with a lake of empty border under it, which is
+   what made the first pass at this look padded rather than dense. */
+.sheet > .card{align-self:start}
+.sheet.over{padding:84px 0 116px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 66px,
+    #000 calc(100% - 88px),transparent 100%)}
+/* The two full-width rows keep the NARROW column. They sit at the top of
+   the circle, where 880 px has its ends out in the black. */
+.senrow, #conn-sec, .sheet > .hint{grid-column:1 / -1;
+  width:600px;justify-self:center}
+.card{border:2px solid var(--hairline);border-radius:24px;
+  padding:15px 20px 17px;display:flex;flex-direction:column}
 /* The mark on the overlay's leading edge - the edge that travels, and
    the one your thumb pulls. The panel comes DOWN from the top now, so
    its leading edge is the bottom; this sat at the top for as long as the
@@ -483,9 +495,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    nothing at all - the same trap .mini fell into two lines below the
    real one. One definition, no drift. */
 
-.slab{font-size:27px;font-weight:600;letter-spacing:.16em;color:var(--label);
-  text-transform:uppercase;margin:30px 0 14px;padding-bottom:12px;
-  border-bottom:2px solid var(--hairline)}
+/* Inside a card the border IS the grouping, so the slab no longer needs
+   a rule under it or 30 px of air over it to separate one section from
+   the next. It is a caption now. */
+.slab{font-size:22px;font-weight:600;letter-spacing:.18em;color:var(--label);
+  text-transform:uppercase;margin:0 0 4px;display:flex;
+  justify-content:space-between;align-items:baseline}
 /* slimmer track, round accent thumb - the same restraint as the rail */
 #dim{flex:1;height:14px;-webkit-appearance:none;appearance:none;
   background:var(--hairline);border-radius:7px;outline:none}
@@ -512,13 +527,18 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    Both tiles and the slider share one row. The slider keeps whatever is
    left of the 600 px sheet after three tiles - about 234 px - which is
    short for a drag control, so the thumb stays large to compensate.   */
-.dimrow{display:flex;align-items:center;gap:18px;padding-top:10px}
+/* The slider drops under the tiles. Three across fitted the 600 px
+   column it was drawn for; in half a card the track ended up shorter
+   than the thumb it carries. */
+.dimrow{display:grid;grid-template-columns:auto auto 1fr;
+  align-items:center;gap:4px 18px;padding-top:6px}
+.dimrow #dim{grid-column:1 / -1;margin-top:2px}
 /* .dimico/.dimico.sm retired with the sun icons that used to flank the
    brightness slider - the tiles carry their own glyphs now. */
 #dim-pct{float:right;color:var(--accent);letter-spacing:.06em}
 
 /* --- depth widget: threshold and live reading on one scale --- */
-.depthwrap{display:flex;flex-direction:column;gap:10px}
+.depthwrap{display:flex;flex-direction:column;gap:7px}
 .bar{position:relative;height:46px;border-radius:12px;background:var(--chip);
   overflow:hidden}
 .bar-alarm{position:absolute;left:0;top:0;bottom:0;background:var(--alarm);opacity:.55}
@@ -527,15 +547,20 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   background:var(--ink);box-shadow:0 0 0 4px var(--panel)}
 .bar-scale{display:flex;justify-content:space-between;font-size:19px;
   font-weight:600;color:var(--label);letter-spacing:.1em}
-.steprow{display:flex;align-items:center;gap:14px;margin-top:6px}
+/* 12 not 14, and the steppers 74 not 86: half a card is 391 px of
+   usable width and the old row wanted 428, which squeezed FT / M onto
+   two lines. */
+.steprow{display:flex;align-items:center;gap:12px;margin-top:4px}
+.steprow .mini{width:74px;height:74px;font-size:34px}
+.steprow .mini.wide{height:74px;font-size:19px;letter-spacing:.1em}
 /* The sounder row. The button keeps its own width rather than taking the
    row, because what it says beside itself - the output it is actually
    driving - is the half of the answer a silent test does not give. */
-.sndrow{display:flex;align-items:center;gap:20px;margin-top:6px}
-.sndrow .mini.wide{flex:none;width:210px}
+.sndrow{display:flex;align-items:center;gap:18px;margin-top:4px}
+.sndrow .mini.wide{flex:none;width:168px;height:74px}
 .sndwho{font-size:19px;font-weight:600;letter-spacing:.08em;color:var(--label);
   text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.numv{min-width:118px;text-align:center;font-size:40px;font-weight:600;color:var(--accent)}
+.numv{min-width:96px;text-align:center;font-size:38px;font-weight:600;color:var(--accent)}
 .numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
   letter-spacing:.12em}
 /* This was a second, full copy of .mini that still carried the old chip
@@ -556,10 +581,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mini.wide.on{color:var(--accent);border-color:var(--accent)}
 /* Under the pair rather than beside it: what the mode means is a
    sentence, and a sentence does not fit in a row of two pills. */
-.startwhy{margin-top:14px;font-size:20px;letter-spacing:.1em;
-  text-transform:uppercase;line-height:1.5}
+/* Two lines of room whichever mode is on. The two sentences are not the
+   same length, and a card that changed height when you tapped the other
+   pill shoved the whole right-hand column about. */
+.startwhy{margin:10px 0 0;font-size:17px;letter-spacing:.06em;
+  text-transform:uppercase;line-height:1.35;min-height:46px;opacity:.75}
 
-.senrow{position:relative;margin-bottom:26px}
+.senrow{position:relative;margin-bottom:6px}
 #sen-svg{display:block;width:340px;height:60px;margin:0 auto}
 /* Absolutely placed rather than laid out in a flex row, so the four
    glyphs stay centred on the sheet exactly where they were and the
@@ -598,7 +626,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    off wlan0/wlan1 - those can swap.
 
    Outlined, never filled, like everything else on this panel.      */
-.conn{display:flex;justify-content:center;gap:26px;margin-bottom:32px}
+.conn{display:flex;justify-content:center;gap:24px;margin-bottom:8px}
 .cbtn{width:104px;height:104px;border-radius:50%;background:none;flex:none;
   border:2px solid var(--hairline);color:var(--label);font-family:var(--font);
   display:flex;align-items:center;justify-content:center}
@@ -734,7 +762,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* (the panel's ambient rail was folded into .dimrow - rule retired) */
 /* the status element is now the centred .t-status line above the rail */
 .hint{font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7;
-  text-align:center;margin-top:34px}
+  text-align:center;margin-top:10px}
+/* Reads as a caption on the pills above it, so it starts where they do.
+   Specificity, not source order: plain .hint centres, and this is the
+   one that does not. */
+.hint.startwhy{text-align:left}
 /* which build is on the glass. Small, permanent, and the only way to tell
    three copies of this file apart at a glance. */
 .build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
@@ -1883,6 +1915,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          helper is unreachable, and dead radios would be worse than none. -->
     <div class="conn" id="conn-sec" style="display:none"></div>
 
+    <!-- Each section is a CARD from here down. Two across, so the whole
+         panel is one glance rather than a column you have to travel -
+         which is what the round glass has the width for at mid-height
+         and wastes on a single 600 px column. -->
+    <div class="card">
     <div class="slab">Display <span id="dim-pct">100%</span></div>
     <div class="dimrow">
       <button class="tile" id="theme-btn">
@@ -1898,6 +1935,9 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
 
+    </div>
+
+    <div class="card">
     <div class="slab">Shallow alarm</div>
     <div class="depthwrap">
       <div class="bar">
@@ -1914,11 +1954,14 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       </div>
     </div>
 
+    </div>
+
     <!-- Which club night this is. GUN is a proper sequence with the
          line shut until zero; WINDOW is an open five minutes you go
          when you are ready. The line cannot tell them apart - the same
          crossing is a start on one night and a foul on the other - so
          it is asked here, once, before the sequence. -->
+    <div class="card">
     <div class="slab">Start</div>
     <div class="steprow">
       <button class="mini wide" id="st-gun">GUN</button>
@@ -1926,16 +1969,22 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     </div>
     <div class="hint startwhy" id="st-why"></div>
 
+    </div>
+
     <!-- Shown only when netd reports a sounder. Its whole job is the
          question you cannot answer from the cockpit any other way: is
          the thing plugged in, and can I hear it from back there. So it
          sounds the GUN, not a polite chirp - the loudest noise the boat
          will make, which is the one you need to have heard before a
-         start rather than during one. -->
-    <div class="slab sndslab" id="snd-slab" style="display:none">Sounder</div>
-    <div class="sndrow" id="snd-row" style="display:none">
+         start rather than during one.
+         The CARD carries the display, not the rows: an empty bordered
+         box on a boat with no sounder would be worse than the gap. -->
+    <div class="card sndslab" id="snd-slab" style="display:none">
+    <div class="slab">Sounder</div>
+    <div class="sndrow" id="snd-row">
       <button class="mini wide" id="snd-test">TEST</button>
       <span class="sndwho" id="snd-who"></span>
+    </div>
     </div>
 
     <!-- deploy.sh rewrites __BUILD__ with the commit it published. A panel

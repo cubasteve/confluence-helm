@@ -92,19 +92,36 @@ t.ok(!s.sheet && s.panel, 'DONE closes the picker, not the panel', JSON.stringif
 await fling(p,1,0,-260);
 t.ok(!(await state(p)).panel, 'and the dial is back');
 
-t.head('a panel taller than the glass scrolls, and still closes');
-/* The panel is 600 px wide on a circle of radius 540, so the column is
-   only lit between y=91 and y=989. It outgrew that, and centring meant
-   the top row and the build stamp were simply outside the glass. */
-await p.evaluate(()=>openPanel());
-await p.waitForTimeout(700);
-const sh=()=>p.evaluate(()=>{ const e=$('p-sheet');
+t.head('the panel fits the glass');
+/* It stopped fitting once it was a single 600 px column of sections -
+   600 px wide on a circle of radius 540 is only lit between y=91 and
+   y=989, and the sheet had passed 1140. Two cards across is the fix;
+   the scrolling below is what catches it if it ever grows again. */
+await p.evaluate(()=>openPanel()); await p.waitForTimeout(700);
+const sh=()=>p.evaluate(()=>{ const e=$('p-sheet'), r=e.getBoundingClientRect();
+  /* every corner of every card, against the circle */
+  const out=[];
+  e.querySelectorAll('.card,.senrow,.conn').forEach(k=>{
+    const q=k.getBoundingClientRect(); if(!q.height) return;
+    [[q.left,q.top],[q.right,q.top],[q.left,q.bottom],[q.right,q.bottom]]
+      .forEach(([x,y])=>{ if(Math.hypot(x-540,y-540)>534) out.push(k.className); }); });
   return {over:e.classList.contains('over'), top:Math.round(e.scrollTop),
-          room:e.scrollHeight-e.clientHeight,
-          first:Math.round(document.querySelector('#p-sheet .senrow').getBoundingClientRect().y),
-          last:Math.round([...document.querySelectorAll('#p-sheet .hint')]
-                 .filter(x=>x.offsetHeight).pop().getBoundingClientRect().bottom)}; });
-/* A drag on the sheet, which is not the flinging the judge reads. */
+          room:e.scrollHeight-e.clientHeight, h:Math.round(r.height),
+          cards:[...e.querySelectorAll('.card')].filter(k=>k.offsetHeight).length,
+          outside:[...new Set(out)]}; });
+let S=await sh();
+t.ok(S.cards===4, 'four cards, everything the panel has', String(S.cards));
+t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
+t.ok(!S.over, 'so nothing is faded off an edge');
+t.ok(S.outside.length===0, 'and no card corner is out in the black',
+     S.outside.join(' '));
+
+t.head('and scrolls if it ever stops fitting');
+/* The backstop. Forced here rather than waited for: the layout above
+   is what stops it happening, and the day a section is added is not
+   the day to find out this was never wired. */
+await p.evaluate(()=>{ $('p-sheet').style.maxHeight='520px'; sheetFit(); });
+await p.waitForTimeout(300);
 const pull=(y0,y1)=>p.evaluate(([y0,y1])=>{ const el=$('p-sheet');
   const ev=(t,y)=>el.dispatchEvent(new PointerEvent(t,{pointerId:1,clientX:540,
     clientY:y,bubbles:true,pointerType:'touch'}));
@@ -112,20 +129,24 @@ const pull=(y0,y1)=>p.evaluate(([y0,y1])=>{ const el=$('p-sheet');
   const st=y1>y0?40:-40;
   for(let y=y0; y1>y0?y<=y1:y>=y1; y+=st) ev('pointermove',y);
   ev('pointermove',y1); ev('pointerup',y1); },[y0,y1]);
-let S=await sh();
-t.ok(S.room>0, 'it is taller than the glass, and knows it', S.room+' px over');
-t.ok(S.over, 'so the edges fade rather than cutting off at a chord');
-t.ok(S.first>=80, 'and the first row starts inside the circle, not above it',
-     'y='+S.first);
-await pull(720,320); await p.waitForTimeout(500);
 S=await sh();
-t.ok(S.top>200, 'a drag up scrolls it', S.top+' px down');
+t.ok(S.room>0 && S.over, 'it knows, and fades its edges rather than cutting off',
+     S.room+' px over');
+await pull(660,380); await p.waitForTimeout(400);
+S=await sh();
+t.ok(S.top>100, 'a drag up scrolls it', S.top+' px down');
 t.ok((await state(p)).panel, 'and does NOT close the panel under the finger');
-t.ok(S.last<=1000, 'the foot of it is now reachable', 'y='+S.last);
-await pull(720,320); await p.waitForTimeout(500);
-t.ok((await sh()).room-(await sh()).top < 2, 'and again takes it to the end');
-await pull(720,320); await p.waitForTimeout(700);
+/* Until it runs out, not a fixed count: one drag past the end is the
+   drag that gets handed back, and that one closes the panel. */
+for(let i=0;i<8;i++){ const q=await sh();
+  if(q.room-q.top<2) break;
+  await pull(660,380); await p.waitForTimeout(250); }
+S=await sh();
+t.ok(S.room-S.top<2, 'repeated drags take it to the end', S.top+' of '+S.room);
+t.ok((await state(p)).panel, 'and not one of them closes the panel');
+await pull(660,380); await p.waitForTimeout(700);
 t.ok(!(await state(p)).panel,
-     'at the end the drag is handed back, and the same swipe closes it');
+     'and at the end the drag is handed back, so the same swipe closes it');
+await p.evaluate(()=>{ $('p-sheet').style.maxHeight=''; sheetFit(); });
 
 await t.done(b);

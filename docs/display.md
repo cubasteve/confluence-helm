@@ -516,6 +516,41 @@ inside the 540 the glass stops at. The row is held to 600 rather than
 the dock's full inner width, so its ends cannot reach the rim when a
 second app arrives.
 
+### Two cards across
+
+The panel is a **grid**, not a column. Everything it has is on the glass
+at once: DISPLAY and SHALLOW ALARM on one row, START and SOUNDER on the
+next, with the sensor glyphs and the radios full-width above them.
+
+It was a single 600 px column of sections, and it outgrew the circle.
+600 px wide on a radius of 540 is only lit between y=91 and y=989 —
+about 900 px — and the sheet had reached 1147. What happened then was
+not a scrollbar: the panel centres its child, so the sensor row hung off
+the top at y=−33 and the build stamp sat eight px past the bottom, with
+no way to reach either.
+
+Two columns is 669 px for the same content, which is the round glass
+being used where it is widest instead of wasted. Each card sizes to its
+own content rather than stretching to the taller of its row — the first
+pass stretched them, and the short one got a lake of empty border under
+it that read as padding rather than density.
+
+The sensor row and the radios keep the **narrow** 600 px column. They
+sit at the top of the circle, where 880 px has its ends out in the
+black.
+
+**It still scrolls** if it ever stops fitting — with the radios expanded
+and a section or two added it could. `max-height` rather than `height`,
+so a panel that fits is centred exactly as before, and the edges fade
+only when there is something under them: on a round panel a hard cut at
+a chord just looks like the layout is broken.
+
+The scroller shares its glass with the gesture judge, which is the
+awkward part — a swipe up closes the panel, and a swipe up is also how
+you scroll down. So it claims the drag **lazily**: on the first movement,
+and only as much as it can absorb. At the end of its travel it hands the
+gesture back, and the same swipe closes the panel.
+
 ### The dead band at the foot of the dial
 
 A swipe up could not *start* at the bottom of the glass, which is
