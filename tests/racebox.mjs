@@ -76,6 +76,65 @@ t.head('and the finish');
 await p.evaluate(()=>{ tState='finished'; tFinal=2895000; paintRace(); });
 t.ok((await pill()).txt==='FINISHED', 'once it is over', (await pill()).txt);
 
+t.head('BURN is the seconds to burn, and only while you are closing');
+/* What is left on the clock, less the time it takes to reach the line
+   at this speed on this course. POSITIVE is slack - carry on and you
+   are at the line early, with that many seconds to burn off. NEGATIVE
+   is late: you cannot make the gun from here, which is the one marked
+   red. Only the LABEL was ever checked here, which is how it shipped
+   with its closing rate inverted - dashes on every approach, and a
+   confident number while the boat sailed away from the line. */
+const burn=(sogKt,cogDeg,metres,leftMs)=>p.evaluate(([kt,deg,m,left])=>{
+  LINE={pin:{lat:28.8000,lon:-81.2700}, boat:{lat:28.8000,lon:-81.2670}}; saveLine();
+  /* south of an east-west line, with the wind out of the north, is the
+     pre-start side - so `m` metres to go */
+  feedPut('pos.lat', 28.8000-m/111320, 't'); feedPut('pos.lon', -81.2685, 't');
+  feedPut('environment.wind.directionTrue', 0, 't');
+  feedPut('navigation.speedOverGround', kt/1.94384, 't');
+  feedPut('navigation.courseOverGroundTrue', deg/DEG, 't');
+  tState='countdown'; tEnd=rnow()+left; rpOpen=true;
+  const L=lineData(); paintRace();
+  return {burn:L.burn, dist:Math.round(L.dist), shown:$('rp-3').textContent,
+          bad:$('rp-3').classList.contains('bad')};
+},[sogKt,cogDeg,metres,leftMs]);
+
+/* 100 m out at 5 kt is 38.9 s of sailing, against 120 s of clock */
+let B=await burn(5, 0, 100, 120000);
+t.ok(B.burn===81, 'straight at the line: the clock less the time to reach it',
+     B.burn+' s of '+B.dist+' m');
+t.ok(B.shown==='+81', 'eighty one seconds to burn off, and it says so with a plus',
+     B.shown);
+t.ok(!B.bad, 'not marked - slack is the side of this you want to be on');
+
+/* the same everything, sailing the other way */
+B=await burn(5, 180, 100, 120000);
+t.ok(B.burn===null, 'sailing AWAY from it there is no time to the line',
+     String(B.burn));
+t.ok(B.shown==='––', 'so it says nothing rather than something', B.shown);
+
+B=await burn(0.05, 0, 100, 120000);
+t.ok(B.burn===null, 'and drifting is not closing either', String(B.burn));
+
+/* 100 m at 5 kt is 39 s of sailing with only 20 s of clock: the gun
+   goes while you are still 19 s short of the line */
+B=await burn(5, 0, 100, 20000);
+t.ok(B.burn===-19, 'not enough clock to get there reads negative', String(B.burn));
+t.ok(B.shown==='-19' && B.bad, 'and is marked red: you cannot make the gun from here',
+     B.shown+(B.bad?' bad':''));
+
+/* half the distance is half the sailing, so more of the clock is slack */
+B=await burn(5, 0, 50, 120000);
+t.ok(B.burn===101, 'half the distance, half the time to it', String(B.burn));
+B=await burn(10, 0, 100, 120000);
+t.ok(B.burn===101, 'and twice the speed comes to the same thing', String(B.burn));
+
+/* The box, not the DOM: a closed box is not repainted, so what the old
+   text still says is nothing to do with the reading. */
+t.ok(await p.evaluate(()=>{ resetAll(); rpOpen=true; paintRace();
+       return lineData().burn===null && $('rp-3').textContent==='––'; }),
+     'and with no countdown running there is nothing to burn against');
+await p.evaluate(()=>{ resetAll(); paintRace(); });
+
 t.head('the pill and the border carry which way to leave the mark');
 /* The one thing about a leg you have to have right before you get
    there. raceStatus() is pure; markNear belongs to the render loop, so

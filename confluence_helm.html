@@ -3203,8 +3203,14 @@ function lineData(){
   let burn=null;
   const sog=get('navigation.speedOverGround'), cog=get('navigation.courseOverGroundTrue');
   if(sog!==null&&cog!==null&&tState==='countdown'){
-    const c=cog*DEG*Math.PI/180;
-    const closing=sog*(Math.sin(c)*nx+Math.cos(c)*ny)*-1;   // m/s toward the line
+    /* n points UPWIND and dist is -(w.n), so dist shrinks at (v.n):
+       sailing at the line is a POSITIVE v.n. The -1 that used to be on
+       the end of this had the sign exactly backwards, which made BURN
+       read dashes on every approach - the one time it is worth
+       anything - and put a confident number on the glass while the boat
+       sailed away from the line. It never showed a wrong figure; it
+       showed the right figure at the wrong times. */
+    const closing=sog*(Math.sin(cog)*nx+Math.cos(cog)*ny);   // m/s toward the line
     if(closing>0.05){
       const tToLine=dist/closing;
       burn=Math.round((tEnd-rnow())/1000 - tToLine);

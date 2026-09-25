@@ -211,7 +211,7 @@ in view under it. What fills the other slots depends on where you are:
 | Item | What it is |
 |---|---|
 | `LINE` | distance to the line, metres or feet with the depth unit; red when you are over |
-| `BURN` | seconds in hand to the line at this speed; red when you are late; dashes until the clock runs |
+| `BURN` | seconds to burn off before the gun at this speed on this course: `+` is slack, `−` is red and means you cannot make the line in time. Dashes until the clock runs, and whenever you are not closing on the line — sailing away from it or drifting, there is no time-to-line to count against |
 | `LINE BIAS` | the favoured end and what it is worth, `PIN +12`, between the two ends |
 | `P` `B` | the two ends of the line; tap each as you pass it, and the bias is then about the line you pinged rather than the club marks |
 
