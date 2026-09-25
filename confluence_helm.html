@@ -934,6 +934,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row .lib-main span{font-size:16px;letter-spacing:.03em;color:var(--label);
   white-space:nowrap}
 .course-row.line .lib-main b{color:var(--label)}
+/* The club row says what it found, and what it found can be longer than
+   the face is wide - so this one line ellipsises rather than running off
+   the circle. Its heading sits in label colour until there is something
+   to load, like the line row's. */
+.course-row.club .lib-main span{overflow:hidden;text-overflow:ellipsis;display:block}
+.course-row.club:not(.in) .lib-main b{color:var(--label)}
 /* which side to leave a mark: P red, S green, the way the lights are.
    Only on rows that are in the course. */
 .course-row .side{display:flex;gap:10px;margin-right:14px;flex:none}
@@ -8455,9 +8461,83 @@ function renderCourse(){
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b>
       <span class="${isMoved(m.id)?'moved':''}">${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
-  box.innerHTML=gunRow+modeRow+lineRow+MARKS.map(row).join('');
+  box.innerHTML=gunRow+modeRow+lineRow+clubRow()+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
+
+/* ---- the course the committee posted -----------------------------------
+   The club posts the evening's marks on the members' site by 5:30, the
+   same ones that go on the clubhouse door. They are these marks under
+   three different names, so the site does the translating and hands back
+   ids this file already knows.
+
+   It has to be us that asks. netd binds loopback, so nothing off the Pi
+   can reach in here to set a course, and that is the right way round for
+   a box on a boat. The read at the other end is open - a posted course
+   is public by the time it matters - so there is no login to carry.
+
+   Two taps, never one. The first fetches and says what it found; the
+   second is what replaces the course. Tapping a row and having the
+   course you are three marks into vanish is not something this sheet
+   should be able to do by accident. */
+const CLUB_COURSE='https://lmsa.pages.dev/api/race/helm';
+let CLUB={step:'idle', got:null, say:''};
+
+function clubRow(){
+  const c=CLUB, n=c.got?c.got.marks.length:0;
+  const head = c.step==='busy'  ? 'CHECKING…'
+             : c.step==='ready' ? 'LOAD '+n+' MARK'+(n===1?'':'S')+'?'
+             : 'CLUB COURSE';
+  const sub  = c.say ? c.say
+             : c.step==='ready' ? 'TAP AGAIN TO REPLACE THE COURSE'
+             : "TAP FOR TONIGHT'S, POSTED ON THE SITE";
+  return `<div class="lib-row course-row club${c.step==='ready'?' in':''}" data-club="1">
+      <div class="seq">⇩</div><div class="lib-main">
+      <b>${esc(head)}</b><span>${esc(sub)}</span></div></div>`;
+}
+
+/* The names as this sheet says them, so you see what you are about to
+   load before you load it. */
+const clubNames=ids=>ids.map(id=>(markOf(id)||{hdr:id.toUpperCase()}).hdr).join(' · ');
+
+async function clubFetch(){
+  CLUB={step:'busy', got:null, say:''}; renderCourse();
+  let j=null;
+  try{ const r=await fetchT(CLUB_COURSE, 9000); j=r.ok?await r.json():null; }
+  catch(e){ j=null; }
+
+  const stop=say=>{ CLUB={step:'idle', got:null, say:say}; renderCourse(); };
+  if(!j) return stop('NO ANSWER · IS THERE WIFI?');
+  if(!j.course) return stop('NOTHING POSTED FOR '+(j.date||'TODAY'));
+
+  const g=j.course;
+  /* Anything this boat has no mark for is already named in the reply;
+     dropping it here as well would leave a course one leg short with
+     nothing to say why, so the count goes in the message on load. */
+  const marks=(g.marks||[]).filter(id=>markOf(id));
+  if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
+  CLUB={step:'ready', got:{marks:marks, side:g.side||{}, raw:g}, say:clubNames(marks)};
+  renderCourse();
+}
+
+function clubApply(){
+  const g=CLUB.got; if(!g) return;
+  COURSE.marks=g.marks.slice();
+  COURSE.side={};
+  g.marks.forEach(id=>{ const s=g.side[id]; if(s==='P'||s==='S') COURSE.side[id]=s; });
+  COURSE.next=0; courseSave(); courseReset();
+
+  /* What did not come across, said now rather than found out at the
+     mark. A course that does not start on the line is not one this
+     sheet's start and finish describe. */
+  const out=[], missing=(g.raw.unknown||[]).length;
+  if(missing) out.push(missing+' MISSING');
+  if(g.raw.startsOnLine===false) out.push('NOT OFF THE LINE');
+  CLUB={step:'idle', got:null, say:out.length?('LOADED · '+out.join(' · ')):'LOADED'};
+  renderCourse(); drawMap(shownTrack());
+}
+
+const clubTap=()=>{ if(CLUB.step==='ready') clubApply(); else if(CLUB.step!=='busy') clubFetch(); };
 /* ---- the scheduled gun -------------------------------------------------
    A club race has a start time printed on the sailing instructions.
    Typed in once, the countdown starts itself CFG.startMins before it
@@ -8599,6 +8679,7 @@ $('course-list').addEventListener('click',e=>{
      a club coordinate is a number off a sheet of paper, and the boat
      standing at the buoy knows better. What that writes is an override -
      see MARK_MOVES - so the book is still there to go back to. */
+  if(row.dataset.club){ clubTap(); return; }
   if(row.dataset.gun){ gnOpen(); return; }
   if(row.dataset.mode){
     const m=e.target.closest('.sb');
