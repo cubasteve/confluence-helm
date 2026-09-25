@@ -2,6 +2,10 @@
    when the answer is yes, no, or the club's server says no. */
 import {open, tally} from './helpers.mjs';
 const t=tally();
+/* The demo is ON - it is on by default, and on a real boat too, where
+   it only fills what nothing else publishes. What stops a submission is
+   an invented FIX, which is a different question; see the foot of this
+   file. So finish() puts a real position in first. */
 const {b,p,scores,posts}=await open(t,{demo:true,
   status:{score:{available:true, url:'https://vuduwave.com/api/add_scratch_time'}}});
 
@@ -10,8 +14,13 @@ const card=()=>p.evaluate(()=>({on:$('score').classList.contains('on'),
   step:scoreStep, t:$('sc-t').textContent, s:$('sc-s').textContent,
   big:$('sc-big').textContent, time:$('sc-time').textContent,
   qr:$('sc-qr').querySelectorAll('path,rect').length}));
-const finish=ms=>p.evaluate(m=>{ scoreSent=''; tGun=Date.now()-m; tState='racing';
-  finishRace(); }, ms);
+/* rnow(), not Date.now(): the race clock is what finishRace() reads,
+   and the two part company the moment anything runs at 3x.
+   `src` is what the card asks about - a fix from the boat's own GPS,
+   or one the demo made up. */
+const finish=(ms,src='sk')=>p.evaluate(([m,src])=>{ scoreSent='';
+  feedPut('pos.lat', 28.8190, src); feedPut('pos.lon', -81.2650, src);
+  tGun=rnow()-m; tState='racing'; finishRace(); }, [ms,src]);
 
 t.head('the time is written the way the form takes it');
 const RE=[/^[0-9]+[,:.][0-5][0-9][,:.][0-5][0-9]$/, /^[0-5][0-9][,:.][0-5][0-9]$/,
@@ -94,6 +103,31 @@ t.ok(v.face==='qr', 'onto the code', JSON.stringify(v));
 t.ok(v.t==='NOT SENT · TYPE IT IN', 'saying plainly it did not go', v.t);
 t.ok(/REFUSED 403/.test(v.s), 'with the status it got', v.s);
 t.ok(v.time==='0.48.15', 'and the number still there to type', v.time);
+
+t.head('a race the demo sailed never reaches the club');
+/* The card is worth walking through while testing - the question, the
+   time, the code. The thing on the far end is somebody else's small
+   server, and a time nobody sailed landing on the board is not
+   something a tap takes back. */
+scores.length=0;
+await finish(1800000,'demo'); await p.waitForTimeout(400);
+v=await card();
+t.ok(v.on && v.t==='SPINNAKER?', 'the card still comes up', JSON.stringify(v));
+await p.click('#sc-no'); await p.waitForTimeout(400);
+v=await card();
+t.ok(/DEMO RACE . NOT SENT/.test(v.time)||/DEMO/.test(v.time+v.t+v.s),
+     'and says why it is going no further', JSON.stringify(v));
+t.ok(scores.length===0, 'NOTHING was submitted', JSON.stringify(scores));
+t.ok(v.qr>0, 'the code is still there, so the flow can be walked end to end',
+     String(v.qr));
+await p.click('#sc-done'); await p.waitForTimeout(200);
+await finish(1900000,'sk'); await p.waitForTimeout(300);
+await p.click('#sc-no'); await p.waitForTimeout(300);
+t.ok((await card()).t==='SUBMIT TO VUDU WAVE?',
+     'and a real fix asks to submit again, as before - the DEMO flag is '
+     +'on the whole time, because it is on by default');
+await p.click('#sc-no'); await p.waitForTimeout(200);
+await p.click('#sc-done'); await p.waitForTimeout(200);
 
 t.head('and the QR is an address a camera can read');
 t.ok((await p.evaluate(()=>SCORE_URL))==='https://vuduwave.com/lmsa', 'the address');

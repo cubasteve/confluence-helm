@@ -74,10 +74,10 @@ const start=await p.evaluate(()=>{
   const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
   const run=(mode, from, to)=>{
     CFG.startMode=mode;
-    tState='racing'; tGun=Date.now()-60000; lineArmed=false; lineWas=null;
+    tState='racing'; tGun=rnow()-60000; lineArmed=false; lineWas=null;
     feed(from[0],from[1]); lineWatch();
     feed(to[0],to[1]);     lineWatch();
-    return {since:Math.round((Date.now()-tGun)/1000), state:tState};
+    return {since:Math.round((rnow()-tGun)/1000), state:tState};
   };
   const out={ win:run('window',S,N), winBack:run('window',N,S),
               gun:run('gun',S,N) };
@@ -93,6 +93,82 @@ t.ok(start.gun.since===60,
      'GUN: the gun stands, and crossing a minute late is a minute lost',
      start.gun.since+' s since the gun');
 
+t.head('the race clock, wound on for testing');
+/* A five minute sequence and a seventy four minute race is most of an
+   evening, and the parts worth watching are minutes apart. The clock is
+   stubbed here rather than waited on - what matters is the arithmetic,
+   not that a wall clock really ticked. */
+const fast=await p.evaluate(()=>{
+  const real=Date.now; let T=1e12; Date.now=()=>T;
+  const out={};
+  raceRate(1);
+  let a=rnow(); T+=1000; out.oneX=rnow()-a;
+  /* the seam: changing rate must not move a gun that already went */
+  const before=rnow(); raceRate(3); out.seam=rnow()-before;
+  a=rnow(); T+=1000; out.threeX=rnow()-a;
+  /* a countdown burns three times as fast */
+  resetAll(); tLeft=60000; startCountdown();
+  T+=10000; out.left=Math.round((tEnd-rnow())/1000);
+  /* and the gun, once it goes, is a fixed point */
+  startRace(); const gun=tGun; T+=5000; out.elapsed=Math.round((rnow()-tGun)/1000);
+  raceRate(1); out.gunHeld = tGun===gun;
+  T+=5000; out.thenReal=Math.round((rnow()-tGun)/1000);
+  /* the demo boat is wound on by the same amount, not a different one */
+  CFG.windDemo=true;
+  raceRate(1); demoT=0; for(let i=0;i<25;i++) windDemoTick(); out.boat1=+demoT.toFixed(3);
+  raceRate(3); demoT=0; for(let i=0;i<25;i++) windDemoTick(); out.boat3=+demoT.toFixed(3);
+  raceRate(1); CFG.windDemo=false; resetAll();
+  /* At rate 1 rnow() advances with Date.now() one for one, so a clock
+     that JUMPS - a Pi that boots with no network and then gets NTP -
+     carries the race with it rather than leaving it hours behind.
+     It does not track Date.now() absolutely: time gained at 3x stays
+     gained, which is the same property that keeps a gun where it went.
+     Nothing compares the two, so the offset costs nothing and a reload
+     clears it. */
+  const was=rnow(); T+=7*3600*1000; out.ntp=(rnow()-was)-7*3600*1000;
+  /* Put the clock back on the real epoch: it was rebased against a
+     stub, and everything after this reads it. */
+  Date.now=real; rAt=rBase=Date.now();   /* one read: two leaves a ms of skew */
+  return out;
+});
+t.ok(fast.oneX===1000, 'a second is a second at 1x', fast.oneX+' ms');
+t.ok(fast.threeX===3000, 'and three at 3x', fast.threeX+' ms');
+t.ok(fast.seam===0, 'changing the rate does not step the clock', fast.seam+' ms');
+t.ok(fast.left===30, 'ten seconds of the world is thirty of a 3x countdown',
+     fast.left+' s left of 60');
+t.ok(fast.elapsed===15, 'and the race clock runs on at the same rate',
+     fast.elapsed+' s after 5');
+t.ok(fast.gunHeld, 'dropping back to real time leaves the gun where it was');
+t.ok(fast.thenReal===20, 'and the clock carries on from there, at one second a second',
+     fast.thenReal+' s');
+t.ok(Math.abs(fast.boat3-fast.boat1*3)<1e-6,
+     'the demo boat sails three times as far, not some other far',
+     fast.boat1+' -> '+fast.boat3);
+t.ok(fast.ntp===0, 'and a clock correction moves it by exactly as much - a Pi '
+     +'that gets NTP hours after boot carries the race with it',
+     fast.ntp+' ms of slip');
+
+t.head('and it cannot follow you onto the water');
+const safe=await p.evaluate(()=>{
+  const out={};
+  demoSet(false); demoSet(true);      /* it is on by default; make the edge real */
+  out.offered=getComputedStyle($('fast-btn')).display!=='none';
+  $('fast-btn').click(); out.on=RACE_RATE;
+  out.lit=$('fast-btn').classList.contains('on');
+  demoSet(false);
+  out.afterDemoOff=RACE_RATE;
+  out.hidden=getComputedStyle($('fast-btn')).display==='none';
+  out.stored=/fast|rate/i.test(localStorage.getItem('helmPrefs')||'');
+  return out;
+});
+t.ok(safe.offered, 'it is offered while the demo is driving');
+t.ok(safe.on===3 && safe.lit, 'a tap puts the clock at 3x, and says so', String(safe.on));
+t.ok(safe.afterDemoOff===1,
+     'turning the demo off puts it back to real time', String(safe.afterDemoOff));
+t.ok(safe.hidden, 'and takes the pill away with it');
+t.ok(!safe.stored, 'nothing about it is remembered - a panel that came up at 3x '
+     +'would hand you a third of the time you sailed');
+
 t.head('the two kinds of start, which only a setting tells apart');
 /* Saturday's line is shut until zero; Wednesday's is open from the off.
    The SAME crossing, at the same place and moment, means opposite
@@ -106,12 +182,12 @@ const both=await p.evaluate(()=>{
   const S=[28.79975,-81.2690], N=[28.80025,-81.2690];
   const run=(mode, left, from, to)=>{
     CFG.startMode=mode;
-    tState='countdown'; tEnd=Date.now()+left; lineArmed=false; lineWas=null;
+    tState='countdown'; tEnd=rnow()+left; lineArmed=false; lineWas=null;
     guns.length=0;
     feed(from[0],from[1]); lineWatch();
     feed(to[0],to[1]);     lineWatch();
-    return {state:tState, since:Date.now()-tGun, guns:guns.slice(),
-            armed:lineArmed, left:Math.round((tEnd-Date.now())/1000)};
+    return {state:tState, since:rnow()-tGun, guns:guns.slice(),
+            armed:lineArmed, left:Math.round((tEnd-rnow())/1000)};
   };
   const out={
     /* a window start, taken early and taken late */
@@ -161,13 +237,13 @@ const zero=await p.evaluate(()=>{
   const realSig=window.signal; window.signal=()=>{};
   for(const mode of ['gun','window']){
     CFG.startMode=mode;
-    tState='countdown'; tEnd=Date.now()-1; lineWas=null;
+    tState='countdown'; tEnd=rnow()-1; lineWas=null;
     tick();                                   /* the clock reaches zero */
     out[mode]=tState;
     /* and a crossing a minute later still moves the gun to it */
-    tGun=Date.now()-60000; lineArmed=false; lineWas=null;
+    tGun=rnow()-60000; lineArmed=false; lineWas=null;
     feed(S[0],S[1]); lineWatch(); feed(N[0],N[1]); lineWatch();
-    out[mode+'Moved']=Math.round((Date.now()-tGun)/1000);
+    out[mode+'Moved']=Math.round((rnow()-tGun)/1000);
   }
   window.signal=realSig; CFG.startMode='gun'; tState='idle'; return out;
 });
@@ -205,12 +281,12 @@ const fin=await p.evaluate(()=>{
                     feed(28.79975,-81.2690); lineWatch(); };
   const out={};
   COURSE.marks=['rum','gosling']; COURSE.next=0; courseSave();
-  tState='racing'; tGun=Date.now()-600000; lineArmed=true; cross();
+  tState='racing'; tGun=rnow()-600000; lineArmed=true; cross();
   out.midRace=tState;
   COURSE.next=2; tState='racing'; lineArmed=true; cross();
   out.done=tState;
   COURSE.marks=[]; COURSE.next=0; courseSave();
-  tState='racing'; tGun=Date.now()-600000; lineArmed=false; cross();
+  tState='racing'; tGun=rnow()-600000; lineArmed=false; cross();
   out.unarmed=tState;
   tState='idle'; return out;
 });

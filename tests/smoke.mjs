@@ -57,10 +57,14 @@ await p.evaluate(()=>{ closeLib(); closeApp(); }); await p.waitForTimeout(500);
 
 console.log('\n=== the race runs ===');
 const race=await p.evaluate(async ()=>{
+  /* A real fix under it. The demo is on - it is on by default - and a
+     race an invented boat sailed is one the card will not offer to
+     send, which is its own probe in tests/score.mjs. */
+  feedPut('pos.lat', 28.8190, 'sk'); feedPut('pos.lon', -81.2650, 'sk');
   startCountdown(); const a=tState;
-  tEnd=Date.now()+1200; await new Promise(r=>setTimeout(r,2200));
+  tEnd=rnow()+1200; await new Promise(r=>setTimeout(r,2200));
   const b=tState;
-  tGun=Date.now()-2895000; finishRace();
+  tGun=rnow()-2895000; finishRace();
   return {a, b, fin:tState, card:$('score').classList.contains('on')};
 });
 ok(race.a==='countdown', 'the countdown starts');

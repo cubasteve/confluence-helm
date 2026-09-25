@@ -423,6 +423,53 @@ roll is starboard down, plus pitch is bow up — mapped from a top-forward
 mount, but it is one line to flip if a bracket turns out to sit the
 other way round.
 
+## Running a race in a sitting
+
+A five minute sequence and a seventy four minute race is most of an
+evening, and the parts worth watching — the signals, the gun, the line,
+a rounding, the finish and the card — are minutes apart. While the demo
+is driving, a **3×** pill appears under `DEMO` and winds the race clock
+and the demo boat on together. The whole thing takes half an hour, and
+you can run it twice.
+
+Everything the race measures reads `rnow()` and not `Date.now()`: the
+countdown, the gun, the elapsed time, the instant the line was crossed,
+the seconds to burn. Normally they are the same value to the
+millisecond.
+
+`rnow()` is **rebased**, not scaled from an epoch — changing the rate
+part way through must not move a gun that has already gone. It is
+monotonic across a rate change, and it advances one for one with
+`Date.now()` at 1×, so a Pi that boots with no network and gets NTP
+hours later carries the race with it rather than being left behind.
+Time gained at 3× stays gained; nothing compares the two, and a reload
+clears it.
+
+Wall-clock things stay on the wall clock: the screensaver's idle timer,
+the alert snooze, the page-slide guard, and the track's 1 Hz sampling.
+Those are about the panel, not the race.
+
+**It cannot follow you onto the water.** It is not persisted, and
+turning the demo off puts the clock back to 1× and takes the pill away.
+A panel that came up at 3× with a real boat under it would hand you a
+finish time a third of the one you sailed.
+
+### A race nobody sailed does not reach the club
+
+The finish card walks the whole way through on a demo race — the
+spinnaker question, the time, the QR — but it will not post. The far
+end is the club's own small server, and a time nobody sailed landing on
+the board is not something a tap takes back.
+
+What settles it is **where the fix came from**, asked at the finish and
+not when you answer the card. Not `CFG.windDemo`: that is `true` by
+default and only means "make up whatever nothing else is publishing",
+so a real boat with a real vane has it set all season. The demo stamps
+what it writes, so `S['pos.lat'].src` is the honest question, and the
+answer is recorded at the moment the race ends — by then the demo may
+have been switched off, and the race would still not be one that
+happened.
+
 ## Golden hour
 
 The icon is a half sun on the horizon with its light on the water — half

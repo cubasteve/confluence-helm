@@ -476,7 +476,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
     #000 calc(100% - 88px),transparent 100%)}
 /* The two full-width rows keep the NARROW column. They sit at the top of
    the circle, where 880 px has its ends out in the black. */
-.senrow, #conn-sec, .sheet > .hint{grid-column:1 / -1;
+.senrow, .phone-row, #conn-sec, .sheet > .hint{grid-column:1 / -1;
   width:600px;justify-self:center}
 .card{border:2px solid var(--hairline);border-radius:24px;
   padding:15px 20px 17px;display:flex;flex-direction:column}
@@ -611,9 +611,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #phone-btn{left:0;right:auto}
 .demo-tog.gps.on{color:var(--accent);border-color:var(--accent)}
 .demo-tog.gps.on.bad{color:var(--warn);border-color:var(--warn)}
-.phone-row{display:none;align-items:center;gap:18px;margin:-10px 0 22px}
+/* The row under the two feed pills. It shows for either of them: MOUNT
+   belongs to PHONE, 3x belongs to DEMO, and each hides with its own. */
+.phone-row{display:none;align-items:center;gap:18px;margin:-2px 0 4px}
 .phone-row.on{display:flex}
 .phone-row .demo-tog{position:static;flex:none}
+.phone-row .fast{margin-left:auto}
+/* Amber like DEMO, and for the same reason: the clock is lying. */
+.demo-tog.fast.on{color:var(--warn);border-color:var(--warn);opacity:1}
 .phone-why{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.06em;
   color:var(--warn);text-transform:uppercase;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -1911,6 +1916,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="phone-row" id="phone-row">
       <button class="demo-tog gps" id="mount-btn" aria-pressed="false">MOUNT</button>
       <span class="phone-why" id="phone-why"></span>
+      <!-- Shown only while the demo is driving, and never persisted. It
+           winds the race clock AND the demo boat together so a whole
+           sequence can be sailed through in a sitting. A real race can
+           never run fast, because a real race has the demo off. -->
+      <button class="demo-tog fast" id="fast-btn" aria-pressed="false">3&times;</button>
     </div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
@@ -3193,7 +3203,7 @@ function lineData(){
     const closing=sog*(Math.sin(c)*nx+Math.cos(c)*ny)*-1;   // m/s toward the line
     if(closing>0.05){
       const tToLine=dist/closing;
-      burn=Math.round((tEnd-Date.now())/1000 - tToLine);
+      burn=Math.round((tEnd-rnow())/1000 - tToLine);
     }
   }
   /* where along the line the boat is: 0 at the pin, 1 at the boat end.
@@ -3467,7 +3477,7 @@ function lineWatch(){
   if(!raceOn()){ lineWas=null; return; }
   const L=lineData();
   if(!L){ lineWas=null; return; }
-  const now=Date.now(), d=L.dist;
+  const now=rnow(), d=L.dist;
   const was=lineWas; lineWas={d, t:now, along:L.along};
   if(tState==='racing' && Math.abs(d)>LINE_AUTO.away) lineArmed=true;
   if(!was) return;
@@ -3786,6 +3796,15 @@ function scoreAsk(){
 function scoreKite(kind){
   const r=SCORE_CLASS[kind]; if(!r) return;
   scorePick=r;
+  /* Never from a race an invented boat sailed. The whole card is worth
+     walking through while testing - the question, the time, the QR -
+     but the far end is the club's own small server, and a time nobody
+     sailed landing on the board is not something a tap takes back.
+     demoRace, not CFG.windDemo: that flag is TRUE by default and only
+     means "make up what nothing else is publishing", so a real boat
+     with a real vane has it set all season. What settles it is where
+     the FIX came from, asked at the finish. */
+  if(demoRace) return scoreShow('DEMO RACE · NOT SENT');
   if(navigator.onLine===false) return scoreShow('OFFLINE · TYPE IT IN');
   scoreStep='send';
   $('sc-t').textContent='SUBMIT TO VUDU WAVE?';
@@ -4018,6 +4037,36 @@ $('trk-rec').addEventListener('click',()=>{
    The countdown self-starts the race at zero so a missed double tap
    never costs you the whole race time; crossing early or late is what
    the manual double tap is for.                                     */
+/* ---- the race clock ------------------------------------------------
+   Everything the RACE measures reads rnow() and not Date.now(): the
+   countdown, the gun, the elapsed time, the instant the line was
+   crossed, the seconds to burn. Normally the two are the same thing to
+   the millisecond.
+
+   In the demo they need not be. A five minute sequence and a seventy
+   four minute race is most of an evening to sit through, and the parts
+   worth watching - the signals, the gun, the line, a rounding, the
+   finish and the card - are minutes apart. At 3x the whole thing is
+   half an hour and you can run it twice.
+
+   Rebased rather than scaled from an epoch: changing the rate part way
+   through must not move a gun that has already gone. rnow() is
+   monotonic across a rate change, which is the only property anything
+   here depends on.
+
+   It is NOT wired to wall-clock things. The screensaver's idle timer,
+   the alert snooze, the page-slide guard and the track's 1 Hz sampling
+   all still run at the speed the world does, because they are about
+   the panel and not about the race. */
+let RACE_RATE=1, rBase=Date.now(), rAt=Date.now();
+const rnow=()=>rBase+(Date.now()-rAt)*RACE_RATE;
+function raceRate(x){
+  x=Math.max(1, Math.min(10, +x||1));
+  if(x===RACE_RATE) return;
+  rBase=rnow(); rAt=Date.now(); RACE_RATE=x;   /* no step at the seam */
+  console.log('[helm] race clock at', x+'x');
+}
+
 let tState='idle';                        // idle | countdown | racing | finished
 let tEnd=0;                               // countdown: wall-clock zero
 let tGun=0;                               // racing: wall-clock start
@@ -4027,14 +4076,14 @@ let tLeft=CFG.startMins*60000;            // countdown remaining while idle
 /* RACE's box: opened by its pill or by the countdown, closed by
    its pill, the gun or a reset. */
 let rpOpen=false;
-const startCountdown=()=>{ tEnd=Date.now()+tLeft; tState='countdown'; rpOpen=true;
+const startCountdown=()=>{ tEnd=rnow()+tLeft; tState='countdown'; rpOpen=true;
   COURSE.next=0; courseReset(); courseSave();
   /* Last, with the clock already running. The card this may raise is
      never on the critical path of a start. */
   heldTake(); };
 const syncMinute =()=>{ if(tState!=='countdown')return;
-    tEnd=Date.now()+Math.max(0,Math.round((tEnd-Date.now())/60000)*60000); };
-const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false;
+    tEnd=rnow()+Math.max(0,Math.round((tEnd-rnow())/60000)*60000); };
+const startRace  =()=>{ tGun=rnow(); tState='racing'; lineArmed=false;
   rpOpen=false; markNear=false;
   /* This track now carries a race, which is what makes it worth a
      question at the next countdown rather than a silent clear. */
@@ -4043,13 +4092,19 @@ const startRace  =()=>{ tGun=Date.now(); tState='racing'; lineArmed=false;
    tFinal comes from: the tap takes now, the line takes the instant it
    interpolated between two fixes. Everything after that is the same, so
    it lives here rather than in two copies that drift. */
+/* Whether the boat that just finished was an invented one. Read off the
+   position's own stamp at the moment it finished, rather than at the
+   moment somebody answers the card - by then the demo may have been
+   switched off, and the race would still not be one that happened. */
+let demoRace=false;
 function raceFinished(){
   tState='finished';
+  demoRace = (S['pos.lat']||{}).src==='demo';
   trkSave();                     /* reports its own failure - see trkSave */
   paintTrack();
   scoreAsk();
 }
-const finishRace =()=>{ tFinal=Date.now()-tGun; raceFinished(); };
+const finishRace =()=>{ tFinal=rnow()-tGun; raceFinished(); };
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
   lineWas=null; lineArmed=false; rpOpen=false; markNear=false; scoreHide(); };
 
@@ -4107,7 +4162,7 @@ function sigArm(){
 
 /* +/- only mean anything before the gun */
 function nudge(sec){
-  if(tState==='countdown') tEnd=Math.max(Date.now(), tEnd+sec*1000);
+  if(tState==='countdown') tEnd=Math.max(rnow(), tEnd+sec*1000);
   else if(tState==='idle') tLeft=Math.max(0, tLeft+sec*1000);
 }
 
@@ -4125,7 +4180,7 @@ function tick(){
   if(tState==='idle'){ ms=tLeft; lbl='START'; dim=true; sigSec=null;
                        sigArmed=false; }
   else if(tState==='countdown'){
-    ms=tEnd-Date.now();
+    ms=tEnd-rnow();
     /* At eleven seconds: a second clear of the ten-second beep, which
        is the last one with a gap ahead of it long enough for the output
        to have gone back to sleep. From there the five short beeps are a
@@ -4143,7 +4198,7 @@ function tick(){
     }
     lbl='COUNTDOWN'; hot=ms<60000;
   }
-  else if(tState==='racing'){ ms=Date.now()-tGun; lbl='RACING'; }
+  else if(tState==='racing'){ ms=rnow()-tGun; lbl='RACING'; }
   else { ms=tFinal; lbl='FINISH'; }
 
   el.textContent=clock(Math.max(0,ms));
@@ -6135,7 +6190,10 @@ const DEMO_TRACK={lat0:28.81666,lon0:-81.25975,crs0:350,step:8,
    trimmed to the race: the first fix happened to be the marina, and
    the moment it stopped being one the channel moved with it. */
 const DEMO_MARINA={lat:28.81525, lon:-81.2663};
-const DEMO_SPEED=1;                  /* real time: the race is 74 minutes, as sailed */
+/* Real time, as sailed. The FAST pill multiplies this and the race
+   clock together - a demo boat sailing at 3x against a countdown at 1x
+   would be a different race, not a faster one. */
+const DEMO_SPEED=1;
 const DEMO_DECL=6.6;                 /* magnetic declination at Sanford, 2026, west */
 /* As sailed, reported from the boat: north-north-east at 8 mph gusting
    15, which is 7.0 kt gusting 13.0. Steady - one breeze, all evening -
@@ -6226,8 +6284,13 @@ function demoSet(on, why){
     /* and the readings' own filters, which are keyed r_<reading> */
     MUS_CELLS.forEach(c=>{ delete sm['r_'+c.k]; delete smA['r_'+c.k]; });
     bezelCont=null;
+    /* And the clock comes back to real time with it. The fast clock is
+       a property of the demo, not a setting that outlives it: a panel
+       still running at 3x with a real boat under it would hand you a
+       finish time a third of the one you sailed. */
+    raceRate(1);
   }
-  drawDemo(); prefsSave();
+  drawDemo(); drawPhone(); prefsSave();
   if(why) console.log('[helm] demo data off:', why);
 }
 function drawDemo(){
@@ -6239,7 +6302,7 @@ function drawDemo(){
 function windDemoTick(){
   if(!CFG.windDemo) return;
   bootReady();                        /* demo mode is a boat, for these purposes */
-  demoT=(demoT+0.12*DEMO_SPEED)%(DEMO_TRACK.dlat.length*DEMO_TRACK.step);
+  demoT=(demoT+0.12*DEMO_SPEED*RACE_RATE)%(DEMO_TRACK.dlat.length*DEMO_TRACK.step);
   const P=demoTrack(demoT), W=demoWind(demoT);
   /* The GPS group defers to a real fix, path by path: a boat with a GPS
      and no vane keeps its own position and course and gets only the wind
@@ -6537,13 +6600,25 @@ function drawPhone(){
   wCls('phone-btn','on',on);
   wCls('phone-btn','bad',on&&!!phoneWhy);
   wAttr('phone-btn','aria-pressed', on?'true':'false');
-  wCls('phone-row','on',on);
+  /* The row carries MOUNT for the phone and 3x for the demo, so it is
+     up if either feed is. */
+  wCls('phone-row','on', on||!!CFG.windDemo);
+  wSty('mount-btn','display', on?'':'none');
+  wSty('fast-btn','display', CFG.windDemo?'':'none');
+  wCls('fast-btn','on', RACE_RATE>1);
+  wAttr('fast-btn','aria-pressed', RACE_RATE>1?'true':'false');
   wCls('mount-btn','on',on&&mountOn);
   wCls('mount-btn','bad',on&&mountOn&&!!mountWhy);
   wAttr('mount-btn','aria-pressed', (on&&mountOn)?'true':'false');
   wText('phone-why', on?why:'');
 }
 $('phone-btn').addEventListener('click',()=>phoneSet(!CFG.phoneGps,'tapped'));
+/* Not persisted, and it cannot survive the demo going off: a panel that
+   came up with the race clock at 3x, on the water, would hand you a
+   finish time a third of what you sailed. */
+const FAST_X=3;
+$('fast-btn').addEventListener('click',()=>{
+  raceRate(RACE_RATE>1 ? 1 : FAST_X); drawPhone(); });
 
 /* ---- the sensor readout on the music page --------------------------
    It was one thin row of 32px numbers above the album art, which is
