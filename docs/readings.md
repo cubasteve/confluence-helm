@@ -233,9 +233,9 @@ the pin is not a crossing, and a jump of more than 80 m between them is
 discarded as a bad fix rather than believed.
 
 *The gun can be scheduled.* The first row of the course sheet is
-`START TIME`: type the time off the sailing instructions and the
-countdown starts itself `CFG.startMins` before it and runs out exactly
-on it. The row then says when the gun is and when the countdown will
+`START TIME`: type the time off the sailing instructions — three or
+four digits and `AM`/`PM`, so `6` `2` `5` `PM` — and the countdown
+starts itself `CFG.startMins` before it and runs out exactly on it. The row then says when the gun is and when the countdown will
 begin, and the RACE pill carries the time while it is armed, so you can
 see it without opening anything.
 
@@ -252,6 +252,18 @@ see it without opening anything.
   but it is dropped on load once it is more than a countdown old, so
   yesterday's race does not arm itself tonight.
 - A gun that went while the panel was off starts nothing.
+- `12` is the one the clock face gets backwards: `12:25 PM` is twenty
+  five past noon and `12:25 AM` is twenty five past midnight, and
+  neither is twelve hours on from the other eleven.
+
+The pad's keys are **112 px**, which is 45 on a 430 px phone — the
+smallest thing worth asking a thumb to hit is 44, and the 56 px it
+borrowed from the mark keyboard was 22. There is **one** `SET`, on the
+pad where the last digit leaves your thumb; it was on the pad *and* on
+the bar, which is the same action twice. And the bar's other button says
+`NO START TIME` rather than `CLEAR`: backspace clears a *digit* and that
+clears the whole scheduled gun, and two very different consequences were
+wearing the same word.
 
 *Which kind of start* it is comes from the **SEQUENCE** row of the
 course sheet, one under the start time — `GUN` or `WINDOW`. Nothing on the water

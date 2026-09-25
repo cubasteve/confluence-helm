@@ -860,6 +860,37 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .rbtn{width:84px}
 #course-list{max-height:560px}
 #course-main,#course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
+/* ---- the start time's pad ----
+   Sized for a thumb rather than for the page. At 56 px - what it
+   borrowed from the mark keyboard - a key is 22 px on a 430 px phone,
+   and the smallest thing anyone should ask a thumb to hit is 44. These
+   are 112, which is 45 there and a generous target on the panel. */
+#course-gun{display:flex;flex-direction:column;align-items:stretch;width:640px}
+.gn-field{height:118px;border-radius:20px;background:var(--chip);display:flex;
+  align-items:center;justify-content:center;gap:18px;
+  border:2px solid var(--accent)}
+.gn-lbl{font-size:19px;letter-spacing:.16em;color:var(--label)}
+.gn-val{font-size:64px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.gn-val i{font-style:normal;font-size:34px;margin-left:10px}
+.gn-val.empty{color:var(--label);font-size:38px;letter-spacing:.08em}
+.gn-pad{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.gn-row{display:flex;gap:10px}
+.gn-mer{margin-top:14px}
+.gn-key{flex:1;min-width:0;height:112px;border-radius:16px;background:var(--chip);
+  border:none;font-family:var(--font);font-size:42px;font-weight:600;
+  color:var(--ink);display:flex;align-items:center;justify-content:center}
+.gn-key:active{background:var(--accent);color:var(--panel)}
+.gn-key.fn{height:96px;font-size:30px;color:var(--ink-dim)}
+.gn-key.go{height:96px;flex:2;font-size:26px;letter-spacing:.14em;
+  background:var(--accent);color:var(--panel)}
+/* The half of the day, drawn like the SEQUENCE pair a sheet away. */
+.gn-key.mer{height:88px;font-size:26px;letter-spacing:.12em;background:none;
+  border:2px solid var(--hairline);color:var(--label)}
+.gn-key.mer.on{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+#course-gun .course-bar{margin-top:16px}
+#course-gun .course-bar .cbtn{width:auto;height:72px;padding:0 30px;
+  border-radius:36px;font-size:21px}
 /* the form starts under where the alert banner ends (240): a shoaling
    warning while you are entering a mark is not far-fetched here */
 #course-add{padding-top:40px}
@@ -2240,15 +2271,23 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          typing it once beats watching a clock for the moment to press
          a button. -->
     <div id="course-gun" style="display:none">
-      <div class="mk-row"><div class="mk-field on" data-f="at"
-        ><span class="mk-lbl">GUN AT</span><span class="mk-val" id="gn-at"
-        ></span><span class="pw-cur"></span></div></div>
-      <div class="kb small" id="gn-kb"></div>
+      <div class="gn-field"><span class="gn-lbl">GUN AT</span
+        ><span class="gn-val" id="gn-at"></span></div>
+      <div class="gn-row gn-mer">
+        <button class="gn-key mer" id="gn-am">AM</button>
+        <button class="gn-key mer" id="gn-pm">PM</button>
+      </div>
+      <div class="gn-pad" id="gn-kb"></div>
       <div class="ns-msg" id="gn-msg"></div>
+      <!-- One SET, on the pad, where your thumb already is when the last
+           digit goes in - it was on the pad AND on this bar, which is
+           the same action twice.
+           NO START TIME rather than CLEAR: backspace clears a DIGIT and
+           this clears the whole scheduled gun, and two very different
+           consequences were wearing the same word. -->
       <div class="course-bar">
-        <button class="cbtn" id="gn-cancel">CANCEL</button>
-        <button class="cbtn" id="gn-clear">CLEAR</button>
-        <button class="cbtn on" id="gn-save">SET</button>
+        <button class="cbtn" id="gn-cancel">BACK</button>
+        <button class="cbtn" id="gn-clear">NO START TIME</button>
       </div>
     </div>
   </div>
@@ -8382,8 +8421,13 @@ try{ const v=+localStorage.getItem(GUN_KEY);
      if(v && v > Date.now()-CFG.startMins*60000) GUNAT=v; }catch(e){}
 const gunSave=()=>{ try{ GUNAT ? localStorage.setItem(GUN_KEY,String(GUNAT))
                                 : localStorage.removeItem(GUN_KEY); }catch(e){} };
-const gunTxt=t=>{ const d=new Date(t), p=n=>String(n).padStart(2,'0');
-                  return p(d.getHours())+':'+p(d.getMinutes()); };
+/* Shown the way it is said and the way the sailing instructions print
+   it. 24-hour was what the four-digit pad happened to take, which is a
+   poor reason for a clock to read 18:25 to someone who calls it
+   twenty five past six. */
+const gunTxt=t=>{ const d=new Date(t), h=d.getHours();
+  return ((h%12)||12)+':'+String(d.getMinutes()).padStart(2,'0')
+         +' '+(h<12?'AM':'PM'); };
 
 /* Started by the clock rather than by a hand, and only ever from idle:
    a countdown already running, a race under way or one just finished is
@@ -8407,13 +8451,17 @@ function gunWatch(){
   console.log('[helm] countdown started for', gunTxt(at));
 }
 
-/* Four digits, and the keyboard the marks already use. `GN` holds what
-   has been typed so far rather than a parsed time: half of 18:25 is not
-   a time, and a field that refuses to show you what you typed is a
-   field you cannot correct. */
+/* Three or four digits and the half of the day. `GN` holds what has
+   been TYPED rather than a parsed time: half of 6:25 is not a time, and
+   a field that refuses to show you what you typed is a field you cannot
+   correct. */
 let GN=null;
 function gnOpen(){
-  GN={v: GUNAT!==null ? gunTxt(GUNAT).replace(':','') : '', layer:''};
+  let v='', pm=new Date().getHours()>=12;   /* the half of the day it is */
+  if(GUNAT!==null){ const d=new Date(GUNAT), h=d.getHours();
+    pm = h>=12;
+    v = String((h%12)||12) + String(d.getMinutes()).padStart(2,'0'); }
+  GN={v:v, pm:pm, built:false};
   $('course-title').textContent='Start time';
   $('course-main').style.display='none'; $('course-gun').style.display='';
   $('gn-msg').textContent=''; gnPaint();
@@ -8421,28 +8469,40 @@ function gnOpen(){
 function gnClose(){ GN=null; $('course-gun').style.display='none';
   $('course-title').textContent='Course';
   $('course-main').style.display=''; renderCourse(); }
-/* Digits and nothing else. kbHtml's numeric layer carries the point,
-   the minus and NSEW, which are there for a coordinate and are four
-   wrong answers on a clock. */
-const gnKb=()=>'<div class="kb-r">'
-  +'1234567890'.split('').map(c=>'<button class="kk" data-c="'+c+'">'+c+'</button>').join('')
-  +'</div><div class="kb-r"><button class="kk fn" data-a="del">⌫</button>'
-  +'<button class="kk go" data-a="go">SET</button></div>';
+/* Digits and nothing else, five to a row. kbHtml's numeric layer carries
+   the point, the minus and NSEW, which are there for a coordinate and
+   are four wrong answers on a clock. */
+const gnKey=c=>'<button class="gn-key" data-c="'+c+'">'+c+'</button>';
+const gnKb=()=>'<div class="gn-row">'+'12345'.split('').map(gnKey).join('')
+  +'</div><div class="gn-row">'+'67890'.split('').map(gnKey).join('')
+  +'</div><div class="gn-row"><button class="gn-key fn" data-a="del">⌫</button>'
+  +'<button class="gn-key go" data-a="go">SET</button></div>';
 function gnPaint(){
   if(!GN) return;
-  const d=GN.v;
-  wText('gn-at', d.length>2 ? d.slice(0,d.length-2)+':'+d.slice(-2) : d);
-  if(GN.layer!=='n'){ GN.layer='n'; $('gn-kb').innerHTML=gnKb(); }
+  const d=GN.v, el=$('gn-at');
+  /* The colon goes two from the right as soon as there is a right: 6,
+     6:2, 6:25, 12:25. Typing is what it shows, not what it will mean. */
+  const txt = d.length>2 ? d.slice(0,d.length-2)+':'+d.slice(-2) : d;
+  el.innerHTML = d ? esc(txt)+'<i>'+(GN.pm?'PM':'AM')+'</i>' : 'WHEN?';
+  wCls('gn-at','empty', !d);
+  wCls('gn-am','on', !GN.pm); wCls('gn-pm','on', GN.pm);
+  if(!GN.built){ GN.built=true; $('gn-kb').innerHTML=gnKb(); }
 }
-/* Local today at hh:mm. Refused rather than rolled to tomorrow if it
-   has gone: 18:25 typed at 18:30 is a typo far more often than it is a
-   plan for tomorrow evening, and arming for tomorrow would look exactly
-   like working while doing nothing at all tonight. */
+/* Local today at the hour typed. Refused rather than rolled to
+   tomorrow if it has gone: 6:25 typed at 6:30 is a typo far more often
+   than it is a plan for tomorrow evening, and arming for tomorrow would
+   look exactly like working while doing nothing at all tonight. */
 function gnSet(){
   const d=GN.v.replace(/\D/g,'');
-  if(d.length<3||d.length>4) return void($('gn-msg').textContent='FOUR DIGITS · 1825');
-  const h=+d.slice(0,d.length-2), m=+d.slice(-2);
-  if(h>23||m>59) return void($('gn-msg').textContent='NOT A TIME');
+  if(d.length<3||d.length>4)
+    return void($('gn-msg').textContent='THREE OR FOUR DIGITS · 625');
+  let h=+d.slice(0,d.length-2); const m=+d.slice(-2);
+  if(h<1||h>12||m>59) return void($('gn-msg').textContent='NOT A TIME');
+  /* Noon and midnight are the two the clock face gets backwards: 12 PM
+     is the middle of the day and 12 AM is the start of it, and neither
+     is twelve hours on from the other eleven. */
+  if(h===12) h=0;
+  if(GN.pm) h+=12;
   const t=new Date(); t.setHours(h,m,0,0);
   if(t.getTime() <= Date.now())
     return void($('gn-msg').textContent=gunTxt(t.getTime())+' HAS GONE');
@@ -8676,11 +8736,14 @@ $('course-gun').addEventListener('click',e=>{
   if(!GN) return;
   const b=e.target.closest('#gn-kb button'); if(!b) return;
   const c=b.dataset.c, a=b.dataset.a;
-  if(c!==undefined){ if(/\d/.test(c) && GN.v.length<4) GN.v+=c; return gnPaint(); }
+  if(c!==undefined){ if(/\d/.test(c) && GN.v.length<4) GN.v+=c;
+                     $('gn-msg').textContent=''; return gnPaint(); }
   if(a==='del'){ GN.v=GN.v.slice(0,-1); $('gn-msg').textContent=''; return gnPaint(); }
   if(a==='go') return gnSet();
 });
-$('gn-save')  .addEventListener('click',gnSet);
+const gnMer=pm=>{ if(!GN) return; GN.pm=pm; $('gn-msg').textContent=''; gnPaint(); };
+$('gn-am').addEventListener('click',()=>gnMer(false));
+$('gn-pm').addEventListener('click',()=>gnMer(true));
 $('gn-cancel').addEventListener('click',gnClose);
 $('gn-clear') .addEventListener('click',()=>{ GUNAT=null; gunSave(); gnClose(); });
 

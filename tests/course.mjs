@@ -167,20 +167,26 @@ t.head('the scheduled gun: typed once, and it starts itself');
 const gunRow=()=>p.evaluate(()=>{ const r=document.querySelector('.course-row.gun');
   return {b:r.querySelector('b').textContent, sub:r.querySelector('span').textContent,
           set:r.classList.contains('in')}; });
-const type=async d=>{ await p.evaluate(()=>gnOpen()); await p.waitForTimeout(250);
-  await p.evaluate(d=>{ GN.v=''; gnPaint();
-    for(const c of d) document.querySelector('#gn-kb button[data-c="'+c+'"]').click(); }, d);
+/* Typed on the pad, and the half of the day chosen on its pair - the
+   same two taps a thumb makes. */
+const type=async (d,mer)=>{ await p.evaluate(()=>gnOpen()); await p.waitForTimeout(250);
+  await p.evaluate(([d,mer])=>{ GN.v=''; gnPaint();
+    if(mer) $('gn-'+mer).click();
+    for(const c of d) document.querySelector('#gn-kb button[data-c="'+c+'"]').click();
+  }, [d,mer||null]);
   await p.evaluate(()=>gnSet()); await p.waitForTimeout(250);
   return p.evaluate(()=>({at:GUNAT, msg:$('gn-msg').textContent,
-                          open:$('course-gun').style.display!=='none'})); };
+                          open:$('course-gun').style.display!=='none',
+                          h:GUNAT===null?null:new Date(GUNAT).getHours(),
+                          m:GUNAT===null?null:new Date(GUNAT).getMinutes()})); };
 /* a time 40 minutes out, whatever o'clock it is where this runs */
-const want=await p.evaluate(()=>{ const d=new Date(Date.now()+40*60000),
-  z=n=>String(n).padStart(2,'0');
-  return {d:z(d.getHours())+z(d.getMinutes()), hhmm:z(d.getHours())+':'+z(d.getMinutes())}; });
+const want=await p.evaluate(()=>{ const d=new Date(Date.now()+40*60000), h=d.getHours();
+  return {d:String((h%12)||12)+String(d.getMinutes()).padStart(2,'0'),
+          mer:h<12?'am':'pm', hhmm:gunTxt(d.getTime())}; });
 await p.evaluate(()=>{ GUNAT=null; gunSave(); renderCourse(); });
 let G=await gunRow();
 t.ok(/START TIME/.test(G.b) && !G.set, 'unset, the row invites one', G.b);
-let r=await type(want.d);
+let r=await type(want.d, want.mer);
 t.ok(r.at!==null && !r.open, 'four digits and it is armed', String(r.at));
 G=await gunRow();
 t.ok(G.b==='GUN AT '+want.hhmm, 'the row says when the gun is', G.b);
@@ -190,16 +196,66 @@ t.ok(await p.evaluate(()=>raceStatus().txt)===want.hhmm,
      await p.evaluate(()=>raceStatus().txt));
 
 t.head('what it refuses');
-const gone=await p.evaluate(()=>{ const d=new Date(Date.now()-60*60000),
-  z=n=>String(n).padStart(2,'0'); return z(d.getHours())+z(d.getMinutes()); });
-r=await type(gone);
+const gone=await p.evaluate(()=>{ const d=new Date(Date.now()-60*60000), h=d.getHours();
+  return {d:String((h%12)||12)+String(d.getMinutes()).padStart(2,'0'),
+          mer:h<12?'am':'pm'}; });
+r=await type(gone.d, gone.mer);
 t.ok(/HAS GONE/.test(r.msg) && r.open,
      'a time that has already passed, rather than arming for tomorrow', r.msg);
-r=await type('2599');
-t.ok(/NOT A TIME/.test(r.msg) && r.open, 'and 25:99', r.msg);
-r=await type('18');
-t.ok(/FOUR DIGITS/.test(r.msg) && r.open, 'and half of one', r.msg);
+t.ok(/[AP]M/.test(r.msg), 'and says it back the way it is said', r.msg);
+r=await type('1399','pm');
+t.ok(/NOT A TIME/.test(r.msg) && r.open, 'and 13:99 on a twelve hour clock', r.msg);
+r=await type('099','am');
+t.ok(/NOT A TIME/.test(r.msg) && r.open, 'and a zero hour - there is no 0 on a clock face',
+     r.msg);
+r=await type('18','pm');
+t.ok(/THREE OR FOUR DIGITS/.test(r.msg) && r.open, 'and half of one', r.msg);
 await p.evaluate(()=>gnClose());
+
+t.head('noon and midnight, which the clock face gets backwards');
+/* 12 PM is the middle of the day and 12 AM is the start of it, and
+   neither is twelve hours on from the other eleven. */
+const at=async (d,mer)=>{ await p.evaluate(()=>{ GUNAT=null; gunSave(); });
+  await p.evaluate(()=>gnOpen()); await p.waitForTimeout(200);
+  return p.evaluate(([d,mer])=>{ GN.v=d; GN.pm=(mer==='pm'); gnPaint();
+    /* the refusal of a time already gone is not what is under test */
+    const real=Date.now; Date.now=()=>0;
+    gnSet();
+    const out = GUNAT===null ? {msg:$('gn-msg').textContent}
+              : {h:new Date(GUNAT).getHours(), m:new Date(GUNAT).getMinutes()};
+    Date.now=real; GUNAT=null; gunSave(); gnClose(); return out; }, [d,mer]); };
+t.ok(JSON.stringify(await at('1225','pm'))==='{"h":12,"m":25}',
+     '12:25 PM is twenty five past noon', JSON.stringify(await at('1225','pm')));
+t.ok(JSON.stringify(await at('1225','am'))==='{"h":0,"m":25}',
+     'and 12:25 AM is twenty five past midnight',
+     JSON.stringify(await at('1225','am')));
+t.ok(JSON.stringify(await at('625','pm'))==='{"h":18,"m":25}',
+     '6:25 PM is eighteen twenty five', JSON.stringify(await at('625','pm')));
+t.ok(JSON.stringify(await at('625','am'))==='{"h":6,"m":25}',
+     'and 6:25 AM is six twenty five', JSON.stringify(await at('625','am')));
+t.ok(JSON.stringify(await at('1125','pm'))==='{"h":23,"m":25}',
+     'eleven at night is the last hour, not the thirteenth',
+     JSON.stringify(await at('1125','pm')));
+
+t.head('the pad a thumb can hit');
+const pad=await p.evaluate(()=>{ gnOpen();
+  const k=[...$('gn-kb').querySelectorAll('button')];
+  const r=k[0].getBoundingClientRect();
+  const out={n:k.length, h:Math.round(r.height), w:Math.round(r.width),
+             /* 430 px of phone showing 1080 px of layout */
+             onPhone:Math.round(r.height*430/1080),
+             set:k.filter(x=>/SET/.test(x.textContent)).length,
+             bar:[...document.querySelectorAll('#course-gun .cbtn')]
+                   .map(x=>x.textContent)};
+  gnClose(); return out; });
+t.ok(pad.n===12, 'ten digits, a backspace and a SET', String(pad.n));
+t.ok(pad.onPhone>=44, 'and a key is 44 px on a phone, which is the smallest '
+     +'thing worth asking a thumb to hit', pad.h+' px -> '+pad.onPhone);
+t.ok(pad.set===1, 'ONE set, on the pad where the last digit leaves your thumb',
+     String(pad.set));
+t.ok(pad.bar.join('|')==='BACK|NO START TIME',
+     'and the bar says what it does rather than CLEAR, which is what '
+     +'backspace does to a digit', pad.bar.join('|'));
 
 t.head('and what it does when the moment comes');
 const fired=await p.evaluate(()=>{
