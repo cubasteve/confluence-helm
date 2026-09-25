@@ -37,8 +37,9 @@ await tap('#trk-course');
 let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
 const marks=x=>x.filter(r=>r.mark), lineOf=x=>x.find(r=>r.line);
-t.ok(marks(S).length===10 && S.length===12,
-     'the gun, the line and all ten club marks', String(S.length));
+t.ok(marks(S).length===10 && S.length===13,
+     'the start time, the sequence, the line and all ten club marks',
+     String(S.length));
 t.ok(/START . FINISH LINE/.test(lineOf(S).name), 'the line has its own row',
      lineOf(S).name);
 t.ok(lineOf(S).sub==='FLAG – BALL', 'and says which two marks it is', lineOf(S).sub);

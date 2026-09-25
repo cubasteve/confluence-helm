@@ -253,8 +253,8 @@ see it without opening anything.
   yesterday's race does not arm itself tonight.
 - A gun that went while the panel was off starts nothing.
 
-*Which kind of start* it is comes from the **START** setting on the
-control panel — `GUN` or `WINDOW`. Nothing on the water
+*Which kind of start* it is comes from the **SEQUENCE** row of the
+course sheet, one under the start time — `GUN` or `WINDOW`. Nothing on the water
 tells them apart: the same crossing, at the same place, at the same
 moment, is a start on one night and a foul on the other.
 
@@ -264,8 +264,15 @@ moment, is a start on one night and a foul on the other.
 | `WINDOW` | the line is **live**. Crossing is your gun, and the clock runs from that instant | if you never crossed, it starts anyway | the latest crossing within three minutes moves the start to it |
 
 `GUN` is a proper sequence — Saturday. `WINDOW` is an open five minutes
-you go when you are ready — Wednesday. It is remembered across a
-restart, because it is a fact about the series and not about today.
+you go when you are ready — Wednesday. The pair is drawn the way the
+marks' `P` and `S` are a few rows down: both showing, the one in force
+lit, and a tap anywhere on the row is the other one. It is remembered
+across a restart, because it is a fact about the series and not about
+today.
+
+It lived on the control panel until the start time arrived. Everything
+about a start is one thing, and the panel is where the boat is set up
+rather than where a race is.
 
 The difference *after* the gun is the one that reaches the scoreboard.
 On a gun start the fleet's time runs from the gun whoever was where, so

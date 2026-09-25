@@ -146,7 +146,8 @@ const sh=()=>p.evaluate(()=>{ const e=$('p-sheet'), r=e.getBoundingClientRect();
           cards:[...e.querySelectorAll('.card')].filter(k=>k.offsetHeight).length,
           outside:[...new Set(out)]}; });
 let S=await sh();
-t.ok(S.cards===4, 'four cards, everything the panel has', String(S.cards));
+t.ok(S.cards===3, 'three cards, everything the panel has left - the start '
+     +'moved to the course sheet, with the rest of the start', String(S.cards));
 t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
 t.ok(!S.over, 'so nothing is faded off an edge');
 t.ok(S.outside.length===0, 'and no card corner is out in the black',
@@ -160,8 +161,11 @@ const row=await p.evaluate(()=>{
   const tr=$('dim').getBoundingClientRect();
   return {h, slider:mid($('dim')), stepper:mid($('d-down')),
           thumbClear:Math.round(card.bottom-(tr.top+tr.height/2+38))}; });
-t.ok(row.h[0]===row.h[1] && row.h[2]===row.h[3],
-     'each row is one height, not two', JSON.stringify(row.h));
+/* Cards two at a time: a row of two is one height. An odd last card
+   has no pair and is simply its own. */
+const pairs=row.h.reduce((a,_,i)=>i%2?a.concat([row.h.slice(i-1,i+1)]):a,[]);
+t.ok(pairs.every(([a,b])=>a===b), 'a row of two is one height, not two',
+     JSON.stringify(row.h));
 t.ok(Math.abs(row.slider-row.stepper)<=1,
      'the brightness slider sits on the depth steppers\' line',
      row.slider+' vs '+row.stepper);

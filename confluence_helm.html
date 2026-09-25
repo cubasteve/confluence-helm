@@ -904,6 +904,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .course-row .side{display:flex;gap:10px;margin-right:14px;flex:none}
 .sb{width:50px;height:50px;border-radius:25px;border:2px solid var(--hairline);
   display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--label)}
+/* The start row's pair says GUN and WINDOW rather than P and S, so it
+   is the same control in a wider shape - and neither of them is a
+   tack, so neither is red or green. */
+.side.wide .sb{width:auto;padding:0 18px;font-size:19px;letter-spacing:.1em}
+.side.wide .sb.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 .sb.on{color:#fff;background:var(--port);border-color:var(--port)}
 .sb.on[data-side="S"]{background:var(--stbd);border-color:var(--stbd)}
 .course-bar{display:flex;gap:18px;margin-top:22px}
@@ -1974,24 +1979,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="mini" id="d-up">+</button>
         <button class="mini wide" id="r-units">FT / M</button>
       </div>
-    </div>
-
-    </div>
-
-    <!-- Which club night this is. GUN is a proper sequence with the
-         line shut until zero; WINDOW is an open five minutes you go
-         when you are ready. The line cannot tell them apart - the same
-         crossing is a start on one night and a foul on the other - so
-         it is asked here, once, before the sequence.
-         A line under the pills used to spell out what each one did. It
-         is gone: the two words say it to anyone who races, and a panel
-         that explains itself every time you open it is a panel you
-         stop reading. docs/readings.md has the long version. -->
-    <div class="card">
-    <div class="slab">Start</div>
-    <div class="steprow">
-      <button class="mini wide" id="st-gun">GUN</button>
-      <button class="mini wide" id="st-win">WINDOW</button>
     </div>
 
     </div>
@@ -8328,16 +8315,34 @@ function renderCourse(){
   const box=$('course-list'); if(!box) return;
   const E=lineEnds();
   const lineRow=`<div class="lib-row course-row line" data-line="1">
-      <div class="seq">⚑</div><div class="lib-main">
+      <div class="seq">↔</div><div class="lib-main">
       <b>START · FINISH LINE</b><span>${E.pinged?'PINGED · TAP TO USE THE MARKS':
         markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr}</span></div></div>`;
-  /* Above the line, because it comes first in the evening. */
+  /* Above the line, because they come first in the evening. The two
+     start rows live here rather than on the control panel: everything
+     about a start is one thing, and the panel is where the boat is set
+     up rather than where a race is.
+     WINDOW and GUN are drawn the way the marks' P and S are, on the
+     same sheet a few rows down - both showing, the one in force lit.
+     That was what replaced the sentence under them: the pair says
+     which without a line of prose to read every time. */
   const gunRow=`<div class="lib-row course-row gun${GUNAT!==null?' in':''}" data-gun="1">
       <div class="seq">⏱</div><div class="lib-main">
       <b>${GUNAT!==null ? 'GUN AT '+gunTxt(GUNAT) : 'START TIME'}</b><span>${
         GUNAT!==null
           ? 'COUNTDOWN STARTS '+gunTxt(GUNAT-CFG.startMins*60000)
           : 'TAP TO SET · THE COUNTDOWN STARTS ITSELF'}</span></div></div>`;
+  const w=CFG.startMode==='window';
+  /* SEQUENCE, not START: the row under it is the START line and the one
+     above is the START time, and three rows opening on the same word is
+     three rows you have to read to tell apart. It is the sailing word
+     for the procedure anyway, and GUN or WINDOW is exactly which
+     procedure this is. */
+  const modeRow=`<div class="lib-row course-row mode in" data-mode="1">
+      <div class="seq">⚑</div><div class="lib-main">
+      <b>SEQUENCE</b><span>${w?'LINE OPEN THROUGHOUT':'LINE OPENS AT ZERO'}</span></div>
+      <div class="side wide"><span class="sb${w?'':' on'}" data-mode="gun">GUN</span>`
+     +`<span class="sb${w?' on':''}" data-mode="window">WINDOW</span></div></div>`;
   const row=m=>{
     const i=COURSE.marks.indexOf(m.id);
     const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
@@ -8354,7 +8359,7 @@ function renderCourse(){
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b>
       <span class="${isMoved(m.id)?'moved':''}">${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
-  box.innerHTML=gunRow+lineRow+MARKS.map(row).join('');
+  box.innerHTML=gunRow+modeRow+lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
 /* ---- the scheduled gun -------------------------------------------------
@@ -8449,18 +8454,10 @@ function gnSet(){
    not about today: whoever races Wednesdays races them every Wednesday,
    and a setting that forgets over a restart is one you find out about
    at the gun. */
-function startModePaint(){
-  const w=CFG.startMode==='window';
-  wCls('st-gun','on',!w); wCls('st-win','on',w);
-  wAttr('st-gun','aria-pressed', w?'false':'true');
-  wAttr('st-win','aria-pressed', w?'true':'false');
-}
 function startModeSet(m){
   if(START_MODES.indexOf(m)<0 || CFG.startMode===m) return;
-  CFG.startMode=m; startModePaint(); prefsSave();
+  CFG.startMode=m; prefsSave(); renderCourse();
 }
-$('st-gun').addEventListener('click',()=>startModeSet('gun'));
-$('st-win').addEventListener('click',()=>startModeSet('window'));
 
 $('trk-course').addEventListener('click',()=>{
   if($('t-course').classList.contains('on')) closeLib(); else { hideQR(); $('t-lib').classList.remove('on'); openCourse(); } });
@@ -8470,8 +8467,12 @@ $('course-list').addEventListener('click',e=>{
   /* P or S on a mark in the course sets its side; it is not a tap on
      the row, which would take the mark out. Nor is the delete, nor the
      grip. */
+  /* A side belongs to a MARK. The start row's pair is the same control
+     in a wider shape and carries no data-side, so without this it fell
+     into here and wrote COURSE.side[undefined]. */
   const sb=e.target.closest('.sb');
-  if(sb){ COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
+  if(sb && row.dataset.mark){
+    COURSE.side=COURSE.side||{}; COURSE.side[row.dataset.mark]=sb.dataset.side;
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
   if(e.target.closest('.undo')){ markRevert(row.dataset.mark); return; }
   if(e.target.closest('.del')){ markDelete(row.dataset.mark); return; }
@@ -8482,6 +8483,13 @@ $('course-list').addEventListener('click',e=>{
      standing at the buoy knows better. What that writes is an override -
      see MARK_MOVES - so the book is still there to go back to. */
   if(row.dataset.gun){ gnOpen(); return; }
+  if(row.dataset.mode){
+    const m=e.target.closest('.sb');
+    /* The pair, or anywhere on the row: a row that only answers a
+       12 mm word is a row you miss in a seaway. */
+    startModeSet(m ? m.dataset.mode
+                   : (CFG.startMode==='window' ? 'gun' : 'window'));
+    return; }
   if(courseEdit && !row.dataset.line && row.dataset.mark){ mkOpen(row.dataset.mark); return; }
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
@@ -11029,7 +11037,6 @@ drawDemo();
    browser asks for location, which is the right moment because you
    asked for it last time. */
 drawPhone(); if(CFG.phoneGps) phoneStart();
-startModePaint();      /* stored before this session; the pills say which */
 /* A race held from a previous session, for the same reason: HELD is
    read at its declaration, but the card it draws is markup, and this
    is where persisted state gets painted. */

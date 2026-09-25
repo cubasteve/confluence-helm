@@ -280,22 +280,40 @@ t.ok(zero.gunMoved===60,
      'GUN: the gun stands, and crossing a minute late is a minute of lost time',
      zero.gunMoved+' s since the gun');
 
-t.head('the pills say which, and are remembered');
+t.head('the pair says which, on the course sheet with the rest of the start');
+/* It lived on the control panel until the start time arrived; the two
+   belong together, and the panel is where the boat is set up rather
+   than where a race is. */
 const pills=await p.evaluate(()=>{
-  const read=()=>({gun:$('st-gun').classList.contains('on'),
-                   win:$('st-win').classList.contains('on')});
-  const out={start:read()};
-  $('st-win').click(); out.win=read();
+  startModeSet('gun'); renderCourse();
+  const r=()=>{ const row=document.querySelector('#course-list .course-row.mode');
+    return {title:row.querySelector('b').textContent,
+            sub:row.querySelector('span').textContent,
+            lit:[...row.querySelectorAll('.sb.on')].map(x=>x.textContent).join()}; };
+  const tap=m=>{ document.querySelector(
+    '#course-list .sb[data-mode="'+m+'"]').click(); };
+  const out={start:r()};
+  tap('window'); out.win=r();
   out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
-  $('st-gun').click(); out.back=read();
+  /* anywhere on the row is the other one, because a row that only
+     answers a 12 mm word is a row you miss in a seaway */
+  document.querySelector('#course-list .course-row.mode .lib-main').click();
+  out.row=r();
+  out.panel=!document.getElementById('st-gun');
   return out;
 });
-t.ok(pills.start.gun && !pills.start.win, 'a gun start until told otherwise');
-t.ok(pills.win.win && !pills.win.gun, 'tapping WINDOW lights it and puts GUN out');
-t.ok(await p.evaluate(()=>$('st-gun').getAttribute('aria-pressed'))==='true',
-     'and says which out loud, for anything that is not looking');
+t.ok(pills.start.lit==='GUN', 'a gun start until told otherwise', pills.start.lit);
+t.ok(pills.start.title==='SEQUENCE',
+     'headed SEQUENCE, not START - the rows either side of it are the start '
+     +'time and the start line', pills.start.title);
+t.ok(pills.win.lit==='WINDOW', 'tapping WINDOW lights it and puts GUN out',
+     pills.win.lit);
+t.ok(/OPEN THROUGHOUT/.test(pills.win.sub) && /OPENS AT ZERO/.test(pills.start.sub),
+     'and the row says what it does to the line',
+     pills.start.sub+' | '+pills.win.sub);
 t.ok(pills.stored==='window', 'it is remembered across a restart', String(pills.stored));
-t.ok(pills.back.gun && !pills.back.win, 'and it goes back');
+t.ok(pills.row.lit==='GUN', 'a tap anywhere on the row is the other one', pills.row.lit);
+t.ok(pills.panel, 'and it is gone from the control panel');
 
 t.head('and finishes it, but only when the course is sailed');
 const fin=await p.evaluate(()=>{
