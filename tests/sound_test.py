@@ -9,7 +9,7 @@ are not sitting at.
 
     python3 tests/sound_test.py
 """
-import contextlib, importlib, math, os, shutil, struct, sys
+import contextlib, importlib, json, math, os, shutil, struct, sys
 import tempfile, time, unittest, wave
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,12 +28,31 @@ def rig(tools=(), **env):
     open(LOG, 'w').close()
     for name in tools:
         p = os.path.join(d, name)
+        body = ('#!/bin/sh\nprintf "%s %s\\n" "$(basename "$0")" "$*" >> '
+                + LOG + '\n')
+        if name == 'aplay':
+            # Two enquiries to answer. `-l` names the cards, which is how
+            # netd finds the 3.5 mm jack; `-L` names the PCMs, which is
+            # how it finds what else it could be pointed at. Names at
+            # column 0, descriptions indented under them.
+            body += ('if [ "$1" = "-l" ]; then\n'
+                     '  printf "card 0: Headphones [bcm2835 Headphones],'
+                     ' device 0: bcm2835 Headphones []\\n"\n'
+                     'elif [ "$1" = "-L" ]; then\n'
+                     '  printf "default\\n    Default\\n"\n'
+                     '  printf "pulse\\n    PulseAudio Sound Server\\n"\n'
+                     '  printf "plughw:CARD=Headphones,DEV=0\\n'
+                     '    bcm2835 Headphones\\n"\n'
+                     'fi\n')
+        body += 'exit 0\n'
         with open(p, 'w') as f:
-            f.write('#!/bin/sh\nprintf "%s %s\\n" "$(basename "$0")" "$*" >> '
-                    + LOG + '\nexit 0\n')
+            f.write(body)
         os.chmod(p, 0o755)
     old = dict(os.environ)
     os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH', '')
+    # Never the real one: a test must not write into the home directory
+    # of whoever is running it.
+    os.environ['HELM_AUDIO_CFG'] = os.path.join(d, 'audio.json')
     for k, v in env.items():
         if v is None:
             os.environ.pop(k, None)
@@ -50,10 +69,12 @@ def rig(tools=(), **env):
 
 
 def calls():
-    """What the pretend tools were asked to do - less `aplay -l`, which
-    netd runs once at import to find the jack and is not a signal."""
+    """What the pretend tools were asked to do - less aplay's two
+    enquiries. `-l` finds the jack at import; `-L` lists where the
+    sounder could be pointed, and /status asks it. Neither is a sound."""
+    skip = ('aplay -l', 'aplay -L')
     with open(LOG) as f:
-        return [l.strip() for l in f if l.strip() and l.strip() != 'aplay -l']
+        return [l.strip() for l in f if l.strip() and l.strip() not in skip]
 
 
 def settle(fn, secs=3.0):
@@ -249,6 +270,114 @@ class Audio(unittest.TestCase):
             self.assertTrue(r['ok'])
             self.assertFalse(r['armed'])
             self.assertEqual(r['mode'], 'gpio')
+
+
+class Outs(unittest.TestCase):
+    """Where the sounder can be pointed. aplay only addresses ALSA, so a
+    Bluetooth speaker is reached through whatever sits in front of it."""
+
+    def test_the_jack_is_offered_first_and_always(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            outs = n.audio_outs()
+            self.assertEqual(outs[0]['name'], '3.5 MM JACK')
+            self.assertTrue(outs[0]['dev'].startswith('plughw:'))
+
+    def test_and_whatever_else_this_image_actually_has(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            devs = [o['dev'] for o in n.audio_outs()]
+            # the stand-in `aplay -L` offers pulse and default
+            self.assertIn('pulse', devs)
+            self.assertIn('default', devs)
+            # and nothing it did not
+            self.assertNotIn('bluealsa', devs)
+
+    def test_pointing_it_somewhere_else(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            r = n.audio_out_set('pulse')
+            self.assertTrue(r['ok'])
+            self.assertEqual(n.AUDIO_DEV, 'pulse')
+            n.buzz(90, 1, 0)
+            self.assertTrue(settle(lambda: calls()))
+            self.assertIn('-D pulse', calls()[0])
+
+    def test_somewhere_it_has_not_got(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            was = n.AUDIO_DEV
+            r = n.audio_out_set('bluealsa')
+            self.assertFalse(r['ok'])
+            self.assertEqual(r['error'], 'NO SUCH OUTPUT')
+            self.assertEqual(n.AUDIO_DEV, was, 'and it is left where it was')
+
+    def test_a_pinned_output_is_not_overridden_by_a_tap(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio',
+                 HELM_AUDIO_DEV='pulse') as n:
+            self.assertEqual(n.AUDIO_DEV, 'pulse')
+            r = n.audio_out_set('default')
+            self.assertFalse(r['ok'])
+            self.assertIn('PINNED', r['error'])
+
+    def test_a_saved_choice_comes_back(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            self.assertTrue(n.audio_out_set('pulse')['saved'])
+            cfg = n.AUDIO_CFG
+            with open(cfg) as f:
+                self.assertEqual(json.load(f)['dev'], 'pulse')
+            # and a fresh import of netd comes up pointed there
+            sys.modules.pop('netd', None)
+            n2 = importlib.import_module('netd')
+            self.assertEqual(n2.AUDIO_DEV, 'pulse')
+
+    def test_status_says_where_it_is_pointed_and_where_else(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            st = n.route('/status', {})['buzzer']
+            self.assertTrue(st['device'].startswith('plughw:'))
+            self.assertGreater(len(st['outs']), 1)
+            self.assertFalse(st['pinned'])
+
+    def test_and_a_pin_says_so(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio',
+                 HELM_AUDIO_DEV='pulse') as n:
+            self.assertTrue(n.route('/status', {})['buzzer']['pinned'])
+
+    def test_a_buzzer_has_no_outputs_to_choose_between(self):
+        with rig(('pinctrl',), HELM_BUZZER_MODE='gpio') as n:
+            st = n.route('/status', {})['buzzer']
+            self.assertNotIn('outs', st)
+            self.assertEqual(n.route('/buzz/out', {'dev': 'pulse'})['error'],
+                             'NO AUDIO OUT')
+
+
+class Arm(unittest.TestCase):
+    """How much silence it takes to have the output awake. The jack
+    wants a fraction of a second; an A2DP link that has gone idle takes
+    the better part of one to come back, and the front of whatever is
+    playing is simply not there until it has."""
+
+    def test_the_jack_is_quick(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            self.assertEqual(n._arm_ms(), 120)
+
+    def test_anything_in_front_of_alsa_is_not(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            n.audio_out_set('pulse')
+            self.assertGreaterEqual(n._arm_ms(), 900)
+
+    def test_and_the_arming_file_is_that_long(self):
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            n.audio_out_set('pulse')
+            r = n.buzz(None, None, None, arm=True)
+            self.assertEqual(r['ms'], n._arm_ms())
+            self.assertTrue(settle(lambda: calls()))
+            self.assertIn('quiet-%d-' % n._arm_ms(), calls()[0])
+
+    def test_changing_the_output_re_arms(self):
+        # A different output is a different DAC, and the one just woken
+        # is not the one about to be played.
+        with rig(('aplay',), HELM_BUZZER_MODE='audio') as n:
+            n.buzz(None, None, None, arm=True)
+            self.assertFalse(n.buzz(None, None, None, arm=True)['armed'])
+            n.audio_out_set('pulse')
+            self.assertTrue(n.buzz(None, None, None, arm=True)['armed'])
 
 
 class Gpio(unittest.TestCase):

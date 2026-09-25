@@ -11,7 +11,10 @@ const {b,p,posts}=await open(t,{demo:true,
      fit the glass - see the scrolling checks at the foot of this file. */
   status:{wifi:{available:true, devices:[{dev:'wlan0',up:true,ap:true,ssid:'Confluence'}]},
           bt:{available:true,powered:true}, power:{available:true},
-          buzzer:{available:true, mode:'audio', device:'plughw:CARD=Headphones,DEV=0'}},
+          buzzer:{available:true, mode:'audio',
+                  device:'plughw:CARD=Headphones,DEV=0', pinned:false,
+                  outs:[{dev:'plughw:CARD=Headphones,DEV=0',name:'3.5 MM JACK'},
+                        {dev:'pulse',name:'PIPEWIRE / PULSE'}]}},
   reply:{'/wifi/list':{ok:true, up:true, ap:true, nets:NETS}}});
 
 t.head('the drawers');
@@ -91,6 +94,39 @@ s=await state(p);
 t.ok(!s.sheet && s.panel, 'DONE closes the picker, not the panel', JSON.stringify(s));
 await fling(p,1,0,-260);
 t.ok(!(await state(p)).panel, 'and the dial is back');
+
+t.head('the sounder says where it comes out, and can be pointed elsewhere');
+/* aplay only addresses ALSA, so a Bluetooth speaker is reached through
+   whatever sits in front of it - which is why this is a list and not a
+   jack-or-nothing.
+   Painted and read in ONE turn: the /status poll owns this row and
+   repaints it from the stub a few times a second, so anything set by
+   hand and asked about later is a race with it. */
+await p.evaluate(()=>openPanel()); await p.waitForTimeout(400);
+const who=st=>p.evaluate(st=>{ paintSounder(st);
+  return {txt:$('snd-who').textContent, pick:$('snd-who').classList.contains('pick'),
+          off:$('snd-who').disabled}; }, st);
+const OUT2=[{dev:'plughw:CARD=Headphones,DEV=0',name:'3.5 MM JACK'},
+            {dev:'pulse',name:'PIPEWIRE / PULSE'}];
+let W=await who({available:true, mode:'audio', pinned:false, outs:OUT2,
+                 device:'plughw:CARD=Headphones,DEV=0'});
+t.ok(/3\.5 MM JACK/.test(W.txt), 'it says where in words, not in an ALSA name', W.txt);
+t.ok(/TAP/.test(W.txt) && W.pick, 'and offers the others', W.txt);
+posts.length=0;
+await p.evaluate(()=>$('snd-who').click()); await p.waitForTimeout(700);
+t.ok(posts.some(o=>o.path==='/buzz/out' && o.body.dev==='pulse'),
+     'a tap asks netd for the next one',
+     JSON.stringify(posts.filter(o=>o.path==='/buzz/out').map(o=>o.body)));
+
+t.head('and offers nothing when there is nothing to offer');
+W=await who({available:true, mode:'audio', device:'pulse', pinned:true, outs:OUT2});
+t.ok(/PINNED/.test(W.txt) && W.off,
+     'a HELM_AUDIO_DEV in the environment is shown and not tappable', W.txt);
+W=await who({available:true, mode:'audio', pinned:false,
+             device:'plughw:CARD=Headphones,DEV=0', outs:[OUT2[0]]});
+t.ok(!/TAP/.test(W.txt) && W.off, 'and one output is not a choice', W.txt);
+W=await who({available:true, mode:'gpio', gpio:17});
+t.ok(W.txt==='GPIO 17' && W.off, 'a wire on a pin has no output to pick', W.txt);
 
 t.head('the panel fits the glass');
 /* It stopped fitting once it was a single 600 px column of sections -

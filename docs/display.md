@@ -995,7 +995,47 @@ The plug in the middle is the only thing anyone handles.
   `plughw:CARD=Headphones,DEV=0`; `plughw:` rather than `hw:` so ALSA
   converts rather than refusing a rate the bcm2835 device will not take.
   `HELM_AUDIO_DEV` overrides the whole thing for a rig with something
-  else in front.
+  else in front, and when it is set the panel shows the output as
+  `PINNED` and will not change it.
+- **The output is pickable from the panel.** The sounder card's right
+  half names where the beeps come out; tapping it cycles whatever this
+  Pi actually has. `netd` reads that list out of `aplay -L` rather than
+  guessing at the image: the jack first and always, because it is the
+  one certainly there and certainly awake, then `pipewire`, `pulse`,
+  `default` and `bluealsa` if they exist. The choice is kept in
+  `~/.config/confluence-helm-audio.json` and survives a restart.
+
+#### Bluetooth speakers
+
+Pairing one is already the panel's Bluetooth tile — `netd` pairs and
+connects just-works devices, which speakers are. Getting the *sounder*
+out of one is the picker above: `aplay` addresses ALSA and nothing else,
+so a Bluetooth speaker is reached through whatever sits in front of it,
+which on Bookworm is PipeWire. Point the sounder at `PIPEWIRE` (or
+`SYSTEM DEFAULT`, if the speaker is the default sink) and the beeps
+follow the speaker.
+
+Expect it to be worse than the jack, and know why before you judge it:
+
+- **A2DP has 100–200 ms of latency, always.** For a gun that is the
+  difference between your watch and the committee's, and it is constant
+  rather than random, so it can be lived with.
+- **An idle link goes to sleep**, and coming back takes the better part
+  of a second — during which the front of whatever is playing is simply
+  not there. That is the truncated first beep. It is a property of the
+  link, not of this program.
+- The arming silence is **ten times longer off the jack** for exactly
+  that reason: 120 ms for the bcm2835 output, 1200 ms for anything
+  reached through PipeWire, PulseAudio or bluealsa. The only thing that
+  can be done about a sleeping link is to open the stream sooner, and
+  that is what arming is.
+- **Range and interference.** The Pi's radio is also the hotspot; a
+  speaker at the mast with the crew between it and the panel is a
+  different proposition from one in the cockpit.
+
+If the first beep of a sequence is still clipped after that, the honest
+answer is that A2DP is not built for signals that matter to a second,
+and the jack is.
 - **The gain is wound up once at startup.** A fresh Raspberry Pi OS comes
   up well below full, and the amp's pot cannot make up what the Pi never
   sent. `HELM_AUDIO_VOL` sets it; 100% is the default.

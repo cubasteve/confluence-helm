@@ -571,8 +571,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    driving - is the half of the answer a silent test does not give. */
 .sndrow{display:flex;align-items:center;gap:18px;margin-top:4px}
 .sndrow .mini.wide{flex:none;width:168px;height:74px}
-.sndwho{font-size:19px;font-weight:600;letter-spacing:.08em;color:var(--label);
-  text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sndwho{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.08em;
+  color:var(--label);text-transform:uppercase;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+  background:none;border:none;font-family:var(--font);text-align:left;padding:0}
+.sndwho.pick{color:var(--accent)}
+.sndwho:disabled{color:var(--label)}
 .numv{min-width:96px;text-align:center;font-size:38px;font-weight:600;color:var(--accent)}
 .numv i{font-style:normal;font-size:20px;color:var(--label);margin-left:6px;
   letter-spacing:.12em}
@@ -2003,7 +2007,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="slab">Sounder</div>
     <div class="sndrow" id="snd-row">
       <button class="mini wide" id="snd-test">TEST</button>
-      <span class="sndwho" id="snd-who"></span>
+      <!-- Where it comes out. A tap cycles whatever netd says this Pi
+           has: the jack, and anything in front of ALSA - which is how a
+           Bluetooth speaker is reached. Not a button on a GPIO rig,
+           where there is one wire and no choice. -->
+      <button class="sndwho" id="snd-who"></button>
     </div>
     </div>
 
@@ -5333,19 +5341,42 @@ function netForget(i){
    Hidden outright when netd has nothing to sound, rather than shown
    greyed: a control that cannot work is worse than no control, and on
    a phone loading this page over boat WiFi there is no helper at all. */
+/* The outputs netd last said this Pi has, and which one is in force.
+   Kept so the tap knows what to cycle to without asking again. */
+let SND={outs:[], dev:'', pinned:false};
 function paintSounder(st){
   const on=!!(st&&st.available);
   $('snd-slab').style.display=on?'':'none';
   $('snd-row') .style.display=on?'':'none';
   sheetFit();                    /* two more rows, or two fewer */
   if(!on) return;
-  /* Which output, in the words you would need to go and check it: the
-     jack's ALSA name, or the pin number. plughw:CARD=Headphones,DEV=0
-     is netd's business and not a thing to read on a round screen. */
-  $('snd-who').textContent = st.mode==='audio'
-    ? '3.5 MM JACK'
-    : ('GPIO ' + st.gpio);
+  const audio = st.mode==='audio';
+  SND={outs:audio?(st.outs||[]):[], dev:audio?(st.device||''):'',
+       pinned:!!st.pinned};
+  /* Which output, in the words you would need to go and check it - not
+     plughw:CARD=Headphones,DEV=0, which is netd's business and not a
+     thing to read on a round screen at arm's length. */
+  const here=SND.outs.find(o=>o.dev===SND.dev);
+  $('snd-who').textContent = !audio ? ('GPIO ' + st.gpio)
+    : (here ? here.name : (SND.dev||'—'))
+      + (SND.pinned ? ' · PINNED' : SND.outs.length>1 ? ' · TAP' : '');
+  /* A tap is only worth offering when there is somewhere else to go. */
+  const pick = audio && SND.outs.length>1 && !SND.pinned;
+  $('snd-who').disabled=!pick;
+  wCls('snd-who','pick',pick);
 }
+/* Round the list and back to the start. netd refuses anything it has
+   not got, so a stale list costs a message rather than a silent boat. */
+$('snd-who').addEventListener('click',async ()=>{
+  if(SND.outs.length<2 || SND.pinned) return;
+  const i=SND.outs.findIndex(o=>o.dev===SND.dev);
+  const next=SND.outs[(i+1)%SND.outs.length];
+  $('snd-who').textContent=next.name+' …';
+  const r=await netApi('/buzz/out',{dev:next.dev});
+  if(r&&r.ok){ SND.dev=next.dev; }
+  else $('snd-who').textContent=(r&&r.error)||'FAILED';
+  netStatus();                   /* and let the poll say what is true */
+});
 
 $('snd-test').addEventListener('click',()=>{
   /* The real thing, flash and all - signal() is what the gun calls. A

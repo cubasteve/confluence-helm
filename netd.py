@@ -819,17 +819,110 @@ def _audio_card():
     return None
 
 
+# Env-overridable for the same reason HELM_SPOTIFY_CMD is: a test rig
+# must not write into the home directory of whoever is running it.
+AUDIO_CFG = (os.environ.get('HELM_AUDIO_CFG', '').strip()
+             or os.path.expanduser('~/.config/confluence-helm-audio.json'))
+
+
+def _audio_saved():
+    """The output last chosen from the panel, if any."""
+    try:
+        with open(AUDIO_CFG) as f:
+            v = (json.load(f) or {}).get('dev', '')
+        return v.strip() if isinstance(v, str) else ''
+    except Exception:
+        return ''
+
+
 def _audio_device():
+    # The environment wins: it is how a rig with something unusual in
+    # front of ALSA is pinned, and it should not be silently overridden
+    # by a tap on a panel.
     d = os.environ.get('HELM_AUDIO_DEV', '').strip()
+    if d:
+        return d
+    d = _audio_saved()
     if d:
         return d
     c = AUDIO_CARD
     # plughw: rather than hw:, so ALSA converts rather than refusing a
     # rate the bcm2835 device will not take. Falling back to `default`
     # means whatever the system thinks is the output - right on a rig
-    # with PipeWire in front, wrong on a bare one with HDMI first, which
-    # is what HELM_AUDIO_DEV is for.
+    # with PipeWire in front, wrong on a bare one with HDMI first.
     return ('plughw:CARD=%s,DEV=0' % c) if c else 'default'
+
+
+# The outputs worth offering, in the order they are offered. aplay can
+# only address ALSA, so a Bluetooth speaker is reached through whatever
+# sits in front of it - PipeWire's or PulseAudio's ALSA device, or
+# bluealsa on a rig that runs that instead. Which of these exist is what
+# `aplay -L` answers, so that is what decides the list rather than a
+# guess about the image.
+AUDIO_LABELS = [
+    ('pipewire', 'PIPEWIRE'),
+    ('pulse', 'PIPEWIRE / PULSE'),
+    ('default', 'SYSTEM DEFAULT'),
+    ('bluealsa', 'BLUETOOTH'),
+]
+
+
+def _aplay_pcms():
+    """The PCM names aplay will take, from `aplay -L`.
+
+    Names sit at column 0 and their descriptions are indented under
+    them, so the names are the unindented lines."""
+    rc, out, _ = run(['aplay', '-L'], 5)
+    if rc != 0:
+        return []
+    return [l.strip() for l in out.splitlines()
+            if l and not l[:1].isspace() and not l.startswith('#')]
+
+
+def audio_outs():
+    """Where the sounder can be pointed, for the panel to offer.
+
+    The jack first and always, because it is the one that is certainly
+    there and certainly awake. Everything else is whatever this image
+    actually has in front of ALSA."""
+    outs = []
+    if AUDIO_CARD:
+        outs.append({'dev': 'plughw:CARD=%s,DEV=0' % AUDIO_CARD,
+                     'name': '3.5 MM JACK'})
+    have = _aplay_pcms()
+    for pcm, label in AUDIO_LABELS:
+        if any(p == pcm or p.startswith(pcm + ':') for p in have):
+            outs.append({'dev': pcm, 'name': label})
+    # Whatever is in force but not on the list - a pinned HELM_AUDIO_DEV,
+    # or a saved choice from an image that has since changed - is still
+    # shown, because a setting you cannot see is one you cannot undo.
+    if AUDIO_DEV and not any(o['dev'] == AUDIO_DEV for o in outs):
+        outs.insert(0, {'dev': AUDIO_DEV, 'name': AUDIO_DEV})
+    return outs
+
+
+def audio_out_set(dev):
+    """Point the sounder somewhere else, and remember it.
+
+    Only at somewhere aplay says it has: a typo here is a silent boat,
+    and silence is the one failure a sounder cannot report."""
+    global AUDIO_DEV
+    dev = str(dev or '').strip()
+    if not any(o['dev'] == dev for o in audio_outs()):
+        return {'ok': False, 'error': 'NO SUCH OUTPUT'}
+    if os.environ.get('HELM_AUDIO_DEV', '').strip():
+        return {'ok': False, 'error': 'PINNED BY HELM_AUDIO_DEV'}
+    AUDIO_DEV = dev
+    _snd['armed'] = 0.0          # a different output is a different DAC
+    try:
+        os.makedirs(os.path.dirname(AUDIO_CFG), exist_ok=True)
+        tmp = AUDIO_CFG + '.part'
+        with open(tmp, 'w') as f:
+            json.dump({'dev': dev}, f)
+        os.replace(tmp, AUDIO_CFG)
+    except Exception as e:
+        return {'ok': True, 'device': dev, 'saved': False, 'error': str(e)[:60]}
+    return {'ok': True, 'device': dev, 'saved': True}
 
 
 AUDIO_CARD = _audio_card() if (SOUND_MODE in ('auto', 'audio')
@@ -964,6 +1057,19 @@ def _arm_stop():
     _snd['arm_proc'] = None
 
 
+def _arm_ms():
+    """How much silence it takes to have the output awake.
+
+    The bcm2835 jack wants a couple of hundred milliseconds. Anything
+    reached through PipeWire, PulseAudio or bluealsa is a Bluetooth
+    speaker as often as not, and an A2DP link that has gone idle takes
+    the better part of a second to come back - during which the front of
+    whatever is playing is simply not there. That is the truncated first
+    beep, and it is a property of the link rather than of this program;
+    the only thing to do about it is to open the stream sooner."""
+    return 120 if AUDIO_DEV.startswith('plughw:') else 1200
+
+
 def audio_arm():
     """Wake the DAC, without making a sound.
 
@@ -981,10 +1087,11 @@ def audio_arm():
     if _snd['busy'] or now - _snd['armed'] < 2.0:
         return {'ok': True, 'armed': False}
     _snd['armed'] = now
+    ms = _arm_ms()
     threading.Thread(target=_audio_run,
-                     args=(_audio_wav('quiet', 120, 1, 0), 3),
+                     args=(_audio_wav('quiet', ms, 1, 0), ms / 1000.0 + 3),
                      kwargs={'arm': True}, daemon=True).start()
-    return {'ok': True, 'armed': True}
+    return {'ok': True, 'armed': True, 'ms': ms}
 
 
 def audio_warm():
@@ -1102,7 +1209,12 @@ def buzzer_status():
     if SOUND['mode'] == 'off':
         return {'available': False, 'mode': 'off',
                 'why': SOUND.get('why', 'OFF')}
-    return dict(SOUND, available=True)
+    st = dict(SOUND, available=True)
+    if st['mode'] == 'audio':
+        st['device'] = AUDIO_DEV
+        st['outs'] = audio_outs()
+        st['pinned'] = bool(os.environ.get('HELM_AUDIO_DEV', '').strip())
+    return st
 
 
 def _sound_run(kind, ms, n, gap):
@@ -2023,6 +2135,10 @@ def route(path, body):
         return gpx_save(str(body.get('name', '')), str(body.get('xml', '')))
     if path == '/score':
         return score_submit(body.get('racer_id'), body.get('elapsed_time'))
+    if path == '/buzz/out':
+        if SOUND['mode'] != 'audio':
+            return {'ok': False, 'error': 'NO AUDIO OUT'}
+        return audio_out_set(body.get('dev'))
     if path == '/buzz':
         return buzz(body.get('ms'), body.get('n'), body.get('gap'),
                     body.get('kind'), body.get('arm'))
