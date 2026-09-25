@@ -232,8 +232,29 @@ Both fixes have to fall between the ends, so a boat rounding outside
 the pin is not a crossing, and a jump of more than 80 m between them is
 discarded as a bad fix rather than believed.
 
-*The start* depends on which kind of start it is, which is the **START**
-setting on the control panel — `GUN` or `WINDOW`. Nothing on the water
+*The gun can be scheduled.* The first row of the course sheet is
+`START TIME`: type the time off the sailing instructions and the
+countdown starts itself `CFG.startMins` before it and runs out exactly
+on it. The row then says when the gun is and when the countdown will
+begin, and the RACE pill carries the time while it is armed, so you can
+see it without opening anything.
+
+- Set it **inside** the window — three minutes before a five minute
+  sequence — and the countdown starts at once, still ending on the gun.
+- It is **one shot**: it clears when it fires, so it cannot fire again
+  into the race it just started. Starting a countdown by hand disarms
+  it for the same reason.
+- A time that has **already passed** is refused rather than rolled to
+  tomorrow. `18:25` typed at `18:30` is a typo far more often than it is
+  a plan for tomorrow evening, and arming for tomorrow would look
+  exactly like working while doing nothing tonight.
+- It survives a restart, because the kiosk restarts on every deploy —
+  but it is dropped on load once it is more than a countdown old, so
+  yesterday's race does not arm itself tonight.
+- A gun that went while the panel was off starts nothing.
+
+*Which kind of start* it is comes from the **START** setting on the
+control panel — `GUN` or `WINDOW`. Nothing on the water
 tells them apart: the same crossing, at the same place, at the same
 moment, is a start on one night and a foul on the other.
 

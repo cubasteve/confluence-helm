@@ -7,16 +7,19 @@ await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
 await p.waitForTimeout(700);
 /* A map needs a track to be a map. The demo only records while a race
    is on, so the probe lays one down itself - a short leg up the lake,
-   through the middle of the club's marks. */
-await p.evaluate(()=>{ const t0=Date.now()-600e3;
+   through the middle of the club's marks. Re-laid wherever something
+   clears it: startCountdown() sets the old race aside, and setting a
+   race aside takes the track with it. */
+const seed=()=>p.evaluate(()=>{ const t0=Date.now()-600e3;
   TRK=[...Array(120).keys()].map(i=>({t:t0+i*5000, la:28.8190+i*0.00012,
     lo:-81.2650-i*0.00004, s:2.6, c:0.3}));
   drawMap(shownTrack()); });
+await seed();
 await p.waitForTimeout(400);
 
 /* Everything the sheet says, in the sheet's own order. */
 const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .course-row')]
-  .map(r=>({mark:r.dataset.mark||null, line:!!r.dataset.line,
+  .map(r=>({mark:r.dataset.mark||null, line:!!r.dataset.line, gun:!!r.dataset.gun,
             seq:r.querySelector('.seq').textContent.trim(),
             name:r.querySelector('b').textContent,
             sub:r.querySelector('.lib-main span').textContent,
@@ -33,11 +36,14 @@ t.head('the sheet opens on the course button, and closes on it');
 await tap('#trk-course');
 let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
-t.ok(S.length===11, 'the line and all ten club marks', String(S.length));
-t.ok(S[0].line && /START . FINISH LINE/.test(S[0].name), 'the line is the first row', S[0].name);
-t.ok(S[0].sub==='FLAG – BALL', 'and says which two marks are the line', S[0].sub);
-t.ok(/^\d\d \d\d\.\d\d\d[NS] · \d\d\d \d\d\.\d\d\d[EW]$/.test(S[1].sub),
-     'every mark row carries its position', S[1].sub);
+const marks=x=>x.filter(r=>r.mark), lineOf=x=>x.find(r=>r.line);
+t.ok(marks(S).length===10 && S.length===12,
+     'the gun, the line and all ten club marks', String(S.length));
+t.ok(/START . FINISH LINE/.test(lineOf(S).name), 'the line has its own row',
+     lineOf(S).name);
+t.ok(lineOf(S).sub==='FLAG – BALL', 'and says which two marks it is', lineOf(S).sub);
+t.ok(/^\d\d \d\d\.\d\d\d[NS] · \d\d\d \d\d\.\d\d\d[EW]$/.test(marks(S)[0].sub),
+     'every mark row carries its position', marks(S)[0].sub);
 await tap('#course-done');
 t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
      'and DONE puts it away');
@@ -108,7 +114,8 @@ await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
 await tap('#course-clr');
 C=await course(); S=await sheet();
 t.ok(C.marks.length===0 && C.next===0, 'nothing left to sail', C.marks.join()+' @'+C.next);
-t.ok(S.length===11 && S.slice(1).every(r=>r.seq===''), 'the marks are all still there, unnumbered');
+t.ok(marks(S).length===10 && marks(S).every(r=>r.seq===''),
+     'the marks are all still there, unnumbered');
 await tap(row('gosling')); await tap(row('cb12'));
 await p.evaluate(()=>{ COURSE.side={gosling:'S'}; courseSave(); renderCourse(); });
 
@@ -116,7 +123,7 @@ t.head('EDIT is for the list, not the course');
 await tap('#course-edit');
 S=await sheet();
 t.ok(await p.evaluate(()=>courseEdit), 'edit mode is on');
-t.ok(S.slice(1).every(r=>r.grip), 'every mark gets a grip to drag by');
+t.ok(marks(S).every(r=>r.grip), 'every mark gets a grip to drag by');
 t.ok(!S.find(r=>r.mark==='cb8').del, 'a club mark nobody has touched gets no button');
 await tap(row('cb8'));
 t.ok(await p.evaluate(()=>MK&&MK.id==='cb8'), 'a tap opens the mark instead');
@@ -141,16 +148,94 @@ await p.evaluate(()=>{ courseEdit=false; $('course-edit').classList.remove('on')
                        renderCourse(); });
 await p.waitForTimeout(200);
 S=await sheet();
-t.ok(/PINGED/.test(S[0].sub), 'a pinged line says so', S[0].sub);
+t.ok(/PINGED/.test(lineOf(S).sub), 'a pinged line says so', lineOf(S).sub);
 t.ok(await p.evaluate(()=>lineEnds().pinged), 'and is the line the readings use');
 await tap('#course-list .course-row.line');
 S=await sheet();
-t.ok(!/PINGED/.test(S[0].sub) && S[0].sub==='FLAG – BALL',
-     'tapping it drops the pings and goes back to the club marks', S[0].sub);
+t.ok(lineOf(S).sub==='FLAG – BALL',
+     'tapping it drops the pings and goes back to the club marks', lineOf(S).sub);
 t.ok(await p.evaluate(()=>!lineEnds().pinged
        && !$('ping-pin').classList.contains('set')
        && !$('ping-boat').classList.contains('set')),
      'and the ping buttons go out with them');
+
+t.head('the scheduled gun: typed once, and it starts itself');
+/* A club race has a time on the sailing instructions. Typing it beats
+   watching a clock for the moment to press a button with a boat to
+   sail at the same time. */
+const gunRow=()=>p.evaluate(()=>{ const r=document.querySelector('.course-row.gun');
+  return {b:r.querySelector('b').textContent, sub:r.querySelector('span').textContent,
+          set:r.classList.contains('in')}; });
+const type=async d=>{ await p.evaluate(()=>gnOpen()); await p.waitForTimeout(250);
+  await p.evaluate(d=>{ GN.v=''; gnPaint();
+    for(const c of d) document.querySelector('#gn-kb button[data-c="'+c+'"]').click(); }, d);
+  await p.evaluate(()=>gnSet()); await p.waitForTimeout(250);
+  return p.evaluate(()=>({at:GUNAT, msg:$('gn-msg').textContent,
+                          open:$('course-gun').style.display!=='none'})); };
+/* a time 40 minutes out, whatever o'clock it is where this runs */
+const want=await p.evaluate(()=>{ const d=new Date(Date.now()+40*60000),
+  z=n=>String(n).padStart(2,'0');
+  return {d:z(d.getHours())+z(d.getMinutes()), hhmm:z(d.getHours())+':'+z(d.getMinutes())}; });
+await p.evaluate(()=>{ GUNAT=null; gunSave(); renderCourse(); });
+let G=await gunRow();
+t.ok(/START TIME/.test(G.b) && !G.set, 'unset, the row invites one', G.b);
+let r=await type(want.d);
+t.ok(r.at!==null && !r.open, 'four digits and it is armed', String(r.at));
+G=await gunRow();
+t.ok(G.b==='GUN AT '+want.hhmm, 'the row says when the gun is', G.b);
+t.ok(/COUNTDOWN STARTS/.test(G.sub), 'and when the countdown will start itself', G.sub);
+t.ok(await p.evaluate(()=>raceStatus().txt)===want.hhmm,
+     'and the pill carries it, so an armed gun shows on the face',
+     await p.evaluate(()=>raceStatus().txt));
+
+t.head('what it refuses');
+const gone=await p.evaluate(()=>{ const d=new Date(Date.now()-60*60000),
+  z=n=>String(n).padStart(2,'0'); return z(d.getHours())+z(d.getMinutes()); });
+r=await type(gone);
+t.ok(/HAS GONE/.test(r.msg) && r.open,
+     'a time that has already passed, rather than arming for tomorrow', r.msg);
+r=await type('2599');
+t.ok(/NOT A TIME/.test(r.msg) && r.open, 'and 25:99', r.msg);
+r=await type('18');
+t.ok(/FOUR DIGITS/.test(r.msg) && r.open, 'and half of one', r.msg);
+await p.evaluate(()=>gnClose());
+
+t.head('and what it does when the moment comes');
+const fired=await p.evaluate(()=>{
+  const real=Date.now;
+  const set=t=>{ Date.now=()=>t; rAt=rBase=t; };
+  const out={};
+  /* armed, and the clock walked up to five minutes before it */
+  const at=real()+40*60000; GUNAT=at; gunSave(); resetAll();
+  set(at-6*60000); gunWatch(); out.early=tState;
+  set(at-CFG.startMins*60000+200); gunWatch();
+  out.fired=tState; out.left=Math.round((tEnd-rnow())/1000);
+  out.cleared=GUNAT===null;
+  /* set INSIDE the window: it starts at once and still ends on the gun */
+  resetAll(); GUNAT=at; set(at-90000); gunWatch();
+  out.late=tState; out.lateLeft=Math.round((tEnd-rnow())/1000);
+  /* and one that has been and gone while the panel was off */
+  resetAll(); GUNAT=at; gunSave(); set(at+60000); gunWatch();
+  out.missed=tState; out.missedCleared=GUNAT===null;
+  /* a countdown started by hand stands a scheduled one down */
+  resetAll(); GUNAT=at; gunSave(); startCountdown();
+  out.byHand=GUNAT===null;
+  Date.now=real; rAt=rBase=Date.now(); resetAll(); GUNAT=null; gunSave();
+  return out;
+});
+t.ok(fired.early==='idle', 'six minutes out it is still idle', fired.early);
+t.ok(fired.fired==='countdown', 'five minutes out the countdown starts itself',
+     fired.fired);
+t.ok(fired.left===300, 'and runs out exactly on the gun', fired.left+' s');
+t.ok(fired.cleared, 'one shot - it does not fire into the race it just started');
+t.ok(fired.late==='countdown' && fired.lateLeft===90,
+     'set inside the window it starts at once, and still ends on the gun',
+     fired.lateLeft+' s');
+t.ok(fired.missed==='idle' && fired.missedCleared,
+     'a gun that went while the panel was off starts nothing, and is dropped');
+t.ok(fired.byHand, 'and starting the countdown by hand disarms it');
+await p.evaluate(()=>renderCourse());
+await seed(); await p.waitForTimeout(300);
 
 t.head('a mark an ocean away is a typo, and the map is not fitted to it');
 await p.evaluate(()=>{ COURSE.marks=['gosling']; courseSave(); drawMap(shownTrack()); });

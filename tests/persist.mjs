@@ -108,6 +108,18 @@ t.ok(await p.evaluate(()=>!isMoved('cb8')
        && Math.abs(markOf('cb8').lat-DM(28,49.881))<1e-9),
      'and putting it back gives the book\'s position again, across a restart too');
 
+t.head('a scheduled gun outlives a restart, but not the day');
+await p.evaluate(()=>{ GUNAT=Date.now()+40*60000; gunSave(); });
+const armed=await p.evaluate(()=>GUNAT);
+await reboot();
+t.ok(await p.evaluate(()=>GUNAT)===armed,
+     'a start time set half an hour ago survives a deploy', String(armed));
+await p.evaluate(()=>{ GUNAT=Date.now()-3*3600*1000; gunSave(); });
+await reboot();
+t.ok(await p.evaluate(()=>GUNAT)===null,
+     "and yesterday's race does not arm itself tonight",
+     String(await p.evaluate(()=>GUNAT)));
+
 t.head('a pinged line outlives the restart it is set before');
 await p.evaluate(()=>{ LINE={pin:{lat:28.8191,lon:-81.2649},
                              boat:{lat:28.8196,lon:-81.2621}}; saveLine(); });

@@ -2236,6 +2236,23 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="cbtn on" id="mk-save">SAVE</button>
       </div>
     </div>
+
+    <!-- The scheduled gun. Four digits and the same keyboard the marks
+         use: a club race has a time on the sailing instructions, and
+         typing it once beats watching a clock for the moment to press
+         a button. -->
+    <div id="course-gun" style="display:none">
+      <div class="mk-row"><div class="mk-field on" data-f="at"
+        ><span class="mk-lbl">GUN AT</span><span class="mk-val" id="gn-at"
+        ></span><span class="pw-cur"></span></div></div>
+      <div class="kb small" id="gn-kb"></div>
+      <div class="ns-msg" id="gn-msg"></div>
+      <div class="course-bar">
+        <button class="cbtn" id="gn-cancel">CANCEL</button>
+        <button class="cbtn" id="gn-clear">CLEAR</button>
+        <button class="cbtn on" id="gn-save">SET</button>
+      </div>
+    </div>
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2869,6 +2886,7 @@ function render(){
   lineWatch();
   courseWatch();
   markWatch();
+  gunWatch();
 
   /* Alerts are evaluated HERE, in DATA, and not in the DRAW block below.
      The shallow alarm used to be a class toggle inside the dial's draw
@@ -3379,7 +3397,11 @@ const RP_STATE={
    that never sets one - where it has always just meant racing. */
 const sideGrad = id => markSide(id)==='P' ? 'rp-g-port' : 'rp-g-stbd';
 function raceStatus(){
-  if(tState==='idle') return RP_STATE.idle;
+  /* An armed gun is worth knowing about from the face. The pill is the
+     one thing always on it, and RACE is a word it can spare. */
+  if(tState==='idle') return GUNAT!==null
+    ? Object.assign({}, RP_STATE.idle, {txt:gunTxt(GUNAT)})
+    : RP_STATE.idle;
   if(tState==='countdown') return RP_STATE.count;
   if(tState==='finished') return RP_STATE.finish;
   const n=courseNext();
@@ -4087,6 +4109,9 @@ let tLeft=CFG.startMins*60000;            // countdown remaining while idle
    its pill, the gun or a reset. */
 let rpOpen=false;
 const startCountdown=()=>{ tEnd=rnow()+tLeft; tState='countdown'; rpOpen=true;
+  /* Whatever was scheduled, this is the start now. Leaving it armed
+     would have it firing into the middle of the race it just lost. */
+  if(GUNAT!==null){ GUNAT=null; gunSave(); }
   COURSE.next=0; courseReset(); courseSave();
   /* Last, with the clock already running. The card this may raise is
      never on the critical path of a start. */
@@ -8252,7 +8277,8 @@ $('qr-box').addEventListener('click',e=>{
 $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
 const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
-  courseEdit=false; $('course-edit').classList.remove('on'); if(MK) mkClose(); };
+  courseEdit=false; $('course-edit').classList.remove('on');
+  if(MK) mkClose(); if(GN) gnClose(); };
 /* ---- the course sheet --------------------------------------------------
    Every mark, in the club's order. Tap one to add it to the course - it
    takes the next number - and tap it again to take it out. The line's
@@ -8271,6 +8297,13 @@ function renderCourse(){
       <div class="seq">⚑</div><div class="lib-main">
       <b>START · FINISH LINE</b><span>${E.pinged?'PINGED · TAP TO USE THE MARKS':
         markOf(LINE_MARKS.pin).hdr+' – '+markOf(LINE_MARKS.boat).hdr}</span></div></div>`;
+  /* Above the line, because it comes first in the evening. */
+  const gunRow=`<div class="lib-row course-row gun${GUNAT!==null?' in':''}" data-gun="1">
+      <div class="seq">⏱</div><div class="lib-main">
+      <b>${GUNAT!==null ? 'GUN AT '+gunTxt(GUNAT) : 'START TIME'}</b><span>${
+        GUNAT!==null
+          ? 'COUNTDOWN STARTS '+gunTxt(GUNAT-CFG.startMins*60000)
+          : 'TAP TO SET · THE COUNTDOWN STARTS ITSELF'}</span></div></div>`;
   const row=m=>{
     const i=COURSE.marks.indexOf(m.id);
     const cls='lib-row course-row'+(i>=0?' in':'')+(i===COURSE.next?' next':'');
@@ -8287,9 +8320,96 @@ function renderCourse(){
     return `<div class="${cls}" data-mark="${m.id}"><div class="seq">${i>=0?i+1:''}</div>
       <div class="lib-main"><b>${esc(m.name)}</b>
       <span class="${isMoved(m.id)?'moved':''}">${posDM(m)}</span></div>${side}${del}${grip}</div>`; };
-  box.innerHTML=lineRow+MARKS.map(row).join('');
+  box.innerHTML=gunRow+lineRow+MARKS.map(row).join('');
 }
 function openCourse(){ $('t-course').classList.add('on'); renderCourse(); }
+/* ---- the scheduled gun -------------------------------------------------
+   A club race has a start time printed on the sailing instructions.
+   Typed in once, the countdown starts itself CFG.startMins before it
+   and runs out exactly on it - which beats watching a clock for the
+   moment to press a button, with a boat to sail at the same time.
+
+   Held as a wall-clock instant, not as hours and minutes: the whole
+   point is a moment, and the arithmetic against Date.now() is then
+   one subtraction rather than a date to reconstruct every frame.
+
+   Persisted, because the kiosk restarts on every deploy and autopull
+   and a gun you set half an hour ago should survive one. Dropped on
+   load if it has already gone by more than the countdown is long -
+   yesterday's race must not arm itself tonight. */
+const GUN_KEY='gunAt';
+let GUNAT=null;
+try{ const v=+localStorage.getItem(GUN_KEY);
+     if(v && v > Date.now()-CFG.startMins*60000) GUNAT=v; }catch(e){}
+const gunSave=()=>{ try{ GUNAT ? localStorage.setItem(GUN_KEY,String(GUNAT))
+                                : localStorage.removeItem(GUN_KEY); }catch(e){} };
+const gunTxt=t=>{ const d=new Date(t), p=n=>String(n).padStart(2,'0');
+                  return p(d.getHours())+':'+p(d.getMinutes()); };
+
+/* Started by the clock rather than by a hand, and only ever from idle:
+   a countdown already running, a race under way or one just finished is
+   not something a scheduled time gets to interrupt.
+   tEnd is on the RACE clock and GUNAT is on the wall clock, so it is
+   converted rather than assigned - after a spell at 3x the two are
+   offset by whatever was gained. */
+function gunWatch(){
+  if(GUNAT===null) return;
+  if(tState!=='idle'){ return; }
+  const now=Date.now();
+  if(now < GUNAT - CFG.startMins*60000) return;
+  /* Gone entirely - the panel was off, or asleep - and nothing can be
+     done about a start that has already happened. */
+  if(now >= GUNAT){ GUNAT=null; gunSave(); renderCourse(); return; }
+  const at=GUNAT;
+  GUNAT=null; gunSave();               /* one shot; it has done its job */
+  startCountdown();
+  tEnd = rnow() + (at-Date.now());     /* out exactly on the gun */
+  renderCourse();
+  console.log('[helm] countdown started for', gunTxt(at));
+}
+
+/* Four digits, and the keyboard the marks already use. `GN` holds what
+   has been typed so far rather than a parsed time: half of 18:25 is not
+   a time, and a field that refuses to show you what you typed is a
+   field you cannot correct. */
+let GN=null;
+function gnOpen(){
+  GN={v: GUNAT!==null ? gunTxt(GUNAT).replace(':','') : '', layer:''};
+  $('course-title').textContent='Start time';
+  $('course-main').style.display='none'; $('course-gun').style.display='';
+  $('gn-msg').textContent=''; gnPaint();
+}
+function gnClose(){ GN=null; $('course-gun').style.display='none';
+  $('course-title').textContent='Course';
+  $('course-main').style.display=''; renderCourse(); }
+/* Digits and nothing else. kbHtml's numeric layer carries the point,
+   the minus and NSEW, which are there for a coordinate and are four
+   wrong answers on a clock. */
+const gnKb=()=>'<div class="kb-r">'
+  +'1234567890'.split('').map(c=>'<button class="kk" data-c="'+c+'">'+c+'</button>').join('')
+  +'</div><div class="kb-r"><button class="kk fn" data-a="del">⌫</button>'
+  +'<button class="kk go" data-a="go">SET</button></div>';
+function gnPaint(){
+  if(!GN) return;
+  const d=GN.v;
+  wText('gn-at', d.length>2 ? d.slice(0,d.length-2)+':'+d.slice(-2) : d);
+  if(GN.layer!=='n'){ GN.layer='n'; $('gn-kb').innerHTML=gnKb(); }
+}
+/* Local today at hh:mm. Refused rather than rolled to tomorrow if it
+   has gone: 18:25 typed at 18:30 is a typo far more often than it is a
+   plan for tomorrow evening, and arming for tomorrow would look exactly
+   like working while doing nothing at all tonight. */
+function gnSet(){
+  const d=GN.v.replace(/\D/g,'');
+  if(d.length<3||d.length>4) return void($('gn-msg').textContent='FOUR DIGITS · 1825');
+  const h=+d.slice(0,d.length-2), m=+d.slice(-2);
+  if(h>23||m>59) return void($('gn-msg').textContent='NOT A TIME');
+  const t=new Date(); t.setHours(h,m,0,0);
+  if(t.getTime() <= Date.now())
+    return void($('gn-msg').textContent=gunTxt(t.getTime())+' HAS GONE');
+  GUNAT=t.getTime(); gunSave(); gnClose();
+}
+
 /* ---- which start ------------------------------------------------------
    Persisted, because it is a fact about the series you are sailing and
    not about today: whoever races Wednesdays races them every Wednesday,
@@ -8327,7 +8447,8 @@ $('course-list').addEventListener('click',e=>{
      a club coordinate is a number off a sheet of paper, and the boat
      standing at the buoy knows better. What that writes is an override -
      see MARK_MOVES - so the book is still there to go back to. */
-  if(courseEdit && !row.dataset.line){ mkOpen(row.dataset.mark); return; }
+  if(row.dataset.gun){ gnOpen(); return; }
+  if(courseEdit && !row.dataset.line && row.dataset.mark){ mkOpen(row.dataset.mark); return; }
   if(row.dataset.line){ if(lineEnds().pinged){ LINE={}; saveLine();
       ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set')); } }
   else{ const id=row.dataset.mark, i=COURSE.marks.indexOf(id);
@@ -8507,6 +8628,20 @@ $('course-add').addEventListener('click',e=>{
   if(a==='del')  { MK[MK.f]=MK[MK.f].slice(0,-1); return mkPaint(); }
   if(a==='go')   return mkSave();
 });
+/* The gun editor, on the same shape as the one above it. Digits only,
+   four of them, and GO is SET. */
+$('course-gun').addEventListener('click',e=>{
+  if(!GN) return;
+  const b=e.target.closest('#gn-kb button'); if(!b) return;
+  const c=b.dataset.c, a=b.dataset.a;
+  if(c!==undefined){ if(/\d/.test(c) && GN.v.length<4) GN.v+=c; return gnPaint(); }
+  if(a==='del'){ GN.v=GN.v.slice(0,-1); $('gn-msg').textContent=''; return gnPaint(); }
+  if(a==='go') return gnSet();
+});
+$('gn-save')  .addEventListener('click',gnSet);
+$('gn-cancel').addEventListener('click',gnClose);
+$('gn-clear') .addEventListener('click',()=>{ GUNAT=null; gunSave(); gnClose(); });
+
 $('course-add-btn').addEventListener('click',()=>mkOpen());
 $('mk-here').addEventListener('click',mkHere);
 $('mk-save').addEventListener('click',mkSave);
