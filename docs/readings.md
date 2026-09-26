@@ -620,7 +620,8 @@ hid the other line would not say how to get it.
 
 ### The start time pad
 
-It comes up **over** the sheet rather than in place of it. It used to
+It comes up **over** the sheet rather than in place of it, on a scrim
+that dims everything behind. It used to
 take the whole page, which meant the course you were setting a time for
 vanished while you set it — the one thing you might want to look at —
 and a full page for four digits is what a phone does because a phone has
@@ -641,6 +642,16 @@ under the thumb on every key. A clock is four characters wide whatever
 you have typed into it so far. The `GUN AT` label beside it is gone: the
 pad is titled, the readout it came from is titled, and a label on the
 number as well was the third time of asking.
+
+**The dim is not decoration.** A pad floating over a live sheet leaves
+the cross at the foot, `CLEAR` and every mark tile looking exactly as
+tappable as they were a moment ago — and the one of those that is a real
+hazard is the cross, which closes the whole app. So the veil and the pad
+are children of the **stage**, not of the sheet: inside the sheet they
+sat in `#tmap`'s stacking context at z1, where a z26 veil cannot reach
+over an app at z25, and the cross stayed bright and live on top of the
+dim. A probe now hit-tests the middle of the cross and requires the veil
+to be what a tap there would land on.
 
 ### CLUB SYNC
 

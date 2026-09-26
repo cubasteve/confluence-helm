@@ -1197,8 +1197,16 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    thing you might want to look at - and a full page for four digits is
    the kind of thing a phone does because a phone has nothing else on
    the screen. 520 wide and centred, with a veil to tap away. */
-#gn-veil{position:absolute;inset:0;z-index:26;display:none}
-#gn-veil.on{display:block}
+/* And it dims what is behind it. A pad floating over a live sheet left
+   the cross at the foot, the CLEAR button and every mark tile looking
+   exactly as tappable as they were a moment ago - and the one of those
+   that is a real hazard is the cross, which closes the whole app. The
+   scrim says the page has stopped listening.
+   visibility rather than display, so the fade has something to animate:
+   a box going from display:none has no first frame to move from. */
+#gn-veil{position:absolute;inset:0;z-index:26;background:#000;opacity:0;
+  visibility:hidden;transition:opacity .18s ease, visibility 0s linear .18s}
+#gn-veil.on{opacity:.46;visibility:visible;transition:opacity .18s ease}
 #course-gun{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   z-index:27;display:none;flex-direction:column;align-items:stretch;width:640px;
   padding:20px;border-radius:30px;background:var(--panel);
@@ -1719,7 +1727,7 @@ a.lib-row{text-decoration:none;color:inherit}
    box is ever being scrolled - so it is placed in stage coordinates
    beside whichever box was last touched. */
 #arc{position:absolute;inset:0;width:100%;height:100%;z-index:29;
-  pointer-events:none;fill:none;opacity:0;transition:opacity .35s ease}
+  pointer-events:none;stroke:none;opacity:0;transition:opacity .35s ease}
 /* Lit the whole time the box in front of you has more in it than it can
    show. A fade that only appears once you have already scrolled answers
    a question you had to guess at to ask: the track has to be up BEFORE
@@ -1727,11 +1735,10 @@ a.lib-row{text-decoration:none;color:inherit}
    is a hairline at 45% - present, and no louder than the rule under a
    heading. */
 #arc.lit{opacity:1}
-#arc path{stroke-width:7;stroke-linecap:round}
-#arc .trk{stroke:var(--hairline);opacity:.45}
+#arc .trk{fill:var(--hairline);opacity:.45}
 /* The thumb is the part that is only worth having while you are moving:
    where you are in the list is a question you ask by scrolling. */
-#arc .thm{stroke:var(--accent);opacity:0;transition:opacity .45s ease}
+#arc .thm{fill:var(--accent);opacity:0;transition:opacity .45s ease}
 #arc.on .thm{opacity:1;transition:opacity .1s ease}
 
 #veil{position:absolute;inset:0;background:#000;opacity:0;
@@ -2684,31 +2691,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       </div>
     </div>
 
-    <!-- The scheduled gun. Four digits and the same keyboard the marks
-         use: a club race has a time on the sailing instructions, and
-         typing it once beats watching a clock for the moment to press
-         a button. -->
-    <div id="gn-veil"></div>
-    <div id="course-gun">
-      <div class="gn-hd">Start time</div>
-      <div class="gn-field"><span class="gn-val" id="gn-at"></span></div>
-      <div class="gn-row gn-mer">
-        <button class="gn-key mer" id="gn-am">AM</button>
-        <button class="gn-key mer" id="gn-pm">PM</button>
-      </div>
-      <div class="gn-pad" id="gn-kb"></div>
-      <div class="ns-msg" id="gn-msg"></div>
-      <!-- One SET, on the pad, where your thumb already is when the last
-           digit goes in - it was on the pad AND on this bar, which is
-           the same action twice.
-           NO START TIME rather than CLEAR: backspace clears a DIGIT and
-           this clears the whole scheduled gun, and two very different
-           consequences were wearing the same word. -->
-      <div class="course-bar">
-        <button class="cbtn" id="gn-cancel">BACK</button>
-        <button class="cbtn" id="gn-clear">NO START TIME</button>
-      </div>
-    </div>
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2733,6 +2715,32 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      is actually blowing, at a rate set by its actual speed. So the
      motion is data - a glance tells you the breeze filled in even if
      you never read a number. One big value cycles underneath. -->
+  <!-- The scheduled gun. Four digits and the same keyboard the marks
+       use: a club race has a time on the sailing instructions, and
+       typing it once beats watching a clock for the moment to press
+       a button. -->
+  <div id="gn-veil"></div>
+  <div id="course-gun">
+    <div class="gn-hd">Start time</div>
+    <div class="gn-field"><span class="gn-val" id="gn-at"></span></div>
+    <div class="gn-row gn-mer">
+      <button class="gn-key mer" id="gn-am">AM</button>
+      <button class="gn-key mer" id="gn-pm">PM</button>
+    </div>
+    <div class="gn-pad" id="gn-kb"></div>
+    <div class="ns-msg" id="gn-msg"></div>
+    <!-- One SET, on the pad, where your thumb already is when the last
+         digit goes in - it was on the pad AND on this bar, which is
+         the same action twice.
+         NO START TIME rather than CLEAR: backspace clears a DIGIT and
+         this clears the whole scheduled gun, and two very different
+         consequences were wearing the same word. -->
+    <div class="course-bar">
+      <button class="cbtn" id="gn-cancel">BACK</button>
+      <button class="cbtn" id="gn-clear">NO START TIME</button>
+    </div>
+  </div>
+
 <!-- The scroll arc. Empty until something is scrolled, and drawn in
      stage coordinates beside whatever that is - see rimDraw(). -->
 <svg id="arc" viewBox="0 0 1080 1080" aria-hidden="true">
@@ -8294,18 +8302,64 @@ function sheetFit(){ scrollFit($('p-sheet'));
    It is up only while you are moving, and for a beat after. Permanent
    it would be furniture on a face that has room for none; and when it
    is down the box's own faded edge is still saying there is more. */
-const RIM_R=505, RIM_C=540, RIM_MIN=5;   /* degrees: a thumb you can see */
+/* The indicator lies ON the drum rather than on the glass behind it.
+   It was an arc of the rim - struck about the centre of the CIRCLE at
+   540 - and a list is hardly ever centred there: the marks grid runs
+   503 to 772, so it was handed one quadrant of that circle and bent the
+   whole way in one direction, while the drum beside it bulged about its
+   own middle at 638. Two centres, two curves, and the eye sees it.
+   So it is built from the same three numbers the rows are: the same
+   middle, the same taper, the same foreshortening. It stands off the
+   rows by DRUM_BOW and follows them in and out, and it is drawn as a
+   filled ribbon rather than a stroked line because a stroke cannot
+   change width along its length and the whole point is that it is
+   thickest where the drum faces you. */
+/* How far the track stands off the rows at the ends, and how much
+   further at the middle. Designed rather than derived, and the reason is
+   worth writing down: the rows' own outlines barely taper. Each tile is
+   scaled about ITS centre, not the grid's, so the rightmost column moves
+   in by a tenth of a tile rather than a tenth of the grid - and then
+   perspective magnifies the near edge of a tilted tile by about as much
+   as the scale shrinks it, so a measured silhouette comes back within a
+   pixel of straight at every height. A track traced onto that would be
+   a straight line, which says nothing.
+   So this is the drum's curvature drawn at an amplitude you can see,
+   about the middle the drum actually turns on. 14 clear at the ends,
+   36 at the middle, and the rows' right edge never above 948. */
+const DRUM_BOW=14, DRUM_ARCH=22;
+const DRUM_W=8;           /* the track at its widest, square on */
+const RIM_MIN=0.10;       /* of the box: a thumb you can still see */
 let rimOff=null;
-/* A y on the glass, in stage pixels, to the angle on the rim beside it.
-   asin lands in -90..90, which is the right half of the circle - the
-   half a right-handed helm is not holding a tiller across. */
-const rimAng=y=>Math.asin(Math.max(-1,Math.min(1,(y-RIM_C)/RIM_R)))*180/Math.PI;
-const rimPath=(a,b)=>{
-  const P=d=>[(RIM_C+RIM_R*Math.cos(d*Math.PI/180)).toFixed(1),
-              (RIM_C+RIM_R*Math.sin(d*Math.PI/180)).toFixed(1)];
-  const [x0,y0]=P(a), [x1,y1]=P(b);
-  return `M${x0} ${y0}A${RIM_R} ${RIM_R} 0 0 1 ${x1} ${y1}`;
-};
+/* One edge of the drum, between two fractions down the box. Sampled
+   rather than solved: the taper is a clamp away from being a formula
+   and a polygon of 18 points is exact enough at eight pixels wide. */
+function drumRib(el, a, b){
+  const st=$('stage').getBoundingClientRect(), r=el.getBoundingClientRect();
+  const top=r.top-st.top, h=r.height, mid=top+h/2, half=h/2||1;
+  const cx=r.left-st.left+r.width/2, halfW=r.width/2;
+  const L=[], R=[], N=24;
+  for(let i=0;i<=N;i++){
+    const y=top+h*(a+(b-a)*i/N);
+    const u=Math.max(-1,Math.min(1,(y-mid)/half));
+    /* The rows taper with |u|, which has a corner at nought - two
+       straight runs meeting in a point, and a drum has no point on it.
+       This is |u| with the corner rounded off and both ends left
+       exactly where they were, so the track still finishes level with
+       the row it is beside. */
+    const E=0.35, K=Math.sqrt(1+E*E)-E;
+    const au=(Math.sqrt(u*u+E*E)-E)/K;
+    const sc=1-au*DRUM_SHRINK;
+    let x=cx+halfW+DRUM_BOW+DRUM_ARCH*(1-au);
+    /* and never off the glass: a tall box's ends reach further out than
+       the circle does at that height. */
+    const dy=Math.abs(y-540), lim=540+Math.sqrt(Math.max(0,540*540-dy*dy))-16;
+    x=Math.min(x, lim);
+    const w=DRUM_W*sc/2;
+    L.push((x-w).toFixed(1)+' '+y.toFixed(1));
+    R.unshift((x+w).toFixed(1)+' '+y.toFixed(1));
+  }
+  return 'M'+L.join('L')+'L'+R.join('L')+'Z';
+}
 let RIM=null;                     /* the box the arc is describing */
 /* moving: this is a scroll, so bring the thumb up too. Without it the
    call is just 'this box is on screen and it has more in it', which is
@@ -8322,16 +8376,14 @@ function rimDraw(el, moving){
       RIM=null; svg.classList.remove('lit','on'); }
     return; }
   RIM=el;
-  const st=$('stage').getBoundingClientRect(), r=el.getBoundingClientRect();
-  const a0=rimAng(r.top-st.top), a1=rimAng(r.bottom-st.top), span=a1-a0;
-  let t0=a0+span*(el.scrollTop/el.scrollHeight),
-      t1=a0+span*((el.scrollTop+el.clientHeight)/el.scrollHeight);
+  let t0=el.scrollTop/el.scrollHeight,
+      t1=(el.scrollTop+el.clientHeight)/el.scrollHeight;
   /* A list long enough and the window in it is a dot. Hold the thumb to
-     a length that is still an arc, and keep it inside the track. */
+     a length you can still see, and keep it inside the track. */
   if(t1-t0<RIM_MIN){ const m=(t0+t1)/2;
-    t0=Math.max(a0, Math.min(m-RIM_MIN/2, a1-RIM_MIN)); t1=t0+RIM_MIN; }
-  wAttr('arc-t','d',rimPath(a0,a1));
-  wAttr('arc-h','d',rimPath(t0,t1));
+    t0=Math.max(0, Math.min(m-RIM_MIN/2, 1-RIM_MIN)); t1=t0+RIM_MIN; }
+  wAttr('arc-t','d',drumRib(el,0,1));
+  wAttr('arc-h','d',drumRib(el,t0,t1));
   svg.classList.add('lit');
   if(!moving) return;
   svg.classList.add('on');
@@ -9696,8 +9748,15 @@ function gnOpen(){
     v = String((h%12)||12) + String(d.getMinutes()).padStart(2,'0'); }
   GN={v:v, pm:pm, built:false};
   pickClose();
-  /* The sheet stays where it is, under the veil. The course you are
-     setting a time for is the one thing worth seeing while you set it. */
+  /* The sheet stays where it is, dimmed under the veil. The course you
+     are setting a time for is the one thing worth seeing while you set
+     it - and the cross at the foot of the app is the one thing worth
+     making plainly unavailable, which is why the veil and the pad are
+     children of the STAGE rather than of the sheet. Inside the sheet
+     they sat in #tmap's stacking context at z1, so a z26 veil could not
+     reach over an app at z25 and the cross stayed bright and tappable
+     on top of the dim. */
+  rimDraw(null);                 /* no scroll track over a modal */
   $('gn-veil').classList.add('on'); $('course-gun').classList.add('on');
   $('gn-msg').textContent=''; gnPaint();
 }

@@ -482,6 +482,23 @@ t.ok(await p.evaluate(()=>{ gnOpen();
 t.ok(await p.evaluate(()=>{ gnOpen(); const r=$('course-gun').getBoundingClientRect();
        gnClose(); return r.width<1080 && r.height<1080 && r.width<=700; }),
      'and it is a pop-out, not a page');
+/* The dim is not decoration. The one thing behind it that is a real
+   hazard is the app's cross, which closes the whole app - so the veil
+   has to be over THAT, not merely over the sheet. */
+const veil=await p.evaluate(()=>{ gnOpen();
+  const g=getComputedStyle($('gn-veil'));
+  const r=$('app-close').getBoundingClientRect(), s=$('stage').getBoundingClientRect();
+  const hit=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
+  const out={op:+g.opacity, vis:g.visibility, bg:g.backgroundColor,
+             overCross: hit===$('gn-veil') || $('gn-veil').contains(hit),
+             arc:$('arc').classList.contains('lit')};
+  gnClose(); return out; });
+t.ok(veil.op>0.3 && veil.vis==='visible', 'the page behind it is dimmed',
+     JSON.stringify(veil));
+t.ok(veil.overCross, 'including the app\'s own cross - a tap where it is '
+     +'lands on the veil, which puts the pad away rather than shutting '
+     +'the app out from under you');
+t.ok(!veil.arc, 'and no scroll track is left drawn over a modal');
 t.ok(pad.bar.join('|')==='BACK|NO START TIME',
      'and the bar says what it does rather than CLEAR, which is what '
      +'backspace does to a digit', pad.bar.join('|'));

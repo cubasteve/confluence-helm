@@ -15,13 +15,29 @@ const arc=()=>p.evaluate(()=>({
   on:$('arc').classList.contains('on'),
   trk:$('arc-t').getAttribute('d'), thm:$('arc-h').getAttribute('d')}));
 /* The two ends of a path, as the numbers actually written into it. */
-const ends=d=>{ const m=/^M([\d.]+) ([\d.]+)A[\d ]+ [01] [01] ([\d.]+) ([\d.]+)$/.exec(d);
-  return m?{y0:+m[2], y1:+m[4], x0:+m[1], x1:+m[3]}:null; };
+/* The indicator is a filled ribbon lying on the drum, not an arc of the
+   glass: a polygon of x y pairs. What a probe wants off it is where it
+   starts and ends down the box, how far out it stands, and whether it
+   bulges in the middle the way the rows beside it do. */
+const ends=d=>{
+  const pts=[...d.matchAll(/([\d.]+) ([\d.]+)/g)].map(m=>({x:+m[1], y:+m[2]}));
+  if(pts.length<4) return null;
+  const ys=pts.map(q=>q.y), xs=pts.map(q=>q.x);
+  /* the outer edge at the top, at the middle, and at the foot */
+  const at=f=>{ const y0=Math.min(...ys), y1=Math.max(...ys), y=y0+(y1-y0)*f;
+    let best=null;
+    for(const q of pts) if(Math.abs(q.y-y)<(y1-y0)/12+1)
+      if(!best||q.x>best) best=q.x;
+    return best; };
+  return {y0:Math.min(...ys), y1:Math.max(...ys),
+          x0:Math.min(...xs), x1:Math.max(...xs),
+          top:at(0), mid:at(0.5), foot:at(1)};
+};
 const grid=()=>p.evaluate(()=>{ const el=$('course-list'),
   s=$('stage').getBoundingClientRect(), r=el.getBoundingClientRect();
   return {over:el.classList.contains('over'), masked:!!getComputedStyle(el)
             .webkitMaskImage.match(/gradient/),
-          top:r.top-s.top, bottom:r.bottom-s.top,
+          top:r.top-s.top, bottom:r.bottom-s.top, right:r.right-s.left,
           scroll:el.scrollHeight, client:el.clientHeight}; });
 const scrollTo=n=>p.evaluate(v=>{ const el=$('course-list');
   el.scrollTop=v; el.dispatchEvent(new Event('scroll')); }, n);
@@ -124,14 +140,39 @@ await p.waitForTimeout(150);
 let A=await arc();
 t.ok(A.on, 'the scroll brings it up');
 const T=ends(A.trk), H=ends(A.thm);
-t.ok(T && H, 'both paths are arcs', A.trk+' / '+A.thm);
+t.ok(T && H, 'both are ribbons', A.trk.slice(0,40)+' / '+A.thm.slice(0,40));
 t.ok(Math.abs(T.y0-G.top)<2 && Math.abs(T.y1-G.bottom)<2,
      "the track's ends sit beside the box's own top and bottom",
      [T.y0,T.y1].join()+' vs '+[G.top,G.bottom].join());
 t.ok(H.y0>=T.y0-0.5 && H.y1<=T.y1+0.5, 'and the thumb is inside the track',
      [H.y0,H.y1].join()+' in '+[T.y0,T.y1].join());
-t.ok(T.x0>900 && T.x1>900, 'out on the rim, not over the list',
-     [T.x0,T.x1].join());
+/* Clear of the ROWS, which is the honest test: the track pulls in at
+   the ends, and so do they - measuring it against the box's own
+   untransformed edge would only say the drum is working. */
+t.ok(await p.evaluate(()=>{
+       const s=$('stage').getBoundingClientRect();
+       const pts=[...$('arc-t').getAttribute('d').matchAll(/([\d.]+) ([\d.]+)/g)]
+         .map(m=>({x:+m[1], y:+m[2]}));
+       for(const k of $('course-list').children){
+         const r=k.getBoundingClientRect();
+         const right=r.right-s.left, mid=(r.top+r.bottom)/2-s.top;
+         for(const q of pts) if(Math.abs(q.y-mid)<r.height/2 && q.x<right+4)
+           return false;
+       }
+       return true; }),
+     'beside the list and never over a row, at any height - it pulls in '
+     +'at the ends because the rows do');
+/* the whole point of the change: it lies on the drum, so it bulges
+   about the middle of the BOX - not about the middle of the glass,
+   which is where an arc of the rim put it, and which a list is hardly
+   ever centred on */
+t.ok(T.mid>T.top+12 && T.mid>T.foot+12,
+     'and bulges out at the middle the way the rows beside it do',
+     [T.top,T.mid,T.foot].map(Math.round).join(' '));
+t.ok(Math.abs(T.top-T.foot)<6,
+     'symmetrically - both ends pull in by the same amount, because the '
+     +'drum is centred on the list and not on the glass',
+     [T.top,T.foot].map(Math.round).join(' '));
 
 t.head('and it moves with the scroll');
 const at=async n=>{ await scrollTo(n); await p.waitForTimeout(120);
@@ -152,7 +193,7 @@ await p.evaluate(()=>{ for(let i=0;i<120;i++)
 await p.waitForTimeout(300);
 await scrollTo(200); await p.waitForTimeout(150);
 const L=ends((await arc()).thm), LT=ends((await arc()).trk);
-t.ok(L.y1-L.y0>6, 'not a dot', String((L.y1-L.y0).toFixed(1)));
+t.ok(L.y1-L.y0>20, 'not a dot', String((L.y1-L.y0).toFixed(1)));
 t.ok(L.y0>=LT.y0-0.5 && L.y1<=LT.y1+0.5, 'and still inside the track',
      [L.y0,L.y1].join()+' in '+[LT.y0,LT.y1].join());
 

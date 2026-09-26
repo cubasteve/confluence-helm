@@ -668,13 +668,34 @@ an edge switches off.
 
 ![The marks grid mid-scroll: both edges faded, the arc on the rim](img/scroll-arc.png)
 
-**And the rim carries an arc** while you are moving. `#arc` is one SVG
-overlay for the whole instrument at z28, drawn in stage coordinates:
-`rimAng()` maps the box's top and bottom onto the circle at r=505, the
-track spans exactly the rows the box is a window onto, and the accent
-length inside it is that window. One overlay serves every scroller
-because only one thing is ever being scrolled — the arc simply appears
-beside whichever box it is.
+**And a track lies on the drum** beside the rows. `#arc` is one SVG
+overlay for the whole instrument, drawn in stage coordinates: the track
+spans exactly the rows the box is a window onto, and the accent length
+inside it is that window. One overlay serves every scroller because only
+one thing is ever being scrolled — it simply appears beside whichever
+box it is.
+
+It was an arc of the **glass's** rim, struck about the centre of the
+circle at 540. A list is hardly ever centred there: the marks grid runs
+503 to 772, so it was handed one quadrant of that circle and bent the
+whole way in one direction, while the drum beside it bulged about its
+own middle at 638. Two centres, two curves, and the eye sees it. It is
+built from the same middle as the rows now, symmetric about the list —
+and drawn as a filled ribbon rather than a stroked line, because a
+stroke cannot change width along its length and the point is that it is
+thickest where the drum faces you.
+
+The **amplitude is designed, not derived**, and that is worth writing
+down. The rows' own outlines barely taper: each tile is scaled about
+*its* centre rather than the grid's, so the rightmost column moves in by
+a tenth of a tile instead of a tenth of the grid — and then perspective
+magnifies the near edge of a tilted tile by about as much as the scale
+shrinks it, so a measured silhouette comes back within a pixel of
+straight at every height. A track traced onto that would be a straight
+line, which says nothing. So the curve is the drum's, drawn at an
+amplitude you can see: 14 px clear of the rows at the ends, 36 at the
+middle, with the apex rounded because |u| has a corner at nought and a
+drum has no point on it.
 
 It is up for 900 ms after the last scroll event and then fades, and it
 flashes once when a sheet opens with more in it than it can show. Up
