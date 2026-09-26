@@ -35,11 +35,30 @@ back to.
        * .            . *
 ```
 
-The control panel is still an overlay, pulled up from the bottom over
-whatever page you are on - and now reachable from any of them, the way
+The control panel is still an overlay, pulled down from the top over
+whatever page you are on - and reachable from any of them, the way
 control centre is on a phone. It is a layer over a place, not a place.
 While it is up it owns the gestures: left and right do nothing until you
 swipe it away.
+
+**Over a running app too.** A pull from the top edge — the top 17% of
+the glass, 184 px of 1080, which on every app is above its first row of
+anything — brings the panel down over the radar, the tracks app or
+golden hour without closing any of them. Brightness, the sounder, the
+radios and the theme are not things you should have to leave the radar
+to reach. That needs three things to line up: the panel sits at z29,
+over a launched app at 25 (and shares 29 with the scroll arc, which is
+later in the document, so the panel's own sheet can still show its arc);
+the judge asks the panel *before* the app, or a panel pulled down over
+one could never be swiped away; and the radar's chart, which fills the
+glass and claims every touch on it, lets a touch starting in that band
+go unclaimed.
+
+**A swipe no longer closes an app.** A down-flick used to, which is both
+why the pull did not work and the wrong control for the job — a flick
+that shuts the page you are reading, thrown by the same thumb that
+scrolls it. The cross at the foot closes an app now, and only the
+cross.
 
 ### How many fingers
 
@@ -676,11 +695,13 @@ the bottom, go smaller and go dim, and the row you are looking at is the
 one square on. It is the same shape as the buoy you are looking for out
 there — a thing you see part of because the rest of it has gone round.
 
-**Only a box with more in it than it can show turns.** Flat means you
-are looking at all of it; curved means it goes round. So the curve is
-itself one more thing on the face saying there is more, before you have
-touched anything — the same job as the lit track and the faded edge,
-said a third way.
+**It turns whether or not there is anything to scroll.** Curving only
+the boxes that overflow made the curve a signal, which was tidy — and it
+also meant the marks grid changed shape when an eleventh mark was added,
+so the one surface you look at most had two appearances and no say in
+which. A drum is what the list *is*, not a thing that happens to it once
+it gets long. Saying there is more is the lit track's job and the faded
+edge's, and two of those is enough.
 
 `perspective` goes on the scroller, not on each row, so every row is
 seen from one place — the middle of the box. That is what makes them

@@ -46,9 +46,10 @@ t.ok(!G.over, 'eleven marks fit, so no fade', G.scroll+' in '+G.client);
 t.ok(!G.masked, 'and nothing is masked');
 await scrollTo(0);
 t.ok(!(await arc()).lit, 'and there is no arc to draw');
-t.ok(await p.evaluate(()=>![...$('course-list').children]
-       .some(k=>k.style.transform)),
-     'and the grid is flat - nothing turns that has nothing to turn');
+t.ok(await p.evaluate(()=>[...$('course-list').children]
+       .every(k=>/rotateX/.test(k.style.transform))),
+     'and the grid still turns - a drum is what this list IS, not a '
+     +'thing that happens to it once it gets long');
 
 t.head('a box that does not fit fades at the edge the content crosses');
 await p.evaluate(()=>{

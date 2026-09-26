@@ -31,6 +31,50 @@ t.ok((await state(p)).panel, 'one finger DOWN pulls the control panel off the to
 await fling(p,1,0,-260);
 t.ok(!(await state(p)).panel, 'and UP puts it away');
 
+t.head('the control panel comes down over a running app');
+/* The panel is brightness, the sounder, the radios and the theme. None
+   of those is a thing you should have to leave the radar to reach. */
+const app=()=>p.evaluate(()=>({app:!!APP.on,
+  up:$('app-run').classList.contains('on'),
+  panel:panel.classList.contains('open')}));
+await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+await p.waitForTimeout(900);
+t.ok((await app()).up, 'the tracks app is running');
+await fling(p,1,0,200,480,70);                 /* from the very top */
+let A=await app();
+t.ok(A.panel, 'a pull from the very top brings the panel down over it');
+t.ok(A.up, 'and the app is still there underneath', JSON.stringify(A));
+await fling(p,1,0,-260);
+A=await app();
+t.ok(!A.panel && A.up, 'up puts the panel away and leaves the app', JSON.stringify(A));
+await fling(p,1,0,240,480,600);                /* low down: the app's */
+A=await app();
+t.ok(!A.panel, 'a down flick below the top band is not the panel\'s');
+t.ok(A.up, 'and it does NOT close the app - a flick that shuts the page '
+     +'you are reading is the wrong control for the job. The cross at the '
+     +'foot closes an app, and only the cross', JSON.stringify(A));
+/* the radar's chart fills the glass and claims every touch on it, so
+   the top band has to be released by the canvas itself */
+await p.evaluate(()=>{ closeApp(); });
+await p.waitForTimeout(400);
+const rad=await p.evaluate(()=>!!APPS.find(a=>a.id==='radar'));
+if(rad){
+  await p.evaluate(()=>openApp(APPS.find(a=>a.id==='radar')));
+  await p.waitForTimeout(1400);
+  const box=await p.evaluate(()=>{ const r=$('stage').getBoundingClientRect();
+    return {x:r.x,y:r.y}; });
+  await p.mouse.move(box.x+540, box.y+70); await p.mouse.down();
+  for(let i=1;i<=6;i++) await p.mouse.move(box.x+540, box.y+70+200*i/6);
+  await p.mouse.up(); await p.waitForTimeout(700);
+  A=await app();
+  t.ok(A.panel, 'the radar chart lets the top band go, so the pull works there too',
+       JSON.stringify(A));
+  t.ok(A.up, 'and the chart is still up behind it');
+  await fling(p,1,0,-260); await p.waitForTimeout(300);
+}
+await p.evaluate(()=>{ closeApp(); }); await p.waitForTimeout(500);
+t.ok(!(await app()).up, 'and closeApp is what actually shuts one');
+
 t.head('paging wants three fingers');
 await fling(p,1,-260,0);
 t.ok((await state(p)).page===1, 'one finger sideways does not page');

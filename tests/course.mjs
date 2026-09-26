@@ -114,8 +114,9 @@ t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
      await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join()));
 t.ok(await p.evaluate(()=>{const t=document.querySelector('.cv-tile.add');
-       return !!t && t===$('course-list').firstElementChild;}),
-     'and a mark is added from the head of the grid, where the mark will be');
+       return !!t && t===$('course-list').lastElementChild;}),
+     'and a mark is added from the END of the grid, where the new one '
+     +'will appear');
 t.ok(!await p.evaluate(()=>$('course-done')),
      'there is no DONE beside the heading - the cross at the foot is the '
      +'one way out, and it goes back one step');
@@ -390,7 +391,10 @@ const type=async (d,mer)=>{ await p.evaluate(()=>gnOpen()); await p.waitForTimeo
   }, [d,mer||null]);
   await p.evaluate(()=>gnSet()); await p.waitForTimeout(250);
   return p.evaluate(()=>({at:GUNAT, msg:$('gn-msg').textContent,
-                          open:$('course-gun').style.display!=='none',
+                          /* a class now, not an inline display: the pad
+                             comes up OVER the sheet rather than in place
+                             of it, so the sheet's own display never moves */
+                          open:$('course-gun').classList.contains('on'),
                           h:GUNAT===null?null:new Date(GUNAT).getHours(),
                           m:GUNAT===null?null:new Date(GUNAT).getMinutes()})); };
 /* a time 40 minutes out, whatever o'clock it is where this runs */
@@ -468,6 +472,16 @@ t.ok(pad.onPhone>=44, 'and a key is 44 px on a phone, which is the smallest '
      +'thing worth asking a thumb to hit', pad.h+' px -> '+pad.onPhone);
 t.ok(pad.set===1, 'ONE set, on the pad where the last digit leaves your thumb',
      String(pad.set));
+t.ok(await p.evaluate(()=>{ gnOpen();
+       const over=getComputedStyle($('course-main')).display!=='none'
+              && $('gn-veil').classList.contains('on');
+       gnClose(); return over; }),
+     'the pad comes up OVER the sheet, not in place of it - the course '
+     +'you are setting a time for is the one thing worth seeing while '
+     +'you set it');
+t.ok(await p.evaluate(()=>{ gnOpen(); const r=$('course-gun').getBoundingClientRect();
+       gnClose(); return r.width<1080 && r.height<1080 && r.width<=700; }),
+     'and it is a pop-out, not a page');
 t.ok(pad.bar.join('|')==='BACK|NO START TIME',
      'and the bar says what it does rather than CLEAR, which is what '
      +'backspace does to a digit', pad.bar.join('|'));

@@ -535,7 +535,7 @@ which said *which* part. The row is gone and each one went home:
 |---|---|---|
 | `CLEAR` | in the `ROUTE` heading | it empties the route. Disabled while there is no route to empty |
 | `EDIT` | in the `MARKS` heading | it changes what is in the list |
-| `+ MARK` | the **first tile in the grid** | a mark appears in the grid, so that is where you make one. It stands in the place the new one will take |
+| `+ MARK` | the **last tile in the grid** | a mark appears in the grid, so that is where you make one, and it stands in the place the new one will take. It led the grid for a while, which put it under your thumb and also put it in front of eleven marks you have to get past it |
 | `START LINE` | **first in the route**, in line with it | the route starts on the line and comes home to it. It was down among the evening's settings, next to the countdown, as though it were another thing about the clock |
 | `DONE` | **gone** | the ✕ at the foot already meant *out of here*. It goes back one step now: a sheet in front of the app closes first, the app itself next. Two ways out on a face this small is not a convenience, it is a question about which one you meant |
 
@@ -569,7 +569,7 @@ glance and only occasionally change.
 
 | | reads | a tap |
 |---|---|---|
-| `START TIME` | `6:25 PM`, or `NOT SET` | opens the pad that types it |
+| `START TIME` | `6:25 PM`, or `NOT SET` | opens the pad that types it — see below |
 | `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, and round again |
 | `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
 | `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
@@ -617,6 +617,30 @@ with `PING BOTH ENDS WITH P AND B ON THE RACE BOX` under it: a menu that
 hid the other line would not say how to get it.
 
 ![The two lines there are](img/course-line.png)
+
+### The start time pad
+
+It comes up **over** the sheet rather than in place of it. It used to
+take the whole page, which meant the course you were setting a time for
+vanished while you set it — the one thing you might want to look at —
+and a full page for four digits is what a phone does because a phone has
+nothing else on the screen. 640 × 736 on a 1080 circle, with a veil to
+tap away.
+
+640 and not the 520 it was first drawn at, because **430 px of phone
+shows 1080 px of layout**: a key is 0.398 of what the stylesheet says,
+and 112 is the smallest that still lands 44 px under a thumb. A pop-out
+is worth having; a pop-out you cannot hit is not. A probe holds that
+number.
+
+The field is a **fixed two-and-two mask** that fills as you type —
+`––:––`, `6–:––`, `62:––`, `06:25` — with the digits not yet typed drawn
+in the hairline. It showed the raw digits with the colon two from the
+right before, which meant the number changed width and jumped sideways
+under the thumb on every key. A clock is four characters wide whatever
+you have typed into it so far. The `GUN AT` label beside it is gone: the
+pad is titled, the readout it came from is titled, and a label on the
+number as well was the third time of asking.
 
 ### CLUB SYNC
 
