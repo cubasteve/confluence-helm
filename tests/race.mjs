@@ -288,14 +288,14 @@ const pills=await p.evaluate(()=>{
   startModeSet('gun'); renderCourse();
   const r=()=>({lbl:$('cv-mode').querySelector('s').textContent,
                 val:$('cv-mode').querySelector('b').textContent.trim()});
-  const rows=()=>[...$('cv-pk').querySelectorAll('.pr')]
+  const rows=()=>[...$('pick-pk').querySelectorAll('.pkset')]
     .map(x=>x.querySelector('b').textContent+(x.classList.contains('sel')?'*':''));
   const out={start:r()};
   $('cv-mode').click();                       /* the menu it opens */
   out.menu=rows();
-  out.says=[...$('cv-pk').querySelectorAll('.pr s')].map(x=>x.textContent);
-  document.querySelector('#cv-pk .pr[data-mode="window"]').click();
-  out.win=r(); out.shut=!$('cv-pick').classList.contains('on');
+  out.says=[...$('pick-pk').querySelectorAll('.pkset s')].map(x=>x.textContent);
+  document.querySelector('#pick-pk .pkset[data-mode="window"]').click();
+  out.win=r(); out.shut=!$('pick').classList.contains('on');
   out.stored=JSON.parse(localStorage.getItem('helmPrefs')).startMode;
   out.panel=!document.getElementById('st-gun');
   return out;

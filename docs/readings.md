@@ -539,14 +539,16 @@ that runs ten or fifteen needs saying once. Change it while nothing is
 running and the RACE pill carries the new length at once rather than at
 the next reset.
 
-**The menu** is the dial's readings picker in every respect that
-matters: painted in `--panel` over a hairline so it reads as something
-in front rather than a hole, **swiped to scroll** because nothing under
-`#stage` scrolls itself, and **tapped to choose**. It opens *above* its
-readout — the row is a hundred px off the bottom of the glass — on the
-value already in force, so the choice you have is under your finger.
-With one open, a tap on another of the five moves it; a tap anywhere
-else puts it away.
+**The menu is the dial's readings picker** — the same box, the same
+code: painted in `--panel` over a hairline so it reads as something in
+front rather than a hole, **swiped to scroll** because nothing under
+`#stage` scrolls itself, and **tapped to choose**. What the course sheet
+supplies is the rows, the head and foot, and what a tap means. It opens
+*above* its readout — the settings row has the sheet's own bar under it,
+and a menu over that covers the way out — and on the value already in
+force, so the choice you have is under your finger. With one open, a tap
+on another of the five moves it; a tap anywhere else puts it away, and
+that tap does nothing else.
 
 **`START LINE` is which line the race starts *and* finishes on**, and it
 is the one fact on this sheet you cannot work out from anything else on

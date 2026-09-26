@@ -36,6 +36,7 @@ probes count on.
 | `persist` | everything stored, across a reload - and storage full of nonsense |
 | `phone` | the page in a pocket: its GPS as an instrument, MOUNT, and what it never invents |
 | `icons` | the home-screen set, and the page still working without any of it |
+| `pick` | the menu the dial's readings and the course sheet's settings share: where it opens, what a tap on a row does, and the veil |
 
 ## The helper
 

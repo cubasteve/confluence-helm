@@ -1002,12 +1002,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    you have to open, scroll and dismiss. */
 /* Wider than the sheet's own column, and it can be: the row sits low
    enough on the glass that 940 is inside the circle where 816 is the
-   most the strip and the marks can have up at the heading.
-   Above the veil, so an open menu can be moved from one setting to the
-   next with one tap instead of two: the veil dismisses everything else,
-   but these five are the row the menu belongs to. */
+   most the strip and the marks can have up at the heading. */
 .cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:940px;
-  align-self:center;position:relative;z-index:19}
+  align-self:center}
 .cvr{flex:1;min-width:0;height:76px;padding:0 30px 0 14px;border-radius:18px;
   border:2px solid var(--hairline);background:none;font-family:var(--font);
   display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
@@ -1038,50 +1035,35 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .cvr.club b{font-size:19px;gap:6px}
 .cvr.club b span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-/* ---- and the menu three of them open ----
-   The same menu as the dial's readings picker, and for the same reasons:
-   painted in --panel over a hairline so it reads as something in front,
-   swiped to scroll because nothing under #stage scrolls itself, tapped
-   to choose. It opens ABOVE its readout - the row is a hundred px off
-   the bottom of the glass, and there is nothing below it to open into. */
-.cv-veil{position:absolute;inset:0;z-index:17;display:none}
-.cv-veil.on{display:block}
-.cv-pick{position:absolute;z-index:18;width:330px;display:none;
-  flex-direction:column;border-radius:26px;background:var(--panel);
-  border:2px solid var(--hairline);box-shadow:0 20px 48px rgba(0,0,0,.30);
-  overflow:hidden}
-.cv-pick.on{display:flex}
-.cvp{overflow-y:auto;max-height:296px}
-.cvp::-webkit-scrollbar{width:0}
-.prhd{padding:14px 16px 6px;font-size:15px;font-weight:700;letter-spacing:.22em;
-  color:var(--label)}
-/* Baseline, so the name and what it is line up along one edge - and
-   padded off the top, because baseline alignment otherwise hangs the
-   text from the ceiling of a 78 px row. */
-.pr{display:flex;align-items:baseline;gap:10px;width:100%;padding:26px 16px 0;
+/* ---- the rows the settings put in the menu ----
+   The menu itself is the dial's - see #pick and pickOpen. What differs
+   is what goes in it: a reading is a name, a number and a unit in three
+   columns (.pkrow), and a setting is what it is over what it means
+   (.pkset). Two shapes, one box. */
+.pkset{display:flex;align-items:baseline;gap:10px;width:100%;padding:26px 16px 0;
   height:78px;background:none;border:none;font-family:var(--font);
   color:var(--ink);text-align:left}
 /* Two lines instead of two columns, for a choice whose description is a
    sentence rather than a name. */
-.pr.two{flex-direction:column;align-items:flex-start;justify-content:center;
-  gap:4px;padding:0 16px;height:auto;min-height:78px;padding-top:14px;padding-bottom:14px}
-.pr.two s{margin-left:0;white-space:normal;text-align:left;line-height:1.35}
-.pr b{font-size:26px;font-weight:600}
-.pr s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
+.pkset.two{flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:4px;padding:14px 16px;height:auto;min-height:78px}
+.pkset.two s{margin-left:0;white-space:normal;text-align:left;line-height:1.35}
+.pkset b{font-size:26px;font-weight:600}
+.pkset s{text-decoration:none;font-size:15px;letter-spacing:.06em;color:var(--label);
   margin-left:auto;text-align:right;white-space:nowrap}
-.pr.sel b,.pr.sel s{color:var(--accent)}
-.pr:active{background:var(--chip)}
+.pkset.sel b,.pkset.sel s{color:var(--accent)}
+.pkset:active{background:var(--chip)}
 /* A choice that is not available yet, shown rather than hidden: the
    pinged line is a line you make with P and B, and a menu that simply
    left it out would not say so. */
-.pr.off b{color:var(--label)}
-.pr.off s{color:var(--label);opacity:.7}
-.prfoot{width:100%;height:74px;flex:none;border:none;border-top:2px solid var(--hairline);
+.pkset.off b{color:var(--label)}
+.pkset.off s{color:var(--label);opacity:.7}
+.pkfoot{width:100%;height:74px;border:none;border-top:2px solid var(--hairline);
   background:none;font-family:var(--font);font-size:19px;font-weight:600;
   letter-spacing:.12em;color:var(--accent)}
-.prfoot:active{background:var(--chip)}
-.prfoot.club{color:var(--club)}
-.prnote{padding:12px 16px 16px;font-size:16px;letter-spacing:.06em;color:var(--label);
+.pkfoot:active{background:var(--chip)}
+.pkfoot.club{color:var(--club)}
+.pknote{padding:12px 16px 16px;font-size:16px;letter-spacing:.06em;color:var(--label);
   text-align:center;line-height:1.5}
 /* ---- the start time's pad ----
    Sized for a thumb rather than for the page. At 56 px - what it
@@ -1502,27 +1484,33 @@ a.lib-row{text-decoration:none;color:inherit}
 /* --panel is the page's own colour, so a menu painted in it reads as a
    hole rather than as something over the top. The hairline is what says
    "this is in front", and the shadow only reinforces it - on the day
-   theme a shadow alone is nearly invisible. */
-#mus-pick{position:absolute;z-index:18;width:356px;max-height:0;overflow:hidden;
-  border-radius:26px;background:var(--panel);opacity:0;
+   theme a shadow alone is nearly invisible.
+   Its width is set by whoever opens it, and its height is its content's
+   up to the scroller's cap. It fades and rises rather than unrolling:
+   the box has to be MEASURED the instant it opens, to be placed on a
+   round glass, and a box animating its own height measures short. A
+   transform does not touch layout. */
+#pick{position:absolute;z-index:27;display:none;flex-direction:column;
+  border-radius:26px;background:var(--panel);opacity:0;overflow:hidden;
   border:2px solid var(--hairline);
-  box-shadow:0 20px 48px rgba(0,0,0,.30);
-  transition:max-height .26s cubic-bezier(.16,1,.3,1), opacity .16s}
-#mus-pick.on{max-height:300px;opacity:1}
-/* The scroller inside, because the rounded corners have to clip it and a
-   scrolling box cannot also be the animated one. The first group heading
-   brings its own top space, so the scroller needs none of its own.
+  box-shadow:0 20px 48px rgba(0,0,0,.30);transform:translateY(-6px)}
+#pick.on{display:flex;opacity:1;transform:none;
+  transition:opacity .16s, transform .22s cubic-bezier(.16,1,.3,1)}
+#pick-hd,#pick-ft{flex:none}
+/* The scroller inside, because the rounded corners have to clip it. The
+   first group heading brings its own top space, so it needs none of its
+   own.
    touch-action stays NONE, inherited from #stage *, and that is the
-   whole design: the menu drives its own scroll from pointer events
-   (pkDrag, below). Asking the browser to do it meant setting pan-y on
-   the menu and every row in it and then trusting that no ancestor's
-   `none` vetoed it - untestable here, and it did not work on the panel.
-   Driving it by hand needs no such trust, behaves the same under a
-   finger and a mouse, and can actually be tested. overflow-y:auto stays
-   so a wheel still works and so scrollTop means something. */
-#mus-pick .pk{max-height:300px;overflow-y:auto;
+   whole design: the menu drives its own scroll from pointer events - see
+   dragScroll. Asking the browser to do it meant setting pan-y on the
+   menu and every row in it and then trusting that no ancestor's `none`
+   vetoed it - untestable here, and it did not work on the panel. Driving
+   it by hand needs no such trust, behaves the same under a finger and a
+   mouse, and can actually be tested. overflow-y:auto stays so a wheel
+   still works and so scrollTop means something. */
+#pick .pk{max-height:300px;overflow-y:auto;
   -webkit-overflow-scrolling:touch;padding:0 0 6px}
-#mus-pick .pk::-webkit-scrollbar{width:0}
+#pick .pk::-webkit-scrollbar{width:0}
 /* In the flow, not stuck to the top of the scroller. Sticky was the
    obvious thing and it did not work here: the rows scrolling underneath
    painted THROUGH the heading - hit-testing agreed the heading was on
@@ -1562,9 +1550,13 @@ a.lib-row{text-decoration:none;color:inherit}
    may wake up - but it should not look like a live one. */
 .pkrow.none b,.pkrow.none s{color:var(--label);opacity:.55}
 .pkrow:active{background:var(--chip)}
-/* Catches the tap that dismisses it, and nothing else. */
-#mus-veil{position:absolute;inset:0;z-index:17;display:none}
-#mus-veil.on{display:block}
+/* Above the app drawer and the control panel at 20 and above a launched
+   app at 25, because the course sheet - which opens one of these - runs
+   inside #app-run; and below the screensaver at 30, the lock and the
+   dimmer, which are allowed to cover anything.
+   Catches the tap that dismisses it, and nothing else. */
+#pick-veil{position:absolute;inset:0;z-index:26;display:none}
+#pick-veil.on{display:block}
 
 /* Above everything. This is the brightness control on hardware with no
    backlight to drive, so it has to behave like one and dim the whole
@@ -2076,12 +2068,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
 <div id="dots"><i></i><i></i></div>
 
-<!-- The reading picker, shared by the dial and the music page. Outside
-     both of them: #music slides in on a transform, and a menu that slid
-     with it would be animating while you were reading it. It is only ever
-     open transiently, and it closes on a page change. -->
-<div id="mus-veil"></div>
-<div id="mus-pick"><div class="pk" id="mus-pk"></div></div>
+<!-- The menu. One of them, for the dial's readings, the music page's and
+     the course sheet's settings - see pickOpen. Outside all three: #music
+     slides in on a transform and the tracks app fades, and a menu that
+     moved with either would be animating while you were reading it. It is
+     only ever open transiently, and it closes on a page change.
+     A head and a foot that do not scroll, because which end of the line
+     you are choosing and the button that loads a course are not things
+     that should slide out from under a finger. -->
+<div id="pick-veil"></div>
+<div id="pick"><div id="pick-hd"></div><div class="pk" id="pick-pk"></div>
+  <div id="pick-ft"></div></div>
 
 <!-- ============== CONTROL PANEL ============== -->
 <!-- ============== THE APP DRAWER ==============
@@ -2469,13 +2466,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <button class="cbtn on" id="course-done">DONE</button>
       </div>
     </div>
-    <!-- The settings menu and the tap that dismisses it. Outside
-         #course-main, because it is over the sheet rather than in it -
-         and #t-course is the positioned ancestor, so its coordinates are
-         the glass's. -->
-    <div class="cv-veil" id="cv-veil"></div>
-    <div class="cv-pick" id="cv-pick"><div id="cv-phd"></div>
-      <div class="cvp" id="cv-pk"></div><div id="cv-pft"></div></div>
     <!-- A mark of your own: a name, and a position typed or taken from
          the GPS. Degrees and decimal minutes as the sailing instructions
          give them, or decimal degrees; west and south are minus.
@@ -4707,19 +4697,19 @@ function layoutPages(){
 function goPage(i){
   i=Math.max(PAGE_MIN,Math.min(PAGE_MAX,i));
   if(i===PAGE_I) return;
-  musPickClose();
+  pickClose();
   PAGE_I=i; markSlide('page-'+i); layoutPages();
 }
 
 /* Anything that moves the glass out from under the picker closes it:
    the menu is anchored to a cell, and a cell that has slid away or gone
    behind the panel leaves it pointing at nothing. */
-const openPanel =()=>{ if(APP.on) return; closeApps(); musPickClose();
+const openPanel =()=>{ if(APP.on) return; closeApps(); pickClose();
                        markSlide('panel-open');  panel.classList.add('open');
                        netPanelOpen(); sheetFit(); };
 const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
                        netPanelClose(); };
-const openApps  =()=>{ if(APP.on) return; closePanel();
+const openApps  =()=>{ if(APP.on) return; closePanel(); pickClose();
                        drawApps(); markSlide('apps-open');
                        apps.classList.add('open'); };
 const closeApps =()=>{ markSlide('apps-close'); apps.classList.remove('open'); };
@@ -7519,8 +7509,8 @@ function paintStrip(){
   /* The cells are rebuilt, so the menu is anchored to an element that no
      longer exists - re-point it at the new one. */
   if(PICK && PICK.g==='mus'){
-    PICK.el=document.querySelector(`.mcell[data-slot="${PICK.sl}"]`);
-    musPickPlace();
+    PICK.at=document.querySelector(`.mcell[data-slot="${PICK.sl}"]`);
+    pickPlace();
   }
 }
 
@@ -7539,8 +7529,8 @@ function paintStrip(){
    shuffling the others would move readings you never touched. Across
    groups nothing is swapped: the dial showing depth is no reason the
    music page cannot. */
-let PICK=null;                       /* {g:'mus'|'dial', sl, el} */
-
+/* PICK, the open menu, is declared with the menu itself - the spec this
+   page hands it carries `g` and `sl` for the three functions below. */
 const PICK_G={
   mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,
          save:musSave,     after:()=>{ stripKey=''; paintStrip(); }},
@@ -7572,68 +7562,7 @@ function musPickRows(){
   }).join('');
 }
 
-/* PICK_R is the radius the box has to stay inside, and it was 536
-   against a 540 glass - four pixels of inset. That is a knife edge: the
-   starboard menu missed fitting BELOW its cell by three hundredths of a
-   pixel and flipped to the top of the glass instead, which is a large
-   visible jump caused by nothing. 539 leaves a pixel, and the box is
-   round-cornered anyway so its true corners are inside its bounds. */
-const PICK_W=360, PICK_H=300, PICK_GAP=14, PICK_R=539;
-function musPickPlace(){
-  const pk=$('mus-pick');
-  if(!pk || !PICK || !PICK.el || !PICK.el.isConnected) return musPickClose();
-  const host=$('stage').getBoundingClientRect();
-  const r=PICK.el.getBoundingClientRect();
-  /* Anchored to the cell's INWARD edge, not centred under it. Centred,
-     the outboard menus hung over the rim, got pulled back by the clamp,
-     and landed on top of the very reading you were changing. Hung inward
-     they have the whole middle of the glass to fall into, and they still
-     point at the cell they belong to. */
-  const L=r.left-host.left, R=r.right-host.left;
-  const mid=L+r.width/2;
-  const want = mid<440 ? L : mid>640 ? R-PICK_W : mid-PICK_W/2;
-  /* Half the chord at whichever of the box's two edges is further from
-     the middle - that edge runs out of circle first. */
-  const clampX=y=>{
-    const dy=Math.max(Math.abs(y-540), Math.abs(y+PICK_H-540));
-    const half=Math.sqrt(Math.max(0, PICK_R*PICK_R-dy*dy));
-    return Math.max(540-half, Math.min(540+half-PICK_W, want));
-  };
-  const fits=(x,y)=>[[x,y],[x+PICK_W,y],[x,y+PICK_H],[x+PICK_W,y+PICK_H]]
-    .every(([cx,cy])=>Math.hypot(cx-540,cy-540)<=PICK_R);
-  /* Below the cell, above it if that will not go, and failing both -
-     a cell low on the glass, or the apex with art either side and glass
-     neither - straddling the middle, the only band wide enough for
-     anything. Each re-clamps x for its own y: a box that moved is over a
-     different width of circle than the one that did not. */
-  const tries=[ r.bottom-host.top+PICK_GAP,
-                r.top-host.top-PICK_H-PICK_GAP,
-                540-PICK_H/2 ];
-  let x=clampX(tries[2]), y=tries[2];
-  for(const ty of tries){ const tx=clampX(ty); if(fits(tx,ty)){ x=tx; y=ty; break; } }
-  pk.style.left=Math.round(x)+'px';
-  pk.style.top =Math.round(y)+'px';
-}
-
-function musPickOpen(group, slot, el){
-  if(PICK && PICK.g===group && PICK.sl===slot) return musPickClose();
-  PICK={g:group, sl:slot, el:el};
-  const pk=$('mus-pk');
-  pk.innerHTML=musPickRows();
-  /* Opens ON the reading that is already in the cell rather than at the
-     top. Fourteen readings in five groups is four screenfuls of
-     scrolling, and starting at BOAT SPEED every time means hunting for
-     where you are before you can go anywhere. Centred, so the groups
-     either side of it are visible and you can see which way to scroll.
-     scrollIntoView is not used: it scrolls the PAGE too, and the page
-     here is a kiosk that must not move. */
-  const sel=pk.querySelector('.pkrow.sel');
-  pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(PICK_H-sel.offsetHeight)/2) : 0;
-  musPickPlace();
-  $('mus-veil').classList.add('on');
-  $('mus-pick').classList.add('on');
-  musPickMark();
-}
+/* Which cell is being picked for, said on the cell itself. */
 function musPickMark(){
   document.querySelectorAll('.mcell').forEach(e=>
     e.classList.toggle('picking',
@@ -7642,11 +7571,14 @@ function musPickMark(){
   if(sv) DIAL_SLOTS.forEach(sl=>sv.classList.toggle('picking-'+sl,
     !!PICK && PICK.g==='dial' && PICK.sl===sl));
 }
-function musPickClose(){
-  PICK=null; pkStop();
-  const pk=$('mus-pick'); if(pk) pk.classList.remove('on');
-  const v=$('mus-veil'); if(v) v.classList.remove('on');
-  musPickMark();
+/* A reading, in the menu every other setting uses. What is the dial's
+   about it is the rows, what a tap on one means, and the cell that
+   lights while it is open; the box, where it goes on a round glass and
+   the swipe that scrolls it are pickOpen's. */
+function musPickOpen(group, slot, el){
+  pickOpen({ key:group+':'+slot, g:group, sl:slot, at:el, width:356,
+             list:musPickRows, mark:musPickMark, peers:'.mcell,.dcell',
+             tap:t=>{ const b=t.closest('.pkrow'); if(b) musPickChoose(b.dataset.k); } });
 }
 function musPickChoose(k){
   if(!PICK) return;
@@ -7655,7 +7587,7 @@ function musPickChoose(k){
   if(from) map[from]=map[PICK.sl];              /* swap, never duplicate */
   map[PICK.sl]=k;
   g.save();
-  musPickClose();
+  pickClose();
   g.after();
 }
 
@@ -7675,65 +7607,11 @@ $('dial-cells').addEventListener('click',e=>{
   const c=e.target.closest('.dcell'); if(!c) return;
   e.stopPropagation(); musPickOpen('dial', c.dataset.slot, c); });
 
-/* ---- the menu scrolls itself ---------------------------------------
-   Everything under #stage has touch-action:none so a swipe is never
-   stolen by a scroll, which also means the browser will not scroll this
-   list. Thirteen readings do not fit in 300px, so the drag IS the
-   scroll: pointer deltas go straight into scrollTop, and a flick coasts
-   afterwards the way a native one would.
-   PK_SLOP is what separates a tap from a drag. Without it the finger
-   that scrolled the list would also choose whatever reading it happened
-   to lift over, which is the worst possible outcome of a scroll. */
+/* PK_SLOP is what separates a tap from a drag, for every list under
+   #stage. Without it the finger that scrolled a list would also choose
+   whatever it happened to lift over, which is the worst possible outcome
+   of a scroll. */
 const PK_SLOP=10, PK_FLICK=0.15;      /* px, and px per ms */
-let pkDrag=null, pkMoved=0, pkGlide=null;
-const pkStop=()=>{ if(pkGlide) cancelAnimationFrame(pkGlide); pkGlide=null; };
-function pkCoast(v){                  /* v in scrollTop px per ms */
-  const pk=$('mus-pk'); let last=performance.now();
-  const step=now=>{
-    const dt=Math.min(40, now-last); last=now;
-    const was=pk.scrollTop;
-    pk.scrollTop += v*dt;
-    v *= Math.pow(0.994, dt);         /* about half every 115 ms */
-    /* Stops at the ends rather than grinding against them: scrollTop
-       clamps itself, so a coast that is no longer moving is over. */
-    pkGlide = (Math.abs(v)>0.02 && pk.scrollTop!==was)
-      ? requestAnimationFrame(step) : null;
-  };
-  pkGlide=requestAnimationFrame(step);
-}
-$('mus-pick').addEventListener('pointerdown',e=>{
-  gClaim(); pkStop(); pkMoved=0;
-  pkDrag={id:e.pointerId, y0:e.clientY, y:e.clientY,
-          t:performance.now(), top:$('mus-pk').scrollTop, v:0};
-});
-/* On WINDOW, not on the menu, and deliberately NOT setPointerCapture.
-   Capture was the obvious way to keep a finger that runs off the menu
-   scrolling it - and it retargets the CLICK to the capturing element,
-   so `closest('.pkrow')` found nothing and a plain tap stopped choosing
-   anything at all. Window listeners keyed on the pointer id give the
-   same reach with none of that. */
-addEventListener('pointermove',e=>{
-  if(!pkDrag || e.pointerId!==pkDrag.id) return;
-  const now=performance.now(), dt=now-pkDrag.t;
-  if(dt>0) pkDrag.v=(pkDrag.y-e.clientY)/dt;   /* sign of scrollTop */
-  pkDrag.y=e.clientY; pkDrag.t=now;
-  pkMoved=Math.max(pkMoved, Math.abs(e.clientY-pkDrag.y0));
-  $('mus-pk').scrollTop = pkDrag.top-(e.clientY-pkDrag.y0);
-});
-['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
-  if(!pkDrag || e.pointerId!==pkDrag.id) return;
-  const v=pkDrag.v; pkDrag=null;
-  if(pkMoved>PK_SLOP && Math.abs(v)>PK_FLICK) pkCoast(v);
-}));
-$('mus-pick').addEventListener('click',e=>{
-  const b=e.target.closest('.pkrow'); if(!b) return;
-  e.stopPropagation();
-  /* A drag that ended over a row is a scroll, not a choice. */
-  if(pkMoved>PK_SLOP){ pkMoved=0; return; }
-  musPickChoose(b.dataset.k); });
-$('mus-veil').addEventListener('pointerdown',()=>gClaim());
-$('mus-veil').addEventListener('click',e=>{ e.stopPropagation(); musPickClose(); });
-
 /* The same scroller for any list under #stage - the course sheet and
    the race library. Same reasoning as the picker's: the browser will
    not scroll anything here, so the drag is the scroll and a flick
@@ -7780,6 +7658,163 @@ function dragScroll(list, lazy){
 const courseDragged=dragScroll($('course-list'));
 const libDragged=dragScroll($('lib-list'));
 dragScroll($('p-sheet'), true);
+
+/* ---- the menu ----------------------------------------------------------
+   One menu, and three things open it: a cell on the dial, a cell on the
+   music page - both choosing which reading they show - and a readout on
+   the course sheet choosing what it is set to. They were two
+   implementations of the same object, because the second was written
+   rather than the first generalised, which is how a file gets long.
+
+   What differs between the callers is only what goes IN it: the rows, an
+   optional head and foot that do not scroll, what a tap on a row means,
+   and what lights up while it is open. Those are the caller's, in the
+   spec it passes here. Everything else is this:
+
+     - where it goes, so it stays on a round glass and points at the
+       control it belongs to
+     - opening on the row already in force rather than at the top
+     - the swipe that scrolls it, and the tap that is not a swipe
+     - the veil that dismisses it
+
+   spec: { key     what makes this menu this one - tapping the control
+                   that is already open closes it
+           at      the element it is anchored to
+           width   how wide, in px
+           up      try ABOVE the control first rather than below
+           hold    an element to stay inside, where that is narrower
+                   than the glass
+           list()  the rows. A row with .sel is the one in force
+           head()  above the scroller, optional
+           foot()  below it, optional
+           tap(el) what the tap means. It may repaint or close
+           mark()  called on open and on close, to light the control } */
+let PICK=null;
+const PICK_GAP=14;
+/* PICK_R is the radius the box has to stay inside, and it was 536
+   against a 540 glass - four pixels of inset. That is a knife edge: the
+   starboard menu missed fitting BELOW its cell by three hundredths of a
+   pixel and flipped to the top of the glass instead, which is a large
+   visible jump caused by nothing. 539 leaves a pixel, and the box is
+   round-cornered anyway so its true corners are inside its bounds. */
+const PICK_R=539;
+const pickDragged=dragScroll($('pick-pk'));
+
+function pickOpen(spec){
+  if(PICK && PICK.key===spec.key) return pickClose();
+  const was=PICK;
+  PICK=spec;
+  if(was && was.mark) was.mark();          /* the one it came from goes out */
+  $('pick').style.width=(spec.width||356)+'px';
+  /* Shown before it is filled, because a box with display:none has no
+     size to be placed by - and nothing paints between here and the end
+     of pickPaint, so there is no frame with an empty menu in it. */
+  $('pick-veil').classList.add('on');
+  $('pick').classList.add('on');
+  pickPaint();
+}
+function pickClose(){
+  const was=PICK; if(!was) return;
+  PICK=null;
+  $('pick').classList.remove('on');
+  $('pick-veil').classList.remove('on');
+  if(was.mark) was.mark();
+}
+function pickPaint(){
+  if(!PICK) return;
+  $('pick-hd').innerHTML = PICK.head ? PICK.head() : '';
+  const pk=$('pick-pk');
+  pk.innerHTML=PICK.list();
+  $('pick-ft').innerHTML = PICK.foot ? PICK.foot() : '';
+  /* Opens ON the row that is already in force rather than at the top.
+     Fourteen readings in five groups is four screenfuls of scrolling,
+     and starting at BOAT SPEED every time means hunting for where you
+     are before you can go anywhere. Centred, so the rows either side of
+     it are visible and you can see which way to scroll.
+     scrollIntoView is not used: it scrolls the PAGE too, and the page
+     here is a kiosk that must not move. */
+  const sel=pk.querySelector('.sel');
+  pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(pk.clientHeight-sel.offsetHeight)/2) : 0;
+  pickPlace();
+  if(PICK.mark) PICK.mark();
+}
+/* Anchored to the control's INWARD edge, not centred under it. Centred,
+   the outboard menus hung over the rim, got pulled back by the clamp,
+   and landed on top of the very thing you were changing. Hung inward
+   they have the whole middle of the glass to fall into, and they still
+   point at what they belong to. */
+function pickPlace(){
+  if(!PICK) return;
+  const box=$('pick');
+  if(!PICK.at || !PICK.at.isConnected) return pickClose();
+  const host=$('stage').getBoundingClientRect(), r=PICK.at.getBoundingClientRect();
+  const w=box.offsetWidth, h=box.offsetHeight;
+  const L=r.left-host.left, R=r.right-host.left, mid=L+r.width/2;
+  const want = mid<440 ? L : mid>640 ? R-w : mid-w/2;
+  /* Half the chord at whichever of the box's two edges is further from
+     the middle - that edge runs out of circle first. And inside `hold`
+     where there is one: a menu hanging out over the rim beside a sheet
+     reads as something that has come loose from it. */
+  const lim = PICK.hold ? PICK.hold.getBoundingClientRect() : null;
+  const clampX=y=>{
+    const dy=Math.max(Math.abs(y-540), Math.abs(y+h-540));
+    const half=Math.sqrt(Math.max(0, PICK_R*PICK_R-dy*dy));
+    let lo=540-half, hi=540+half-w;
+    if(lim){ const a=Math.max(lo, lim.left-host.left),
+                   b=Math.min(hi, lim.right-host.left-w);
+             if(a<=b){ lo=a; hi=b; } }
+    return Math.max(lo, Math.min(hi, want));
+  };
+  const fits=(x,y)=>[[x,y],[x+w,y],[x,y+h],[x+w,y+h]]
+    .every(([cx,cy])=>Math.hypot(cx-540,cy-540)<=PICK_R);
+  /* Below the control, above it if that will not go, and failing both -
+     a cell low on the glass, or the apex with art either side and glass
+     neither - straddling the middle, the only band wide enough for
+     anything. A caller that says `up` asks for above first: the course
+     sheet's settings row has its own bar under it, and a menu over that
+     covers the way out. Each try re-clamps x for its own y: a box that
+     moved is over a different width of circle than the one that did
+     not. */
+  const below=r.bottom-host.top+PICK_GAP, above=r.top-host.top-h-PICK_GAP;
+  const tries = PICK.up ? [above, below, 540-h/2] : [below, above, 540-h/2];
+  let y=tries[2], x=clampX(y);
+  for(const ty of tries){ const tx=clampX(ty); if(fits(tx,ty)){ x=tx; y=ty; break; } }
+  box.style.left=Math.round(x)+'px';
+  box.style.top =Math.round(y)+'px';
+}
+/* gClaim on both: a tap in the menu is not a page swipe, and a drag
+   inside the list is a scroll rather than one either - dragScroll claims
+   that one itself. */
+$('pick').addEventListener('pointerdown',()=>gClaim());
+$('pick').addEventListener('click',e=>{
+  if(!PICK) return;
+  e.stopPropagation();
+  if(pickDragged()) return;               /* a scroll, not a choice */
+  PICK.tap(e.target);
+});
+$('pick-veil').addEventListener('pointerdown',()=>gClaim());
+$('pick-veil').addEventListener('click',e=>{
+  e.stopPropagation();
+  /* The veil swallows the tap that dismisses the menu, which is the
+     point of it: a tap meant to put the menu away should not also drag
+     the map or press whatever was under it.
+     One exception, and it is handed on rather than let through: another
+     control of the same set - the cell next door, the readout next along
+     - MOVES the menu instead of just closing it. The veil is over them,
+     so it looks underneath itself and passes the tap to the one it
+     finds. Two taps to go one setting sideways is one too many. */
+  const peers=PICK && PICK.peers, at=PICK && PICK.at;
+  let under=peers && document.elementsFromPoint(e.clientX, e.clientY)
+      .map(el=>el.closest && el.closest(peers)).find(Boolean);
+  /* Not its OWN control, though: that tap is the one that closes the
+     menu, and handing it on would open the same one straight back. */
+  if(under && at && (under===at || under.contains(at))) under=null;
+  pickClose();
+  /* Dispatched rather than .click(): half of these controls are SVG
+     rects on the dial, and an SVGElement has no click() to call. */
+  if(under) under.dispatchEvent(new MouseEvent('click',
+      {bubbles:true, clientX:e.clientX, clientY:e.clientY}));
+});
 /* The fades and the room for them are only worth having when there is
    something under them. Re-asked whenever the panel opens, because what
    is in it changes: the sounder row and the radios both appear only
@@ -8683,7 +8718,7 @@ $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
 const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
   courseEdit=false; $('course-edit').classList.remove('on');
-  cvpClose();
+  pickClose();
   if(MK) mkClose(); if(GN) gnClose(); };
 /* ---- the course sheet --------------------------------------------------
    The course reads across the top as chips, in the order it is rounded;
@@ -8835,7 +8870,7 @@ function renderCourse(){
        c2.step==='busy'  ? 'CHECKING…'
      : c2.step==='ready' ? cn+' MARK'+(cn===1?'':'S')+'?'
      :                     'SYNC')+'</span>', '⌄');
-  if(CVP) cvpPaint();
+  if(cvpOn()) pickPaint();
 }
 /* The sheet's title is what the sub-views are called. The course view's
    own heading already says COURSE, so the title is off for it rather
@@ -8916,96 +8951,55 @@ function clubApply(){
    15 minutes is three values, and a tap that steps them beats a menu you
    have to open, scroll and dismiss.
 
-   It is the dial's readings picker in every respect that matters: it is
-   painted in --panel over a hairline so it reads as something in front
-   rather than a hole, it is swiped to scroll because nothing under
-   #stage scrolls itself, and it is tapped to choose. It opens ABOVE its
-   readout: the row is a hundred px off the bottom of the glass and there
-   is nothing below it to open into.
-
-   The head and the foot are outside the scroller. Which end of the line
-   you are choosing, and the button that loads the club's course, are not
-   things that should scroll away from under the finger. */
-let CVP=null;                            /* {kind, end} while one is open */
-const cvpDragged=dragScroll($('cv-pk'));
-const CVP_GAP=12, CVP_R=539;
+   The menu is the dial's - see pickOpen. What is the course sheet's
+   about it is here: what goes in the head, the rows, the foot, what a
+   tap on one means, and the readout that lights while it is open. It
+   asks to open UPWARDS, because the settings row has the sheet's own bar
+   under it and a menu over that covers the way out; and to stay inside
+   the sheet's column, which is narrower than the glass down there. */
 const cvpBtn=k=>$('cv-'+(k==='club'?'sync':k));
+const cvpOn=()=>PICK && PICK.own==='course' ? PICK : null;
 
 function cvpOpen(kind){
-  if(CVP && CVP.kind===kind) return cvpClose();
-  CVP={kind:kind, end:'pin'};
-  $('cv-veil').classList.add('on'); $('cv-pick').classList.add('on');
-  cvpPaint();
+  pickOpen({ key:'cv:'+kind, own:'course', kind:kind, end:'pin',
+             at:cvpBtn(kind), width:330, up:true, hold:$('course-main'),
+             peers:'.cvr',
+             head:cvpHead, list:cvpBody, foot:cvpFoot,
+             mark:cvpMark, tap:cvpTap });
 }
-function cvpClose(){
-  if(!CVP) return;
-  CVP=null;
-  $('cv-pick').classList.remove('on'); $('cv-veil').classList.remove('on');
-  document.querySelectorAll('.cvr').forEach(e=>e.classList.remove('picking'));
-}
-function cvpPaint(){
-  if(!CVP) return;
-  const k=CVP.kind, pk=$('cv-pk');
-  $('cv-phd').innerHTML=cvpHead();
-  pk.innerHTML = k==='mode' ? cvpMode() : k==='line' ? cvpLine() : cvpClub();
-  $('cv-pft').innerHTML=cvpFoot();
+function cvpMark(){
+  const on=cvpOn();
   document.querySelectorAll('.cvr').forEach(e=>
-    e.classList.toggle('picking', e===cvpBtn(k)));
-  /* Opened on what it is set to rather than at the top, and centred, so
-     the choice already in force is under the finger and you can see
-     which way the others lie. */
-  const sel=pk.querySelector('.pr.sel');
-  pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(pk.clientHeight-sel.offsetHeight)/2) : 0;
-  cvpPlace();
-}
-/* Above the readout it belongs to, centred on it, and pulled back inside
-   the glass by the chord at whichever of its edges is furthest from the
-   middle - the same arithmetic the readings picker does, for the same
-   round reason. */
-function cvpPlace(){
-  if(!CVP) return;
-  const pk=$('cv-pick'), host=$('stage').getBoundingClientRect();
-  const r=cvpBtn(CVP.kind).getBoundingClientRect();
-  const w=pk.offsetWidth, h=pk.offsetHeight;
-  const want=r.left-host.left+r.width/2-w/2;
-  const y=Math.max(8, r.top-host.top-h-CVP_GAP);
-  const dy=Math.max(Math.abs(y-540), Math.abs(y+h-540));
-  const half=Math.sqrt(Math.max(0, CVP_R*CVP_R-dy*dy));
-  /* Held inside the sheet's own column where that is narrower than the
-     glass, which it is here: a menu hanging out over the rim beside the
-     sheet reads as something that has come loose. */
-  const m=$('course-main').getBoundingClientRect();
-  let lo=Math.max(540-half, m.left-host.left), hi=Math.min(540+half-w, m.right-host.left-w);
-  if(lo>hi){ lo=540-half; hi=540+half-w; }
-  pk.style.left=Math.round(Math.max(lo, Math.min(hi, want)))+'px';
-  pk.style.top =Math.round(y)+'px';
+    e.classList.toggle('picking', !!on && e===cvpBtn(on.kind)));
 }
 function cvpHead(){
-  const k=CVP.kind;
-  if(k==='mode') return '<div class="prhd">WHICH SEQUENCE</div>';
-  if(k==='club') return '<div class="prhd">TONIGHT, FROM THE CLUB</div>';
-  return '<div class="prhd">WHICH LINE</div>';
+  const k=cvpOn().kind;
+  if(k==='mode') return '<div class="pkhd">WHICH SEQUENCE</div>';
+  if(k==='club') return '<div class="pkhd">TONIGHT, FROM THE CLUB</div>';
+  return '<div class="pkhd">WHICH LINE</div>';
 }
+const cvpBody=()=>{ const k=cvpOn().kind;
+  return k==='mode' ? cvpMode() : k==='line' ? cvpLine() : cvpClub(); };
 const cvpMode=()=>[['gun','GUN','LINE OPENS AT ZERO'],
                    ['window','WINDOW','LINE OPEN THROUGHOUT']]
-  .map(([k,n,w])=>'<button class="pr two'+(CFG.startMode===k?' sel':'')+'" data-mode="'+k+'">'
-      +'<b>'+n+'</b><s>'+w+'</s></button>').join('');
+  .map(([k,n,w])=>'<button class="pkset two'+(CFG.startMode===k?' sel':'')
+      +'" data-mode="'+k+'"><b>'+n+'</b><s>'+w+'</s></button>').join('');
 /* The club's line, or the one you pinged. There is no third: the marks
    the club's line runs between do not move, and a line laid somewhere
    else is a line you ping. */
 function cvpLine(){
   const pinged=lineEnds().pinged;
-  return '<button class="pr two'+(pinged?'':' sel')+'" data-line="marks">'
+  return '<button class="pkset two'+(pinged?'':' sel')+'" data-line="marks">'
       +'<b>'+esc(lineMark('pin').hdr+' – '+lineMark('boat').hdr)+'</b>'
       +'<s>THE CLUB’S MARKS</s></button>'
-    +'<button class="pr two'+(pinged?' sel':' off')+'" data-line="pinged">'
+    +'<button class="pkset two'+(pinged?' sel':' off')+'" data-line="pinged">'
       +'<b>PINGED</b><s>'+(pinged ? 'FROM P AND B ON THE RACE BOX'
           : 'PING BOTH ENDS WITH P AND B ON THE RACE BOX')+'</s></button>';
 }
 function cvpClub(){
   const c=CLUB;
-  if(c.step==='busy') return '<div class="prnote">CHECKING THE CLUB SITE…</div>';
-  if(c.step!=='ready') return '<div class="prnote">'+esc(c.say||'TAP AGAIN TO ASK THE '
+  if(c.step==='busy') return '<div class="pknote">CHECKING THE CLUB SITE…</div>';
+  if(c.step!=='ready') return '<div class="pknote">'+esc(c.say||'TAP AGAIN TO ASK THE '
     +'CLUB SITE FOR TONIGHT’S COURSE')+'</div>';
   const g=c.got.raw||{}, out=[];
   if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
@@ -9014,47 +9008,40 @@ function cvpClub(){
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
   if(g.startsOnLine===false) out.push('IT DOES NOT START ON THE LINE');
   if(g.note) out.push(String(g.note).toUpperCase());
-  return '<div class="prnote">'+out.map(esc).join('<br>')+'</div>';
+  return '<div class="pknote">'+out.map(esc).join('<br>')+'</div>';
 }
 function cvpFoot(){
-  const k=CVP.kind, c=CLUB;
-  if(k==='club'){
-    if(c.step==='ready') return '<button class="prfoot club" data-load="1">LOAD '
-      +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')+'</button>';
-    if(c.step==='busy') return '';
-    return '<button class="prfoot club" data-again="1">ASK THE CLUB</button>';
-  }
-  return '';
+  const c=CLUB;
+  if(cvpOn().kind!=='club') return '';
+  if(c.step==='ready') return '<button class="pkfoot club" data-load="1">LOAD '
+    +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')+'</button>';
+  if(c.step==='busy') return '';
+  return '<button class="pkfoot club" data-again="1">ASK THE CLUB</button>';
 }
-$('cv-pick').addEventListener('pointerdown',()=>gClaim());
-$('cv-pick').addEventListener('click',e=>{
-  if(!CVP) return;
-  if(cvpDragged()) return;                    /* a scroll, not a choice */
-  const md=e.target.closest('[data-mode]');
-  if(md){ startModeSet(md.dataset.mode); cvpClose(); return; }
-  const ln=e.target.closest('[data-line]');
+function cvpTap(t){
+  const md=t.closest('[data-mode]');
+  if(md){ startModeSet(md.dataset.mode); pickClose(); return; }
+  const ln=t.closest('[data-line]');
   if(ln){
     /* Back to the marks is the only one of the two this menu can do.
        The pinged line is made by pinging - the row is there so the menu
        says what the other line would be, and how to get it. */
     if(ln.dataset.line==='marks' && lineEnds().pinged){
       LINE={}; saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.remove('set'));
-      renderCourse(); drawMap(shownTrack()); cvpClose(); }
-    else if(ln.dataset.line==='marks') cvpClose();
+      renderCourse(); drawMap(shownTrack()); }
+    if(ln.dataset.line==='marks') pickClose();
     return; }
-  if(e.target.closest('[data-load]')){ clubApply(); cvpClose(); return; }
-  if(e.target.closest('[data-again]')){ clubFetch(); return; }
-});
-$('cv-veil').addEventListener('pointerdown',()=>gClaim());
-$('cv-veil').addEventListener('click',e=>{ e.stopPropagation(); cvpClose(); });
+  if(t.closest('[data-load]')){ clubApply(); pickClose(); return; }
+  if(t.closest('[data-again]')){ clubFetch(); return; }
+}
 
 /* Tap the CLUB readout and it asks, with the menu open on the answer;
    the LOAD in the menu is the second tap, and still the only thing that
    replaces a course. */
 function clubTap(){
-  const was=CVP && CVP.kind==='club';
+  const was=cvpOn() && cvpOn().kind==='club';
   cvpOpen('club');
-  if(CVP && !was && CLUB.step==='idle') clubFetch();
+  if(cvpOn() && !was && CLUB.step==='idle') clubFetch();
 }
 /* Five, ten, fifteen, five. Three values a thumb can step through. */
 function minsStep(){
@@ -9126,7 +9113,7 @@ function gnOpen(){
     pm = h>=12;
     v = String((h%12)||12) + String(d.getMinutes()).padStart(2,'0'); }
   GN={v:v, pm:pm, built:false};
-  cvpClose(); crsTitle('Start time');
+  pickClose(); crsTitle('Start time');
   $('course-main').style.display='none'; $('course-gun').style.display='';
   $('gn-msg').textContent=''; gnPaint();
 }
@@ -9212,7 +9199,7 @@ $('course-list').addEventListener('click',e=>{
 $('course-main').addEventListener('click',e=>{
   /* Anything else on the sheet is an answer of 'not that' to an open
      menu, the same as the veil. */
-  if(CVP && !e.target.closest('.cvr')) cvpClose();
+  if(cvpOn() && !e.target.closest('.cvr')) pickClose();
   /* A chip carries one mark's side. One tap flips it: two buttons per
      chip would have made the strip half again as long, and P or S is a
      choice between exactly two things. */
@@ -9312,7 +9299,7 @@ function mkOpen(id){
       name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
       buoy:(m&&m.buoy)||'o',
       kb:{shift:false,sym:false,num:false}};
-  cvpClose(); crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
+  pickClose(); crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
   $('course-main').style.display='none'; $('course-add').style.display='';
   $('mk-msg').textContent=''; mkPaint();
 }

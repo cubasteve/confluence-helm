@@ -43,12 +43,12 @@ const rd=id=>p.evaluate(i=>({lbl:$(i).querySelector('s').textContent,
                              val:$(i).querySelector('b').textContent.trim()}), id);
 /* And the menu three of them open. */
 const menu=()=>p.evaluate(()=>({
-  on:$('cv-pick').classList.contains('on'),
-  head:$('cv-phd').textContent.trim(),
-  rows:[...$('cv-pk').querySelectorAll('.pr')].map(r=>r.querySelector('b').textContent),
-  sel:[...$('cv-pk').querySelectorAll('.pr.sel')].map(r=>r.querySelector('b').textContent)[0]||null,
-  note:($('cv-pk').querySelector('.prnote')||{textContent:''}).textContent.trim(),
-  foot:$('cv-pft').textContent.trim(),
+  on:$('pick').classList.contains('on'),
+  head:$('pick-hd').textContent.trim(),
+  rows:[...$('pick-pk').querySelectorAll('.pkset')].map(r=>r.querySelector('b').textContent),
+  sel:[...$('pick-pk').querySelectorAll('.pkset.sel')].map(r=>r.querySelector('b').textContent)[0]||null,
+  note:($('pick-pk').querySelector('.pknote')||{textContent:''}).textContent.trim(),
+  foot:$('pick-ft').textContent.trim(),
   lit:[...document.querySelectorAll('.cvr.picking')].map(e=>e.id)[0]||null}));
 const tap=async(sel)=>{ await p.click(sel); await p.waitForTimeout(250); };
 const row=m=>`#course-list .cv-tile[data-mark="${m}"]`;
@@ -235,7 +235,7 @@ let M=await menu();
 t.ok(M.on && M.lit==='cv-line', 'the readout opens its menu', String(M.lit));
 t.ok(M.sel==='PINGED', 'lit on the pinged line', String(M.sel));
 /* The way back from a ping taken at the wrong end: choose the marks. */
-await tap('#cv-pk .pr[data-line="marks"]');
+await tap('#pick-pk .pkset[data-line="marks"]');
 t.ok(await p.evaluate(()=>!lineEnds().pinged
        && !$('ping-pin').classList.contains('set')
        && !$('ping-boat').classList.contains('set')),
@@ -250,12 +250,12 @@ M=await menu();
 t.ok(M.rows.join()==='FLAG – BALL,PINGED', 'the club\'s marks, or the one you pinged',
      M.rows.join());
 t.ok(M.sel==='FLAG – BALL', 'on the one in force', String(M.sel));
-t.ok(/P AND B/.test(await p.evaluate(()=>$('cv-pk').textContent)),
+t.ok(/P AND B/.test(await p.evaluate(()=>$('pick-pk').textContent)),
      'and says where a pinged line comes from',
-     await p.evaluate(()=>$('cv-pk').textContent.trim()));
-t.ok(await p.evaluate(()=>!!$('cv-pk').querySelector('.pr.off')),
+     await p.evaluate(()=>$('pick-pk').textContent.trim()));
+t.ok(await p.evaluate(()=>!!$('pick-pk').querySelector('.pkset.off')),
      'with the pinged one shown but not available, rather than left out');
-await tap('#cv-pk .pr[data-line="marks"]');
+await tap('#pick-pk .pkset[data-line="marks"]');
 t.ok(!(await menu()).on && !await p.evaluate(()=>lineEnds().pinged),
      'choosing the marks when they are already in force changes nothing');
 
@@ -264,7 +264,7 @@ await tap('#cv-mode');
 M=await menu();
 t.ok(M.rows.join()==='GUN,WINDOW' && M.sel==='GUN', 'both, opened on the one in force',
      M.sel+' of '+M.rows.join());
-await tap('#cv-pk .pr[data-mode="window"]');
+await tap('#pick-pk .pkset[data-mode="window"]');
 t.ok(await p.evaluate(()=>CFG.startMode)==='window', 'a tap sets it',
      await p.evaluate(()=>CFG.startMode));
 t.ok((await menu()).on===false, 'and the menu goes away, because that was the choice');
@@ -297,7 +297,7 @@ await tap('#cv-mode');
 t.ok((await menu()).on, 'open');
 /* High on the glass, clear of the menu itself - the veil is the whole
    sheet and the menu is on top of the middle of it. */
-await p.click('#cv-veil',{position:{x:540,y:120}}); await p.waitForTimeout(250);
+await p.click('#pick-veil',{position:{x:540,y:120}}); await p.waitForTimeout(250);
 t.ok(!(await menu()).on, 'and shut, with nothing changed',
      await p.evaluate(()=>CFG.startMode));
 

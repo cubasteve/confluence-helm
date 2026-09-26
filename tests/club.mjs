@@ -25,9 +25,9 @@ const CLUB='#cv-sync';
    drawn where the course it would replace is. */
 const said=()=>p.evaluate(()=>({
   head:$('cv-sync').querySelector('b').textContent.trim(),
-  sub:($('cv-pk').textContent+' '+$('cv-say').textContent).trim(),
-  menu:$('cv-pick').classList.contains('on'),
-  foot:$('cv-pft').textContent.trim(),
+  sub:($('pick-pk').textContent+' '+$('cv-say').textContent).trim(),
+  menu:$('pick').classList.contains('on'),
+  foot:$('pick-ft').textContent.trim(),
   count:$('cv-count').textContent,
   ghost:[...document.querySelectorAll('#cv-strip .cv-chip.ghost')]
           .map(c=>[...c.childNodes].filter(n=>n.nodeType===3)
@@ -35,14 +35,14 @@ const said=()=>p.evaluate(()=>({
   bad:$('cv-say').classList.contains('bad')}));
 /* A fresh ask, whatever the menu is doing: the readout opens it and
    fetches, and tapping it while it is open is how you put it away. */
-const ask=async()=>{ await p.evaluate(()=>cvpClose()); await tap(CLUB); };
+const ask=async()=>{ await p.evaluate(()=>pickClose()); await tap(CLUB); };
 /* The second tap is the LOAD in the menu, not the readout again. */
-const load=async()=>{ await p.click('#cv-pft .prfoot'); await p.waitForTimeout(400); };
+const load=async()=>{ await p.click('#pick-ft .pkfoot'); await p.waitForTimeout(400); };
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
                                   side:Object.assign({},COURSE.side||{})}));
 const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:{}}; courseSave();
                                  CLUB={step:'idle',got:null,say:'',bad:false};
-                                 cvpClose(); renderCourse(); });
+                                 pickClose(); renderCourse(); });
 
 /* The course sheet hangs off the tracks app, as it does for the probe
    next door. */
