@@ -3383,6 +3383,12 @@ const MARKS=[
   {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', buoy:'r', lat:DM(28,49.004), lon:-DM(81,14.566)},
   {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  buoy:'w', lat:DM(28,50.851), lon:-DM(81,14.916)},
   {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  buoy:'w', lat:DM(28,51.201), lon:-DM(81,15.212)},
+  /* Surveyed from this boat before it was on any club list, and carried
+     as a mark of your own since. The club publishes it now and the
+     members' site has it, so it belongs up here - and a course pulled
+     from the site stops arriving a mark short. Green, so it is the
+     teepee of three pilings rather than the red's single stick. */
+  {id:'green',  name:'GREEN BUOY',        hdr:'GREEN',  buoy:'g', lat:DM(28,49.030), lon:-DM(81,16.170)},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
 /* Marks of your own, from the course sheet's NEW MARK: kept in browser
@@ -3390,6 +3396,38 @@ const markOf=id=>MARKS.find(m=>m.id===id);
    there for the course, the map and the readings like the club's. */
 let USER_MARKS=[];
 try{ USER_MARKS=JSON.parse(localStorage.getItem('marks')||'[]'); if(!Array.isArray(USER_MARKS)) USER_MARKS=[]; }catch(e){ USER_MARKS=[]; }
+
+/* A mark of your own that this file has since grown a copy of - the
+   Green Buoy, surveyed here first and published by the club later.
+   Left alone, yours would be skipped by the fold below as a duplicate
+   id and then sit in storage being not quite a mark: a bin on its row
+   in EDIT, and a position nothing reads.
+
+   So it is absorbed. Where yours disagrees with the compiled number it
+   becomes an override, which is what an override is for - you stood at
+   the thing and the sheet of paper did not - and the book's value stays
+   underneath to go back to. Where it agrees there is nothing to keep.
+   Written straight to storage because markMoves is read a few lines
+   down and marksSave does not exist yet. */
+(function absorb(){
+  const keep=[]; let did=false;
+  USER_MARKS.forEach(u=>{
+    const club=u&&u.id ? MARKS.find(x=>x.id===u.id) : null;
+    if(!club){ keep.push(u); return; }
+    did=true;
+    /* About a metre of latitude. Closer than that and they are the same
+       buoy written down twice. */
+    if(!(Math.abs(club.lat-u.lat)>1e-5 || Math.abs(club.lon-u.lon)>1e-5)) return;
+    try{
+      const mv=JSON.parse(localStorage.getItem('markMoves')||'{}');
+      if(mv && typeof mv==='object' && !mv[u.id]){
+        mv[u.id]={lat:u.lat, lon:u.lon};
+        localStorage.setItem('markMoves', JSON.stringify(mv));
+      }
+    }catch(e){}
+  });
+  if(did){ USER_MARKS=keep; try{ localStorage.setItem('marks',JSON.stringify(keep)); }catch(e){} }
+})();
 USER_MARKS.forEach(m=>{ if(m&&m.id&&!MARKS.some(x=>x.id===m.id)) MARKS.push(m); });
 const marksSave=()=>localStorage.setItem('marks',JSON.stringify(USER_MARKS));
 const isUserMark=id=>USER_MARKS.some(m=>m.id===id);

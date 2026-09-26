@@ -61,7 +61,7 @@ await tap('#trk-course');
 let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
 const marks=x=>x.filter(r=>r.mark);
-t.ok(marks(S).length===10, 'all ten of the club\'s marks, as tiles', String(S.length));
+t.ok(marks(S).length===11, 'all eleven of the club\'s marks, as tiles', String(S.length));
 let L=await rd('cv-line');
 t.ok(L.lbl==='START LINE', 'the line is one of the five settings', L.lbl);
 t.ok(L.val==='FLAG – BALL', 'and says which two marks it runs between', L.val);
@@ -163,7 +163,7 @@ await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
 await tap('#course-clr');
 C=await course(); S=await sheet();
 t.ok(C.marks.length===0 && C.next===0, 'nothing left to sail', C.marks.join()+' @'+C.next);
-t.ok(marks(S).length===10 && marks(S).every(r=>r.seq===''),
+t.ok(marks(S).length===11 && marks(S).every(r=>r.seq===''),
      'the marks are all still there, unnumbered');
 t.ok((await strip()).length===0, 'and the strip has nothing to show');
 await tap(row('gosling')); await tap(row('cb12'));
