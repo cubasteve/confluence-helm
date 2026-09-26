@@ -667,6 +667,45 @@ is not reaching across.
 The dock's row scrolls sideways, so its fade runs the other way and it
 gets no arc: the rim is a vertical idea.
 
+### The drum
+
+A list that scrolls flat is a window cut in the glass. On a round face
+it can be the face itself turning instead, and that is what the marks
+grid and the race library do: rows tip away as they reach the top and
+the bottom, go smaller and go dim, and the row you are looking at is the
+one square on. It is the same shape as the buoy you are looking for out
+there — a thing you see part of because the rest of it has gone round.
+
+**Only a box with more in it than it can show turns.** Flat means you
+are looking at all of it; curved means it goes round. So the curve is
+itself one more thing on the face saying there is more, before you have
+touched anything — the same job as the lit track and the faded edge,
+said a third way.
+
+`perspective` goes on the scroller, not on each row, so every row is
+seen from one place — the middle of the box. That is what makes them
+read as one surface rather than as rows that each happen to be tilted,
+and it is why the four tiles across a grid row come out at the same
+angle.
+
+`drumPaint()` is the whole of it. `u` is how far a row's centre is from
+the middle of the box as a fraction of half the box: 0 square on, ±1 at
+the edge. Tilt is `−u × 34°`, scale is `1 − |u| × 0.11`, opacity is
+`1 − |u| × 0.42`. 38° was too much to read at the edges and 22° was not
+a drum at all. It is an approximation of a cylinder rather than the real
+thing — there is no `translateZ` putting each row on the actual surface,
+because that needs a radius and the radius moves with the box height.
+What the eye reads is the tilt and the taper; the missing depth is a
+pixel or two at the edges.
+
+One paint per frame however many scroll events land in it, via
+`drumTick()` and a single `requestAnimationFrame`.
+
+The cost is real and worth naming: the rows at the edges are dimmed to
+about 0.42 and shrunk, which is harder to read in sunlight than a flat
+row was. The row you are reaching for is the one square on, which is the
+bet the whole idea rests on.
+
 ### Scrolling against the gesture judge
 
 The scroller shares its glass with the gesture judge, which is the

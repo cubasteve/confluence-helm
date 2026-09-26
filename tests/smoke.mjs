@@ -55,6 +55,19 @@ ok(/\d+ \d+\.\d+N · \d+ \d+\.\d+W/.test(
    await p.$eval('.cv-tile[data-mark="cb12"] s',e=>e.textContent)),
    'each reading its position back');
 await p.evaluate(()=>{ courseEdit=false; renderCourse(); });
+/* The way out of an app is a cross on a disc, not the word CLOSE: the
+   foot of a circle is the narrowest place there is to spend 190 px of
+   type on what the shape already says. */
+const X=await p.evaluate(()=>{ const e=$('app-close'), r=e.getBoundingClientRect();
+  return {svg:!!e.querySelector('svg'), txt:e.textContent.trim(),
+          w:Math.round(r.width), h:Math.round(r.height),
+          foot:Math.round(1080-r.bottom)}; });
+ok(X.svg && X.txt==='', 'a cross, with no word left on it', JSON.stringify(X));
+ok(X.w===76 && X.h===76, 'round, and the height the pill was', X.w+'x'+X.h);
+ok(X.foot===38, 'in the same place, so nothing above it moves', String(X.foot));
+await p.click('#app-close'); await p.waitForTimeout(600);
+ok(!await p.evaluate(()=>$('app-run').classList.contains('on')),
+   'and it still shuts the app');
 await p.evaluate(()=>{ closeLib(); closeApp(); }); await p.waitForTimeout(500);
 
 console.log('\n=== the race runs ===');

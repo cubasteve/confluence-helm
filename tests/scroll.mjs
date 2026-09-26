@@ -46,6 +46,9 @@ t.ok(!G.over, 'eleven marks fit, so no fade', G.scroll+' in '+G.client);
 t.ok(!G.masked, 'and nothing is masked');
 await scrollTo(0);
 t.ok(!(await arc()).lit, 'and there is no arc to draw');
+t.ok(await p.evaluate(()=>![...$('course-list').children]
+       .some(k=>k.style.transform)),
+     'and the grid is flat - nothing turns that has nothing to turn');
 
 t.head('a box that does not fit fades at the edge the content crosses');
 await p.evaluate(()=>{
@@ -72,6 +75,47 @@ t.ok(E.a && E.z, 'in the middle both edges do', JSON.stringify(E));
 await scrollTo(9999); await p.waitForTimeout(120);
 E=await edges();
 t.ok(E.a && !E.z, 'and at the end only the top', JSON.stringify(E));
+
+t.head('the rows sit on a drum, and only when there is a drum to sit on');
+/* Each tile's rotateX in degrees, read back off the matrix, with the
+   opacity it was dimmed to. Grouped by row: four tiles across share a y,
+   so they must share an angle or they are not one surface. */
+const rows=()=>p.evaluate(()=>{
+  const out={};
+  for(const k of $('course-list').children){
+    const m=k.style.transform.match(/rotateX\(([-\d.]+)deg\)/);
+    const y=k.offsetTop;
+    (out[y]=out[y]||[]).push({a:m?+m[1]:null, o:+(k.style.opacity||1)});
+  }
+  return Object.keys(out).map(Number).sort((a,b)=>a-b).map(y=>out[y]);
+});
+await scrollTo(0); await p.waitForTimeout(250);
+let R=await rows();
+t.ok(R.length>=3, 'with seventeen there are rows to curve', String(R.length));
+t.ok(R.every(r=>r.every(k=>k.a===r[0].a)),
+     'the four tiles across a row share one angle - it is a surface, '
+     +'not four tilted tiles');
+const ang=R.map(r=>r[0].a), op=R.map(r=>r[0].o);
+t.ok(ang[0]>0 && ang[ang.length-1]<0,
+     'the top tips one way and the bottom the other', ang.join(' '));
+t.ok(ang.every((a,i)=>i===0||a<ang[i-1]),
+     'and every row between them is further round than the last',
+     ang.join(' '));
+/* Whichever row is square on is the one facing you, wherever the scroll
+   has put it - so the probe finds it rather than assuming the middle. */
+const face=ang.indexOf(ang.reduce((m,a)=>Math.abs(a)<Math.abs(m)?a:m));
+t.ok(op[face]===Math.max(...op),
+     'the row nearest square on is the brightest', op.join(' ')+' @'+face);
+t.ok(op.every((o,i)=>i===face || o<op[face]),
+     'and every row going round is dimmer than it', op.join(' '));
+
+t.head('and the drum turns under the scroll');
+const before=(await rows()).map(r=>r[0].a);
+await scrollTo(92); await p.waitForTimeout(250);
+const after=(await rows()).map(r=>r[0].a);
+t.ok(before.join()!==after.join(), 'the angles are re-laid as it moves',
+     before.join(' ')+' -> '+after.join(' '));
+await scrollTo(0); await p.waitForTimeout(200);
 
 t.head('the arc spans the rows the box is a window onto');
 await scrollTo(90);

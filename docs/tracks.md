@@ -112,10 +112,10 @@ same mistake — furniture that belonged to a page still standing where
 the app's own chrome now goes:
 
 - **the map's lock button**, which sat at the foot of the glass exactly
-  where `CLOSE` does now. A page you could be locked on needed it; an
-  app does not.
+  where the app's close cross does now. A page you could be locked on
+  needed it; an app does not.
 - **the library's hint line**, which had the foot to itself and was
-  underneath `CLOSE`. It has moved up, and now says what the two row
+  underneath it. It has moved up, and now says what the two row
   buttons do rather than repeating how to close a sheet.
 
 The chart also ran into the numbers: the clip circle reached y=665 with

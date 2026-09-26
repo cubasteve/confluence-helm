@@ -287,11 +287,18 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   opacity:.92;pointer-events:none}
+/* A cross, not the word. CLOSE was 190 px of type at the foot of the
+   glass saying what the shape already says, and the foot of a circle is
+   the narrowest place there is to spend it - the two sheets above it
+   both had to lift their hints to clear the pill. Round and 76, the same
+   diameter the pill was tall, so nothing above it moves. */
 #app-close{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);
-  min-width:190px;height:76px;padding:0 34px;border:2px solid var(--hairline);
+  width:76px;height:76px;padding:0;border:2px solid var(--hairline);
   border-radius:38px;background:var(--panel);color:var(--ink);
-  font-family:var(--font);font-size:23px;font-weight:600;letter-spacing:.18em;
+  display:flex;align-items:center;justify-content:center;
   opacity:.94;z-index:2}
+#app-close svg{width:32px;height:32px;fill:none;stroke:currentColor;
+  stroke-width:2.2;stroke-linecap:round}
 #app-close:active{background:var(--chip)}
 #app-msg{display:none;position:absolute;top:50%;left:50%;
   transform:translate(-50%,-50%);width:560px;
@@ -515,6 +522,22 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    leading edge - top, or left on the row that scrolls sideways - and
    .over-z the trailing one; at 0 the gradient's two stops meet and
    there is no fade at all, which is how an edge switches off. */
+/* ---- the drum -------------------------------------------------------
+   A list that scrolls flat is a window cut in the glass. On a round face
+   it can be the face itself turning instead: rows tip away as they reach
+   the top and the bottom, go smaller and go dim, and the one you are
+   looking at is the one square on. It is the same shape as the buoy you
+   are looking for out there - a thing you see part of because the rest
+   of it has gone round.
+   Only a box with more in it than it can show turns. Flat means you are
+   looking at all of it; curved means it goes round, which is one more
+   thing on the face saying so before you have touched anything.
+   perspective on the scroller and not on each row, so every row is seen
+   from one place - the middle of the box - which is what makes them read
+   as one surface rather than as rows that each happen to be tilted. */
+.cv-grid.over,.lib-list.over{perspective:900px;perspective-origin:50% 50%}
+.cv-grid > *,.lib-list > *{transform-origin:50% 50%}
+
 .cv-grid,.lib-list,.approw{--fa:0px; --fz:0px}
 .over-a{--fa:26px}
 .over-z{--fz:34px}
@@ -1201,14 +1224,15 @@ a.lib-row{text-decoration:none;color:inherit}
    narrowest part of the circle - 637 px of text into a 491 px chord, so
    73 px fell off each end. Lift it to where the chord is 629 px and set
    a smaller face, which leaves ~100 px of clearance.                  */
-/* Clear of the app's CLOSE button, which now stands where this used to
+/* Clear of the app's close button, which now stands where this used to
    have the foot of the glass to itself. */
 #lib-hint{bottom:176px;font-size:19px;letter-spacing:.12em}
 .t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
 .t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
-/* 150 from the foot, not 104: the app host's CLOSE pill tops out 115
+/* 150 from the foot, not 104: the app host's close button tops out 115
    from the foot, and at 104 the hint's descenders sat on it. Both sheets
-   share this, so both lift. */
+   share this, so both lift. It is a cross on a 76 px disc now rather
+   than a 190 px pill, but it is the same height, so this still holds. */
 .t-hint{position:absolute;bottom:150px;left:0;right:0;text-align:center;
   font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7}
 
@@ -1777,7 +1801,7 @@ a.lib-row{text-decoration:none;color:inherit}
    drawn in the SVG at the matching y - the face is a 1080 viewBox over a
    1080 stage, so the coordinates line up exactly. */
 /* The track map had one of these too, back when it was a page you could
-   be locked on. It is an app now and wears the app's CLOSE button in
+   be locked on. It is an app now and wears the app's close button in
    that exact spot, so a second control there was one too many. */
 #m-lock{position:absolute;left:50%;bottom:91px;transform:translateX(-50%)}
 
@@ -2161,7 +2185,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div id="app-body"></div>
   <div id="app-msg"></div>
   <div id="app-name">App</div>
-  <button id="app-close">CLOSE</button>
+  <button id="app-close" aria-label="Close">
+    <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
 </div>
 
 <div id="panel">
@@ -7977,11 +8002,50 @@ function rimDraw(el, moving){
   clearTimeout(rimOff);
   rimOff=setTimeout(()=>$('arc').classList.remove('on'), 900);
 }
-/* Wire a box up: it fades at its edges and it draws the arc. passive,
-   because none of this touches the scroll it is describing. */
+/* ---- the drum ---------------------------------------------------------
+   Where each row sits on the cylinder. u is how far it is from the
+   middle of the box, as a fraction of half the box: 0 square on, ±1 at
+   the edge. Everything else is that one number.
+   38 degrees was too much to read at the edges and 22 was not a drum at
+   all; 34 is the one that turns without costing you the row.
+   The transform is an approximation of a cylinder rather than the real
+   thing - rotate, shrink, dim, with no translateZ to put the row on the
+   actual surface. The honest version needs a radius, and a radius needs
+   the box height, and the box height changes with the theme's line
+   spacing. What the eye is reading here is the tilt and the taper; the
+   missing depth is a pixel or two at the edges. */
+const DRUM_TILT=34, DRUM_SHRINK=.11, DRUM_DIM=.42, DRUM_EDGE=1.4;
+function drumPaint(el){
+  if(!el || !el.clientHeight) return;
+  const on=el.classList.contains('over');
+  const H=el.clientHeight, mid=el.scrollTop+H/2, half=H/2;
+  for(const k of el.children){
+    if(!on){ if(k.style.transform){ k.style.transform=''; k.style.opacity=''; }
+             continue; }
+    const c=k.offsetTop+k.offsetHeight/2;
+    let u=(c-mid)/half;
+    /* Rows well past the edge are not on screen at all. Park them at the
+       edge's own values rather than working out a tilt nobody sees. */
+    u=Math.max(-DRUM_EDGE,Math.min(DRUM_EDGE,u));
+    const a=Math.abs(u);
+    k.style.transform='rotateX('+(-u*DRUM_TILT).toFixed(2)+'deg) scale('
+                     +(1-a*DRUM_SHRINK).toFixed(3)+')';
+    k.style.opacity=(1-a*DRUM_DIM).toFixed(3);
+  }
+}
+/* One paint per frame however many scroll events arrive in it. */
+let drumReq=0, drumEl=null;
+function drumTick(el){
+  drumEl=el; if(drumReq) return;
+  drumReq=requestAnimationFrame(()=>{ drumReq=0; drumPaint(drumEl); });
+}
+
+/* Wire a box up: it turns, it fades at its edges, and it draws the arc.
+   passive, because none of this touches the scroll it is describing. */
 function rimWatch(el,arc=true){
   if(!el) return;
-  el.addEventListener('scroll',()=>{ scrollFit(el); if(arc) rimDraw(el,true); },
+  el.addEventListener('scroll',()=>{ scrollFit(el); drumTick(el);
+                                     if(arc) rimDraw(el,true); },
                       {passive:true});
 }
 ['p-sheet','course-list','lib-list'].forEach(id=>rimWatch($(id)));
@@ -9014,7 +9078,7 @@ function renderCourse(){
       +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
-  scrollFit(box); rimDraw(box);
+  scrollFit(box); drumPaint(box); rimDraw(box);
 
   /* The five settings, read at a glance. The corner glyph says what kind
      of control it is: a chevron opens a menu, a plus steps, and the
@@ -9048,7 +9112,10 @@ const crsTitle=t=>{ $('course-title').textContent=t||'Course'; };
 /* The arc on the way in: a box that scrolls says so once as it opens,
    the way the fade at its edge does, and then gets out of the way. */
 function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse();
-  setTimeout(()=>rimDraw($('course-list')),60); }
+  /* Measured after the sheet is up: a box that is display:none has no
+     height, and every row would come out at the same angle. */
+  setTimeout(()=>{ scrollFit($('course-list')); drumPaint($('course-list'));
+                   rimDraw($('course-list')); },60); }
 /* Both sheets live in the same overlay, so one close serves both - and
    the arc, which belongs to whichever of them was up. */
 
@@ -9651,7 +9718,7 @@ function renderLib(){
          </div>`).join('');
     }
     box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
-    scrollFit(box); rimDraw(box);
+    scrollFit(box); drumPaint(box); rimDraw(box);
   });
 }
 
