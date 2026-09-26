@@ -484,7 +484,7 @@ is how it is found:
 |---|---|
 | **yellow special, X topmark** | `RUM`, `GOSLING` — the club's own inflatables. Marks of the *course*, which is what the X says |
 | **red board on a piling** | `CB 2`, `CB 8`, `CB 10`, `CB 12`. The channel here is not buoyed, it is **beaconed**: a stick out of the water with a square board on top |
-| **green board on a tripod** | the green ones, which are three wooden sticks leaned together in a teepee with the board across the top. Two pilings apart at a glance, which is the whole reason for drawing them |
+| **green board on a tripod** | `GREEN`, the Green Buoy — three wooden sticks leaned together in a teepee with the board across the top. Two pilings apart at a glance, which is the whole reason for drawing them |
 | **white can** | `MAN 1`, `MAN 2` — the manatee zone's regulatory marks, floating, on a waterline |
 | **white lighted buoy** | `FLAG`, the pin end. Not a flag at all: a donut of a float, a cylinder standing out of it, and the light on top |
 | **one big grey ball** | `BALL`, the boat end — the Romance sail ball |
@@ -493,19 +493,17 @@ is how it is found:
 **A mark of your own can say which buoy it is.** The form carries all
 seven, under the position: tap one and it is kept with the mark, in
 browser storage with everything else about it, and the sheet draws it.
-That is how the green tripod gets drawn — it is a mark of yours, not one
-of the club's ten. Correcting one of the club's marks can change its
-buoy too, on the same terms as its name: stored only if you changed it,
-so the correction stays a correction and the table still says what the
-table says.
+Correcting one of the club's marks can change its buoy too, on the same
+terms as its name: stored only if you changed it, so the correction
+stays a correction and the table still says what the table says.
 
 On the **night** theme every one of them is the same red, as everything
 there is; the shapes still tell them apart, which is what tells them
 apart out on the water in the dark anyway.
 
 The drawing says in a glance what a line of type was spelling out, so
-the tiles are smaller than they were — four across, and the ten club
-marks fit without scrolling. Tiles carry the short name, the one the
+the tiles are smaller than they were — four across, and the club's
+eleven marks fit without scrolling. Tiles carry the short name, the one the
 cell headers and the RACE box use, where a name has to fit in 32 px.
 
 In **EDIT** the tile says the mark's position instead of its place in
@@ -590,7 +588,14 @@ by accident.
 What did not come across is said before you load rather than found out
 at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START ON
 THE LINE` for a course this sheet cannot draw a start for; both are
-repeated over the settings row once it is loaded. A site that does not
+repeated over the settings row once it is loaded.
+
+A mark can fail to arrive two ways, and both are counted. The site names
+the ones *it* could not translate. The other is the site believing this
+boat has a mark it has not got — the site's list of what the helm
+carries and the table in this file are kept in step by hand, so they can
+drift — and that one is only visible from here. A course arriving a leg
+short with nothing said about it is the worst of the three outcomes. A site that does not
 answer says `NO ANSWER · IS THERE WIFI?`, changes nothing, and offers
 `ASK THE CLUB` to try again.
 

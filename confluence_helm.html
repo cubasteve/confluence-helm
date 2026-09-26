@@ -3387,7 +3387,9 @@ const MARKS=[
      as a mark of your own since. The club publishes it now and the
      members' site has it, so it belongs up here - and a course pulled
      from the site stops arriving a mark short. Green, so it is the
-     teepee of three pilings rather than the red's single stick. */
+     teepee of three pilings rather than the red's single stick.
+     Checked against site/assets/schedule.js in the club's own repo, as
+     all eleven were: the same position to the metre. */
   {id:'green',  name:'GREEN BUOY',        hdr:'GREEN',  buoy:'g', lat:DM(28,49.030), lon:-DM(81,16.170)},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
@@ -8877,12 +8879,17 @@ async function clubFetch(){
   if(!j.course) return stop('NOTHING POSTED FOR '+(j.date||'TODAY'));
 
   const g=j.course;
-  /* Anything this boat has no mark for is already named in the reply;
-     dropping it here as well would leave a course one leg short with
-     nothing to say why, so the count goes in the message on load. */
+  /* Two ways a mark can fail to arrive. The site names the ones IT could
+     not translate, in `unknown`. The other way is the site believing
+     this boat has a mark that it has not got - the two lists are kept in
+     step by hand, so they can drift - and that one is only visible from
+     here. Both are counted, because a course one leg short with nothing
+     said about it is the worst of the three outcomes. */
   const marks=(g.marks||[]).filter(id=>markOf(id));
+  const dropped=(g.marks||[]).filter(id=>!markOf(id));
   if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
-  CLUB={step:'ready', got:{marks:marks, side:g.side||{}, raw:g}, say:'', bad:false};
+  CLUB={step:'ready', got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g},
+        say:'', bad:false};
   renderCourse();
 }
 
@@ -8896,7 +8903,7 @@ function clubApply(){
   /* What did not come across, said now rather than found out at the
      mark. A course that does not start on the line is not one this
      sheet's start and finish describe. */
-  const out=[], missing=(g.raw.unknown||[]).length;
+  const out=[], missing=(g.raw.unknown||[]).length + (g.dropped||[]).length;
   if(missing) out.push(missing+' MISSING');
   if(g.raw.startsOnLine===false) out.push('NOT OFF THE LINE');
   CLUB={step:'idle', got:null, bad:out.length>0,
@@ -9003,7 +9010,7 @@ function cvpClub(){
   const g=c.got.raw||{}, out=[];
   if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
   out.push('DASHED IN THE STRIP ABOVE, IN THE ORDER IT IS SAILED');
-  const miss=(g.unknown||[]).length;
+  const miss=(g.unknown||[]).length + (c.got.dropped||[]).length;
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
   if(g.startsOnLine===false) out.push('IT DOES NOT START ON THE LINE');
   if(g.note) out.push(String(g.note).toUpperCase());

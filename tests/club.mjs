@@ -119,6 +119,28 @@ t.ok(C.marks.join()==='cb10,rum', 'what it does have is loaded', C.marks.join())
 S=await said();
 t.ok(/1 MISSING/.test(S.sub), 'and it is told, not left to be found at the mark', S.sub);
 
+t.head('a mark the site thinks we have and we have not');
+/* The two lists are kept in step by hand - the site's HELM_MARKS and
+   the table in this file - so they can drift. When they do, the site
+   reports nothing wrong and the course quietly arrives a leg short.
+   That is the one this boat has to notice by itself. */
+await clear();
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['rum','notamark','cb10'], side:{}, note:null, posted:1,
+  line:{pin:'flag',boat:'ball'},
+  startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/2 MARKS\?/.test(S.head), 'it offers only what it can actually sail', S.head);
+t.ok(/1 MARK THIS BOAT HAS NOT GOT/.test(S.sub),
+     'and says the third one did not come, though the site claimed all three',
+     S.sub);
+await load();
+C=await course();
+t.ok(C.marks.join()==='rum,cb10', 'the two it has are loaded', C.marks.join());
+t.ok(/1 MISSING/.test((await said()).sub),
+     'and the missing one is still counted after the load', (await said()).sub);
+
 t.head('a course that does not start on the line');
 await clear();
 reply={status:200, body:{date:'2026-09-30', course:{
