@@ -975,6 +975,93 @@ Alert text carries whole units rather than tenths on purpose: to a tenth
 the banner would rewrite itself several times a second for no added
 meaning.
 
+## Touch sound
+
+A capacitive panel gives nothing back. No travel, no detent: gloved,
+wet, or braced against a heel you cannot tell a tap that landed from one
+that slid off without looking up to see what changed — and what changed
+is often a number two inches from where you were looking. A sound
+answers that, and it answers before the screen has repainted.
+
+This is **not** the countdown's buzzer below. That goes out to `netd`
+and the horn on the coachroof and is meant for the foredeck; this comes
+out of whatever is playing the page, so it works on the phone too, where
+there is no `netd` to ask.
+
+**Synthesised, not sampled.** Nine voices at a few hundred bytes of code
+keeps a file that still opens over `file://` with nothing beside it,
+which is the premise of the whole thing; nine WAVs is a folder to lose.
+
+| | what it is | when it is the right one |
+|---|---|---|
+| `GLASS` | 2950 Hz with partials at 5210 and 7780, 75 ms | **the default.** A fingernail on the pane. Those ratios — 1.77, 2.64 — are a *plate's* and not a chord's, and that inharmonicity is the difference between a tink and a note. Each partial dies faster than the one below it, as a real pane's high modes do |
+| `TICK` | filtered noise at 2.5 kHz over a 3.2 kHz pip, 8 ms, dry | a switch. Disappears into the background; you notice it when it is missing |
+| `CRYSTAL` | two sines 4 Hz apart at 2620 Hz, plus 6870, 300 ms | a wine glass struck at the rim. Where `GLASS` is a plate, this is a thin-walled vessel — nearly one mode, ringing a third of a second. The shimmer is the 4 Hz beat: a real glass is never perfectly round, so its two perpendicular modes sit apart and the note pulses. One partial alone is a test tone |
+| `PAD` | bandpassed breath at 3.4 kHz over a lowpassed thud, 13 ms | the flat of a finger arriving, which is the sound the panel actually makes when you use it. The quietest of the set on purpose: the tap you made, not a noise about it |
+| `FROST` | a bandpass at Q 6 sweeping 1800→3200 Hz over 55 ms, swelling | a finger **dragged** across the pane rather than landing on it. Not a burst decaying but a resonance climbing while it swells, which is stick-slip: skin grabbing and releasing the glass hundreds of times a second. The only one here that is a touch rather than a strike |
+| `DROP` | a sine falling 1180→620 Hz over 90 ms, no transient | the least machine-like of them — closest to water |
+| `KEY` | a 4 kHz noise transient over a short triangle | the most definite. A typewriter |
+| `BELL` | two sine partials at an inharmonic 2.6 ratio, 220 ms | a struck thing rather than a chord. The longest, so a flurry of taps overlaps into something musical |
+| `THOCK` | 210→150 Hz under a lowpassed transient, 130 ms | the one that carries over an engine, because it is under the engine rather than over it |
+
+`GLASS` is the default because the panel **is** glass: it is the one
+voice that is not a noise the instrument decided to make, but the noise
+the thing under your finger would have made anyway.
+
+Plus `OFF`. The panel's control **cycles** rather than listing ten, and
+**plays what it lands on** — the only way to choose a sound is to hear
+it, so the control that changes it is the control that sounds it.
+
+**Each voice carries its own gain.** Five sounds built to the same peak
+are not five sounds of the same loudness: a 6 ms `TICK` and a 130 ms
+`THOCK` at equal amplitude are 9.5 dB apart to an ear that integrates
+over about a fifth of a second. Equalising that energy outright
+overshoots the other way and clips the short ones, so `CLICK_GAIN` is
+the square root of it — the usual compromise between peak and loudness
+for a transient. The two long ones are levelled by peak instead, and
+`CRYSTAL` a shade under that: at 300 ms it is the longest by far, and a
+long sound at equal peak is tiring by the hundredth tap. The numbers are measured rather than guessed: the same
+synthesis is rendered offline and the 200 ms energy of each read off.
+
+**What makes a noise is listed, not inferred.** A swipe that pages the
+dial, a drag across the map and a scroll down the marks all begin with a
+`pointerdown`, and a click on each of those is the panel claiming it did
+something it has not done. `CLICKABLE` names the controls — half of them
+SVG, since the dial's cells and the line's two ping buttons are not
+buttons however much they behave like them. The listener is on the
+capture phase so nothing downstream can swallow it, and it neither
+claims the gesture nor prevents anything, so nothing downstream can tell
+it ran.
+
+The context is made on the first tap and kept. One created before any
+gesture starts suspended and browsers resume it only on one — which
+every caller here is, so it comes up on the first thing you touch.
+
+One thing to listen for on the Pi: its analogue output powers down while
+idle and wakes with a pop, which is why the countdown arms the output
+ten seconds before the gun (below). A touch sound after a quiet spell
+may carry that same pop. Taps in a flurry keep it awake and are clean.
+
+### What it costs
+
+Measured, per process, with PSS rather than RSS — a Chromium process's
+resident set is mostly the binary and the libraries it shares with the
+other seven, and counting that once per process answers a question
+nobody asked.
+
+| | |
+|---|---|
+| `OFF` | **nothing.** No context, no process, no buffer. The listener returns before `ac()` is ever reached, so the cost of not wanting this is zero, and a probe asserts it |
+| the audio context | **26.5 MB PSS** — a whole extra Chromium process, its Audio Service, spawned on the first tap and kept. This is the entire cost, and none of it is ours: an empty page that makes one `AudioContext` pays exactly the same |
+| the noise buffer | 88,200 bytes — half a second at 44.1 kHz, made once and replayed at an offset |
+| the JS heap | 189 KB in total, the buffer included |
+| 600 further taps | **+4 KB.** The nodes are created per tap and collected after `stop()`; nothing accumulates |
+
+So: about 27 MB while it is on, almost all of it the price of admission
+to Web Audio at all, and 0 while it is off. On a 4 GB Pi that is 0.7% of
+the machine. It is worth knowing before turning it on, and it is worth
+nothing after.
+
 ## Countdown signals
 
 The countdown sounds the pattern a race committee sounds, so it needs no

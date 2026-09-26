@@ -2358,6 +2358,19 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
     </div>
 
+    <!-- What the glass sounds like under a finger. A cycle rather than
+         a list of six: the only way to choose a sound is to hear it, so
+         the control that changes it plays it, and one button is the
+         whole of both. Always shown - it comes out of whatever is
+         playing the page, so it works on the phone too, where there is
+         no sounder to report. -->
+    <div class="card">
+    <div class="slab">Touch sound</div>
+    <div class="sndrow">
+      <button class="mini wide" id="clk-voice"></button>
+    </div>
+    </div>
+
     <!-- Shown only when netd reports a sounder. Its whole job is the
          question you cannot answer from the cockpit any other way: is
          the thing plugged in, and can I hear it from back there. So it
@@ -2778,6 +2791,15 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
   host:SK_HOST, theme:'auto', demo:false, phoneGps:false,
+
+  /* Which noise a control makes under a finger. A capacitive panel in a
+     cockpit gives nothing back: no travel, no detent, and gloved or wet
+     you cannot tell a tap that landed from one that did not without
+     looking up to check what changed. See CLICKS.
+     A fingernail on the pane by default: the panel IS glass, so it is
+     the one voice that is not a noise the instrument decided to make -
+     it is the noise the thing under your finger would make anyway. */
+  click:'glass',
 
   /* ---- feature switches -------------------------------------------
      There is no race switch: the start-line pings, the polar target and
@@ -4643,6 +4665,175 @@ const finishRace =()=>{ tFinal=rnow()-tGun; raceFinished(); };
 const resetAll   =()=>{ tState='idle'; tLeft=CFG.startMins*60000;
   lineWas=null; lineArmed=false; rpOpen=false; markNear=false; scoreHide(); };
 
+/* ---- the noise the glass makes ----------------------------------------
+   A capacitive panel gives nothing back. No travel, no detent: gloved,
+   wet, or braced against a heel you cannot tell a tap that landed from
+   one that slid off without looking up to see what changed - and what
+   changed is often a number two inches from where you were looking.
+   A sound is the cheapest thing that answers it, and it answers before
+   the screen has repainted.
+
+   Synthesised rather than sampled. Five voices at a few hundred bytes of
+   code is a file that still opens over file:// with nothing beside it,
+   which is the whole premise here; five WAVs is a folder to lose.
+
+   It is NOT the countdown's buzzer. That goes out to netd and the horn
+   on the coachroof and is meant for the foredeck; this comes out of
+   whatever is playing the page, so it also works on the phone, where
+   there is no netd to ask. */
+const CLICK_KEYS=['off','tick','glass','crystal','pad','frost',
+                  'drop','key','bell','thock'];
+/* Loud enough to hear over a diesel at idle, quiet enough that a hundred
+   taps setting a course is not an event. */
+const CLICK_VOL=0.22;
+let AC=null, NOISE=null;
+/* Made on the first tap and kept. A context created before any gesture
+   starts suspended, and browsers resume it only on one - which every
+   caller here is, so it comes up on the first thing you touch. */
+function ac(){
+  if(AC===false) return null;
+  if(!AC){
+    try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }
+    catch(e){ AC=false; return null; }
+  }
+  if(AC.state==='suspended') AC.resume().catch(()=>{});
+  return AC;
+}
+/* One second of white noise, made once and replayed at an offset. A
+   fresh buffer per tap is a kilobyte of allocation forty times a minute
+   for a sound six milliseconds long. */
+function noiseBuf(c){
+  if(NOISE && NOISE.sampleRate===c.sampleRate) return NOISE;
+  const n=Math.floor(c.sampleRate*0.5);
+  NOISE=c.createBuffer(1,n,c.sampleRate);
+  const d=NOISE.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  return NOISE;
+}
+/* A tone with an exponential body. exponentialRampToValueAtTime cannot
+   reach zero, so it goes to a value below hearing and the node stops. */
+function cTone(c,t,to,type,f0,f1,dur,peak){
+  const o=c.createOscillator(), g=c.createGain();
+  o.type=type;
+  o.frequency.setValueAtTime(f0,t);
+  if(f1!==f0) o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.7);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(peak,t+0.0015);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(to); o.start(t); o.stop(t+dur+0.02);
+}
+/* The transient: what makes a click sound like something touching
+   something rather than like a note.
+   f1 sweeps the filter and rise gives it an attack instead of starting
+   at full - between them that is a squeak, which is a resonance moving
+   while it swells rather than a burst decaying. */
+function cNoise(c,t,to,dur,peak,type,freq,q,f1,rise){
+  const src=c.createBufferSource(), g=c.createGain(), f=c.createBiquadFilter();
+  src.buffer=noiseBuf(c); src.loop=true;
+  f.type=type; f.frequency.setValueAtTime(freq,t); if(q) f.Q.value=q;
+  if(f1) f.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  if(rise){ g.gain.setValueAtTime(0.0001,t);
+            g.gain.exponentialRampToValueAtTime(peak,t+rise); }
+  else      g.gain.setValueAtTime(peak,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  src.connect(f); f.connect(g); g.connect(to);
+  src.start(t, Math.random()*0.4); src.stop(t+dur+0.02);
+}
+/* Five voices, chosen to be different KINDS of sound rather than five
+   pitches of the same one - so the one you pick is the one you can hear
+   over whatever your boat is doing. */
+const CLICKS={
+  /* A switch. Dry, 8 ms, nothing left ringing. */
+  tick:(c,t,g)=>{ cNoise(c,t,g,0.006,0.9,'bandpass',2500,1.2);
+                  cTone(c,t,g,'sine',3200,3200,0.005,0.35); },
+  /* A pip that falls. Rounded, no transient, the least like a machine. */
+  drop:(c,t,g)=>{ cTone(c,t,g,'sine',1180,620,0.09,0.55); },
+  /* A keyboard. A hard transient over a short square body. */
+  key:(c,t,g)=>{ cNoise(c,t,g,0.003,0.8,'highpass',4000);
+                 cTone(c,t,g,'triangle',1800,1700,0.014,0.5); },
+  /* A small struck bell: two partials at an inharmonic ratio, which is
+     what a struck thing does and a chord does not. The longest of them,
+     and the one that sounds like an instrument rather than a UI. */
+  bell:(c,t,g)=>{ cTone(c,t,g,'sine',1050,1050,0.22,0.42);
+                  cTone(c,t,g,'sine',2730,2730,0.14,0.18); },
+  /* A panel button: low, woody, short. The one that carries over an
+     engine, because it is under the engine rather than over it. */
+  thock:(c,t,g)=>{ cNoise(c,t,g,0.004,0.55,'lowpass',1200);
+                   cTone(c,t,g,'sine',210,150,0.13,0.85); },
+  /* A fingernail on the pane. Glass is stiff and light, so it rings
+     high and briefly, and its modes are INHARMONIC - a plate is not a
+     string, and the ratios here (1.77, 2.64) are a plate's rather than a
+     chord's, which is the whole difference between a tink and a note.
+     Each partial dies faster than the one below it, which is also what a
+     real one does: the high modes shed energy first. */
+  glass:(c,t,g)=>{ cNoise(c,t,g,0.002,0.7,'highpass',6000);
+                   cTone(c,t,g,'sine',2950,2950,0.075,0.50);
+                   cTone(c,t,g,'sine',5210,5210,0.045,0.22);
+                   cTone(c,t,g,'sine',7780,7780,0.026,0.10); },
+  /* And the flat of a finger arriving on it, which is the sound the
+     panel actually makes when you use it: mostly the breath of skin on
+     a hard surface, a little thud of flesh under it, and one faint high
+     glint off the glass. Quieter and shorter than anything else here -
+     it is meant to be the tap you made, not a noise about it. */
+  pad:(c,t,g)=>{ cNoise(c,t,g,0.013,0.34,'bandpass',3400,0.7);
+                 cNoise(c,t,g,0.004,0.26,'lowpass',900);
+                 cTone(c,t,g,'sine',4300,4300,0.018,0.12); },
+  /* A wine glass, struck at the rim. Where GLASS is a plate - stiff,
+     inharmonic, gone in 75 ms - this is a thin-walled vessel, which is
+     nearly a single mode and rings for a third of a second. The shimmer
+     is two partials four hertz apart: a real glass is never perfectly
+     round, so its two perpendicular modes sit a beat apart and the note
+     pulses. One partial alone is a test tone. */
+  crystal:(c,t,g)=>{ cNoise(c,t,g,0.0015,0.35,'highpass',7000);
+                     cTone(c,t,g,'sine',2618,2618,0.30,0.42);
+                     cTone(c,t,g,'sine',2622,2622,0.30,0.36);
+                     cTone(c,t,g,'sine',6870,6870,0.10,0.08); },
+  /* And a finger DRAGGED across it rather than landing: the squeak. Not
+     a burst decaying but a resonance climbing while it swells, which is
+     stick-slip - skin grabbing and releasing the glass hundreds of times
+     a second. A narrow band sweeping up, with the dry rub of friction
+     under it. The only one here that is a touch rather than a strike. */
+  frost:(c,t,g)=>{ cNoise(c,t,g,0.055,0.30,'bandpass',1800,6,3200,0.018);
+                   cNoise(c,t,g,0.040,0.10,'lowpass',600,0,0,0.010); }
+};
+/* Per voice, because five sounds built to the same peak are not five
+   sounds of the same loudness: a 6 ms tick and a 130 ms thock at equal
+   amplitude are 9.5 dB apart to the ear, which integrates over about a
+   fifth of a second. Equalising that energy outright overshoots the
+   other way and clips the short ones, so these are the square root of
+   it - the usual compromise between peak and loudness for a transient.
+   Measured, not guessed: the voices are rendered offline and the
+   200 ms energy of each read off, which is also how the audition files
+   in the docs are made. */
+const CLICK_GAIN={tick:2.07, glass:0.94, crystal:0.50, pad:2.38, frost:10.0,
+                  drop:0.89, key:1.51, bell:0.79, thock:0.67};
+function clickPlay(k){
+  const n=k||CFG.click, v=CLICKS[n]; if(!v) return;
+  const c=ac(); if(!c) return;
+  const g=c.createGain();
+  g.gain.value=CLICK_VOL*(CLICK_GAIN[n]||1); g.connect(c.destination);
+  try{ v(c, c.currentTime, g); }catch(e){}
+}
+/* What counts as a control. Not every pointerdown on the glass: a swipe
+   that pages the dial, a drag across the map and a scroll down the marks
+   all start with one, and a click on each of those is the panel saying
+   it did something it has not done yet.
+   Listed rather than inferred, because half of these are SVG - the
+   dial's cells, the line's two ping buttons - and an SVG rect is not a
+   button however much it behaves like one. */
+const CLICKABLE='button,.tile,.mini,.cbtn,.cv-act,.cv-line,.cv-chip,.cv-tile,'
+  +'.cvr,.pkset,.lib-row,.mk-field,.sw,.pbtn,.vcell,#rp-adv,[data-app],'
+  +'[data-cell],[data-chip],[data-mark],[data-mode],[data-line],[data-load]';
+/* Capture, so it is heard before anything downstream can stop the event
+   - and it neither claims the gesture nor prevents anything, so nothing
+   downstream can tell it ran. */
+addEventListener('pointerdown',e=>{
+  if(CFG.click==='off') return;
+  if($('stage').classList.contains('booting')) return;
+  const el=e.target.closest && e.target.closest(CLICKABLE);
+  if(el && !el.disabled) clickPlay();
+},{capture:true, passive:true});
+
 /* ---- the countdown's signals -------------------------------------------
    One schedule, two ways of taking it: the face flashes, and a buzzer
    wired to the Pi beeps. The pattern is the one a committee sounds - a
@@ -5271,7 +5462,9 @@ const PREF_DEFS={
   /* And this one because it is a fact about the series, not the day. */
   startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null,
   /* Five, ten or fifteen minutes - the three sequences anyone runs. */
-  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null
+  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
+  /* Which noise the glass makes under a finger, or none. */
+  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5914,6 +6107,21 @@ function paintSounder(st){
 }
 /* Round the list and back to the start. netd refuses anything it has
    not got, so a stale list costs a message rather than a silent boat. */
+/* The cycle, and the sound of it. Tapping this plays the voice it just
+   moved to, so choosing is hearing - and the tap is also a tap on a
+   control, so it would have clicked anyway; playing it here rather than
+   leaving that to the global listener is what makes OFF audible as the
+   silence it is. */
+const CLICK_LBL={off:'OFF', tick:'TICK', glass:'GLASS', crystal:'CRYSTAL',
+                 pad:'PAD', frost:'FROST', drop:'DROP', key:'KEY',
+                 bell:'BELL', thock:'THOCK'};
+const clkPaint=()=>wText('clk-voice', CLICK_LBL[CFG.click]||'TICK');
+$('clk-voice').addEventListener('click',()=>{
+  const i=CLICK_KEYS.indexOf(CFG.click);
+  CFG.click=CLICK_KEYS[(i+1)%CLICK_KEYS.length];
+  clkPaint(); prefsSave(); clickPlay();
+});
+
 $('snd-who').addEventListener('click',async ()=>{
   if(SND.outs.length<2 || SND.pinned) return;
   const i=SND.outs.findIndex(o=>o.dev===SND.dev);
@@ -12111,6 +12319,7 @@ prefsLoad(); applyDim(CFG.dim,false); layoutPages();
    panel with the demo saved off came up with the pill lit until the next
    toggle. */
 drawDemo();
+clkPaint();                       /* and the touch sound, for the same reason */
 /* Same reason as drawDemo: CFG is only right after prefsLoad. If phone
    mode was left on, this is where the watch starts - and where the
    browser asks for location, which is the right moment because you

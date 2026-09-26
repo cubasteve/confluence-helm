@@ -203,8 +203,9 @@ const sh=()=>p.evaluate(()=>{ const e=$('p-sheet'), r=e.getBoundingClientRect();
           cards:[...e.querySelectorAll('.card')].filter(k=>k.offsetHeight).length,
           outside:[...new Set(out)]}; });
 let S=await sh();
-t.ok(S.cards===3, 'three cards, everything the panel has left - the start '
-     +'moved to the course sheet, with the rest of the start', String(S.cards));
+t.ok(S.cards===4, 'four cards - display, the shallow alarm, the touch sound, '
+     +'and the sounder when there is one. The start is not among them: it '
+     +'moved to the course sheet with the rest of the start', String(S.cards));
 t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
 t.ok(!S.over, 'so nothing is faded off an edge');
 t.ok(S.outside.length===0, 'and no card corner is out in the black',
