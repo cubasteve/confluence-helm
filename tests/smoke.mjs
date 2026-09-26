@@ -65,9 +65,15 @@ const X=await p.evaluate(()=>{ const e=$('app-close'), r=e.getBoundingClientRect
 ok(X.svg && X.txt==='', 'a cross, with no word left on it', JSON.stringify(X));
 ok(X.w===76 && X.h===76, 'round, and the height the pill was', X.w+'x'+X.h);
 ok(X.foot===38, 'in the same place, so nothing above it moves', String(X.foot));
+/* It goes back one step: the course sheet is in front of the app, so
+   the first tap takes that and the second takes the app. */
+await p.click('#app-close'); await p.waitForTimeout(500);
+ok(!await p.evaluate(()=>$('t-course').classList.contains('on'))
+   && await p.evaluate(()=>$('app-run').classList.contains('on')),
+   'one tap puts the sheet away and leaves the app up');
 await p.click('#app-close'); await p.waitForTimeout(600);
 ok(!await p.evaluate(()=>$('app-run').classList.contains('on')),
-   'and it still shuts the app');
+   'and the next shuts the app');
 await p.evaluate(()=>{ closeLib(); closeApp(); }); await p.waitForTimeout(500);
 
 console.log('\n=== the race runs ===');

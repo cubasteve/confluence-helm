@@ -459,7 +459,8 @@ RACE box advances the course on a double tap.
 
 The next mark comes from the course set in the Tracks app. **The course
 reads across the top as a strip**, in the order you will sail it —
-`1 RUM › 2 GOSLING › 3 CB 12 › FINISH` — and every mark this boat knows
+`FLAG – BALL  1 RUM  2 GOSLING  3 CB 12  FINISH`, the line it starts on
+first and the same line at the end — and every mark this boat knows
 sits under it as a tile. **Tap a tile to put that mark on the end of the
 course.** Every tap adds a rounding, so tapping the same tile twice
 sails past that buoy twice — the tile then says `IN COURSE · 1,3` and
@@ -523,7 +524,43 @@ grid goes to three across to fit it. The hemisphere is a letter and the
 degrees are padded, because nothing read at arm's length should turn on
 spotting a minus sign at 13 px.
 
-### The five settings
+### Every section carries its own control
+
+There were four buttons in a row across the foot of the sheet — `+ MARK`,
+`CLEAR`, `EDIT`, `DONE` — 86 px of the narrowest glass on the face, spent
+on things that each belong to one part of what is above them and none of
+which said *which* part. The row is gone and each one went home:
+
+| | now | because |
+|---|---|---|
+| `CLEAR` | in the `ROUTE` heading | it empties the route. Disabled while there is no route to empty |
+| `EDIT` | in the `MARKS` heading | it changes what is in the list |
+| `+ MARK` | the **first tile in the grid** | a mark appears in the grid, so that is where you make one. It stands in the place the new one will take |
+| `START LINE` | **first in the route**, in line with it | the route starts on the line and comes home to it. It was down among the evening's settings, next to the countdown, as though it were another thing about the clock |
+| `DONE` | **gone** | the ✕ at the foot already meant *out of here*. It goes back one step now: a sheet in front of the app closes first, the app itself next. Two ways out on a face this small is not a convenience, it is a question about which one you meant |
+
+The sheet is 46 px taller for it, all of it given to the marks grid, and
+the strip lost its `›` separators on the same argument — the chips are
+numbered, which is what says the order, and eleven pixels of punctuation
+per gap was what tipped a four-mark course onto a second row.
+
+The line is a chip at the head of the strip, dashed like `FINISH`
+because neither is a mark you round, and drawn the way the map draws a
+line: two ends with a dashed run between them.
+
+It costs 216 px of a row 816 wide, which is the whole of the honest
+accounting here: a two-mark course fits on one row at 740, and three
+does not — 931. Twenty of that came back by taking the chip gap from 10
+to 8 and the side badge from 46 to 42, and the rest cannot be had
+without giving up something that earns its place. The `P`/`S` badge
+could go and its colour move to the chip's border, which would save 50 a
+chip and fit five marks on a row — and on the night theme, where
+everything is one red, a coloured border says nothing at all. So the
+strip wraps, and a three-mark course is two rows of chips at 151 px
+rather than one at 72. What is bought for that is the route reading as a
+route: you start on the line, you round these, you come home to it.
+
+### The four settings
 
 **Everything about the evening that is not the course itself is one row
 under the marks**, drawn the way the dial's readings are — a small label
@@ -535,13 +572,13 @@ glance and only occasionally change.
 | `START TIME` | `6:25 PM`, or `NOT SET` | opens the pad that types it |
 | `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, and round again |
 | `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
-| `START LINE` | `FLAG – BALL`, or `PINGED` | opens a menu: the two lines there are |
 | `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
 
 The two clock facts are next to each other because between them they say
-when the countdown starts, which neither says alone. The row is 940 wide
-where the strip and the marks above it are 816: it sits low enough on
-the glass that the circle allows it, and five readings want the room.
+when the countdown starts, which neither says alone. The row is 816 wide,
+the same as the strip and the marks above it, so its ends line up with
+both — it was 940 and hanging 62 px proud of each when there were five
+readings and a button row holding it higher up the glass.
 
 The countdown is the only one that opens nothing. Three values is not
 worth opening, scrolling and dismissing something for. It is how long
@@ -558,8 +595,9 @@ supplies is the rows, the head and foot, and what a tap means. It opens
 *above* its readout — the settings row has the sheet's own bar under it,
 and a menu over that covers the way out — and on the value already in
 force, so the choice you have is under your finger. With one open, a tap
-on another of the five moves it; a tap anywhere else puts it away, and
-that tap does nothing else.
+on another of them moves it; a tap anywhere else puts it away, and that
+tap does nothing else. The line's menu is the exception that opens
+*downwards*: its control is at the top of the sheet, not the bottom.
 
 **`START LINE` is which line the race starts *and* finishes on**, and it
 is the one fact on this sheet you cannot work out from anything else on
@@ -629,7 +667,8 @@ tap on this sheet that can replace a course you are already sailing.
 
 ![Adding a mark of your own](img/course-form.png)
 
-**Marks of your own.** `+ MARK` on the sheet's bar opens a form: a name,
+**Marks of your own.** The `＋ NEW MARK` tile at the head of the grid
+opens a form: a name,
 a position typed on the app's own keyboard or taken from the GPS with
 `HERE`, and which of the seven buoys it is. Positions read as the sailing instructions write them,
 degrees and decimal minutes with a space between, or as decimal
@@ -653,8 +692,8 @@ of it in the course.
 
 **Tapping a mark in edit mode opens it**, with its name and position
 already in the fields. Outside edit mode a tap still adds a rounding to
-the course, which is what that tap is for the rest of the time. `DONE`
-leaves edit mode.
+the course, which is what that tap is for the rest of the time. `EDIT`
+in the heading is a toggle, lit in the accent while it is on.
 
 What `SAVE` then does depends on whose mark it is.
 

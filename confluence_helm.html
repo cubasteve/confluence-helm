@@ -947,13 +947,61 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    way when a five-mark course wraps the strip onto a second line. */
 #course-main{display:flex;flex-direction:column;align-items:center;gap:14px;width:816px}
 #course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
-.cv{display:flex;flex-direction:column;gap:14px;width:100%;height:508px}
+.cv{display:flex;flex-direction:column;gap:12px;width:100%;height:640px}
+/* Each section owns its own control. There were four buttons in a row
+   across the foot of the sheet - + MARK, CLEAR, EDIT, DONE - 86 px of
+   glass spent on things that each belong to one part of what is above
+   them, and none of which said WHICH part. CLEAR sits on the route it
+   clears, EDIT on the list it edits, and + MARK went into the grid as a
+   tile, because that is where a mark appears. The row is gone. */
 .cv-hd{display:flex;align-items:center;justify-content:space-between;gap:16px;
-  font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label);
-  text-transform:uppercase;flex:none}
-/* the course itself, in the order it is rounded */
+  height:48px;font-size:21px;font-weight:600;letter-spacing:.18em;
+  color:var(--label);text-transform:uppercase;flex:none}
+.cv-act{height:48px;padding:0 22px;border-radius:24px;flex:none;
+  border:2px solid var(--hairline);background:none;font-family:var(--font);
+  font-size:17px;font-weight:600;letter-spacing:.14em;color:var(--label);
+  text-transform:uppercase}
+/* A button does not inherit text-transform - the UA sheet sets it to
+   none on form controls - so every control that sits in a heading has to
+   say it again. */
+.cv-hd .cv-act{margin-left:auto}
+/* Which line the race starts and finishes on: the first thing in the
+   route, in line with it, because that is what it is - the route starts
+   on the line and comes home to it. It was a readout down among the
+   evening's settings, next to the countdown, as though it were another
+   thing about the clock.
+   Dashed like the FINISH chip, because neither is a mark you round. */
+#cv-route{display:contents}
+.cv-line{height:72px;padding:0 16px;border-radius:36px;flex:none;
+  display:flex;align-items:center;gap:9px;background:none;
+  border:2px dashed var(--hairline);font-family:var(--font)}
+.cv-line svg{width:22px;height:22px;fill:none;stroke:var(--label);
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cv-line svg .f{fill:var(--label);stroke:none}
+.cv-line b{font-size:19px;font-weight:600;letter-spacing:.02em;color:var(--ink);
+  text-transform:none;white-space:nowrap}
+.cv-line u{text-decoration:none;font-size:15px;color:var(--label)}
+.cv-line:active{background:var(--chip)}
+.cv-line.picking{border-style:solid;border-color:var(--accent)}
+.cv-line.picking b{color:var(--accent)}
+.cv-line.picking svg,.cv-line.picking svg .f{stroke:var(--accent)}
+.cv-line.picking svg .f{fill:var(--accent)}
+.cv-line.picking b{color:var(--accent)}
+.cv-act.on{border-color:var(--accent);color:var(--accent)}
+.cv-act:active{background:var(--chip)}
+.cv-act[disabled]{opacity:.3}
+
+/* The course itself, in the order it is rounded, between the two ends
+   of the line it starts and finishes on.
+   The chips used to be separated by a › each. They are numbered, which
+   is what says the order, and eleven pixels of punctuation per gap is
+   what tipped a four-mark course onto a second row. */
 .cv-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:none}
-.cv-chip{display:flex;align-items:center;gap:10px;height:72px;padding:0 8px;
+/* 8 of gap and a 42 px side badge, not 10 and 46. The line standing in
+   the route ahead of them costs 190 px of a row that is 816 wide, and
+   this is 20 of it back across a three-mark course - which is the
+   difference between one row and two on the commonest course there is. */
+.cv-chip{display:flex;align-items:center;gap:8px;height:72px;padding:0 8px;
   border-radius:36px;background:var(--chip);font-size:23px;font-weight:600;
   letter-spacing:.01em;color:var(--ink)}
 /* The number is the rounding, and it is also the way out of the course:
@@ -966,7 +1014,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Which side to leave it on, on the chip: one tap flips it, and the
    letter wears the colour of the light it is - P red, S green, the way
    they are on the water. */
-.cv-chip .sd{width:46px;height:46px;border-radius:23px;flex:none;font-size:21px;
+.cv-chip .sd{width:42px;height:42px;border-radius:21px;flex:none;font-size:20px;
   display:flex;align-items:center;justify-content:center;color:#fff;
   background:var(--port)}
 .cv-chip .sd.s{background:var(--stbd)}
@@ -977,7 +1025,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .cv-chip.ghost{background:none;border:2px dashed var(--club);color:var(--club)}
 .cv-chip.ghost i{background:var(--club)}
 .cv-empty{font-size:20px;letter-spacing:.12em;color:var(--label)}
-.cv-arrow{color:var(--label);font-size:22px}
 /* The marks: what the buoy looks like, what it is called, and where it
    stands in the course. Four across and 92 tall - smaller than they
    were, because a drawing of the buoy says in a glance what a line of
@@ -1014,6 +1061,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   display:flex;align-items:center;justify-content:center;font-size:22px;
   color:var(--label)}
 .cv-tile.lift{opacity:.45}
+/* A mark is added where marks are. The + was a pill at the foot of the
+   sheet, two sections away from the grid it filled; as a tile at the
+   head of that grid it is standing in the place the new mark will
+   appear, which is the whole of what it had to say. */
+.cv-tile.add{border-style:dashed;border-color:var(--accent);color:var(--accent)}
+.cv-tile.add b{color:var(--accent)}
+.cv-tile.add .pl{flex:none;width:24px;height:24px;font-size:30px;line-height:22px;
+  display:flex;align-items:center;justify-content:center;color:var(--accent)}
 /* ---- the buoys ----
    Drawn as they are on the water, because that is how they are found:
    the club's own marks are yellow specials with an X topmark, the
@@ -1055,7 +1110,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Wider than the sheet's own column, and it can be: the row sits low
    enough on the glass that 940 is inside the circle where 816 is the
    most the strip and the marks can have up at the heading. */
-.cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:940px;
+/* 816 rather than the 940 it was: with the button row gone the sheet
+   sits lower, and at the row's new bottom edge the glass is only 870
+   wide. 816 is also the width of everything above it, so the row's ends
+   line up with the strip's and the grid's instead of hanging 62 px
+   proud of both. */
+.cv-set{display:flex;gap:12px;justify-content:center;flex:none;width:816px;
   align-self:center}
 .cvr{flex:1;min-width:0;height:76px;padding:0 30px 0 14px;border-radius:18px;
   border:2px solid var(--hairline);background:none;font-family:var(--font);
@@ -2524,25 +2584,35 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
-        <div class="cv-strip" id="cv-strip"></div>
-        <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
+        <!-- ROUTE: the two ends of the line with the marks between them,
+             and the one control that belongs to a route - emptying it. -->
+        <div class="cv-hd"><span>Route</span>
+          <button class="cv-act" id="course-clr">Clear</button></div>
+        <!-- The line is a fixed element rather than part of the strip's
+             innerHTML: a menu is anchored to it, and a chip rebuilt from
+             a string is a new node, which pickPlace reads as the control
+             having left the document and closes the menu over. Its
+             content is rewritten; the node stays. #cv-route is
+             display:contents, so the chips inside it wrap in the strip
+             as though they were its own children. -->
+        <div class="cv-strip" id="cv-strip">
+          <button class="cv-line" id="cv-line"></button>
+          <span id="cv-route"></span></div>
+        <!-- MARKS: every buoy this boat knows, the first tile being the
+             way to add one, and the one control that belongs to a list -
+             changing what is in it. -->
+        <div class="cv-hd"><span>Marks</span>
+          <button class="cv-act" id="course-edit">Edit</button></div>
         <div class="cv-grid noscroll" id="course-list"></div>
-        <!-- The evening's four settings, read at a glance and changed in
-             the menu three of them open. The club is one of them now,
+        <!-- The evening, on one row: what is left once the line has gone
+             up to the route where it belongs. The club is one of them,
              keeping its own colour: see --club. -->
         <div class="cv-set">
           <button class="cvr" id="cv-start"></button>
           <button class="cvr" id="cv-mins"></button>
           <button class="cvr" id="cv-mode"></button>
-          <button class="cvr" id="cv-line"></button>
           <button class="cvr club" id="cv-sync"></button>
         </div>
-      </div>
-      <div class="course-bar">
-        <button class="cbtn" id="course-add-btn">+ MARK</button>
-        <button class="cbtn" id="course-clr">CLEAR</button>
-        <button class="cbtn" id="course-edit">EDIT</button>
-        <button class="cbtn on" id="course-done">DONE</button>
       </div>
     </div>
     <!-- A mark of your own: a name, and a position typed or taken from
@@ -7849,7 +7919,10 @@ function pickPaint(){
   const sel=pk.querySelector('.sel');
   pk.scrollTop = sel ? Math.max(0, sel.offsetTop-(pk.clientHeight-sel.offsetHeight)/2) : 0;
   pickPlace();
-  if(PICK.mark) PICK.mark();
+  /* Re-asked: pickPlace closes the menu outright when the control it is
+     anchored to has left the document, and a caller that repainted the
+     sheet under an open menu is exactly how that happens. */
+  if(PICK && PICK.mark) PICK.mark();
 }
 /* Anchored to the control's INWARD edge, not centred under it. Centred,
    the outboard menus hung over the rim, got pulled back by the clamp,
@@ -9051,13 +9124,26 @@ function renderCourse(){
     return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+i+'">'
       +'<i class="no">'+(i+1)+'</i>'+esc(hdr)
       +'<span class="sd'+(sd==='S'?' s':'')+'">'+sd+'</span></div>'; };
-  $('cv-strip').innerHTML = ids.length
-    ? ids.map(chip).join('<span class="cv-arrow">›</span>')
-      +'<span class="cv-arrow">›</span><div class="cv-chip fin">FINISH</div>'
-    : '<span class="cv-empty">NOTHING YET · TAP A MARK, OR SYNC THE CLUB’S</span>';
+  /* The line leads the route, in line with it: you start on it, and the
+     FINISH at the other end is the same line come home to. Drawn the way
+     the map draws a line - two ends with a dashed run between them; two
+     posts and a bar came out as a letter H. */
+  const LE=lineEnds();
+  $('cv-line').innerHTML='<svg viewBox="0 0 24 24">'
+    +'<circle class="f" cx="4.6" cy="12" r="2.6"/>'
+    +'<circle class="f" cx="19.4" cy="12" r="2.6"/>'
+    +'<path d="M8.4 12h7.2" stroke-dasharray="2.6 2.4"/></svg><b>'
+    +esc(LE.pinged ? 'PINGED'
+         : lineMark('pin').hdr+' – '+lineMark('boat').hdr)+'</b><u>⌄</u>';
+  $('cv-route').innerHTML = ids.length
+    ? ids.map(chip).join('')+'<div class="cv-chip fin">FINISH</div>'
+    : '<span class="cv-empty">NOTHING YET · TAP A MARK BELOW, '
+      +'OR SYNC THE CLUB’S</span>';
 
-  wText('cv-hint', courseEdit ? 'TAP TO CORRECT · DRAG TO REORDER' : 'TAP TO ADD');
   wCls('course-list','edit', courseEdit);
+  /* CLEAR has nothing to clear until there is a route. */
+  $('course-clr').disabled = !COURSE.marks.length;
+  wCls('course-edit','on', courseEdit);
   const tile=m=>{
     /* Every place this mark holds in the course, not just the first -
        tap it twice and it is rounded twice, and the tile says 1,3. */
@@ -9077,12 +9163,18 @@ function renderCourse(){
       +'<div class="tx"><b>'+esc(m.hdr)+'</b>'
       +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
-  box.innerHTML=MARKS.map(tile).join('');
+  /* First, so it is there without scrolling for it, and so the new mark
+     appears in the place the tile that made it was standing. */
+  const add='<button class="cv-tile add" data-add="1">'
+    +'<span class="pl">＋</span><div class="tx"><b>NEW MARK</b>'
+    +'<s>'+(courseEdit?'NAME AND POSITION':'ONE OF YOUR OWN')+'</s></div></button>';
+  box.innerHTML=add+MARKS.map(tile).join('');
   scrollFit(box); drumPaint(box); rimDraw(box);
 
-  /* The five settings, read at a glance. The corner glyph says what kind
+  /* The four settings, read at a glance. The corner glyph says what kind
      of control it is: a chevron opens a menu, a plus steps, and the
-     keypad's three dots open a pad. */
+     keypad's three dots open a pad. The line was a fifth until it went
+     up to the route, which is the only place it was ever about. */
   const rd=(id,lbl,val,glyph)=>{ $(id).innerHTML='<s>'+lbl+'</s><b>'+val+'</b>'
     +'<u>'+glyph+'</u>'; };
   /* The gun, and how long the countdown to it runs. They are next to
@@ -9092,12 +9184,6 @@ function renderCourse(){
   wCls('cv-start','in', GUNAT!==null);
   rd('cv-mins','COUNTDOWN', CFG.startMins+' MIN','＋');
   rd('cv-mode','SEQUENCE', CFG.startMode==='window'?'WINDOW':'GUN','⌄');
-  /* Which line the race starts and finishes on. It is the one thing on
-     this sheet you cannot work out from anything else on it, so it names
-     both ends rather than saying that a line exists. */
-  const E=lineEnds();
-  rd('cv-line','START LINE',
-     E.pinged ? 'PINGED' : esc(lineMark('pin').hdr+' – '+lineMark('boat').hdr), '⌄');
   const c2=CLUB;
   rd('cv-sync','CLUB', ICO_SYNC+'<span>'+(
        c2.step==='busy'  ? 'CHECKING…'
@@ -9186,19 +9272,22 @@ function clubApply(){
    asks to open UPWARDS, because the settings row has the sheet's own bar
    under it and a menu over that covers the way out; and to stay inside
    the sheet's column, which is narrower than the glass down there. */
+/* Which control a menu belongs to. The line's is the chip at the head of
+   the route now rather than a readout in the settings row - so it is the
+   one that is above its menu instead of below it. */
 const cvpBtn=k=>$('cv-'+(k==='club'?'sync':k));
 const cvpOn=()=>PICK && PICK.own==='course' ? PICK : null;
 
 function cvpOpen(kind){
   pickOpen({ key:'cv:'+kind, own:'course', kind:kind, end:'pin',
-             at:cvpBtn(kind), width:330, up:true, hold:$('course-main'),
-             peers:'.cvr',
+             at:cvpBtn(kind), width:330, up:kind!=='line',
+             hold:$('course-main'), peers:'.cvr,.cv-line',
              head:cvpHead, list:cvpBody, foot:cvpFoot,
              mark:cvpMark, tap:cvpTap });
 }
 function cvpMark(){
   const on=cvpOn();
-  document.querySelectorAll('.cvr').forEach(e=>
+  document.querySelectorAll('.cvr,.cv-line').forEach(e=>
     e.classList.toggle('picking', !!on && e===cvpBtn(on.kind)));
 }
 function cvpHead(){
@@ -9406,6 +9495,8 @@ $('trk-course').addEventListener('click',()=>{
 $('course-list').addEventListener('click',e=>{
   if(courseDragged()) return;                 /* a scroll, not a choice */
   const tile=e.target.closest('.cv-tile'); if(!tile) return;
+  /* The first tile is not a mark, it is the way to make one. */
+  if(tile.dataset.add){ mkOpen(); return; }
   const id=tile.dataset.mark;
   if(e.target.closest('.undo')){ markRevert(id); return; }
   if(e.target.closest('.del')){ markDelete(id); return; }
@@ -9433,7 +9524,10 @@ $('course-list').addEventListener('click',e=>{
 $('course-main').addEventListener('click',e=>{
   /* Anything else on the sheet is an answer of 'not that' to an open
      menu, the same as the veil. */
-  if(cvpOn() && !e.target.closest('.cvr')) pickClose();
+  if(cvpOn() && !e.target.closest('.cvr') && !e.target.closest('.cv-line'))
+    pickClose();
+  /* The line is the route's own control, and sits in its heading. */
+  if(e.target.closest('#cv-line')){ cvpOpen('line'); return; }
   /* A chip is one rounding. Its number takes that rounding out of the
      course; anywhere else on it flips the side to leave it. Two targets
      and no third button: P or S is a choice between exactly two things,
@@ -9450,7 +9544,6 @@ $('course-main').addEventListener('click',e=>{
      start time opens the pad that types it. */
   if(e.target.closest('#cv-start')){ gnOpen(); return; }
   if(e.target.closest('#cv-mode')){ cvpOpen('mode'); return; }
-  if(e.target.closest('#cv-line')){ cvpOpen('line'); return; }
   if(e.target.closest('#cv-sync')){ clubTap(); return; }
   if(e.target.closest('#cv-mins')){ minsStep(); return; }
 });
@@ -9464,7 +9557,7 @@ $('rp-adv').addEventListener('pointerup',()=>{
   else rpAdvAt=now;
 });
 $('course-edit').addEventListener('click',()=>{ courseEdit=!courseEdit;
-  $('course-edit').classList.toggle('on',courseEdit); renderCourse(); });
+  renderCourse(); });
 
 /* ---- reordering: drag a row by its grip ---------------------------------
    The grip's pointerdown is taken on the capture phase and stopped, so
@@ -9653,12 +9746,14 @@ $('gn-pm').addEventListener('click',()=>gnMer(true));
 $('gn-cancel').addEventListener('click',gnClose);
 $('gn-clear') .addEventListener('click',()=>{ GUNAT=null; gunSave(); gnClose(); });
 
-$('course-add-btn').addEventListener('click',()=>mkOpen());
+/* + MARK was a pill at the foot of the sheet; it is the first tile in
+   the grid now, handled with the rest of them. */
 $('mk-here').addEventListener('click',mkHere);
 $('mk-save').addEventListener('click',mkSave);
 $('mk-cancel').addEventListener('click',mkClose);
 $('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0,side:[]}; courseSave(); renderCourse(); drawMap(shownTrack()); });
-$('course-done').addEventListener('click',closeLib);
+/* The sheet's own DONE is gone: the cross at the foot closes it, and
+   the app on the next tap. See the #app-close listener. */
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
 /* Two lists, and the difference matters.
 
@@ -11921,7 +12016,20 @@ function appFail(msg){
   $('app-run').classList.add('failed');
   $('app-msg').textContent=msg;
 }
-$('app-close').addEventListener('click',closeApp);
+/* One way out of everything, and it goes back one step: a sheet in
+   front of the app closes first, and the app itself next.
+   DONE beside the COURSE heading was a second control saying the same
+   thing about the sheet only, two feet above a cross that already meant
+   'out of here' - and on a face this small a second way out is not a
+   convenience, it is a question about which one you meant. The tracks
+   app is the only one with sheets over it, so it is the only one this
+   asks about; every other app has nothing in front of it and the cross
+   closes it on the first tap, as it always did. */
+$('app-close').addEventListener('click',()=>{
+  const sheet=$('t-course').classList.contains('on')
+           || $('t-lib').classList.contains('on');
+  if(sheet) closeLib(); else closeApp();
+});
 
 /* ---- fullscreen -------------------------------------------------------
    On the boat this is a no-op: the Pi already launches Chromium with

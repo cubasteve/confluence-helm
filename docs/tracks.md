@@ -114,6 +114,14 @@ the app's own chrome now goes:
 - **the map's lock button**, which sat at the foot of the glass exactly
   where the app's close cross does now. A page you could be locked on
   needed it; an app does not.
+
+That cross is the only way out of anything here, and it **goes back one
+step**: with the course sheet or the library in front of the map it
+closes that, and the app on the next tap. The course sheet had a `DONE`
+of its own beside its heading until the cross took the job — two ways
+out on a 1080 circle is not a convenience, it is a question about which
+one you meant. Every other app has nothing in front of it, so the first
+tap closes it, as it always did.
 - **the library's hint line**, which had the foot to itself and was
   underneath it. It has moved up, and now says what the two row
   buttons do rather than repeating how to close a sheet.

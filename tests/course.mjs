@@ -18,7 +18,8 @@ await seed();
 await p.waitForTimeout(400);
 
 /* Every mark this boat knows, as the grid draws it. */
-const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-tile')]
+/* The marks, not the tile that makes one - that has no buoy on it. */
+const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-tile[data-mark]')]
   .map(r=>({mark:r.dataset.mark,
             /* the tile's place in the course is what its info line says */
             seq:(/IN COURSE . ([\d,]+)/.exec(r.querySelector('s').textContent)||['',''])[1],
@@ -41,6 +42,14 @@ const strip=()=>p.evaluate(()=>[...document.querySelectorAll('#cv-strip .cv-chip
 /* The four settings, as the row reads them: a label and a value each. */
 const rd=id=>p.evaluate(i=>({lbl:$(i).querySelector('s').textContent,
                              val:$(i).querySelector('b').textContent.trim()}), id);
+/* The line is not one of the settings any more - it is the first thing
+   in the route, in line with it, with the line drawn on it. */
+const line=()=>p.evaluate(()=>({val:$('cv-line').querySelector('b').textContent.trim(),
+  glyph:!!$('cv-line').querySelector('svg'),
+  first:$('cv-strip').firstElementChild===$('cv-line'),
+  /* and it is not rebuilt under its own open menu */
+  survives:(()=>{ const n=$('cv-line'); renderCourse(); return $('cv-line')===n; })(),
+  inStrip:!!$('cv-line').closest('#cv-strip')}));
 /* And the menu three of them open. */
 const menu=()=>p.evaluate(()=>({
   on:$('pick').classList.contains('on'),
@@ -63,9 +72,22 @@ let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
 const marks=x=>x.filter(r=>r.mark);
 t.ok(marks(S).length===11, 'all eleven of the club\'s marks, as tiles', String(S.length));
-let L=await rd('cv-line');
-t.ok(L.lbl==='START LINE', 'the line is one of the five settings', L.lbl);
+let L=await line();
+t.ok(L.inStrip && L.first, 'the line leads the route, in line with it - you '
+     +'start on it, and the FINISH at the other end is it come home to',
+     JSON.stringify({inStrip:L.inStrip, first:L.first}));
 t.ok(L.val==='FLAG – BALL', 'and says which two marks it runs between', L.val);
+t.ok(L.glyph, 'drawn as a line between two ends, the way the map draws it');
+t.ok(L.survives, 'and it is the same node after a repaint - a menu is '
+     +'anchored to it, and a rebuilt node would close the menu over it');
+t.ok(await p.evaluate(()=>$('course-clr').closest('.cv-hd')
+       .querySelector('span').textContent.trim())==='Route',
+     'CLEAR is on the route it clears');
+t.ok(await p.evaluate(()=>$('course-edit').closest('.cv-hd')
+       .querySelector('span').textContent.trim())==='Marks',
+     'and EDIT on the list it edits');
+t.ok(await p.evaluate(()=>!document.querySelector('#course-main .course-bar')),
+     'and the row of four buttons across the foot is gone');
 /* The buoy each mark actually is, drawn on its tile: the club's
    inflatables are yellow specials, the channel is red, the manatee
    zone's cans are white, and the line's ends are the flag and the
@@ -86,13 +108,27 @@ t.ok(S.find(r=>r.mark==='flag').buoy==='f' && S.find(r=>r.mark==='ball').buoy===
      +'they actually are');
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join())
-     ==='START TIME,COUNTDOWN,SEQUENCE,START LINE,CLUB',
-     'the whole evening on one row, the two clock facts together',
+     ==='START TIME,COUNTDOWN,SEQUENCE,CLUB',
+     'the evening on one row, the two clock facts together and the line '
+     +'gone up to the route',
      await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join()));
-await tap('#course-done');
+t.ok(await p.evaluate(()=>{const t=document.querySelector('.cv-tile.add');
+       return !!t && t===$('course-list').firstElementChild;}),
+     'and a mark is added from the head of the grid, where the mark will be');
+t.ok(!await p.evaluate(()=>$('course-done')),
+     'there is no DONE beside the heading - the cross at the foot is the '
+     +'one way out, and it goes back one step');
+await tap('#app-close');
 t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
-     'and DONE puts it away');
+     'the first tap puts the sheet away');
+t.ok(await p.evaluate(()=>$('app-run').classList.contains('on')),
+     'and leaves the app it was over standing');
+await tap('#app-close');
+t.ok(!await p.evaluate(()=>$('app-run').classList.contains('on')),
+     'the second closes that');
+await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+await p.waitForTimeout(700);
 await tap('#trk-course');
 
 t.head('a tap puts a mark in the course, and the strip is the order');
@@ -256,12 +292,14 @@ await p.evaluate(()=>{ courseEdit=false; $('course-edit').classList.remove('on')
                        saveLine(); ['pin','boat'].forEach(k=>$('ping-'+k).classList.add('set'));
                        renderCourse(); });
 await p.waitForTimeout(200);
-L=await rd('cv-line');
+L=await line();
 t.ok(L.val==='PINGED', 'a pinged line says so', L.val);
 t.ok(await p.evaluate(()=>lineEnds().pinged), 'and is the line the readings use');
 await tap('#cv-line');
 let M=await menu();
-t.ok(M.on && M.lit==='cv-line', 'the readout opens its menu', String(M.lit));
+t.ok(M.on, 'the control opens its menu');
+t.ok(await p.evaluate(()=>$('cv-line').classList.contains('picking')),
+     'and is lit while it is open');
 t.ok(M.sel==='PINGED', 'lit on the pinged line', String(M.sel));
 /* The way back from a ping taken at the wrong end: choose the marks. */
 await tap('#pick-pk .pkset[data-line="marks"]');
@@ -269,8 +307,8 @@ t.ok(await p.evaluate(()=>!lineEnds().pinged
        && !$('ping-pin').classList.contains('set')
        && !$('ping-boat').classList.contains('set')),
      'choosing the marks drops the pings, and the ping buttons go out with them');
-t.ok((await rd('cv-line')).val==='FLAG – BALL', 'back on the club marks',
-     (await rd('cv-line')).val);
+t.ok((await line()).val==='FLAG – BALL', 'back on the club marks',
+     (await line()).val);
 t.ok(!(await menu()).on, 'and the menu is done');
 
 t.head('and the menu offers the two lines there are');
