@@ -587,19 +587,24 @@ replaces your course. Tapping a control and having the course you are
 three marks into vanish is not something this sheet should be able to do
 by accident.
 
-What did not come across is said before you load rather than found out
-at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START ON
-THE LINE` for a course this sheet cannot draw a start for; both are
-repeated over the settings row once it is loaded.
+What did not come across is said **before** you load rather than found
+out at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START
+ON THE LINE` for a course this sheet cannot draw a start for. That is
+the moment it can still change your mind, so it is the only moment it is
+said. Nothing reports the load afterwards — the strip already shows it,
+and a line under the marks saying `LOADED` said nothing you could not
+see.
 
 A mark can fail to arrive two ways, and both are counted. The site names
 the ones *it* could not translate. The other is the site believing this
 boat has a mark it has not got — the site's list of what the helm
 carries and the table in this file are kept in step by hand, so they can
 drift — and that one is only visible from here. A course arriving a leg
-short with nothing said about it is the worst of the three outcomes. A site that does not
-answer says `NO ANSWER · IS THERE WIFI?`, changes nothing, and offers
-`ASK THE CLUB` to try again.
+short with nothing said about it is the worst of the three outcomes.
+
+A site that does not answer says `NO ANSWER · IS THERE WIFI?` in the
+menu and changes nothing. Asking again is tapping `CLUB` again: the
+readout is the button, so the menu needs none of its own.
 
 It has to be *us* that asks. The helper binds loopback, so nothing off
 the Pi can reach in and set a course — the right way round for a box on

@@ -25,14 +25,12 @@ const CLUB='#cv-sync';
    drawn where the course it would replace is. */
 const said=()=>p.evaluate(()=>({
   head:$('cv-sync').querySelector('b').textContent.trim(),
-  sub:($('pick-pk').textContent+' '+$('cv-say').textContent).trim(),
+  sub:$('pick-pk').textContent.trim(),
   menu:$('pick').classList.contains('on'),
   foot:$('pick-ft').textContent.trim(),
-  count:$('cv-count').textContent,
   ghost:[...document.querySelectorAll('#cv-strip .cv-chip.ghost')]
           .map(c=>[...c.childNodes].filter(n=>n.nodeType===3)
-                .map(n=>n.textContent).join('').trim()).join(' · '),
-  bad:$('cv-say').classList.contains('bad')}));
+                .map(n=>n.textContent).join('').trim()).join(' · ')}));
 /* A fresh ask, whatever the menu is doing: the readout opens it and
    fetches, and tapping it while it is open is how you put it away. */
 const ask=async()=>{ await p.evaluate(()=>pickClose()); await tap(CLUB); };
@@ -41,7 +39,7 @@ const load=async()=>{ await p.click('#pick-ft .pkfoot'); await p.waitForTimeout(
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
                                   side:Object.assign({},COURSE.side||{})}));
 const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:{}}; courseSave();
-                                 CLUB={step:'idle',got:null,say:'',bad:false};
+                                 CLUB={step:'idle',got:null,say:''};
                                  pickClose(); renderCourse(); });
 
 /* The course sheet hangs off the tracks app, as it does for the probe
@@ -64,10 +62,7 @@ t.ok(S.menu && /LOAD 3 MARKS/.test(S.foot),
      'and opens on the one thing that would load it', S.foot);
 t.ok(S.ghost==='CB 10 · GOSLING · RUM',
      'and draws them in the strip, in this sheet\'s own words', S.ghost);
-t.ok(/CLUB COURSE . 3 MARKS/.test(S.count),
-     'the heading says whose course the strip is showing', S.count);
-t.ok(/POSTED \d/.test(S.sub) && /DASHED IN THE STRIP/.test(S.sub),
-     'and where it came from, and where to look at it', S.sub);
+t.ok(/POSTED \d/.test(S.sub), 'and when the club posted it', S.sub);
 let C=await course();
 t.ok(C.marks.length===0, 'the course is still untouched', JSON.stringify(C.marks));
 
@@ -79,9 +74,12 @@ t.ok(C.side.cb10==='P' && C.side.gosling==='S' && C.side.rum==='P',
      'and the side each is left on', JSON.stringify(C.side));
 t.ok(C.next===0, 'starting at the first one', String(C.next));
 S=await said();
-t.ok(/SYNC/.test(S.head) && /LOADED/.test(S.sub), 'and it says so', S.sub);
+t.ok(/SYNC/.test(S.head), 'the readout goes back to offering a sync', S.head);
 t.ok(!S.ghost && !S.menu,
      'with the menu shut and nothing left previewed - the strip is yours again');
+t.ok(!await p.evaluate(()=>CLUB.say),
+     'and nothing is said about it afterwards: what was wrong with the '
+     +'course was on the menu you loaded it from'); 
 
 t.head('a course three marks in is not replaced by one tap');
 await p.evaluate(()=>{ COURSE.next=2; courseSave(); renderCourse(); });
@@ -97,15 +95,14 @@ reply={status:200, body:{date:'2026-10-07', course:null}};
 await tap(CLUB);
 S=await said();
 t.ok(/NOTHING POSTED/.test(S.sub), 'it says so rather than emptying the course', S.sub);
-t.ok(S.bad, 'in the colour of something that did not work');
+t.ok(S.menu && !S.foot, 'in the menu, with nothing to load', S.foot);
 t.ok((await course()).marks.length===0, 'and nothing was loaded');
 
 t.head('no wifi');
-/* From a menu already open on the last answer, ASK THE CLUB in its foot
-   is the retry - tapping the readout again is how you put the menu
-   away. */
+/* Asking again is tapping CLUB again - there is no button in the menu
+   for it, because the readout IS the button. */
 reply='dead';
-await load();
+await ask();
 S=await said();
 t.ok(/NO ANSWER/.test(S.sub), 'the line under the button says why', S.sub);
 
@@ -113,11 +110,15 @@ t.head('a course with a mark this boat has not got');
 reply={status:200, body:{date:'2026-09-30', course:{
   marks:['cb10','rum'], side:{}, note:null, posted:1, line:{pin:'flag',boat:'ball'},
   startsOnLine:true, finishesOnLine:true, unknown:['green']}}};
-await ask(); await load();
-C=await course();
-t.ok(C.marks.join()==='cb10,rum', 'what it does have is loaded', C.marks.join());
+await ask();
 S=await said();
-t.ok(/1 MISSING/.test(S.sub), 'and it is told, not left to be found at the mark', S.sub);
+/* Before the load, not after it: that is the moment it could still
+   change your mind. */
+t.ok(/1 MARK THIS BOAT HAS NOT GOT/.test(S.sub),
+     'it is told, not left to be found at the mark', S.sub);
+await load();
+C=await course();
+t.ok(C.marks.join()==='cb10,rum', 'and what it does have is loaded', C.marks.join());
 
 t.head('a mark the site thinks we have and we have not');
 /* The two lists are kept in step by hand - the site's HELM_MARKS and
@@ -138,16 +139,16 @@ t.ok(/1 MARK THIS BOAT HAS NOT GOT/.test(S.sub),
 await load();
 C=await course();
 t.ok(C.marks.join()==='rum,cb10', 'the two it has are loaded', C.marks.join());
-t.ok(/1 MISSING/.test((await said()).sub),
-     'and the missing one is still counted after the load', (await said()).sub);
 
 t.head('a course that does not start on the line');
 await clear();
 reply={status:200, body:{date:'2026-09-30', course:{
   marks:['rum','gosling'], side:{}, note:null, posted:1, line:{pin:'flag',boat:'ball'},
   startsOnLine:false, finishesOnLine:false, unknown:[]}}};
-await tap(CLUB); await load();
+await ask();
 S=await said();
-t.ok(/NOT OFF THE LINE/.test(S.sub), 'which this sheet cannot draw a start for', S.sub);
+t.ok(/IT DOES NOT START ON THE LINE/.test(S.sub),
+     'which this sheet cannot draw a start for, and says so before you take it',
+     S.sub);
 
 await t.done(b);

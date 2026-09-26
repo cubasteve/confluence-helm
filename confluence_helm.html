@@ -887,21 +887,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    are rounded, and the marks sit under it as tiles to tap into it. That
    wants more room than the other sheets get, so this one is 816 wide -
    which the round glass only allows near mid-height. Hence the fixed
-   580: the view is a known height, centred, and the marks are what give
+   height: the view is a known size, centred, and the marks are what give
    way when a five-mark course wraps the strip onto a second line. */
 #course-main{display:flex;flex-direction:column;align-items:center;gap:14px;width:816px}
 #course-add{display:flex;flex-direction:column;align-items:center;gap:14px;width:600px}
-.cv{display:flex;flex-direction:column;gap:14px;width:100%;height:580px}
+.cv{display:flex;flex-direction:column;gap:14px;width:100%;height:508px}
 .cv-hd{display:flex;align-items:center;justify-content:space-between;gap:16px;
   font-size:21px;font-weight:600;letter-spacing:.18em;color:var(--label);
   text-transform:uppercase;flex:none}
-/* What the club found, or why it found nothing. One line, ellipsised:
-   the club's note can be longer than the face is wide. */
-.cv-note{flex:none;font-size:17px;letter-spacing:.08em;color:var(--label);
-  text-transform:uppercase;text-align:center;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;width:100%}
-.cv-note.bad{color:var(--warn)}
-.cv-note:empty{display:none}
 /* the course itself, in the order it is rounded */
 .cv-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:none}
 .cv-chip{display:flex;align-items:center;gap:10px;height:72px;padding:0 8px 0 14px;
@@ -2435,19 +2428,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <circle cx="17" cy="17" r="2.5"/><path d="M8 16.5L16 7.5M18 8.5v6"/></svg><b>COURSE</b></button>
   </div>
   <!-- The course sheet: the course across the top in the order it is
-       rounded, the marks under it to tap into it. The heading carries the
-       count and the start time, so the sheet's own title is off for this
-       view - COURSE said twice, once in each type size, was one too
-       many. -->
+       rounded, the marks under it to tap into it, and everything about
+       the evening that is not the course on one row under those. COURSE
+       over the lot, where RACE TRACK and LIBRARY sit on the sheets
+       either side of it. -->
   <div id="t-course">
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
-        <div class="cv-hd"><span id="cv-count">Course</span></div>
         <div class="cv-strip" id="cv-strip"></div>
         <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
         <div class="cv-grid" id="course-list"></div>
-        <div class="cv-note" id="cv-say"></div>
         <!-- The evening's four settings, read at a glance and changed in
              the menu three of them open. The club is one of them now,
              keeping its own colour: see --club. -->
@@ -8724,10 +8715,10 @@ const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').
    The course reads across the top as chips, in the order it is rounded;
    every mark this boat knows sits under it as a tile. Tap a tile to put
    that mark on the end of the course and tap it again to take it out;
-   tap a chip to flip which side that mark is left on. The heading
-   carries the count and the start time, and the two things about a
-   start that are not the time - which procedure, and which line - sit
-   under the marks.
+   tap a chip to flip which side that mark is left on. Everything about
+   the evening that is not the course - the start time, the countdown,
+   the sequence, the line and the club - is the row of readings under
+   the marks.
 
    It was a list of rows, one to a mark, the course's order given as
    numbers down the left margin. Every mark was legible and the one thing
@@ -8800,16 +8791,7 @@ const ICO_SYNC='<svg viewBox="0 0 24 24">'
 
 function renderCourse(){
   const box=$('course-list'); if(!box) return;
-  /* The heading counts what the strip is showing, which while the club's
-     course is previewed there is the club's and not yours. */
-  const n=CLUB.step==='ready' ? CLUB.got.marks.length : COURSE.marks.length;
-  wText('cv-count', (CLUB.step==='ready'?'CLUB COURSE · ':'COURSE · ')
-        +(n ? n+' MARK'+(n===1?'':'S') : 'EMPTY'));
-
-  /* What the club had to say about it, if anything. */
   const c=CLUB, cn=c.got ? c.got.marks.length : 0;
-  $('cv-say').textContent=clubSay();
-  wCls('cv-say','bad', !!c.bad);
 
   /* The strip: the course - or, while there is one waiting, the club's
      in dashed outline, drawn in the place it would replace. What the
@@ -8872,12 +8854,11 @@ function renderCourse(){
      :                     'SYNC')+'</span>', '⌄');
   if(cvpOn()) pickPaint();
 }
-/* The sheet's title is what the sub-views are called. The course view's
-   own heading already says COURSE, so the title is off for it rather
-   than saying it twice in two type sizes. */
-const crsTitle=t=>{ const e=$('course-title');
-  e.textContent=t||''; e.style.display=t?'':'none'; };
-function openCourse(){ $('t-course').classList.add('on'); crsTitle(''); renderCourse(); }
+/* COURSE, over the sheet, the way RACE TRACK sits over the map and
+   LIBRARY over the races. The sub-views borrow it to say what they are
+   and hand it back. */
+const crsTitle=t=>{ $('course-title').textContent=t||'Course'; };
+function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse(); }
 
 /* ---- the course the committee posted -----------------------------------
    The club posts the evening's marks on the members' site by 5:30, the
@@ -8895,21 +8876,15 @@ function openCourse(){ $('t-course').classList.add('on'); crsTitle(''); renderCo
    course you are three marks into vanish is not something this sheet
    should be able to do by accident. */
 const CLUB_COURSE='https://lmsa.pages.dev/api/race/helm';
-let CLUB={step:'idle', got:null, say:'', bad:false};
-
-/* The line over the settings row: what came of the last sync. What it
-   FOUND is not in here - those are the ghost chips up in the strip,
-   which is where you can read the course it is offering, and the menu
-   under the CLUB readout is where you load it. */
-const clubSay=()=>CLUB.step==='ready' ? '' : (CLUB.say||'');
+let CLUB={step:'idle', got:null, say:''};
 
 async function clubFetch(){
-  CLUB={step:'busy', got:null, say:'', bad:false}; renderCourse();
+  CLUB={step:'busy', got:null, say:''}; renderCourse();
   let j=null;
   try{ const r=await fetchT(CLUB_COURSE, 9000); j=r.ok?await r.json():null; }
   catch(e){ j=null; }
 
-  const stop=say=>{ CLUB={step:'idle', got:null, say:say, bad:true}; renderCourse(); };
+  const stop=say=>{ CLUB={step:'idle', got:null, say:say}; renderCourse(); };
   if(!j) return stop('NO ANSWER · IS THERE WIFI?');
   if(!j.course) return stop('NOTHING POSTED FOR '+(j.date||'TODAY'));
 
@@ -8923,8 +8898,7 @@ async function clubFetch(){
   const marks=(g.marks||[]).filter(id=>markOf(id));
   const dropped=(g.marks||[]).filter(id=>!markOf(id));
   if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
-  CLUB={step:'ready', got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g},
-        say:'', bad:false};
+  CLUB={step:'ready', got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g}, say:''};
   renderCourse();
 }
 
@@ -8934,15 +8908,12 @@ function clubApply(){
   COURSE.side={};
   g.marks.forEach(id=>{ const s=g.side[id]; if(s==='P'||s==='S') COURSE.side[id]=s; });
   COURSE.next=0; courseSave(); courseReset();
-
-  /* What did not come across, said now rather than found out at the
-     mark. A course that does not start on the line is not one this
-     sheet's start and finish describe. */
-  const out=[], missing=(g.raw.unknown||[]).length + (g.dropped||[]).length;
-  if(missing) out.push(missing+' MISSING');
-  if(g.raw.startsOnLine===false) out.push('NOT OFF THE LINE');
-  CLUB={step:'idle', got:null, bad:out.length>0,
-        say:out.length?('LOADED · '+out.join(' · ')):'LOADED'};
+  /* Nothing is said about the load afterwards. What was wrong with the
+     course - a mark this boat has not got, a start that is not off the
+     line - was on the menu you loaded it from, which is the moment it
+     could still have changed your mind. A line under the marks saying
+     LOADED said only what the strip already showed. */
+  CLUB={step:'idle', got:null, say:''};
   renderCourse(); drawMap(shownTrack());
 }
 
@@ -8996,14 +8967,19 @@ function cvpLine(){
       +'<b>PINGED</b><s>'+(pinged ? 'FROM P AND B ON THE RACE BOX'
           : 'PING BOTH ENDS WITH P AND B ON THE RACE BOX')+'</s></button>';
 }
+/* The whole of what the club has to say, and it is the only place any of
+   it is said: a line under the marks saying LOADED after the fact told
+   nobody anything they could not see in the strip.
+   What is in here is what you cannot: when it was posted, and what will
+   be wrong with the course if you take it. No prose about where to look
+   - the dashed chips in the strip are already the thing being looked
+   at - and no button to ask again, because tapping CLUB is asking. */
 function cvpClub(){
   const c=CLUB;
-  if(c.step==='busy') return '<div class="pknote">CHECKING THE CLUB SITE…</div>';
-  if(c.step!=='ready') return '<div class="pknote">'+esc(c.say||'TAP AGAIN TO ASK THE '
-    +'CLUB SITE FOR TONIGHT’S COURSE')+'</div>';
+  if(c.step==='busy') return '<div class="pknote">CHECKING…</div>';
+  if(c.step!=='ready') return '<div class="pknote">'+esc(c.say||'ASKING…')+'</div>';
   const g=c.got.raw||{}, out=[];
   if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
-  out.push('DASHED IN THE STRIP ABOVE, IN THE ORDER IT IS SAILED');
   const miss=(g.unknown||[]).length + (c.got.dropped||[]).length;
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
   if(g.startsOnLine===false) out.push('IT DOES NOT START ON THE LINE');
@@ -9012,11 +8988,9 @@ function cvpClub(){
 }
 function cvpFoot(){
   const c=CLUB;
-  if(cvpOn().kind!=='club') return '';
-  if(c.step==='ready') return '<button class="pkfoot club" data-load="1">LOAD '
+  if(cvpOn().kind!=='club' || c.step!=='ready') return '';
+  return '<button class="pkfoot club" data-load="1">LOAD '
     +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')+'</button>';
-  if(c.step==='busy') return '';
-  return '<button class="pkfoot club" data-again="1">ASK THE CLUB</button>';
 }
 function cvpTap(t){
   const md=t.closest('[data-mode]');
@@ -9032,7 +9006,6 @@ function cvpTap(t){
     if(ln.dataset.line==='marks') pickClose();
     return; }
   if(t.closest('[data-load]')){ clubApply(); pickClose(); return; }
-  if(t.closest('[data-again]')){ clubFetch(); return; }
 }
 
 /* Tap the CLUB readout and it asks, with the menu open on the answer;
@@ -9118,7 +9091,7 @@ function gnOpen(){
   $('gn-msg').textContent=''; gnPaint();
 }
 function gnClose(){ GN=null; $('course-gun').style.display='none';
-  crsTitle('');
+  crsTitle();
   $('course-main').style.display=''; renderCourse(); }
 /* Digits and nothing else, five to a row. kbHtml's numeric layer carries
    the point, the minus and NSEW, which are there for a coordinate and
@@ -9304,7 +9277,7 @@ function mkOpen(id){
   $('mk-msg').textContent=''; mkPaint();
 }
 function mkClose(){ MK=null; $('course-add').style.display='none';
-  crsTitle('');
+  crsTitle();
   $('course-main').style.display=''; renderCourse(); }
 function mkPaint(){
   if(!MK) return;
