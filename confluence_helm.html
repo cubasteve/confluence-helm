@@ -494,6 +494,39 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .sheet.over{padding:84px 0 116px;
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 66px,
     #000 calc(100% - 88px),transparent 100%)}
+
+/* ---- what a box does when it has more in it than it can show --------
+   Two things, and never a scrollbar. The browser's own is a straight
+   grey rectangle laid down the side of a round instrument, which is the
+   one shape on the glass that belongs to nothing else here.
+   First, the box fades at the edge the content is crossing. The panel
+   sheet has done this since it outgrew the glass - see .sheet.over,
+   just above - and the argument there holds everywhere: on a circle a
+   hard cut at a chord just looks like the layout is wrong, and a row
+   sliced in half reads as a fault rather than as more list.
+   Second, the arc - see #arc, at the foot of the stylesheet. The fade
+   says THAT there is more; the arc says how much, and only while you
+   are moving. */
+.noscroll{scrollbar-width:none;-ms-overflow-style:none}
+.noscroll::-webkit-scrollbar{width:0;height:0}
+/* Only the edge with something behind it fades. A list sitting at the
+   top with its first row dimmed reads as a rendering fault, not as a
+   list: the fade has to MEAN there is more that way. .over-a is the
+   leading edge - top, or left on the row that scrolls sideways - and
+   .over-z the trailing one; at 0 the gradient's two stops meet and
+   there is no fade at all, which is how an edge switches off. */
+.cv-grid,.lib-list,.approw{--fa:0px; --fz:0px}
+.over-a{--fa:26px}
+.over-z{--fz:34px}
+.cv-grid.over,.lib-list.over{-webkit-mask-image:linear-gradient(to bottom,
+  transparent 0,#000 var(--fa),#000 calc(100% - var(--fz)),transparent 100%)}
+/* The dock's row of apps is the one that scrolls sideways, so its fade
+   runs the other way. It gets no arc: the rim is a vertical idea. */
+.approw{--fa:0px; --fz:0px}
+.approw.over-a{--fa:24px}
+.approw.over-z{--fz:24px}
+.approw.over{-webkit-mask-image:linear-gradient(to right,
+  transparent 0,#000 var(--fa),#000 calc(100% - var(--fz)),transparent 100%)}
 /* The two full-width rows keep the NARROW column. They sit at the top of
    the circle, where 880 px has its ends out in the black. */
 .senrow, .phone-row, #conn-sec, .sheet > .hint{grid-column:1 / -1;
@@ -1559,6 +1592,24 @@ a.lib-row{text-decoration:none;color:inherit}
    screen - panel, alerts, lock and all. It sat on auto until the pages
    and the panel were given z-indexes, at which point it silently ended
    up underneath both and the slider stopped doing anything at all. */
+/* --- the scroll arc ---
+   Where a scrollbar would be, if a round instrument had a side to lay
+   one down. It does not, so the indicator goes out to the rim, which is
+   already a curve, already the boundary of the thing, and used by
+   nothing else on the glass. It costs the list no pixels, it reads at a
+   glance from across the cockpit, and it belongs to this face rather
+   than to a document in a window.
+   z28: over the panel, the apps and the menu, under the screensaver and
+   everything after it. One overlay for the whole instrument - only one
+   box is ever being scrolled - so it is placed in stage coordinates
+   beside whichever box was last touched. */
+#arc{position:absolute;inset:0;width:100%;height:100%;z-index:28;
+  pointer-events:none;fill:none;opacity:0;transition:opacity .5s ease}
+#arc.on{opacity:1;transition:opacity .1s ease}
+#arc path{stroke-width:7;stroke-linecap:round}
+#arc .trk{stroke:var(--hairline)}
+#arc .thm{stroke:var(--accent)}
+
 #veil{position:absolute;inset:0;background:#000;opacity:0;
   pointer-events:none;transition:opacity .2s;z-index:90}
 
@@ -2089,7 +2140,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 <div id="apps">
   <div id="apps-dock">
     <div class="grab"></div>
-    <div class="approw" id="app-row"></div>
+    <div class="approw noscroll" id="app-row"></div>
     <div id="apps-empty" style="display:none">Nothing installed</div>
   </div>
 </div>
@@ -2441,7 +2492,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <div class="cv">
         <div class="cv-strip" id="cv-strip"></div>
         <div class="cv-hd"><span>Marks</span><span id="cv-hint">Tap to add</span></div>
-        <div class="cv-grid" id="course-list"></div>
+        <div class="cv-grid noscroll" id="course-list"></div>
         <!-- The evening's four settings, read at a glance and changed in
              the menu three of them open. The club is one of them now,
              keeping its own colour: see --club. -->
@@ -2512,7 +2563,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
-    <div class="lib-list" id="lib-list"></div>
+    <div class="lib-list noscroll" id="lib-list"></div>
     <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
   </div>
 
@@ -2533,6 +2584,11 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      is actually blowing, at a rate set by its actual speed. So the
      motion is data - a glance tells you the breeze filled in even if
      you never read a number. One big value cycles underneath. -->
+<!-- The scroll arc. Empty until something is scrolled, and drawn in
+     stage coordinates beside whatever that is - see rimDraw(). -->
+<svg id="arc" viewBox="0 0 1080 1080" aria-hidden="true">
+  <path class="trk" id="arc-t"/><path class="thm" id="arc-h"/></svg>
+
 <div id="saver">
   <canvas id="ss-cv"></canvas>
   <div class="ss-mid">
@@ -7838,15 +7894,76 @@ $('pick-veil').addEventListener('click',e=>{
   if(under) under.dispatchEvent(new MouseEvent('click',
       {bubbles:true, clientX:e.clientX, clientY:e.clientY}));
 });
-/* The fades and the room for them are only worth having when there is
-   something under them. Re-asked whenever the panel opens, because what
-   is in it changes: the sounder row and the radios both appear only
-   once netd has answered. */
-function sheetFit(){
-  const el=$('p-sheet');
-  el.classList.remove('over');
-  if(el.scrollHeight>el.clientHeight+1) el.classList.add('over');
+/* ---- what a box that scrolls looks like -------------------------------
+   The fades and the room for them are only worth having when there is
+   something under them. Re-asked whenever the box is filled or opened,
+   because what is in it changes: on the panel the sounder row and the
+   radios both appear only once netd has answered, and the marks grid
+   grows a row every time a mark is added. */
+function scrollFit(el){
+  if(!el) return;
+  const vy=el.scrollHeight>el.clientHeight+1, vx=el.scrollWidth>el.clientWidth+1;
+  el.classList.toggle('over', vy||vx);
+  /* Which edge has something behind it. One axis: nothing here scrolls
+     both ways, so whichever one overflows is the one that is asked. */
+  const at   = vy ? el.scrollTop : el.scrollLeft;
+  const room = vy ? el.scrollHeight-el.clientHeight
+                  : el.scrollWidth -el.clientWidth;
+  el.classList.toggle('over-a', (vy||vx) && at>1);
+  el.classList.toggle('over-z', (vy||vx) && at<room-1);
 }
+function sheetFit(){ scrollFit($('p-sheet')); setTimeout(()=>rimDraw($('p-sheet')),60); }
+
+/* The arc. A round face has no side to lay a scrollbar down, so the
+   indicator goes out to the rim: it spans exactly the rows the box is
+   showing a window onto, and the accent length inside it is that
+   window. Both are worked out in stage coordinates, which is why one
+   overlay serves every scroller on the glass - only one thing is ever
+   being scrolled, and the arc simply appears beside it.
+   It is up only while you are moving, and for a beat after. Permanent
+   it would be furniture on a face that has room for none; and when it
+   is down the box's own faded edge is still saying there is more. */
+const RIM_R=505, RIM_C=540, RIM_MIN=5;   /* degrees: a thumb you can see */
+let rimOff=null;
+/* A y on the glass, in stage pixels, to the angle on the rim beside it.
+   asin lands in -90..90, which is the right half of the circle - the
+   half a right-handed helm is not holding a tiller across. */
+const rimAng=y=>Math.asin(Math.max(-1,Math.min(1,(y-RIM_C)/RIM_R)))*180/Math.PI;
+const rimPath=(a,b)=>{
+  const P=d=>[(RIM_C+RIM_R*Math.cos(d*Math.PI/180)).toFixed(1),
+              (RIM_C+RIM_R*Math.sin(d*Math.PI/180)).toFixed(1)];
+  const [x0,y0]=P(a), [x1,y1]=P(b);
+  return `M${x0} ${y0}A${RIM_R} ${RIM_R} 0 0 1 ${x1} ${y1}`;
+};
+function rimDraw(el){
+  const svg=$('arc'); if(!svg) return;
+  /* Nothing to say about a box that fits, or one that is not on screen:
+     a hidden element measures 0 and would draw a point at 9 o'clock. */
+  if(!el || !el.clientHeight || el.scrollHeight<=el.clientHeight+1){
+    svg.classList.remove('on'); return; }
+  const st=$('stage').getBoundingClientRect(), r=el.getBoundingClientRect();
+  const a0=rimAng(r.top-st.top), a1=rimAng(r.bottom-st.top), span=a1-a0;
+  let t0=a0+span*(el.scrollTop/el.scrollHeight),
+      t1=a0+span*((el.scrollTop+el.clientHeight)/el.scrollHeight);
+  /* A list long enough and the window in it is a dot. Hold the thumb to
+     a length that is still an arc, and keep it inside the track. */
+  if(t1-t0<RIM_MIN){ const m=(t0+t1)/2;
+    t0=Math.max(a0, Math.min(m-RIM_MIN/2, a1-RIM_MIN)); t1=t0+RIM_MIN; }
+  wAttr('arc-t','d',rimPath(a0,a1));
+  wAttr('arc-h','d',rimPath(t0,t1));
+  svg.classList.add('on');
+  clearTimeout(rimOff);
+  rimOff=setTimeout(()=>$('arc').classList.remove('on'), 900);
+}
+/* Wire a box up: it fades at its edges and it draws the arc. passive,
+   because none of this touches the scroll it is describing. */
+function rimWatch(el,arc=true){
+  if(!el) return;
+  el.addEventListener('scroll',()=>{ scrollFit(el); if(arc) rimDraw(el); },
+                      {passive:true});
+}
+['p-sheet','course-list','lib-list'].forEach(id=>rimWatch($(id)));
+rimWatch($('app-row'), false);        /* sideways, so it fades but has no arc */
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
@@ -8874,6 +8991,7 @@ function renderCourse(){
       +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
+  scrollFit(box);
 
   /* The five settings, read at a glance. The corner glyph says what kind
      of control it is: a chevron opens a menu, a plus steps, and the
@@ -8904,7 +9022,10 @@ function renderCourse(){
    LIBRARY over the races. The sub-views borrow it to say what they are
    and hand it back. */
 const crsTitle=t=>{ $('course-title').textContent=t||'Course'; };
-function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse(); }
+/* The arc on the way in: a box that scrolls says so once as it opens,
+   the way the fade at its edge does, and then gets out of the way. */
+function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse();
+  setTimeout(()=>rimDraw($('course-list')),60); }
 
 /* ---- the course the committee posted -----------------------------------
    The club posts the evening's marks on the members' site by 5:30, the
@@ -9505,6 +9626,7 @@ function renderLib(){
          </div>`).join('');
     }
     box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
+    scrollFit(box); rimDraw(box);
   });
 }
 
@@ -11673,6 +11795,7 @@ function drawApps(){
        reading the label rather than looking at it would get. */
     +'<span>'+a.name.toUpperCase().replace(/ /g,'\n')+'</span></button>')
     .join('');
+  scrollFit(row);                 /* more apps than the 600 px row holds */
   row.querySelectorAll('[data-app]').forEach(b=>
     b.addEventListener('click',()=>openApp(APPS[+b.dataset.app])));
 }

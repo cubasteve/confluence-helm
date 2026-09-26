@@ -628,6 +628,47 @@ so a panel that fits is centred exactly as before, and the edges fade
 only when there is something under them: on a round panel a hard cut at
 a chord just looks like the layout is broken.
 
+### What a box that scrolls looks like
+
+Nothing on the glass shows the browser's own scrollbar. A straight grey
+rectangle laid down one side is the one shape here that belongs to
+nothing else on a round face, and it is furniture that a 1080 circle has
+no room for. Two things stand in for it, and both are shared by every
+scroller in the app — the settings sheet, the marks grid on the course
+sheet, the race library, and the dock's sideways row of apps.
+
+**The box fades at the edge the content is crossing.** The panel sheet
+has done this since it outgrew the glass, for the reason above: a hard
+cut at a chord reads as a broken layout, and a row sliced in half reads
+as a fault rather than as more list. Only the edge with something behind
+it fades — `.over-a` for the leading edge, `.over-z` for the trailing
+one, both set by `scrollFit()` off `scrollTop` — because a list sitting
+at the top with its first row dimmed reads as a rendering bug. At zero
+the gradient's two stops meet and there is no fade at all, which is how
+an edge switches off.
+
+![The marks grid mid-scroll: both edges faded, the arc on the rim](img/scroll-arc.png)
+
+**And the rim carries an arc** while you are moving. `#arc` is one SVG
+overlay for the whole instrument at z28, drawn in stage coordinates:
+`rimAng()` maps the box's top and bottom onto the circle at r=505, the
+track spans exactly the rows the box is a window onto, and the accent
+length inside it is that window. One overlay serves every scroller
+because only one thing is ever being scrolled — the arc simply appears
+beside whichever box it is.
+
+It is up for 900 ms after the last scroll event and then fades, and it
+flashes once when a sheet opens with more in it than it can show. Up
+permanently it would be furniture again; down, the box's own faded edge
+is still saying there is more. The right half of the circle is where it
+lives, because `Math.asin` lands in −90…90 and that is the side a helm
+is not reaching across.
+
+The dock's row scrolls sideways, so its fade runs the other way and it
+gets no arc: the rim is a vertical idea.
+
+### Scrolling against the gesture judge
+
 The scroller shares its glass with the gesture judge, which is the
 awkward part — a swipe up closes the panel, and a swipe up is also how
 you scroll down. So it claims the drag **lazily**: on the first movement,
