@@ -11,6 +11,7 @@ const bar=sel=>p.evaluate(s=>{ const el=document.querySelector(s);
   return {gutter:el.offsetWidth-el.clientWidth,
           hidden:getComputedStyle(el).scrollbarWidth==='none'}; }, sel);
 const arc=()=>p.evaluate(()=>({
+  lit:$('arc').classList.contains('lit'),
   on:$('arc').classList.contains('on'),
   trk:$('arc-t').getAttribute('d'), thm:$('arc-h').getAttribute('d')}));
 /* The two ends of a path, as the numbers actually written into it. */
@@ -44,7 +45,7 @@ let G=await grid();
 t.ok(!G.over, 'eleven marks fit, so no fade', G.scroll+' in '+G.client);
 t.ok(!G.masked, 'and nothing is masked');
 await scrollTo(0);
-t.ok(!(await arc()).on, 'and there is no arc to draw');
+t.ok(!(await arc()).lit, 'and there is no arc to draw');
 
 t.head('a box that does not fit fades at the edge the content crosses');
 await p.evaluate(()=>{
@@ -56,6 +57,10 @@ await p.waitForTimeout(300);
 G=await grid();
 t.ok(G.over, 'seventeen do not, so the fade goes on', G.scroll+' in '+G.client);
 t.ok(G.masked, 'and it is a gradient, not a cut');
+t.ok((await arc()).lit, 'and the track is up BEFORE anything is touched - '
+     +'that is what says the list goes on');
+t.ok(!(await arc()).on, 'with no thumb yet: where you are is a question '
+     +'you ask by scrolling');
 const edges=()=>p.evaluate(()=>{ const c=$('course-list').classList;
   return {a:c.contains('over-a'), z:c.contains('over-z')}; });
 let E=await edges();
@@ -106,10 +111,17 @@ t.ok(L.y1-L.y0>6, 'not a dot', String((L.y1-L.y0).toFixed(1)));
 t.ok(L.y0>=LT.y0-0.5 && L.y1<=LT.y1+0.5, 'and still inside the track',
      [L.y0,L.y1].join()+' in '+[LT.y0,LT.y1].join());
 
-t.head('it goes away when you stop');
-t.ok((await arc()).on, 'up while moving');
+t.head('the thumb goes away when you stop, and the track does not');
+t.ok((await arc()).on, 'the thumb is up while moving');
 await p.waitForTimeout(1200);
-t.ok(!(await arc()).on, 'and down a beat after the last scroll');
-t.ok((await grid()).over, 'the fade stays - it is what says there is more');
+let A2=await arc();
+t.ok(!A2.on, 'and down a beat after the last scroll');
+t.ok(A2.lit, 'but the track stays lit while the list is still longer than the box');
+t.ok((await grid()).over, 'and so does the fade');
+
+t.head('and the whole thing goes down with the sheet');
+await p.evaluate(()=>closeLib());
+await p.waitForTimeout(250);
+t.ok(!(await arc()).lit, 'nothing is being scrolled, so there is no arc');
 
 await t.done(b);

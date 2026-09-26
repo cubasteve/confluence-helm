@@ -1604,11 +1604,20 @@ a.lib-row{text-decoration:none;color:inherit}
    box is ever being scrolled - so it is placed in stage coordinates
    beside whichever box was last touched. */
 #arc{position:absolute;inset:0;width:100%;height:100%;z-index:28;
-  pointer-events:none;fill:none;opacity:0;transition:opacity .5s ease}
-#arc.on{opacity:1;transition:opacity .1s ease}
+  pointer-events:none;fill:none;opacity:0;transition:opacity .35s ease}
+/* Lit the whole time the box in front of you has more in it than it can
+   show. A fade that only appears once you have already scrolled answers
+   a question you had to guess at to ask: the track has to be up BEFORE
+   you touch anything, or nothing on the face says the list goes on. It
+   is a hairline at 45% - present, and no louder than the rule under a
+   heading. */
+#arc.lit{opacity:1}
 #arc path{stroke-width:7;stroke-linecap:round}
-#arc .trk{stroke:var(--hairline)}
-#arc .thm{stroke:var(--accent)}
+#arc .trk{stroke:var(--hairline);opacity:.45}
+/* The thumb is the part that is only worth having while you are moving:
+   where you are in the list is a question you ask by scrolling. */
+#arc .thm{stroke:var(--accent);opacity:0;transition:opacity .45s ease}
+#arc.on .thm{opacity:1;transition:opacity .1s ease}
 
 #veil{position:absolute;inset:0;background:#000;opacity:0;
   pointer-events:none;transition:opacity .2s;z-index:90}
@@ -7912,7 +7921,8 @@ function scrollFit(el){
   el.classList.toggle('over-a', (vy||vx) && at>1);
   el.classList.toggle('over-z', (vy||vx) && at<room-1);
 }
-function sheetFit(){ scrollFit($('p-sheet')); setTimeout(()=>rimDraw($('p-sheet')),60); }
+function sheetFit(){ scrollFit($('p-sheet'));
+  setTimeout(()=>rimDraw($('p-sheet')),60); }
 
 /* The arc. A round face has no side to lay a scrollbar down, so the
    indicator goes out to the rim: it spans exactly the rows the box is
@@ -7935,12 +7945,22 @@ const rimPath=(a,b)=>{
   const [x0,y0]=P(a), [x1,y1]=P(b);
   return `M${x0} ${y0}A${RIM_R} ${RIM_R} 0 0 1 ${x1} ${y1}`;
 };
-function rimDraw(el){
+let RIM=null;                     /* the box the arc is describing */
+/* moving: this is a scroll, so bring the thumb up too. Without it the
+   call is just 'this box is on screen and it has more in it', which is
+   what an open or a re-render is saying. */
+function rimDraw(el, moving){
   const svg=$('arc'); if(!svg) return;
   /* Nothing to say about a box that fits, or one that is not on screen:
-     a hidden element measures 0 and would draw a point at 9 o'clock. */
-  if(!el || !el.clientHeight || el.scrollHeight<=el.clientHeight+1){
-    svg.classList.remove('on'); return; }
+     a hidden element measures 0 and would draw a point at 9 o'clock.
+     Clearing is only for the box that owns the arc - a re-render of
+     something behind a sheet must not take down the sheet's own. */
+  if(!el || !el.clientHeight || !el.offsetParent
+       || el.scrollHeight<=el.clientHeight+1){
+    if(!el || RIM===el || !RIM || !RIM.offsetParent){
+      RIM=null; svg.classList.remove('lit','on'); }
+    return; }
+  RIM=el;
   const st=$('stage').getBoundingClientRect(), r=el.getBoundingClientRect();
   const a0=rimAng(r.top-st.top), a1=rimAng(r.bottom-st.top), span=a1-a0;
   let t0=a0+span*(el.scrollTop/el.scrollHeight),
@@ -7951,6 +7971,8 @@ function rimDraw(el){
     t0=Math.max(a0, Math.min(m-RIM_MIN/2, a1-RIM_MIN)); t1=t0+RIM_MIN; }
   wAttr('arc-t','d',rimPath(a0,a1));
   wAttr('arc-h','d',rimPath(t0,t1));
+  svg.classList.add('lit');
+  if(!moving) return;
   svg.classList.add('on');
   clearTimeout(rimOff);
   rimOff=setTimeout(()=>$('arc').classList.remove('on'), 900);
@@ -7959,7 +7981,7 @@ function rimDraw(el){
    because none of this touches the scroll it is describing. */
 function rimWatch(el,arc=true){
   if(!el) return;
-  el.addEventListener('scroll',()=>{ scrollFit(el); if(arc) rimDraw(el); },
+  el.addEventListener('scroll',()=>{ scrollFit(el); if(arc) rimDraw(el,true); },
                       {passive:true});
 }
 ['p-sheet','course-list','lib-list'].forEach(id=>rimWatch($(id)));
@@ -8865,7 +8887,8 @@ $('qr-box').addEventListener('click',e=>{
 });
 $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
-const closeLib=()=>{ hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
+const closeLib=()=>{ rimDraw(null);
+  hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
   courseEdit=false; $('course-edit').classList.remove('on');
   pickClose();
   if(MK) mkClose(); if(GN) gnClose(); };
@@ -8991,7 +9014,7 @@ function renderCourse(){
       +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
       +badge+(courseEdit?'<div class="grip">≡</div>':'')+'</button>'; };
   box.innerHTML=MARKS.map(tile).join('');
-  scrollFit(box);
+  scrollFit(box); rimDraw(box);
 
   /* The five settings, read at a glance. The corner glyph says what kind
      of control it is: a chevron opens a menu, a plus steps, and the
@@ -9026,6 +9049,8 @@ const crsTitle=t=>{ $('course-title').textContent=t||'Course'; };
    the way the fade at its edge does, and then gets out of the way. */
 function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse();
   setTimeout(()=>rimDraw($('course-list')),60); }
+/* Both sheets live in the same overlay, so one close serves both - and
+   the arc, which belongs to whichever of them was up. */
 
 /* ---- the course the committee posted -----------------------------------
    The club posts the evening's marks on the members' site by 5:30, the
