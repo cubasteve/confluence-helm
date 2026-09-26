@@ -897,11 +897,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   text-transform:uppercase;flex:none}
 /* the course itself, in the order it is rounded */
 .cv-strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:none}
-.cv-chip{display:flex;align-items:center;gap:10px;height:72px;padding:0 8px 0 14px;
+.cv-chip{display:flex;align-items:center;gap:10px;height:72px;padding:0 8px;
   border-radius:36px;background:var(--chip);font-size:23px;font-weight:600;
   letter-spacing:.01em;color:var(--ink)}
-.cv-chip i{font-style:normal;width:30px;height:30px;border-radius:15px;flex:none;
-  background:var(--accent);color:#fff;font-size:17px;font-weight:600;
+/* The number is the rounding, and it is also the way out of the course:
+   a tap on it drops that leg. So it is a finger wide, not a label wide -
+   44 is 17 on the phone, which is small but is the phone. */
+.cv-chip i{font-style:normal;width:44px;height:44px;border-radius:22px;flex:none;
+  background:var(--accent);color:#fff;font-size:19px;font-weight:600;
   display:flex;align-items:center;justify-content:center}
 .cv-chip.next{box-shadow:inset 0 0 0 3px var(--accent)}
 /* Which side to leave it on, on the chip: one tap flips it, and the
@@ -3576,11 +3579,40 @@ function lineData(){
    the RACE box advances it
    by hand for a mark the GPS never saw you get near. A new countdown
    starts the course over. */
-let COURSE = JSON.parse(localStorage.getItem('course')||'null') || {marks:[], next:0};
+let COURSE = JSON.parse(localStorage.getItem('course')||'null') || {marks:[], next:0, side:[]};
 const courseSave=()=>localStorage.setItem('course',JSON.stringify(COURSE));
-/* Which side to leave each mark, by id: 'P' or 'S', port unless set.
+/* Which side to leave each rounding: 'P' or 'S', port unless set.
+   Keyed by the rounding's PLACE in the course and not by the mark's id,
+   because the same buoy can be rounded twice in one race and the two
+   roundings need not be the same way round - out to port, back to
+   starboard is a normal shape. The array runs alongside COURSE.marks
+   and is spliced with it, so the two never drift apart.
    Lives in COURSE so it is saved and cleared with the course. */
-const markSide=id=>(COURSE.side&&COURSE.side[id])||'P';
+const markSide=i=>((COURSE.side&&COURSE.side[i])==='S')?'S':'P';
+/* The sides as an array exactly as long as the course, made so if it is
+   not. Everything that writes a side goes through here first, because
+   the array can arrive short or not be an array at all: sides used to
+   be an object keyed by mark id, and a course saved before that change
+   is still in storage on the Pi. An old one lays down along the course
+   it belongs to, which is all it can say - one side per mark. */
+function sides(){
+  if(!Array.isArray(COURSE.side)){ const o=COURSE.side||{};
+    COURSE.side=COURSE.marks.map(id=>o[id]==='S'?'S':'P'); }
+  while(COURSE.side.length<COURSE.marks.length) COURSE.side.push('P');
+  COURSE.side.length=COURSE.marks.length;
+  return COURSE.side;
+}
+sides();
+/* Take one rounding out of the course: the mark, its side, and the
+   pointer to the next mark if the course just got shorter than it, or
+   lost a leg ahead of it. The side goes first - it is trimmed to the
+   length of the marks, so after the splice it would lose the last. */
+function courseDrop(i){
+  sides().splice(i,1);
+  COURSE.marks.splice(i,1);
+  if(COURSE.next>i) COURSE.next--;
+  if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length;
+}
 /* Rounding, without trusting the mark's position to the metre.
    This used to be absolute: inside 40 m of the recorded position, then
    back outside 60. That is a bet that loses. Club coordinates come to a
@@ -3700,7 +3732,7 @@ const RP_STATE={
    set, so both keep the plain racing green. That does mean a green
    pill means starboard OR no course, which is only ambiguous on a rig
    that never sets one - where it has always just meant racing. */
-const sideGrad = id => markSide(id)==='P' ? 'rp-g-port' : 'rp-g-stbd';
+const sideGrad = i => markSide(i)==='P' ? 'rp-g-port' : 'rp-g-stbd';
 function raceStatus(){
   /* An armed gun is worth knowing about from the face. The pill is the
      one thing always on it, and RACE is a word it can spare. */
@@ -3715,7 +3747,7 @@ function raceStatus(){
      are coloured by the side, which is the question the whole leg is
      sailed around. */
   return Object.assign({}, markNear ? RP_STATE.mark : RP_STATE.racing,
-                       {g:sideGrad(n.id)},
+                       {g:sideGrad(COURSE.next)},
                        markNear ? {txt:n.hdr} : {});
 }
 let rpTxtW=null;                              /* the last word measured */
@@ -3774,7 +3806,7 @@ function paintRace(met){
     const i=COURSE.next, N=COURSE.marks.length;
     if(n.id==='finish'){ wText('rp-r2-l', N?'LAST LEG':'NO COURSE SET'); wText('rp-r2','FINISH LINE'); }
     else { const after=i+1<N ? markOf(COURSE.marks[i+1]) : null;
-      wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N+' · TO '+(markSide(n.id)==='P'?'PORT':'STBD'));
+      wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N+' · TO '+(markSide(i)==='P'?'PORT':'STBD'));
       wText('rp-r2', n.hdr+(after ? ' · THEN '+after.hdr : ' · THEN FINISH')); }
   }
 }
@@ -8188,15 +8220,24 @@ function drawMap(pts){
   out+=`<line class="t-line" x1="${projX(v,pe).toFixed(1)}" y1="${projY(v,pe).toFixed(1)}"
          x2="${projX(v,be).toFixed(1)}" y2="${projY(v,be).toFixed(1)}"
          stroke="var(--ink)" stroke-width="4" stroke-dasharray="8 6" stroke-opacity=".7"/>`;
-  COURSE.marks.forEach((id,i)=>{ const m=markOf(id); if(!m) return;
+  /* One circle per BUOY, not per rounding: round the same mark twice
+     and the second circle would sit exactly on top of the first, hiding
+     it. So a repeated mark carries both its numbers - 1,3 - and shows
+     the side of the rounding still to come. */
+  const at={};
+  COURSE.marks.forEach((id,i)=>{ if(markOf(id)) (at[id]=at[id]||[]).push(i); });
+  Object.keys(at).forEach(id=>{ const m=markOf(id), ns=at[id];
     const q=merc(m.lat,m.lon), x=projX(v,q), y=projY(v,q);
-    const on=i===COURSE.next;
-    out+=`<circle class="t-mark" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14"
+    const on=ns.indexOf(COURSE.next)>=0, many=ns.length>1;
+    let j=ns.find(i=>i>=COURSE.next); if(j===undefined) j=ns[ns.length-1];
+    const sd=markSide(j);
+    out+=`<circle class="t-mark" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${many?19:14}"
            fill="${on?'var(--accent)':'var(--panel)'}" stroke="var(--accent)" stroke-width="4"/>
           <text x="${x.toFixed(1)}" y="${(y+1).toFixed(1)}" text-anchor="middle"
-           font-size="17" font-weight="700" fill="${on?'#fff':'var(--accent)'}">${i+1}</text>
-          <text x="${(x+19).toFixed(1)}" y="${(y-13).toFixed(1)}" text-anchor="middle"
-           font-size="15" font-weight="700" fill="${markSide(id)==='P'?'var(--port)':'var(--stbd)'}">${markSide(id)}</text>`; });
+           font-size="${many?15:17}" font-weight="700"
+           fill="${on?'#fff':'var(--accent)'}">${ns.map(i=>i+1).join(',')}</text>
+          <text x="${(x+(many?24:19)).toFixed(1)}" y="${(y-(many?18:13)).toFixed(1)}" text-anchor="middle"
+           font-size="15" font-weight="700" fill="${sd==='P'?'var(--port)':'var(--stbd)'}">${sd}</text>`; });
   if(trackLive())                                   /* pulsing head while live */
     out+=`<circle cx="${X[L].toFixed(1)}" cy="${Y[L].toFixed(1)}" r="24"
            fill="none" stroke="var(--port)" stroke-width="3" stroke-opacity=".55"/>`;
@@ -8802,9 +8843,9 @@ function renderCourse(){
   const chip=(id,i)=>{
     const hdr=(markOf(id)||{hdr:id.toUpperCase()}).hdr;
     if(ghost) return '<div class="cv-chip ghost"><i>'+(i+1)+'</i>'+esc(hdr)+'</div>';
-    const sd=markSide(id);
-    return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+id+'">'
-      +'<i>'+(i+1)+'</i>'+esc(hdr)
+    const sd=markSide(i);
+    return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+i+'">'
+      +'<i class="no">'+(i+1)+'</i>'+esc(hdr)
       +'<span class="sd'+(sd==='S'?' s':'')+'">'+sd+'</span></div>'; };
   $('cv-strip').innerHTML = ids.length
     ? ids.map(chip).join('<span class="cv-arrow">›</span>')
@@ -8814,15 +8855,20 @@ function renderCourse(){
   wText('cv-hint', courseEdit ? 'TAP TO CORRECT · DRAG TO REORDER' : 'TAP TO ADD');
   wCls('course-list','edit', courseEdit);
   const tile=m=>{
-    const i=COURSE.marks.indexOf(m.id), moved=isMoved(m.id);
+    /* Every place this mark holds in the course, not just the first -
+       tap it twice and it is rounded twice, and the tile says 1,3. */
+    const at=[]; COURSE.marks.forEach((id,k)=>{ if(id===m.id) at.push(k); });
+    const moved=isMoved(m.id);
     const sub = courseEdit ? posDM(m)
-              : i>=0      ? 'IN COURSE · '+(i+1)+(moved?' · CORRECTED':'')
+              : at.length ? 'IN COURSE · '+at.map(k=>k+1).join(',')
+                            +(moved?' · CORRECTED':'')
               : moved     ? 'CORRECTED'
               :             'TAP TO ADD';
     const badge = !courseEdit ? ''
       : isUserMark(m.id) ? '<div class="del">✕</div>'
       : moved            ? '<div class="del undo">↺</div>' : '';
-    return '<button class="cv-tile'+(i>=0?' in':'')+(i===COURSE.next?' next':'')
+    return '<button class="cv-tile'+(at.length?' in':'')
+      +(at.indexOf(COURSE.next)>=0?' next':'')
       +'" data-mark="'+m.id+'">'+buoySvg(m)
       +'<div class="tx"><b>'+esc(m.hdr)+'</b>'
       +'<s'+(moved?' class="moved"':'')+'>'+esc(sub)+'</s></div>'
@@ -8905,8 +8951,7 @@ async function clubFetch(){
 function clubApply(){
   const g=CLUB.got; if(!g) return;
   COURSE.marks=g.marks.slice();
-  COURSE.side={};
-  g.marks.forEach(id=>{ const s=g.side[id]; if(s==='P'||s==='S') COURSE.side[id]=s; });
+  COURSE.side=g.marks.map(id=>g.side[id]==='S'?'S':'P');
   COURSE.next=0; courseSave(); courseReset();
   /* Nothing is said about the load afterwards. What was wrong with the
      course - a mark this boat has not got, a start that is not off the
@@ -9158,11 +9203,14 @@ $('course-list').addEventListener('click',e=>{
      standing at the buoy knows better. What that writes is an override -
      see MARK_MOVES - so the book is still there to go back to. */
   if(courseEdit){ mkOpen(id); return; }
-  const i=COURSE.marks.indexOf(id);
-  if(i>=0){ COURSE.marks.splice(i,1);
-            if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length;
-            if(COURSE.side) delete COURSE.side[id]; }
-  else COURSE.marks.push(id);
+  /* A tap ALWAYS adds a rounding, and never takes one away. This used
+     to toggle, which read well until the day the course wanted the same
+     buoy twice: the second tap deleted the first rounding instead of
+     making a second, and there was no way at all to sail a triangle
+     twice round. Taking one out lives on its chip in the strip now,
+     where the thing being removed is the one you are pointing at -
+     which a tile, standing for every rounding of that mark, is not. */
+  COURSE.marks.push(id); sides();
   courseSave(); renderCourse(); drawMap(shownTrack()); });
 
 /* Everything on the sheet that is not a mark: the strip, the club, the
@@ -9173,12 +9221,17 @@ $('course-main').addEventListener('click',e=>{
   /* Anything else on the sheet is an answer of 'not that' to an open
      menu, the same as the veil. */
   if(cvpOn() && !e.target.closest('.cvr')) pickClose();
-  /* A chip carries one mark's side. One tap flips it: two buttons per
-     chip would have made the strip half again as long, and P or S is a
-     choice between exactly two things. */
+  /* A chip is one rounding. Its number takes that rounding out of the
+     course; anywhere else on it flips the side to leave it. Two targets
+     and no third button: P or S is a choice between exactly two things,
+     so the whole chip can carry it, and the number - which is what the
+     rounding IS - is the one thing you would point at to say 'not that
+     one'. Both are by place, so removing the second rounding of a mark
+     leaves the first alone. */
   const chip=e.target.closest('.cv-chip[data-chip]');
-  if(chip){ const id=chip.dataset.chip;
-    COURSE.side=COURSE.side||{}; COURSE.side[id]=markSide(id)==='P'?'S':'P';
+  if(chip){ const i=+chip.dataset.chip;
+    if(e.target.closest('.no')) courseDrop(i);
+    else sides()[i]=markSide(i)==='P'?'S':'P';
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
   /* The settings row. Three open a menu, the countdown steps, and the
      start time opens the pad that types it. */
@@ -9345,16 +9398,15 @@ function mkSave(){
   const id='u'+Date.now().toString(36);
   const m={id, name, hdr:name.slice(0,8).trim(), buoy:MK.buoy, lat, lon};
   USER_MARKS.push(m); marksSave(); MARKS.push(m);
-  COURSE.marks.push(id); courseSave();
-  mkClose(); drawMap(shownTrack());
+  COURSE.marks.push(id); sides();
+  courseSave(); mkClose(); drawMap(shownTrack());
 }
 function markDelete(id){
   if(!isUserMark(id)) return;
   USER_MARKS=USER_MARKS.filter(m=>m.id!==id); marksSave();
   const k=MARKS.findIndex(m=>m.id===id); if(k>=0) MARKS.splice(k,1);
-  const i=COURSE.marks.indexOf(id);
-  if(i>=0){ COURSE.marks.splice(i,1); if(COURSE.next>COURSE.marks.length) COURSE.next=COURSE.marks.length; }
-  if(COURSE.side) delete COURSE.side[id];
+  /* every rounding of it, from the back so the places hold still */
+  for(let i=COURSE.marks.length-1;i>=0;i--) if(COURSE.marks[i]===id) courseDrop(i);
   courseSave(); renderCourse(); drawMap(shownTrack());
 }
 $('course-add').addEventListener('click',e=>{
@@ -9392,7 +9444,7 @@ $('course-add-btn').addEventListener('click',()=>mkOpen());
 $('mk-here').addEventListener('click',mkHere);
 $('mk-save').addEventListener('click',mkSave);
 $('mk-cancel').addEventListener('click',mkClose);
-$('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0}; courseSave(); renderCourse(); drawMap(shownTrack()); });
+$('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0,side:[]}; courseSave(); renderCourse(); drawMap(shownTrack()); });
 $('course-done').addEventListener('click',closeLib);
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
 /* Two lists, and the difference matters.

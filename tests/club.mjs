@@ -37,8 +37,8 @@ const ask=async()=>{ await p.evaluate(()=>pickClose()); await tap(CLUB); };
 /* The second tap is the LOAD in the menu, not the readout again. */
 const load=async()=>{ await p.click('#pick-ft .pkfoot'); await p.waitForTimeout(400); };
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
-                                  side:Object.assign({},COURSE.side||{})}));
-const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:{}}; courseSave();
+                                  side:(COURSE.side||[]).slice()}));
+const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:[]}; courseSave();
                                  CLUB={step:'idle',got:null,say:''};
                                  pickClose(); renderCourse(); });
 
@@ -70,8 +70,7 @@ t.head('the second tap is the one that loads it');
 await load();
 C=await course();
 t.ok(C.marks.join()==='cb10,gosling,rum', 'the marks, in order', C.marks.join());
-t.ok(C.side.cb10==='P' && C.side.gosling==='S' && C.side.rum==='P',
-     'and the side each is left on', JSON.stringify(C.side));
+t.ok(C.side.join()==='P,S,P', 'and the side each is left on', C.side.join());
 t.ok(C.next===0, 'starting at the first one', String(C.next));
 S=await said();
 t.ok(/SYNC/.test(S.head), 'the readout goes back to offering a sync', S.head);

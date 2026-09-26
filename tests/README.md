@@ -28,7 +28,7 @@ probes count on.
 | `racebox` | what the box reads before the start and on the leg |
 | `marks` | a mark of your own: what the form takes, what it refuses, HERE |
 | `markmove` | a club mark corrected from the boat, and the way back to the book |
-| `course` | the sheet: taps, numbers, sides, CLEAR, EDIT, the line row |
+| `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
 | `demotrack` | the demo sails last season's race, at the wind that was blowing |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
 | `score` | the card, what it posts, and the fallback when nothing answers |

@@ -78,15 +78,15 @@ t.ok(slots.d.c0==='sog' && slots.d.c2==='heel',
 
 t.head('the course, the sides, and the order of the list');
 await p.evaluate(()=>{ COURSE.marks=['cb12','rum','gosling']; COURSE.next=1;
-  COURSE.side={rum:'S'}; courseSave();
+  COURSE.side=['P','S','P']; courseSave();
   MARKS.sort((a,b)=>a.id<b.id?-1:1); markOrderSave(); });
 const order=await p.evaluate(()=>MARKS.map(m=>m.id).join());
 await reboot();
 let K=await p.evaluate(()=>({m:COURSE.marks.join(), n:COURSE.next,
-  s:JSON.stringify(COURSE.side||{}), o:MARKS.map(x=>x.id).join()}));
+  s:(COURSE.side||[]).join(), o:MARKS.map(x=>x.id).join()}));
 t.ok(K.m==='cb12,rum,gosling', 'the marks, in the order they are rounded', K.m);
 t.ok(K.n===1, 'and which one is being sailed to', String(K.n));
-t.ok(K.s==='{"rum":"S"}', 'which side to leave it', K.s);
+t.ok(K.s==='P,S,P', 'which side to leave each one', K.s);
 t.ok(K.o===order, 'and the order the list itself was dragged into', K.o);
 
 t.head('a mark of your own, and a club mark corrected');

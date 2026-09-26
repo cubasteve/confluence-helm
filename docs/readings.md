@@ -460,21 +460,32 @@ RACE box advances the course on a double tap.
 The next mark comes from the course set in the Tracks app. **The course
 reads across the top as a strip**, in the order you will sail it —
 `1 RUM › 2 GOSLING › 3 CB 12 › FINISH` — and every mark this boat knows
-sits under it as a tile. Tap a tile to put that mark on the end of the
-course, and tap it again to take it out; the rest close up. The mark
+sits under it as a tile. **Tap a tile to put that mark on the end of the
+course.** Every tap adds a rounding, so tapping the same tile twice
+sails past that buoy twice — the tile then says `IN COURSE · 1,3` and
+the map draws one circle at the buoy carrying both numbers. The mark
 being sailed to is the chip with the ring round it. With no course set,
 the only leg is back to the line.
+
+**A tap on a chip's number takes that one rounding out**, and the rest
+close up. Removal lives on the chip rather than on the tile because the
+chip is the rounding you are pointing at; a tile stands for every
+rounding of that mark, so there is nothing for a second tap on it to
+mean but *again*. It used to toggle, which read well until the day the
+course wanted the same buoy twice.
 
 It was a list of rows, one to a mark, with the course's order given as
 numbers down the left margin. Every mark was legible and the one thing
 the sheet exists for — what the course *is*, in order — was the one
 thing you had to assemble in your head.
 
-**A tap on a chip flips which side that mark is left on**, `P` or `S` —
-port unless you say otherwise, red and green the way the lights are.
-The side shows on the map by the mark's number and in the box as you
-close on it. Two buttons on every chip would have made the strip half
-again as long, and it is a choice between exactly two things.
+**A tap anywhere else on a chip flips which side that rounding is left
+on**, `P` or `S` — port unless you say otherwise, red and green the way
+the lights are. It is by rounding and not by mark, so a buoy taken to
+port on the way out can be taken to starboard on the way back. The side
+shows on the map by the mark's number and in the box as you close on it.
+A third button on every chip would have made the strip half again as
+long, and it is a choice between exactly two things.
 
 **Each tile is the buoy, its short name, and where it stands in the
 course** — and the buoy is drawn as it looks on the water, because that
@@ -637,12 +648,13 @@ readings like the club's — and adds it to the course.
 the strip, set by tapping. It puts a band down the right of every tile:
 drag it onto another tile and the mark takes that place in the grid, the
 club's marks included, and the order is kept. A mark of your own gets a
-✕ in edit mode, which removes it from the course and from storage.
+✕ in edit mode, which removes it from storage and from every rounding
+of it in the course.
 
 **Tapping a mark in edit mode opens it**, with its name and position
-already in the fields. Outside edit mode a tap still adds and removes
-marks from the course, which is what that tap is for the rest of the
-time. `DONE` leaves edit mode.
+already in the fields. Outside edit mode a tap still adds a rounding to
+the course, which is what that tap is for the rest of the time. `DONE`
+leaves edit mode.
 
 What `SAVE` then does depends on whose mark it is.
 

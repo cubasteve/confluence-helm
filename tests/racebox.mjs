@@ -42,7 +42,7 @@ t.ok(!v.open, 'and the gun closes the box - the numbers are the face again');
 
 t.head('on a leg it carries the mark');
 await p.evaluate(()=>{ COURSE.marks=['rum','gosling']; COURSE.next=0; courseSave();
-  COURSE.side={rum:'S'}; rpOpen=true; paintRace(); });
+  COURSE.side=['S','P']; rpOpen=true; paintRace(); });
 v=await pill();
 t.ok(/MARK 1 OF 2/.test(v.r2l), 'which mark of how many', v.r2l);
 t.ok(/STBD/.test(v.r2l), 'and which side to leave it', v.r2l);
@@ -141,7 +141,7 @@ t.head('the pill and the border carry which way to leave the mark');
    it is set and asked in the same turn - nothing runs in between. */
 const side=(sd,near,done)=>p.evaluate(([sd,near,done])=>{
   COURSE.marks=['rum','gosling']; COURSE.next=done?2:0;
-  COURSE.side={rum:sd,gosling:sd}; courseSave();
+  COURSE.side=[sd,sd]; courseSave();
   tState='racing'; markNear=near;
   const r=raceStatus(); paintRace();
   return {g:r.g, txt:r.txt, pill:$('rp-pill').getAttribute('fill'),
@@ -175,7 +175,7 @@ t.head('at night neither of them is a colour');
    looking at the screen. A green pill would undo it for a fact the box
    states in words two lines below. */
 const dark=await p.evaluate(()=>{
-  COURSE.marks=['rum']; COURSE.next=0; COURSE.side={rum:'S'}; courseSave();
+  COURSE.marks=['rum']; COURSE.next=0; COURSE.side=['S']; courseSave();
   const read=th=>{ CFG.theme=th; applyTheme();
     const g=getComputedStyle(document.body);
     return {p1:g.getPropertyValue('--port-g1').trim(),

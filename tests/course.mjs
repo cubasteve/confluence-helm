@@ -21,7 +21,7 @@ await p.waitForTimeout(400);
 const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-tile')]
   .map(r=>({mark:r.dataset.mark,
             /* the tile's place in the course is what its info line says */
-            seq:(/IN COURSE . (\d+)/.exec(r.querySelector('s').textContent)||['',''])[1],
+            seq:(/IN COURSE . ([\d,]+)/.exec(r.querySelector('s').textContent)||['',''])[1],
             buoy:[...r.querySelector('svg').classList].filter(c=>c!=='bu')[0]||null,
             name:r.querySelector('b').textContent,
             sub:r.querySelector('s').textContent,
@@ -31,7 +31,7 @@ const sheet=()=>p.evaluate(()=>[...document.querySelectorAll('#course-list .cv-t
             grip:!!r.querySelector('.grip')})));
 /* And the course itself, as the strip reads it across the top. */
 const strip=()=>p.evaluate(()=>[...document.querySelectorAll('#cv-strip .cv-chip')]
-  .map(c=>({mark:c.dataset.chip||null,
+  .map(c=>({at:c.dataset.chip||null,
             n:(c.querySelector('i')||{textContent:''}).textContent,
             name:[...c.childNodes].filter(n=>n.nodeType===3)
                    .map(n=>n.textContent).join('').trim(),
@@ -52,9 +52,10 @@ const menu=()=>p.evaluate(()=>({
   lit:[...document.querySelectorAll('.cvr.picking')].map(e=>e.id)[0]||null}));
 const tap=async(sel)=>{ await p.click(sel); await p.waitForTimeout(250); };
 const row=m=>`#course-list .cv-tile[data-mark="${m}"]`;
-const chip=m=>`#cv-strip .cv-chip[data-chip="${m}"]`;
+const chip=i=>`#cv-strip .cv-chip[data-chip="${i}"]`;   /* by PLACE, not by mark */
+const chipNo=i=>chip(i)+' i';                          /* its number: the way out */
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
-                                  side:Object.assign({},COURSE.side||{})}));
+                                  side:(COURSE.side||[]).slice()}));
 
 t.head('the sheet opens on the course button, and closes on it');
 await tap('#trk-course');
@@ -95,7 +96,7 @@ t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
 await tap('#trk-course');
 
 t.head('a tap puts a mark in the course, and the strip is the order');
-await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; COURSE.side={}; courseSave(); renderCourse(); });
+await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; COURSE.side=[]; courseSave(); renderCourse(); });
 await tap(row('rum')); await tap(row('gosling')); await tap(row('cb12'));
 S=await sheet();
 let T=await strip();
@@ -113,25 +114,37 @@ t.ok(S.find(r=>r.mark==='ball').seq==='' && !S.find(r=>r.mark==='ball').in,
 let C=await course();
 t.ok(C.marks.join()==='rum,gosling,cb12', 'the course itself agrees', C.marks.join());
 
-t.head('and a second tap takes it out, and the rest close up');
+t.head('and another tap rounds the same mark a second time');
 await tap(row('rum'));
-S=await sheet(); C=await course();
-t.ok(C.marks.join()==='gosling,cb12', 'the mark is gone', C.marks.join());
-t.ok(S.find(r=>r.mark==='gosling').seq==='1'&&S.find(r=>r.mark==='cb12').seq==='2',
-     'and what was second is now first');
-t.ok(S.find(r=>r.mark==='rum').seq==='', 'the one taken out has no number');
+S=await sheet(); C=await course(); T=await strip();
+t.ok(C.marks.join()==='rum,gosling,cb12,rum', 'the course has it twice', C.marks.join());
+t.ok(T.map(c=>c.name).join()==='RUM,GOSLING,CB 12,RUM,FINISH',
+     'and the strip sails past it twice', T.map(c=>c.name).join());
+t.ok(seqOf('rum')==='1,4', 'the tile owns both places', seqOf('rum'));
+t.ok(S.find(r=>r.mark==='rum').in, 'and is still marked as in the course');
+
+t.head('the number on a chip takes THAT rounding out, and no other');
+await tap(chipNo(3));
+C=await course(); T=await strip();
+t.ok(C.marks.join()==='rum,gosling,cb12', 'the second rounding is gone', C.marks.join());
+t.ok((await sheet()).find(r=>r.mark==='rum').seq==='1',
+     'and the first is untouched', (await sheet()).find(r=>r.mark==='rum').seq);
+await tap(chipNo(0));
+C=await course();
+t.ok(C.marks.join()==='gosling,cb12', 'the first goes the same way', C.marks.join());
+t.ok(!(await sheet()).find(r=>r.mark==='rum').in, 'and the tile is out of the course');
 await tap(row('rum'));                    /* back on the end, not where it was */
 C=await course();
 t.ok(C.marks.join()==='gosling,cb12,rum', 'it comes back last, not where it was', C.marks.join());
 
-t.head('a tap on a chip flips which side that mark is left on');
+t.head('a tap on a chip flips which side that rounding is left on');
 T=await strip();
-t.ok(T.find(c=>c.mark==='gosling').side==='P', 'port until told otherwise');
+t.ok(T.find(c=>c.name==='GOSLING').side==='P', 'port until told otherwise');
 t.ok(T.every(c=>c.fin||c.side), 'every mark in the course carries a side');
-await tap(chip('gosling'));
+await tap(chip(0));
 T=await strip(); C=await course();
-t.ok(T.find(c=>c.mark==='gosling').side==='S', 'the chip now says S');
-t.ok(C.side.gosling==='S', 'and is kept with the course', String(C.side.gosling));
+t.ok(T.find(c=>c.name==='GOSLING').side==='S', 'the chip now says S');
+t.ok(C.side[0]==='S', 'and is kept with the course', String(C.side[0]));
 t.ok(C.marks.join()==='gosling,cb12,rum',
      'and flipping a side did not take the mark out of the course', C.marks.join());
 await p.evaluate(()=>drawMap(shownTrack())); await p.waitForTimeout(250);
@@ -140,24 +153,40 @@ t.ok(await p.evaluate(()=>[...$('t-path').querySelectorAll('text')]
 
 t.head('the mark being sailed to is the one lit');
 T=await strip();
-t.ok(T.find(c=>c.mark==='gosling').next, 'the first, before any is rounded');
+t.ok(T.find(c=>c.name==='GOSLING').next, 'the first, before any is rounded');
 await p.evaluate(()=>{ courseAdvance(); renderCourse(); }); await p.waitForTimeout(200);
 T=await strip();
-t.ok(!T.find(c=>c.mark==='gosling').next && T.find(c=>c.mark==='cb12').next,
+t.ok(!T.find(c=>c.name==='GOSLING').next && T.find(c=>c.name==='CB 12').next,
      'and the next one once that is behind');
 t.ok(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)===3,
      'all three are on the map',
      String(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)));
 await p.evaluate(()=>{ COURSE.next=0; courseSave(); renderCourse(); });
 
+t.head('the two roundings of one mark keep their own sides');
+await p.evaluate(()=>{ COURSE.marks=['rum','gosling','rum']; COURSE.next=0;
+                       COURSE.side=['P','P','P']; courseSave(); renderCourse(); });
+await tap(chip(2));
+T=await strip(); C=await course();
+t.ok(C.side.join()==='P,P,S', 'only the rounding tapped flipped', C.side.join());
+t.ok(T[0].side==='P' && T[2].side==='S',
+     'out to port and back to starboard, on one buoy', T[0].side+T[2].side);
+await p.evaluate(()=>drawMap(shownTrack())); await p.waitForTimeout(250);
+t.ok(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)===2,
+     'the map draws one circle per buoy, not one per rounding',
+     String(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)));
+t.ok(await p.evaluate(()=>[...$('t-path').querySelectorAll('text')]
+       .some(x=>x.textContent==='1,3')), 'carrying both its numbers');
+
 t.head('taking out a mark already rounded does not leave the course past its end');
-await p.evaluate(()=>{ COURSE.next=3; courseSave(); renderCourse(); });
-await tap(row('rum'));
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=3;
+                       COURSE.side=['S','P','P']; courseSave(); renderCourse(); });
+await tap(chipNo(2));
 C=await course();
 t.ok(C.marks.length===2 && C.next<=2, 'next is pulled back to the end',
      C.next+' of '+C.marks.length);
-t.ok(C.side.gosling==='S' && !('rum' in C.side), 'and the side of the one removed goes with it',
-     JSON.stringify(C.side));
+t.ok(C.side.join()==='S,P', 'and the side of the one removed goes with it',
+     C.side.join());
 await p.evaluate(()=>{ COURSE.next=0; courseSave(); renderCourse(); });
 
 t.head('CLEAR empties the course and leaves the marks alone');
@@ -170,7 +199,7 @@ t.ok(marks(S).length===11 && marks(S).every(r=>r.seq===''),
      'the marks are all still there, unnumbered');
 t.ok((await strip()).length===0, 'and the strip has nothing to show');
 await tap(row('gosling')); await tap(row('cb12'));
-await p.evaluate(()=>{ COURSE.side={gosling:'S'}; courseSave(); renderCourse(); });
+await p.evaluate(()=>{ COURSE.side=['S','P']; courseSave(); renderCourse(); });
 
 t.head('EDIT is for the list, not the course');
 await tap('#course-edit');
