@@ -149,4 +149,39 @@ t.ok(/IT DOES NOT START ON THE LINE/.test(S.sub),
      'which this sheet cannot draw a start for, and says so before you take it',
      S.sub);
 
+t.head('a committee line, which has no ends to send');
+await clear();
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['rum','gosling'], side:{}, note:null, posted:1,
+  line:{mode:'committee', ping:true},
+  startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/COMMITTEE LINE . PING BOTH ENDS/.test(S.sub),
+     'it says to go and take them, before you load it', S.sub);
+
+/* Having pinged, the same course reads differently: the ends it wants
+   are the ones already aboard. */
+await p.evaluate(()=>{ LINE={pin:{lat:28.8190,lon:-81.2660},
+                             boat:{lat:28.8195,lon:-81.2630}}; saveLine(); });
+await ask();
+S=await said();
+t.ok(/USING THE ENDS YOU PINGED/.test(S.sub), 'and then that it has them', S.sub);
+
+/* Loading one does not invent a line, either way. */
+const before=await p.evaluate(()=>JSON.stringify(LINE));
+await load();
+t.ok(await p.evaluate(()=>JSON.stringify(LINE))===before,
+     'and the load leaves the line exactly as it found it');
+await p.evaluate(()=>{ LINE={}; saveLine(); });
+
+t.head('an older site, which sends no line at all');
+await clear();
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['rum'], side:{}, note:null, posted:1, line:{pin:'flag',boat:'ball'},
+  startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(!/COMMITTEE LINE/.test(S.sub), 'reads as the Romance marks, which it is', S.sub);
+
 await t.done(b);

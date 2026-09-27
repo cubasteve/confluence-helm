@@ -10222,6 +10222,16 @@ function cvpClub(){
   const miss=(g.unknown||[]).length + (c.got.dropped||[]).length;
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
   if(g.startsOnLine===false) out.push('IT DOES NOT START ON THE LINE');
+  /* The committee has set a line somewhere other than the Romance marks.
+     WHERE is not in the course and cannot be - nobody knows until there
+     is a boat beside it - so this says to go and take it. Nothing here
+     touches LINE: a ping left over from last week is not today's line
+     either, and choosing silently between the two is worse than naming
+     what is missing. A course with no `line` at all came from an older
+     site, and every one of those starts on the Romance marks. */
+  if(((g.line||{}).mode)==='committee')
+    out.push(lineEnds().pinged ? 'COMMITTEE LINE · USING THE ENDS YOU PINGED'
+                               : 'COMMITTEE LINE · PING BOTH ENDS');
   if(g.note) out.push(String(g.note).toUpperCase());
   return '<div class="pknote">'+out.map(esc).join('<br>')+'</div>';
 }
