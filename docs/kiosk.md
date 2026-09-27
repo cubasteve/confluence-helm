@@ -321,8 +321,18 @@ armed. Nothing else on the sheet moves: armed or idle it is 632 px, so
 the tile you just hit is still under your finger. Tapping it again
 empties it and `DONE` comes back, which is the way out without doing
 anything - unsaid, because the tile is lit and touching a lit thing to
-unlight it needs no caption. The line under the bar is left for what the
-helper says back.
+unlight it needs no caption.
+
+**And nothing is said under it either.** `#ns-msg` is hidden on this
+sheet: four tiles and a bar that names what it would do are the whole
+of it. The radio pickers keep their line, because a scan, a pair and a
+wrong WPA key all have something to report that is visible nowhere else;
+here the report is the screen going black. The cost is that a refusal -
+`NOT PERMITTED FROM HERE`, which is what logind says to a helper started
+from SSH rather than the desktop session - has nowhere to appear, so
+**a slide that did not take springs home instead**, with the tile still
+armed. A bar sitting at the far end with the panel still up is the one
+state on this sheet that would read as a hang.
 
 **And that bar is a slide, not a button.** A tap is one event, and a
 round panel at speed produces plenty it was never offered - a sleeve on

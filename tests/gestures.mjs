@@ -258,6 +258,7 @@ const pw=()=>p.evaluate(()=>{
   return {foot:getComputedStyle($('ns-foot')).display!=='none',
           bar:getComputedStyle(bar).display!=='none',
           word:$('sl-word').textContent,
+          line:getComputedStyle($('ns-msg')).display!=='none',
           msg:$('ns-msg').textContent, red:bar.classList.contains('danger'),
           armed:[...document.querySelectorAll('.pw-tile.armed b')].map(e=>e.textContent),
           knob:Math.round($('sl-knob').getBoundingClientRect().left
@@ -299,8 +300,8 @@ t.ok(!(await p.$('#ns-say')),
      'and nothing above it explains the tile you just touched - a tile '
      +'called Shut down does not need a paragraph under it');
 t.ok(P.red, 'in the alarm red the tile is drawn in');
-t.ok(P.msg==='', 'and the line under the bar stays empty - it is for what '
-     +'the helper says back, not for captioning a lit tile', P.msg);
+t.ok(!P.line, 'and there is no line under the bar at all - four tiles and '
+     +'a bar that names what it does are the whole sheet');
 t.ok(P.out===0, 'and the sheet is inside the glass at every corner, armed '
      +'or not - arming changes nothing about its size');
 /* a tap on the bar is a drag of nothing */
@@ -343,8 +344,25 @@ await slide(1); await p.waitForTimeout(700);
 const down=posts.find(x=>x.path==='/power/do');
 t.ok(down && down.body.action==='poweroff', 'carrying it the whole way is '
      +'what shuts the Pi down', JSON.stringify(posts));
-t.ok(/SHUTTING DOWN/.test((await pw()).msg), 'and it says so rather than '
-     +'closing on a screen that is about to go black', (await pw()).msg);
+t.ok((await pw()).knob>400 && !(await pw()).line,
+     'and nothing is said about it - the screen going black is the report',
+     JSON.stringify(await pw()));
+
+t.head('a slide the helper refuses comes back');
+/* Nothing on this sheet reports, so a bar left at the far end with the
+   panel still up is the one state here that reads as a hang. */
+await p.route('http://127.0.0.1:8091/power/do', r=>r.fulfill({status:200,
+  contentType:'application/json',
+  body:JSON.stringify({ok:false, error:'NOT PERMITTED FROM HERE'})}));
+await p.evaluate(()=>{ NET.busy=''; armSet(null); }); await p.waitForTimeout(200);
+await tap('Reboot'); await p.waitForTimeout(300);
+await slide(1); await p.waitForTimeout(800);
+P=await pw();
+t.ok(P.knob<=7, 'the bar springs home rather than sitting at the end',
+     P.knob+' px along');
+t.ok(P.armed.join()==='Reboot', 'with the tile still armed, so the same '
+     +'slide is there to try again', JSON.stringify(P.armed));
+await p.unroute('http://127.0.0.1:8091/power/do');
 
 t.head('the same bar, without the red, for the ones you can undo');
 await p.evaluate(()=>{ NET.busy=''; armSet(null); }); await p.waitForTimeout(200);

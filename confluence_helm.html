@@ -5923,8 +5923,13 @@ function openNet(kind,dev){
   $('ns-sw').style.display   = pw_?'none':'';
   $('ns-scan').style.display = pw_?'none':'';
   /* Power has nothing to count either - the tiers show everything at
-     once - so its foot is DONE and nothing else. */
+     once - so its foot is DONE and nothing else. And nothing is said
+     under it: four tiles and a bar that names what it does are the
+     whole sheet. A radio picker keeps its line, because a scan, a pair
+     and a wrong WPA key all have something to report that is not
+     visible anywhere else. */
   $('ns-count').style.display = pw_?'none':'';
+  $('ns-msg')  .style.display = pw_?'none':'';
   NET.arm=null; paintArm();
   showPw(false); setMsg('');
   netsheet.classList.add('on');
@@ -6499,8 +6504,11 @@ async function slideGo(){
   /* A shutdown takes the helper down with everything else, so silence is
      the success case. Saying HELPER NOT ANSWERING there would read as a
      failure at the exact moment it worked. */
-  if(!j) return setMsg(heavy?'GOING DOWN…':'NO ANSWER', !heavy);
-  if(!j.ok) return setMsg(j.error||'FAILED',true);
+  /* Nothing on this sheet reports, so a slide that did not take has to
+     show it by coming back: a bar sitting at the far end with the panel
+     still up is the one state here that reads as a hang. */
+  if(!j){ if(!heavy) slideHome(); return setMsg(heavy?'GOING DOWN…':'NO ANSWER', !heavy); }
+  if(!j.ok){ slideHome(); return setMsg(j.error||'FAILED',true); }
   /* A resize is the one action whose result you cannot judge from the
      helper's answer - you have to look at the screen. netd has already
      armed a revert, so the sheet turns into the question that revert is
