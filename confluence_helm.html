@@ -2635,6 +2635,17 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="t-title" id="course-title">Course</div>
     <div id="course-main">
       <div class="cv">
+        <!-- The evening, first: what is left once the line has gone up
+             to the route where it belongs. It sat across the foot, which
+             put the thing you set ONCE below the two you work at all
+             evening - and read bottom-up. The club is one of them,
+             keeping its own colour: see --club. -->
+        <div class="cv-set">
+          <button class="cvr" id="cv-start"></button>
+          <button class="cvr" id="cv-mins"></button>
+          <button class="cvr" id="cv-mode"></button>
+          <button class="cvr club" id="cv-sync"></button>
+        </div>
         <!-- ROUTE: the two ends of the line with the marks between them,
              and the one control that belongs to a route - emptying it. -->
         <div class="cv-hd"><span>Route</span>
@@ -2655,15 +2666,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <div class="cv-hd"><span>Marks</span>
           <button class="cv-act" id="course-edit">Edit</button></div>
         <div class="cv-grid noscroll" id="course-list"></div>
-        <!-- The evening, on one row: what is left once the line has gone
-             up to the route where it belongs. The club is one of them,
-             keeping its own colour: see --club. -->
-        <div class="cv-set">
-          <button class="cvr" id="cv-start"></button>
-          <button class="cvr" id="cv-mins"></button>
-          <button class="cvr" id="cv-mode"></button>
-          <button class="cvr club" id="cv-sync"></button>
-        </div>
       </div>
     </div>
     <!-- A mark of your own: a name, and a position typed or taken from
@@ -9594,7 +9596,12 @@ const cvpOn=()=>PICK && PICK.own==='course' ? PICK : null;
 
 function cvpOpen(kind){
   pickOpen({ key:'cv:'+kind, own:'course', kind:kind, end:'pin',
-             at:cvpBtn(kind), width:330, up:kind!=='line',
+             /* No `up`: every one of these controls is at the head of
+                the sheet now, so its menu falls into the sheet rather
+                than off the top of the glass. The settings row asked for
+                `up` when it was across the foot with the sheet's own
+                button bar under it - and both of those are gone. */
+             at:cvpBtn(kind), width:330,
              hold:$('course-main'), peers:'.cvr,.cv-line',
              head:cvpHead, list:cvpBody, foot:cvpFoot,
              mark:cvpMark, tap:cvpTap });

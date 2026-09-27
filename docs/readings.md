@@ -563,7 +563,7 @@ route: you start on the line, you round these, you come home to it.
 ### The four settings
 
 **Everything about the evening that is not the course itself is one row
-under the marks**, drawn the way the dial's readings are — a small label
+under the heading**, drawn the way the dial's readings are — a small label
 over a value — because that is what they are: things you read at a
 glance and only occasionally change.
 
@@ -574,9 +574,12 @@ glance and only occasionally change.
 | `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
 | `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
 
-The two clock facts are next to each other because between them they say
-when the countdown starts, which neither says alone. The row is 816 wide,
-the same as the strip and the marks above it, so its ends line up with
+The row is at the **head** of the sheet, above the route and the marks.
+It sat across the foot, which put the thing you set once below the two
+you work at all evening, and made the page read bottom-up. The two clock
+facts are next to each other because between them they say when the
+countdown starts, which neither says alone. The row is 816 wide, the
+same as the strip and the marks below it, so its ends line up with
 both — it was 940 and hanging 62 px proud of each when there were five
 readings and a button row holding it higher up the glass.
 
@@ -596,8 +599,12 @@ supplies is the rows, the head and foot, and what a tap means. It opens
 and a menu over that covers the way out — and on the value already in
 force, so the choice you have is under your finger. With one open, a tap
 on another of them moves it; a tap anywhere else puts it away, and that
-tap does nothing else. The line's menu is the exception that opens
-*downwards*: its control is at the top of the sheet, not the bottom.
+tap does nothing else.
+
+They all open **downwards**, into the sheet. They asked to open upwards
+for as long as the row was across the foot with the sheet's own button
+bar under it — a menu over that bar covered the way out. The bar is gone
+and the row is at the top, so upwards is now off the glass.
 
 **`START LINE` is which line the race starts *and* finishes on**, and it
 is the one fact on this sheet you cannot work out from anything else on

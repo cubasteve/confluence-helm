@@ -95,11 +95,14 @@ B=await box();
 t.ok(B.on && B.rows===2, 'the sequence menu is the menu', JSON.stringify(B.rows));
 t.ok(B.out===0, 'inside the glass down there too', JSON.stringify(B));
 t.ok(B.w===330, 'at the width that caller asked for', String(B.w));
-/* The row is a hundred px off the bottom and has the sheet's own bar
-   under it, so this one opens upward. */
-const rd=await p.evaluate(()=>Math.round($('cv-mode').getBoundingClientRect().top));
-t.ok(B.y+B.h <= rd, 'and above its readout, not over the bar below it',
-     B.y+B.h+' vs '+rd);
+/* The row is at the HEAD of the sheet now, so this one falls into the
+   sheet. It opened upward for as long as the row was across the foot
+   with the sheet's own button bar under it - a menu over that bar
+   covered the way out - and both of those are gone. */
+const rd=await p.evaluate(()=>Math.round($('cv-mode').getBoundingClientRect().bottom));
+t.ok(B.y >= rd-2, 'and below its readout, falling into the sheet rather '
+     +'than off the top of the glass',
+     B.y+' vs '+rd);
 const main=await p.evaluate(()=>{ const q=$('course-main').getBoundingClientRect();
   return [Math.round(q.left), Math.round(q.right)]; });
 t.ok(B.x>=main[0]-1 && B.x+B.w<=main[1]+1,

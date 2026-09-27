@@ -106,6 +106,28 @@ t.ok(S.find(r=>r.mark==='green').buoy==='g',
 t.ok(S.find(r=>r.mark==='flag').buoy==='f' && S.find(r=>r.mark==='ball').buoy==='b',
      'and the line\'s two ends are the white lighted buoy and the grey ball '
      +'they actually are');
+t.ok(await p.evaluate(()=>[...document.querySelector('.cv').children]
+       .map(k=>k.id||k.className.split(' ')[0]).join(' '))
+     ==='cv-set cv-hd cv-strip cv-hd course-list',
+     'the evening first, then the route, then the marks - the thing you '
+     +'set once above the two you work at all evening',
+     await p.evaluate(()=>[...document.querySelector('.cv').children]
+       .map(k=>k.id||k.className.split(' ')[0]).join(' ')));
+/* and the menus fall INTO the sheet now, not off the top of the glass:
+   they asked to open upward when the row was across the foot with the
+   sheet's own button bar under it, and both of those are gone */
+for(const k of ['mode','club']){
+  await p.evaluate(x=>{ pickClose(); cvpOpen(x); }, k);
+  await p.waitForTimeout(300);
+  const m=await p.evaluate(x=>{ const s=$('stage').getBoundingClientRect(),
+      a=$('cv-'+(x==='club'?'sync':x)).getBoundingClientRect(),
+      b=$('pick').getBoundingClientRect();
+    return {below:b.top>=a.bottom-2, top:b.top-s.top, bot:b.bottom-s.top}; }, k);
+  t.ok(m.below && m.top>0 && m.bot<1080,
+       'the '+k+' menu drops below its readout and stays on the glass',
+       JSON.stringify(m));
+}
+await p.evaluate(()=>pickClose()); await p.waitForTimeout(200);
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('.cv-set .cvr')]
        .map(e=>e.querySelector('s').textContent).join())
      ==='START TIME,COUNTDOWN,SEQUENCE,CLUB',
