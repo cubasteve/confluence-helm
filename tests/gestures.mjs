@@ -243,90 +243,138 @@ await p.unroute('http://127.0.0.1:8091/bt/list');
 await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);
 
 t.head('the two that end the day are a slide, not a tap');
-/* A tap is one event, and a round panel takes plenty of them it was
-   never offered - a sleeve on the rim, a wave, a knuckle on the way to
-   something else. CONFIRM sat under a thumb's width of the tile that
-   opened it, and the thing on the other side of it is every instrument
-   on the boat going dark. */
+/* A tap is one event, and a round panel takes plenty it was never
+   offered - a sleeve on the rim, a wave, a knuckle on the way past. The
+   tiles used to open a confirm screen whose CONFIRM sat a thumb's width
+   from the tile you had just hit, and on the other side of it is every
+   instrument aboard going dark. There is no second screen now: a tile
+   arms, and DONE becomes the bar that does it. */
 await p.evaluate(()=>{ openPanel(); openNet('power'); }); await p.waitForTimeout(900);
 const acts=await p.$$eval('.pw-tile b', n=>n.map(e=>e.textContent));
 t.ok(acts.join()==='Reload,Helper,Reboot,Shut down',
      'the helper\'s actions, the two heavy ones last', JSON.stringify(acts));
-const ask=()=>p.evaluate(()=>{
-  const v=$('ns-ask-view'), c=v.getBoundingClientRect(), b=$('ask-slide');
-  return {up:v.style.display!=='none', title:$('ask-title').textContent,
-          word:$('ask-word').textContent,
-          red:b.classList.contains('danger'),
-          knob:Math.round($('ask-knob').getBoundingClientRect().left
-                          -b.getBoundingClientRect().left),
-          confirm:!!document.getElementById('ask-yes'),
-          msg:$('ask-msg').textContent,
-          corners:[[c.left,c.top],[c.right,c.top],[c.left,c.bottom],[c.right,c.bottom]]
+const pw=()=>p.evaluate(()=>{
+  const c=$('ns-list-view').getBoundingClientRect(), bar=$('ns-slide');
+  return {foot:getComputedStyle($('ns-foot')).display!=='none',
+          bar:getComputedStyle(bar).display!=='none',
+          word:$('sl-word').textContent, say:$('ns-say').textContent,
+          msg:$('ns-msg').textContent, red:bar.classList.contains('danger'),
+          armed:[...document.querySelectorAll('.pw-tile.armed b')].map(e=>e.textContent),
+          knob:Math.round($('sl-knob').getBoundingClientRect().left
+                          -bar.getBoundingClientRect().left),
+          foot_y:Math.round($('ns-foot').getBoundingClientRect().top),
+          bar_y:Math.round(bar.getBoundingClientRect().top),
+          out:[[c.left,c.top],[c.right,c.top],[c.left,c.bottom],[c.right,c.bottom]]
             .filter(([x,y])=>Math.hypot(x-540,y-540)>534).length}; });
+const tap=name=>p.evaluate(n=>{ [...document.querySelectorAll('.pw-tile')]
+  .find(e=>e.textContent.trim().startsWith(n)).click(); }, name);
 /* Dispatched on the bar, because that is what a thumb lands on. The
-   moves go to the window: a finger that leaves the 104 px bar mid-drag
-   is the normal case, not an abort. */
-const slide=frac=>p.evaluate(f=>{
-  const bar=$('ask-slide'), k=$('ask-knob').getBoundingClientRect();
-  const span=bar.clientWidth-$('ask-knob').offsetWidth-12;
+   moves go to the window: a finger that leaves an 86 px bar mid-drag is
+   the normal case, not an abort. */
+const slide=(frac,drop)=>p.evaluate(([f,drop])=>{
+  const bar=$('ns-slide'), k=$('sl-knob').getBoundingClientRect();
+  const span=bar.clientWidth-$('sl-knob').offsetWidth-10;
   const x0=k.left+k.width/2, y=k.top+k.height/2;
   const ev=(ty,x,el)=>(el||bar).dispatchEvent(new PointerEvent(ty,
     {pointerId:9, clientX:x, clientY:y, bubbles:true, pointerType:'touch'}));
   ev('pointerdown',x0);
   for(let i=1;i<=10;i++) ev('pointermove', x0+span*f*i/10, window);
-  ev('pointerup', x0+span*f, window);
-}, frac);
-await p.evaluate(()=>{ [...document.querySelectorAll('.pw-tile')]
-  .find(e=>/Shut down/.test(e.textContent)).click(); });
-await p.waitForTimeout(400);
-let Q=await ask();
-t.ok(Q.up && /Shut down/.test(Q.title), 'the tile asks first', Q.title);
-t.ok(!Q.confirm, 'and there is no CONFIRM button left to catch a stray tap');
-t.ok(/SLIDE/.test(Q.word), 'the bar says what to do with it', Q.word);
-t.ok(Q.red, 'in the alarm red the tile that got here is drawn in');
-t.ok(Q.corners===0, 'and the card is inside the glass at every corner');
+  if(drop!==false) ev('pointerup', x0+span*f, window);
+}, [frac,drop]);
+let P=await pw();
+const idleFoot=P.foot_y;
+t.ok(P.foot && !P.bar, 'with nothing armed the foot is DONE, which is how you '
+     +'leave without touching anything', JSON.stringify(P));
 posts.length=0;
+await tap('Shut down'); await p.waitForTimeout(400);
+P=await pw();
+t.ok(!posts.length, 'a tap on the tile asks the helper nothing', JSON.stringify(posts));
+t.ok(P.armed.join()==='Shut down', 'it arms the tile instead', JSON.stringify(P.armed));
+t.ok(P.bar && !P.foot, 'and DONE is replaced by the bar, in the same place',
+     'bar at '+P.bar_y+', DONE was at '+idleFoot);
+t.ok(Math.abs(P.bar_y-idleFoot)<160, 'which is the foot of the sheet, not a '
+     +'new screen on top of it', P.bar_y+' vs '+idleFoot);
+t.ok(P.word==='SLIDE TO SHUT DOWN', 'the bar says what it would do', P.word);
+t.ok(/green LED/.test(P.say), 'and the sentence the confirm screen used to '
+     +'carry is on the sheet', P.say.slice(0,40));
+t.ok(P.red, 'in the alarm red the tile is drawn in');
+t.ok(/TAP IT AGAIN/.test(P.msg), 'with the way back out said once - a tile '
+     +'that fills and cannot be emptied is a trap on a screen with no Back',
+     P.msg);
+t.ok(P.out===0, 'and the grown sheet is still inside the glass at every corner');
 /* a tap on the bar is a drag of nothing */
 await slide(0); await p.waitForTimeout(300);
 t.ok(!posts.length, 'a tap on the bar shuts down nothing', JSON.stringify(posts));
-/* The travel is measured from where the finger lands, so a grab at the
-   far end could only be finished by dragging off the edge of the glass.
-   It is not a grab at all. */
-await p.evaluate(()=>{ const bar=$('ask-slide'), r=bar.getBoundingClientRect();
+/* Travel is measured from where the finger lands, so a grab at the far
+   end could only be finished by dragging off the edge of the glass. */
+await p.evaluate(()=>{ const bar=$('ns-slide'), r=bar.getBoundingClientRect();
   const y=r.top+r.height/2, x=r.right-30;
   const ev=(t,el)=>(el||bar).dispatchEvent(new PointerEvent(t,
     {pointerId:8, clientX:t==='pointerdown'?x:x+600, clientY:y,
      bubbles:true, pointerType:'touch'}));
   ev('pointerdown'); ev('pointermove',window); ev('pointerup',window); });
 await p.waitForTimeout(300);
-t.ok(!posts.length && (await ask()).knob<=8,
+t.ok(!posts.length && (await pw()).knob<=7,
      'and the far end of it is not a handle - a drag begun there would '
      +'have to finish off the edge of the glass', JSON.stringify(posts));
 await slide(0.5); await p.waitForTimeout(400);
-Q=await ask();
-t.ok(!posts.length, 'and nor does half of one', JSON.stringify(posts));
-t.ok(Q.knob<=8, 'which springs back, so letting go early is how you '
-     +'change your mind', Q.knob+' px along');
+P=await pw();
+t.ok(!posts.length, 'nor does half a slide', JSON.stringify(posts));
+t.ok(P.knob<=7, 'which springs back, so letting go early is how you change '
+     +'your mind with your hand already on it', P.knob+' px along');
+/* the clock behind the sheet repaints it every six seconds */
+await slide(0.6,false); await p.waitForTimeout(200);
+const held=(await pw()).knob;
+await p.evaluate(()=>renderRows()); await p.waitForTimeout(150);
+t.ok((await pw()).knob===held, 'a repaint mid-drag does not snatch the knob '
+     +'back from under the thumb', held+' -> '+(await pw()).knob);
+await p.evaluate(()=>window.dispatchEvent(new PointerEvent('pointerup',
+  {pointerId:9, clientX:0, clientY:0, bubbles:true, pointerType:'touch'})));
+await p.waitForTimeout(300);
+t.ok(!posts.length, 'and letting go there is still not a shutdown',
+     JSON.stringify(posts));
+await tap('Shut down'); await p.waitForTimeout(400);
+P=await pw();
+t.ok(!P.armed.length && P.foot && !P.bar,
+     'the same tile again disarms it and DONE comes back', JSON.stringify(P));
+await tap('Shut down'); await p.waitForTimeout(300);
 await slide(1); await p.waitForTimeout(700);
 const down=posts.find(x=>x.path==='/power/do');
 t.ok(down && down.body.action==='poweroff', 'carrying it the whole way is '
      +'what shuts the Pi down', JSON.stringify(posts));
-t.ok(/SHUTTING DOWN/.test((await ask()).msg), 'and it says so rather than '
-     +'closing on a screen that is about to go black', (await ask()).msg);
+t.ok(/SHUTTING DOWN/.test((await pw()).msg), 'and it says so rather than '
+     +'closing on a screen that is about to go black', (await pw()).msg);
 
 t.head('the same bar, without the red, for the ones you can undo');
-await p.evaluate(()=>{ showAsk(false); }); await p.waitForTimeout(200);
-await p.evaluate(()=>{ [...document.querySelectorAll('.pw-tile')]
-  .find(e=>/Helper/.test(e.textContent)).click(); });
-await p.waitForTimeout(400);
-Q=await ask();
-t.ok(Q.up && !Q.red, 'restarting netd is not an alarm', JSON.stringify(Q));
-t.ok(Q.knob<=8, 'and the bar comes up at its start, not wherever the last '
-     +'one left it', Q.knob+' px along');
+await p.evaluate(()=>{ NET.busy=''; armSet(null); }); await p.waitForTimeout(200);
+await tap('Helper'); await p.waitForTimeout(400);
+P=await pw();
+t.ok(P.bar && !P.red, 'restarting netd is not an alarm', JSON.stringify(P));
+t.ok(P.word==='SLIDE TO RESTART THE HELPER', 'and the bar names that one',
+     P.word);
+t.ok(P.knob<=7, 'starting at its own end, not wherever the last one left it',
+     P.knob+' px along');
 posts.length=0;
-await p.evaluate(()=>$('ask-no').click()); await p.waitForTimeout(300);
-t.ok(!(await ask()).up && !posts.length, 'CANCEL is still a tap - backing out '
-     +'is the one thing that should be easy', JSON.stringify(posts));
+await slide(1); await p.waitForTimeout(600);
+t.ok(posts.some(x=>x.path==='/power/do'&&x.body.action==='helper'),
+     'and it restarts the helper', JSON.stringify(posts));
+await p.waitForTimeout(1600);
+P=await pw();
+t.ok(!P.armed.length && P.foot, 'then disarms itself, because the sheet you '
+     +'are left looking at should be the one you can leave', JSON.stringify(P));
+
+t.head('and the tallest of them still fits the glass');
+/* Desktop only exists in cage mode, and carries the longest sentence of
+   the six - which makes it the one that decides how tall this sheet can
+   get. */
+await p.evaluate(()=>{ NET.st.power.desktop=true; renderRows(); });
+await p.waitForTimeout(300);
+await tap('Desktop'); await p.waitForTimeout(400);
+P=await pw();
+t.ok(P.armed.join()==='Desktop' && P.out===0,
+     'the longest sentence of the six, and no corner out in the black',
+     JSON.stringify(P.armed));
+await p.evaluate(()=>{ armSet(null); NET.st.power.desktop=false; renderRows(); });
 await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);
 
 t.head('the sounder says where it comes out, and can be pointed elsewhere');

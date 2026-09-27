@@ -255,9 +255,11 @@ and Bluetooth pickers this sheet shares markup with and has never done
 anything on this one. `DONE` stays - it is the way out of the sheet, and
 the only thing left in that row, which is why it runs the full width.
 
-Names are one word (`short`), because the confirm screen every action
-already passes through is where the full sentence belongs. The sub line
-under each row is gone.
+Names are one word (`short`), because the sentence under the tiles, which
+the armed action fills in, is where the full story belongs. The sub line
+under each row is gone. Each action also carries a `verb` - `SHUT DOWN`,
+`RESTART THE HELPER` - for the slide to name it with; `short` would have
+given us `SLIDE TO HELPER`.
 
 Two things to know if you touch this:
 
@@ -309,25 +311,30 @@ usual way an SD card dies, and the helm has no keyboard - so until now the
 only clean shutdown was over SSH, from a phone, over the hotspot the Pi
 itself is running.
 
-Every action gets a full confirm screen, not the second-tap the hotspot
-uses. A mis-tap there costs the boat its network; a mis-tap here costs it
-every instrument at once.
+**A tile arms; the foot of the sheet does it.** There is no confirm
+screen and no second tap. Touching *Shut down* fills that tile, puts the
+sentence that used to be the confirm screen's body under the tiles, and
+turns `DONE` into a bar reading `SLIDE TO SHUT DOWN` - in the same place,
+the same size, because `DONE` is exactly what it replaces while something
+is armed. Tapping the tile again empties it and `DONE` comes back, which
+is the way out without doing anything; the line under the bar says so
+once, because a tile that fills and cannot be emptied is a trap on a
+screen with no Back.
 
-**And that confirm is a slide, not a button.** `CONFIRM` sat one thumb's
-width from the tile that opened it, and a tap is an event a round panel
-produces on its own - a sleeve on the rim, a wave, a knuckle passing
-through. The bar underneath the question has to be carried its whole
-width, 480 px of travel, and 94% of the way counts as all the way; let go
-short of that and it springs home, which is also how you change your mind
-without reaching for `CANCEL`. `CANCEL` stays a tap: backing out is the
-one thing here that should be easy.
+**And that bar is a slide, not a button.** A tap is one event, and a
+round panel at speed produces plenty it was never offered - a sleeve on
+the rim, a wave, a knuckle passing through. What was on the other side of
+`CONFIRM`, one thumb's width from the tile that opened it, is every
+instrument aboard going dark. The bar has to be carried its whole width;
+94% of the way counts as all the way, and letting go short of that
+springs it home, which is the other way to change your mind.
 
-The bar takes the finger, not only the knob - 88 px of knob is 35 px on
+The bar takes the finger, not only the knob - 72 px of knob is 29 px on
 a phone, under anything you can reliably hit. Only its left end does,
-though: `ASK_GRAB` is 200 px, twice the knob. Travel is measured from
-where the finger lands, so a grab at the far end could only be finished
-by dragging off the edge of the glass, and a hold that cannot be
-completed is worse than one that never starts.
+though: `SL_GRAB` is 180 px, two and a half times the knob. Travel is
+measured from where the finger lands, so a grab at the far end could only
+be finished by dragging off the edge of the glass, and a hold that cannot
+be completed is worse than one that never starts.
 
 The knob is a `div`, not a button. Nothing on this bar is tappable, so
 the touch sound belongs to the drag handler: once when it takes hold,
@@ -340,6 +347,19 @@ recoverable ones get the accent.
 The drag `gClaim()`s on `pointerdown`, so the gesture judge cannot read a
 sideways pull across the bar as a page swipe, and the track carries
 `touch-action:none` so the stage does not take it for a pan first.
+
+`paintArm()` runs from every `renderRows()`, including the six-second one
+behind the uptime clock, so it sets classes and words and **never touches
+the knob** - a repaint mid-drag that snatched it back from under the
+thumb would be indistinguishable from the panel refusing. Only `armSet()`
+sends it home, and it does that *after* the render, because a bar still
+`display:none` measures 0 and would leave the fill a stub.
+
+The sheet grows when an action is armed, from 632 px to 762 - 829 for
+*Desktop*, which carries the longest sentence of the six and is therefore
+what decides how tall this thing may get. At 640 wide the circle allows
+855, and the probe arms every action with the desktop tiles present and
+checks all four corners against the glass.
 
 `poweroff` and `reboot` go through logind, which polkit grants to a local
 *active* session without a password - the same reason `netd.py` runs from

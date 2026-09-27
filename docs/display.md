@@ -1148,9 +1148,10 @@ capture phase so nothing downstream can swallow it, and it neither
 claims the gesture nor prevents anything, so nothing downstream can tell
 it ran.
 
-The shutdown sheet's slide-to-confirm bar is in that list, and it is the
-one control that makes the sound twice: once when a thumb lands on it,
-and again at the far end when the slide commits. Taking hold of it and
+The power sheet's slide-to-confirm bar is the exception, and is not in
+that list at all: its knob is a `div`, nothing on the bar is tappable,
+and the drag handler makes the sound itself - once when a thumb takes
+hold, and again at the far end when the slide commits. Taking hold and
 letting go short of the end is not an action, and does not sound like
 one.
 
