@@ -6403,9 +6403,10 @@ function armSet(act){
   NET.arm = same ? null : (act||null);
   renderRows();                  /* the tile has to show which one it is */
   slideHome();                   /* after the render: a bar still display:none measures 0 */
-  /* The way back out, said once, under the bar. A tile that fills and
-     cannot be emptied is a trap on a screen with no Back. */
-  setMsg(NET.arm ? 'TAP IT AGAIN TO CANCEL' : '');
+  /* The line under the bar is for what the helper says back, and
+     nothing else. How to get out of an armed tile is the tile: it is
+     lit, and touching a lit thing to unlight it needs no caption. */
+  setMsg('');
 }
 /* Called by every render, including the six-second one behind the
    uptime clock, so it must never touch the knob - a repaint mid-drag

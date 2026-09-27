@@ -299,10 +299,10 @@ t.ok(!(await p.$('#ns-say')),
      'and nothing above it explains the tile you just touched - a tile '
      +'called Shut down does not need a paragraph under it');
 t.ok(P.red, 'in the alarm red the tile is drawn in');
-t.ok(/TAP IT AGAIN/.test(P.msg), 'with the way back out said once - a tile '
-     +'that fills and cannot be emptied is a trap on a screen with no Back',
-     P.msg);
-t.ok(P.out===0, 'and the grown sheet is still inside the glass at every corner');
+t.ok(P.msg==='', 'and the line under the bar stays empty - it is for what '
+     +'the helper says back, not for captioning a lit tile', P.msg);
+t.ok(P.out===0, 'and the sheet is inside the glass at every corner, armed '
+     +'or not - arming changes nothing about its size');
 /* a tap on the bar is a drag of nothing */
 await slide(0); await p.waitForTimeout(300);
 t.ok(!posts.length, 'a tap on the bar shuts down nothing', JSON.stringify(posts));

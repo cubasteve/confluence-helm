@@ -320,8 +320,9 @@ same size, because `DONE` is exactly what it replaces while something is
 armed. Nothing else on the sheet moves: armed or idle it is 632 px, so
 the tile you just hit is still under your finger. Tapping it again
 empties it and `DONE` comes back, which is the way out without doing
-anything; the line under the bar says so once, because a tile that fills
-and cannot be emptied is a trap on a screen with no Back.
+anything - unsaid, because the tile is lit and touching a lit thing to
+unlight it needs no caption. The line under the bar is left for what the
+helper says back.
 
 **And that bar is a slide, not a button.** A tap is one event, and a
 round panel at speed produces plenty it was never offered - a sleeve on
