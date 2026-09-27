@@ -974,6 +974,23 @@ speed while the boat is being rained on. It does not survive a reload,
 deliberately: being locked out by a crash would be worse than the problem
 it solves.
 
+**The overlay is not enough on its own, and for a long time it was all
+there was.** A transparent box on top of the page stops anything bound to
+an element underneath it, which is every button on the instrument. It
+does nothing about the gesture judge, which is bound to `window` in the
+capture phase on purpose - a finger arriving over the rim has to be
+counted, and a round `#stage` will not hit-test it. The judge therefore
+never saw the overlay, and every swipe went straight through a locked
+screen: pages turned, the control panel came down, the dock came up, and
+a hold anywhere reset the race. `locked()` existed and gated nothing.
+
+`judgeGesture()` returns immediately while locked, which is the one
+choke point all of those share, and `goPage`, `openPanel` and `openApps`
+each refuse as well - the belt to that pair of braces, for any path into
+them added later. The two-second hold that unlocks never reaches the
+judge, because a hold control claims the gesture the moment it is
+touched.
+
 The icons are state, not instruction, and they follow it: the overlay is
 transparent, so all three page buttons stay in plain sight while the helm
 is locked, and a shackle still hanging open under a locked screen would

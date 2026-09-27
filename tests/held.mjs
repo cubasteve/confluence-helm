@@ -1,6 +1,6 @@
 /* The race the last countdown left behind: set aside rather than
    cleared, and never lost without being asked. */
-import {open, tally} from './helpers.mjs';
+import {open, tally, fling} from './helpers.mjs';
 const t=tally();
 const {b,p}=await open(t,{demo:true});
 
@@ -86,5 +86,36 @@ await p.evaluate(()=>bootSettle()); await p.waitForTimeout(600);
 v=await card();
 t.ok(v.on && v.held, 'the card is back up', JSON.stringify(v));
 await p.evaluate(()=>{ heldDrop(); heldPaint(); });
+
+t.head('a locked helm does not move, and only the hold unlocks it');
+/* The lock was an overlay and nothing else: a transparent box on top of
+   the page, which stops anything bound to an element underneath it. The
+   judge is bound to WINDOW in the capture phase, so it never saw the
+   overlay and every swipe went straight through. */
+await p.evaluate(()=>{ heldDrop(); heldPaint(); PAGE_I=1; layoutPages();
+                       closePanel(); closeApps(); lockOn(); });
+await p.waitForTimeout(400);
+const where=()=>p.evaluate(()=>({page:PAGE_I,
+  panel:panel.classList.contains('open'), dock:apps.classList.contains('open'),
+  locked:$('lock').classList.contains('on')}));
+t.ok((await where()).locked, 'locked');
+for(const [n,dx,dy,sx,sy,what] of [
+      [3,-260,0,480,540,'three fingers sideways does not page'],
+      [1,0,260,480,540,'a pull down does not bring the panel'],
+      [1,0,260,480,70,'nor does one from the very top edge'],
+      [1,0,-260,480,540,'a pull up does not bring the dock']]){
+  await fling(p,n,dx,dy,sx,sy);
+  const w=await where();
+  t.ok(w.page===1 && !w.panel && !w.dock, what, JSON.stringify(w));
+}
+/* and the one gesture that must still work */
+const c=await p.evaluate(()=>{ const r=$('stage').getBoundingClientRect();
+  return {x:r.x+540, y:r.y+540}; });
+await p.mouse.move(c.x,c.y); await p.mouse.down();
+await p.waitForTimeout(2400); await p.mouse.up(); await p.waitForTimeout(400);
+t.ok(!(await where()).locked, 'two seconds anywhere on it unlocks');
+await fling(p,3,-260,0);
+t.ok((await where()).page===2, 'and the helm moves again', String((await where()).page));
+await p.evaluate(()=>{ PAGE_I=1; layoutPages(); });
 
 await t.done(b);

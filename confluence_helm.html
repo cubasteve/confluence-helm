@@ -5110,7 +5110,11 @@ function layoutPages(){
   const d=$('dots').children;
   for(let i=0;i<d.length;i++) d[i].classList.toggle('on',i===PAGE_I-PAGE_MIN);
 }
+/* The three ways off the page you are on, each refusing while the helm
+   is locked. The judge above already will not call them - this is the
+   belt to that pair of braces, for any path into them added later. */
 function goPage(i){
+  if(locked()) return;
   i=Math.max(PAGE_MIN,Math.min(PAGE_MAX,i));
   if(i===PAGE_I) return;
   pickClose();
@@ -5124,12 +5128,12 @@ function goPage(i){
    app, which is the whole point of it being at the top edge. openApps
    keeps its guard - a second app launched over the first is not a thing
    anybody reached for. */
-const openPanel =()=>{ closeApps(); pickClose();
+const openPanel =()=>{ if(locked()) return; closeApps(); pickClose();
                        markSlide('panel-open');  panel.classList.add('open');
                        netPanelOpen(); sheetFit(); };
 const closePanel=()=>{ markSlide('panel-close'); panel.classList.remove('open');
                        netPanelClose(); };
-const openApps  =()=>{ if(APP.on) return; closePanel(); pickClose();
+const openApps  =()=>{ if(APP.on||locked()) return; closePanel(); pickClose();
                        drawApps(); markSlide('apps-open');
                        apps.classList.add('open'); };
 const closeApps =()=>{ markSlide('apps-close'); apps.classList.remove('open'); };
@@ -5292,6 +5296,20 @@ function rimStart(x,y){
 }
 
 function judgeGesture(g){
+  /* Locked is locked, and this is where it has to be said.
+     The lock has always been an overlay - a transparent box at z70 that
+     swallows taps because it is on top of everything. That works for
+     anything bound to an element underneath it, which is every button on
+     the instrument. It does nothing at all about the judge, which listens
+     on WINDOW in the capture phase on purpose, so that a finger arriving
+     over the rim is counted even though a round #stage will not hit-test
+     it. The judge therefore never sees the overlay, and every swipe went
+     straight through a locked screen: pages turned, the control panel
+     came down, the dock came up, and a hold anywhere reset the race.
+     The one gesture that must still work is the two-second hold that
+     unlocks, and that is holdBind's on the overlay itself - it never
+     reaches here, because a hold control claims the gesture. */
+  if(locked()) return;
   /* The average of every finger's travel. One finger that slips while
      the other two hold still is not a swipe, and averaging says so. */
   let dx=0,dy=0;
