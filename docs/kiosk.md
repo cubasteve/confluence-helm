@@ -255,11 +255,13 @@ and Bluetooth pickers this sheet shares markup with and has never done
 anything on this one. `DONE` stays - it is the way out of the sheet, and
 the only thing left in that row, which is why it runs the full width.
 
-Names are one word (`short`), because the sentence under the tiles, which
-the armed action fills in, is where the full story belongs. The sub line
-under each row is gone. Each action also carries a `verb` - `SHUT DOWN`,
-`RESTART THE HELPER` - for the slide to name it with; `short` would have
-given us `SLIDE TO HELPER`.
+Names are one word (`short`), and that is now all the words there are:
+the sub line under each row went with the old list layout, and the
+paragraph explaining the armed action went too - a tile that says *Shut
+down* over a bar that says `SLIDE TO SHUT DOWN` has said it twice
+already. Each action carries a `verb` - `SHUT DOWN`, `RESTART THE
+HELPER` - for the bar to name it with; `short` would have given us
+`SLIDE TO HELPER`.
 
 Two things to know if you touch this:
 
@@ -312,14 +314,14 @@ only clean shutdown was over SSH, from a phone, over the hotspot the Pi
 itself is running.
 
 **A tile arms; the foot of the sheet does it.** There is no confirm
-screen and no second tap. Touching *Shut down* fills that tile, puts the
-sentence that used to be the confirm screen's body under the tiles, and
-turns `DONE` into a bar reading `SLIDE TO SHUT DOWN` - in the same place,
-the same size, because `DONE` is exactly what it replaces while something
-is armed. Tapping the tile again empties it and `DONE` comes back, which
-is the way out without doing anything; the line under the bar says so
-once, because a tile that fills and cannot be emptied is a trap on a
-screen with no Back.
+screen and no second tap. Touching *Shut down* fills that tile and turns
+`DONE` into a bar reading `SLIDE TO SHUT DOWN` - in the same place, the
+same size, because `DONE` is exactly what it replaces while something is
+armed. Nothing else on the sheet moves: armed or idle it is 632 px, so
+the tile you just hit is still under your finger. Tapping it again
+empties it and `DONE` comes back, which is the way out without doing
+anything; the line under the bar says so once, because a tile that fills
+and cannot be emptied is a trap on a screen with no Back.
 
 **And that bar is a slide, not a button.** A tap is one event, and a
 round panel at speed produces plenty it was never offered - a sleeve on
@@ -355,11 +357,11 @@ thumb would be indistinguishable from the panel refusing. Only `armSet()`
 sends it home, and it does that *after* the render, because a bar still
 `display:none` measures 0 and would leave the fill a stub.
 
-The sheet grows when an action is armed, from 632 px to 762 - 829 for
-*Desktop*, which carries the longest sentence of the six and is therefore
-what decides how tall this thing may get. At 640 wide the circle allows
-855, and the probe arms every action with the desktop tiles present and
-checks all four corners against the glass.
+At 640 wide the circle allows 855 px of card, and this one is 632
+whatever is armed. The probe still arms every action with the desktop
+tile present - the one that makes the safe tier three across - and
+checks all four corners against the glass, because the next thing added
+to this sheet is the thing that will not fit.
 
 `poweroff` and `reboot` go through logind, which polkit grants to a local
 *active* session without a password - the same reason `netd.py` runs from

@@ -257,7 +257,7 @@ const pw=()=>p.evaluate(()=>{
   const c=$('ns-list-view').getBoundingClientRect(), bar=$('ns-slide');
   return {foot:getComputedStyle($('ns-foot')).display!=='none',
           bar:getComputedStyle(bar).display!=='none',
-          word:$('sl-word').textContent, say:$('ns-say').textContent,
+          word:$('sl-word').textContent,
           msg:$('ns-msg').textContent, red:bar.classList.contains('danger'),
           armed:[...document.querySelectorAll('.pw-tile.armed b')].map(e=>e.textContent),
           knob:Math.round($('sl-knob').getBoundingClientRect().left
@@ -295,8 +295,9 @@ t.ok(P.bar && !P.foot, 'and DONE is replaced by the bar, in the same place',
 t.ok(Math.abs(P.bar_y-idleFoot)<160, 'which is the foot of the sheet, not a '
      +'new screen on top of it', P.bar_y+' vs '+idleFoot);
 t.ok(P.word==='SLIDE TO SHUT DOWN', 'the bar says what it would do', P.word);
-t.ok(/green LED/.test(P.say), 'and the sentence the confirm screen used to '
-     +'carry is on the sheet', P.say.slice(0,40));
+t.ok(!(await p.$('#ns-say')),
+     'and nothing above it explains the tile you just touched - a tile '
+     +'called Shut down does not need a paragraph under it');
 t.ok(P.red, 'in the alarm red the tile is drawn in');
 t.ok(/TAP IT AGAIN/.test(P.msg), 'with the way back out said once - a tile '
      +'that fills and cannot be emptied is a trap on a screen with no Back',
@@ -363,16 +364,15 @@ P=await pw();
 t.ok(!P.armed.length && P.foot, 'then disarms itself, because the sheet you '
      +'are left looking at should be the one you can leave', JSON.stringify(P));
 
-t.head('and the tallest of them still fits the glass');
-/* Desktop only exists in cage mode, and carries the longest sentence of
-   the six - which makes it the one that decides how tall this sheet can
-   get. */
+t.head('and the widest of them still fits the glass');
+/* Desktop only exists in cage mode, and it is the tile that makes the
+   safe tier three across - the widest this sheet ever gets. */
 await p.evaluate(()=>{ NET.st.power.desktop=true; renderRows(); });
 await p.waitForTimeout(300);
 await tap('Desktop'); await p.waitForTimeout(400);
 P=await pw();
 t.ok(P.armed.join()==='Desktop' && P.out===0,
-     'the longest sentence of the six, and no corner out in the black',
+     'three tiles across, armed, and no corner out in the black',
      JSON.stringify(P.armed));
 await p.evaluate(()=>{ armSet(null); NET.st.power.desktop=false; renderRows(); });
 await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);

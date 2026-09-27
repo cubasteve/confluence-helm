@@ -857,11 +857,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .ns-msg.bad{color:var(--alarm)}
 
 /* --- the armed action ---
-   There is no second screen any more. A tile arms, and what the armed
-   action does is said here, where the count would be on a radio sheet. */
-.ns-say{font-size:22px;line-height:1.4;color:var(--label);text-align:center;
-  margin:14px 4px 12px}
-.ns-say b{color:var(--ink);font-weight:600}
+   There is no second screen any more, and no paragraph explaining what
+   the tile you just touched does: the tile fills, the bar below it says
+   what it would do, and a tile called Shut down needs no third telling. */
 .ns-row.danger .ns-name{color:var(--alarm)}
 /* Armed reads from across the cockpit: the tile fills, and takes a
    second rule inside its own so the change is a shape, not a shade. */
@@ -2523,9 +2521,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <!-- The count moves in beside the two buttons now that the arrows
            it sat between are gone. One row where there were two, which
            is most of what a card this size had to find. -->
-      <!-- What the armed action does, in a sentence. Power only: a
-           network row says what it is on the row itself. -->
-      <div class="ns-say" id="ns-say" style="display:none"></div>
       <div class="ns-pager" id="ns-foot">
         <button class="mini wide" id="ns-scan">SCAN</button>
         <div class="ns-count" id="ns-count"></div>
@@ -5990,50 +5985,33 @@ const POWER_ACTIONS=[
     that is alive, and a live page needs nothing heavier - whereas killing
     Chromium here would hand the screen to whatever else owns the browser
     profile and leave the kiosk waiting for it to close. */
- {a:'reload', name:'Reload the app', short:'Reload', verb:'RELOAD', sub:'THIS PAGE ONLY · INSTANT',
+ {a:'reload', name:'Reload the app', short:'Reload', verb:'RELOAD',
   /* Two arcs, not one: Desktop is the monitor and Reboot is the single
      loop, and at 52px on a tile all three sit in the same eyeline. */
   ico:'<path d="M20.5 11A8.5 8.5 0 0 0 6.3 6.3L3.5 9"/><path d="M3.5 4.5V9h4.5"/>'
-     +'<path d="M3.5 13a8.5 8.5 0 0 0 14.2 4.7l2.8-2.7"/><path d="M20.5 19.5V15H16"/>',
-  ask:'Reloads the helm app where it stands. The kiosk is left exactly as '
-     +'it is and nothing else on the Pi is touched.'},
- {a:'helper',  name:'Restart helper',  short:'Helper', verb:'RESTART THE HELPER', sub:'RADIO CONTROLS · COMES BACK ITSELF',
+     +'<path d="M3.5 13a8.5 8.5 0 0 0 14.2 4.7l2.8-2.7"/><path d="M20.5 19.5V15H16"/>'},
+ {a:'helper', name:'Restart helper', short:'Helper', verb:'RESTART THE HELPER',
   ico:'<rect x="5" y="5" width="14" height="14" rx="3"/>'
-     +'<circle class="f" cx="12" cy="12" r="2.2"/>',
-  ask:'The WiFi, Bluetooth and power controls disappear for a few seconds '
-     +'while netd restarts. The instruments carry on.'},
+     +'<circle class="f" cx="12" cy="12" r="2.2"/>'},
  /* Only in cage mode, where there is no desktop running and this is the
     only way to ask for one. netd hides it otherwise - on a normal
     desktop session it would just throw you at the login screen. */
- {a:'desktop', name:'Desktop',         short:'Desktop', verb:'START THE DESKTOP', sub:'LEAVE THE KIOSK · THE KIOSK TILE COMES BACK',
+ {a:'desktop', name:'Desktop', short:'Desktop', verb:'START THE DESKTOP',
   need:'power.desktop',
-  ico:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
-  ask:'Starts the desktop and switches the screen to it, shrunk to the '
-     +'biggest square that fits inside the round panel so all four '
-     +'corners are reachable. The helm app keeps running behind it as a '
-     +'window, and this tile turns into "Back to the kiosk".'},
+  ico:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>'},
  /* The exact mirror of the tile above, and only ever one of the two is
     shown: netd offers 'desktop' when no desktop is running and 'cage'
     when one is. Before this existed, leaving the kiosk was a one-way
     door - the way back was a reboot, or SSH, neither of which you have
     at the wheel. The arrows point INWARD, the same glyph the FULL/KIOSK
     tile uses for the same idea. */
- {a:'cage',    name:'Back to the kiosk', short:'Kiosk', verb:'GO BACK TO THE KIOSK', sub:'FULL SCREEN · NO DESKTOP',
+ {a:'cage', name:'Back to the kiosk', short:'Kiosk', verb:'GO BACK TO THE KIOSK',
   need:'power.cage',
-  ico:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>',
-  ask:'Puts the desktop back to the full panel, stops it, and returns to '
-     +'the kiosk. The windowed app closes with it and the instruments '
-     +'come straight back. If the kiosk does not come up, the desktop is '
-     +'put back rather than leaving you with a black screen.'},
- {a:'reboot',  name:'Reboot',          short:'Reboot', verb:'REBOOT', sub:'THE WHOLE PI · ABOUT A MINUTE', danger:1,
-  ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
-  ask:'Instruments, charts and the hotspot all go down for about a minute. '
-     +'Anything joined to the boat WiFi drops with it.'},
- {a:'poweroff',name:'Shut down',       short:'Shut down', verb:'SHUT DOWN', sub:'THEN WAIT FOR THE LED', danger:1,
-  ico:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>',
-  ask:'Everything goes down. Wait for the green LED to stop blinking '
-     +'before cutting power - pulling it early is how the card gets '
-     +'corrupted.'},
+  ico:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>'},
+ {a:'reboot', name:'Reboot', short:'Reboot', verb:'REBOOT', danger:1,
+  ico:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>'},
+ {a:'poweroff', name:'Shut down', short:'Shut down', verb:'SHUT DOWN', danger:1,
+  ico:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>'},
 ];
 
 /* How long the Pi has been up. "UP 3D 4H" is uptime(1) shorthand and
@@ -6434,11 +6412,9 @@ function armSet(act){
    would snatch it back from under the thumb. */
 function paintArm(){
   const a=NET.arm;
-  $('ns-say')  .style.display = a?'':'none';
   $('ns-slide').style.display = a?'':'none';
   $('ns-foot') .style.display = a?'none':'';
   if(!a) return;
-  $('ns-say').textContent=a.ask;
   $('ns-slide').classList.toggle('danger',!!a.danger);
   $('sl-word').textContent='SLIDE TO '+(a.verb||'CONFIRM');
 }
