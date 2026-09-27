@@ -250,9 +250,10 @@ It also fixes what was there before. Five 112 px rows do not fit a 448 px
 window, so **Shut down had fallen off the bottom** - behind a pager that
 never worked on this sheet, because `▲`/`▼` page `NET.rows`, which is
 empty for power actions. Both arrows looked live and did nothing. The
-pager is now hidden here outright, and `SCAN` with it: that belongs to
-the Wi-Fi and Bluetooth pickers this sheet shares markup with and has
-never done anything on this one.
+arrows are gone, and `SCAN` is hidden here: that belongs to the Wi-Fi
+and Bluetooth pickers this sheet shares markup with and has never done
+anything on this one. `DONE` stays - it is the way out of the sheet, and
+the only thing left in that row, which is why it runs the full width.
 
 Names are one word (`short`), because the confirm screen every action
 already passes through is where the full sentence belongs. The sub line
