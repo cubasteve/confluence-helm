@@ -602,10 +602,10 @@ On it:
   in the course, `1,3`, and the side of the rounding still to come in
   port red or starboard green. The one being sailed to is filled in, the
   same as the chip in the strip.
-- **the legs**, in the order they are sailed, each with an arrow at its
-  middle where no mark is sitting. The line's midpoint is where the
-  first leg starts and where the last comes home, which is how the strip
-  reads it too.
+- **the legs**, in the order they are sailed — and each one is what the
+  boat would actually sail, not the line between the two buoys. See
+  below. The line's midpoint is where the first leg starts and where the
+  last comes home, which is how the strip reads it too.
 - **the boat**, if there is a fix, as the same port-red dot the chart
   uses for it.
 - **north**, and a **scale bar** — in metres while the course is small
@@ -617,6 +617,46 @@ On it:
   in the order it is sailed. With no course set it says `NO COURSE SET ·
   THE LINE IS THE WHOLE OF IT`, which is true.
 
+#### It tacks where you would tack
+
+A beat drawn straight is a leg the boat cannot sail. The angle it *can*
+sail comes out of the polars this file already carries: for the breeze
+blowing now, `vmgAngle()` walks the table for the TWA where
+`speed × cos(TWA)` is greatest — the best VMG angle, and the thing a
+router would pick. On the club's Capri 22 in 9 knots that comes out
+around **45° upwind and 154° down**.
+
+So each leg is checked against the wind. If the rhumb line is inside the
+upwind angle it becomes a **tack**: one board out, one tack, lay the
+mark — the whole of the no-shift answer — with the **long tack first**,
+because that is what you do when you do not know better. Outside the
+downwind angle it becomes a **gybe**, the same solve at the running
+angle. Anything in between is drawn straight, because the boat can lay
+it. The turn is eased rather than cornered, so a tack reads as a boat
+turning and not as a diagram bending.
+
+Underneath a routed leg the rhumb is **ghosted in as a dashed line**:
+without it a tacked leg is just a bent line, and with it you can see
+what the bend is for. The wind itself is drawn top-left, in the warn
+colour because it is the one thing on the card that is not the course —
+an arrow blowing the way the wind blows, tail upwind, since an arrow
+pointing at where the wind came *from* is the thing everyone reads
+backwards. Under it, `023°` and `9 KT`.
+
+The foot then carries both numbers: `4 LEGS · 4.20 NM · 4.91 SAILED`.
+The second is the one a start-time sum wants, and it only appears when
+the two differ by more than a percent.
+
+**The fit takes the laylines in.** A layline runs well outside the box
+the buoys make, so the route is worked out in metres *before* the
+picture is scaled — otherwise the tack happens off the edge of the card,
+which is the one place it is no use.
+
+With no wind instrument and no heading-plus-angle to fall back on, there
+is nothing to route by: every leg is a rhumb line, the card says
+`NO WIND · RHUMB LINES` where the arrow would be, and the foot drops the
+sailed distance rather than claiming one.
+
 **Legs that share a pair of ends bow apart.** A windward-leeward is two
 marks sailed twice, and drawn straight the way back lies exactly on the
 way out: one line, one arrow, and no way to tell a four-leg course from
@@ -625,7 +665,9 @@ instruction draws them, 13 px of sagitta and another 13 for each further
 pair. The bow comes off the *pair*, not off the direction of travel —
 the way back has the opposite perpendicular, and with the sign of the
 bow flipping too the two cancelled and both legs came out on the same
-side, which is the bug this is written to stay fixed.
+side, which is the bug this is written to stay fixed. Routed legs need
+none of this — a beat and a run between the same two buoys are already
+two different shapes — so only straight ones bow.
 
 The scrim is the way out, and it dims the app's ✕ along with the sheet
 on purpose — the same as the start pad and the radio picker. A cross you

@@ -1077,6 +1077,15 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #cp-svg .arw{fill:var(--label);stroke:none;opacity:.7}
 #cp-svg .me{fill:var(--port);stroke:none}
 #cp-svg .rose{stroke:var(--label);stroke-width:2.4;fill:none;opacity:.55}
+/* The breeze the route was worked out in. Warm rather than grey: it is
+   the one thing on this card that is not the course. */
+#cp-svg .wind{stroke:var(--warn);stroke-width:3;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+/* The route the boat sails is the answer, so it is the darker line;
+   the rhumb it cannot sail is a ghost underneath saying why. */
+#cp-svg .leg[data-t="tack"],#cp-svg .leg[data-t="gybe"]{opacity:.8}
+#cp-svg .rhumb{stroke:var(--label);stroke-width:2;fill:none;opacity:.22;
+  stroke-dasharray:6 8}
 .cp-foot{height:40px;display:flex;align-items:center;justify-content:center;
   font-size:21px;font-weight:600;letter-spacing:.14em;color:var(--label)}
 /* Which line the race starts and finishes on: the first thing in the
@@ -8646,15 +8655,26 @@ function drumTick(el){
   drumReq=requestAnimationFrame(()=>{ drumReq=0; drumPaint(drumEl); });
 }
 
-/* Wire a box up: it turns, it fades at its edges, and it draws the arc.
+/* Wire a box up: it fades at its edges, it draws the arc, and - only if
+   it is asked to - it turns.
+   The drum used to come with the wiring, which put it on boxes that
+   have no `perspective` of their own. Without one a rotateX is not a
+   cylinder, it is a vertical squash: the radio picker's rows read as
+   two clean lines of type until you touched them and then went short
+   and grey, which is the change reading as damage. The drum is for the
+   two boxes drawn for it - the marks grid and the race library - and
+   both of those turn all the time rather than only while moving, so
+   nothing about them changes under the finger either.
    passive, because none of this touches the scroll it is describing. */
-function rimWatch(el,arc=true){
+function rimWatch(el,arc=true,drum=false){
   if(!el) return;
-  el.addEventListener('scroll',()=>{ scrollFit(el); drumTick(el);
+  el.addEventListener('scroll',()=>{ scrollFit(el); if(drum) drumTick(el);
                                      if(arc) rimDraw(el,true); },
                       {passive:true});
 }
-['p-sheet','course-list','lib-list'].forEach(id=>rimWatch($(id)));
+rimWatch($('course-list'), true, true);
+rimWatch($('lib-list'),    true, true);
+rimWatch($('p-sheet'));               /* cards, and a card does not tilt */
 rimWatch($('app-row'), false);        /* sideways, so it fades but has no arc */
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
@@ -9744,6 +9764,86 @@ const crsTitle=t=>{ $('app-name').textContent=t||'Course'; };
    Metres east and north off the pin, north up, no chart: the shape of
    the course is the question, and a satellite tile is 200 KB of answer
    to a different one. */
+/* ---- how the boat would actually get round it -------------------------
+   A leg drawn straight is the rhumb line, and on a beat the boat cannot
+   sail it. The angle it CAN sail comes out of the polars this file
+   already carries - the TWA where speed x cos(TWA) is greatest, which
+   is the best VMG angle and the thing a router would pick - so the
+   preview tacks where the boat would tack, at the angle this boat does
+   it at, in the breeze that is blowing now.
+   No shifts, no current, no tide gate: one tack to the layline and lay
+   the mark, which is the whole of the no-shift answer, and long tack
+   first because that is what you do when you do not know better. */
+function vmgAngle(tws, up){
+  let best=up?45:150, bestV=-1;
+  const lo=up?25:110, hi=up?70:180;
+  for(let a=lo;a<=hi;a+=1){
+    const v=targetSpeed(tws,a)*Math.cos(a*Math.PI/180)*(up?1:-1);
+    if(v>bestV){ bestV=v; best=a; }
+  }
+  return best;
+}
+/* The breeze as the route needs it: where it is from, in degrees, and
+   how hard, in knots. Same fallback the start line uses - a boat with
+   no true-wind instrument but a heading and an angle still has one. */
+function windNow(){
+  let twd=get('environment.wind.directionTrue');
+  twd = twd===null ? null : twd*DEG;
+  if(twd===null){
+    const h=get('navigation.courseOverGroundTrue'), t=get('environment.wind.angleTrueWater');
+    if(h!==null&&t!==null) twd=(h+t)*DEG;
+  }
+  if(twd===null) return null;
+  const ts=get('environment.wind.speedTrue');
+  return {twd:((twd%360)+360)%360, tws: ts===null ? 8 : ts*MS_TO_KT, guess: ts===null};
+}
+/* The two boards of a leg the boat cannot sail straight, or null if it
+   can. Metres in, metres out. */
+function tackBoards(a, b, w){
+  const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+  if(d<1) return null;
+  const brg=((Math.atan2(dx,dy)*DEG)%360+360)%360;
+  const off=Math.abs(wrap180(brg-w.twd));         /* TWA of the rhumb line */
+  const up=vmgAngle(w.tws,true), dn=vmgAngle(w.tws,false);
+  let twa, kind;
+  if(off<up-1){ twa=up; kind='tack'; }
+  else if(off>dn+1){ twa=dn; kind='gybe'; }
+  else return null;                               /* it can be sailed as drawn */
+  const uv=h=>({x:Math.sin(h*Math.PI/180), y:Math.cos(h*Math.PI/180)});
+  const try2=(h1,h2)=>{
+    const u1=uv(h1), u2=uv(h2);
+    const det=u1.x*u2.y-u1.y*u2.x;
+    if(Math.abs(det)<1e-6) return null;
+    const t1=(dx*u2.y-dy*u2.x)/det, t2=(u1.x*dy-u1.y*dx)/det;
+    if(t1<=0||t2<=0) return null;
+    return {t1:t1, t2:t2, p:{x:a.x+u1.x*t1, y:a.y+u1.y*t1}};
+  };
+  const A=try2(w.twd-twa, w.twd+twa), B=try2(w.twd+twa, w.twd-twa);
+  /* Long tack first: with no shifts both are the same water, and this
+     is what a sailor does with the choice. */
+  const pick = (A&&B) ? (A.t1>=B.t1?A:B) : (A||B);
+  if(!pick) return null;
+  return {kind:kind, twa:twa, pts:[pick.p], nm:(pick.t1+pick.t2)/1852};
+}
+/* A polyline with its corners eased, so a tack reads as a boat turning
+   rather than a diagram bending. Screen space, and the radius is capped
+   by the shorter of the two boards it sits between. */
+function roundPath(P, r){
+  if(P.length<3) return 'M'+P.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join('L');
+  let o='M'+P[0].x.toFixed(1)+' '+P[0].y.toFixed(1);
+  for(let i=1;i<P.length-1;i++){
+    const a=P[i-1], c=P[i], b=P[i+1];
+    const d1=Math.hypot(c.x-a.x,c.y-a.y), d2=Math.hypot(b.x-c.x,b.y-c.y);
+    const q=Math.min(r, d1/3, d2/3);
+    const p1={x:c.x+(a.x-c.x)/d1*q, y:c.y+(a.y-c.y)/d1*q};
+    const p2={x:c.x+(b.x-c.x)/d2*q, y:c.y+(b.y-c.y)/d2*q};
+    o+='L'+p1.x.toFixed(1)+' '+p1.y.toFixed(1)
+      +'Q'+c.x.toFixed(1)+' '+c.y.toFixed(1)+' '+p2.x.toFixed(1)+' '+p2.y.toFixed(1);
+  }
+  const L=P[P.length-1];
+  return o+'L'+L.x.toFixed(1)+' '+L.y.toFixed(1);
+}
+
 const CP={W:640, H:548, PAD:56, MIN:80, BAR:56};
 /* MIN: metres, the closest it zooms. BAR: the strip the scale keeps. */
 function prevPts(){
@@ -9763,7 +9863,16 @@ function prevPts(){
 }
 function prevDraw(){
   const D=prevPts(), W=CP.W, H=CP.H;
+  /* The route first, boards and all, because a layline runs well
+     outside the box the buoys make and a tack drawn off the edge of the
+     card is a tack nobody sees. Metres here; the fit comes after. */
+  const route=[D.mid].concat(D.seq.map(s=>s.p)).concat(D.seq.length?[D.mid]:[]);
+  const w=windNow();
+  const board=[];
+  for(let i=1;i<route.length;i++)
+    board.push(w ? tackBoards(route[i-1],route[i],w) : null);
   const all=[D.pin,D.boat,D.mid].concat(D.seq.map(s=>s.p));
+  board.forEach(b=>{ if(b) b.pts.forEach(q=>all.push(q)); });
   if(D.me) all.push(D.me);
   const xs=all.map(p=>p.x), ys=all.map(p=>p.y);
   const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs);
@@ -9782,23 +9891,38 @@ function prevDraw(){
   let o='';
 
   /* the legs first, so everything else sits on top of them.
-     A windward-leeward is two marks sailed twice, and drawn straight
-     the way back lies exactly on the way out: one line, one arrow, and
-     no way to tell a four-leg course from a two. So legs that share a
-     pair of ends bow apart, alternating sides, the way a sailing
-     instruction draws them. */
-  const route=[D.mid].concat(D.seq.map(s=>s.p)).concat(D.seq.length?[D.mid]:[]);
+     Each one is what the boat would sail, not the line between the two
+     buoys: a beat tacks once to the layline at this boat's own best
+     VMG angle for the breeze that is blowing, a run gybes the same way,
+     and a leg it can lay is drawn straight.
+     With no wind to route by there is nothing to tack about, and then
+     the old problem comes back - a windward-leeward is two marks sailed
+     twice, and drawn straight the way home lies exactly on the way out.
+     So straight legs that share a pair of ends still bow apart. */
   const key=(a,b)=>{ const r=p=>Math.round(X(p))+'_'+Math.round(Y(p));
     const u=r(a), v=r(b); return u<v ? u+'|'+v : v+'|'+u; };
   const seen={}, nth=[];
   for(let i=1;i<route.length;i++){
-    const kk=key(route[i-1],route[i]);
+    const kk=board[i-1] ? 'sailed'+i : key(route[i-1],route[i]);
     nth.push(seen[kk]=(seen[kk]===undefined?0:seen[kk]+1));
   }
+  let sailedNm=0;
   for(let i=1;i<route.length;i++){
-    const a=route[i-1], b=route[i], n=nth[i-1];
+    const a=route[i-1], b=route[i], n=nth[i-1], brd=board[i-1];
     const ax=X(a), ay=Y(a), bx=X(b), by=Y(b);
     const d=Math.hypot(bx-ax,by-ay);
+    if(brd){
+      /* tacked or gybed: the boards, with the turn eased */
+      const P=[{x:ax,y:ay}].concat(brd.pts.map(q=>({x:X(q),y:Y(q)}))).concat([{x:bx,y:by}]);
+      /* the line between the buoys, ghosted under the boards: without
+         it a tacked leg is just a bent line, and with it you can see
+         what the bend is for */
+      o+=`<line class="rhumb" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`
+        +`<path class="leg" data-t="${brd.kind}" d="${roundPath(P,16)}"></path>`;
+      sailedNm+=brd.nm;
+      for(let j=1;j<P.length;j++) o+=legArrow(P[j-1],P[j],f);
+      continue;
+    }
     const dup=seen[key(a,b)]>0;
     /* the sagitta, in pixels: the control point goes twice as far */
     const bow = dup ? (n%2?1:-1)*(13+13*Math.floor(n/2)) : 0;
@@ -9810,10 +9934,9 @@ function prevDraw(){
     const px=d?-(by-ay)/d*fwd:0, py=d?(bx-ax)/d*fwd:0;
     const qx=(ax+bx)/2+px*bow*2, qy=(ay+by)/2+py*bow*2;
     o+= bow
-      ? `<path class="leg" d="M${f(ax)} ${f(ay)}Q${f(qx)} ${f(qy)} ${f(bx)} ${f(by)}"></path>`
-      : `<line class="leg" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`;
-    /* which way round it goes, at the middle of the leg where no mark
-       is sitting - and on the bow, if it has one */
+      ? `<path class="leg bow" data-t="rhumb" d="M${f(ax)} ${f(ay)}Q${f(qx)} ${f(qy)} ${f(bx)} ${f(by)}"></path>`
+      : `<line class="leg" data-t="rhumb" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`;
+    sailedNm+=Math.hypot(b.x-a.x,b.y-a.y)/1852;
     if(d<34) continue;
     const ux=(bx-ax)/d, uy=(by-ay)/d;
     const cx=(ax+2*qx+bx)/4, cy=(ay+2*qy+by)/4, sz=9;   /* the curve at t=½ */
@@ -9860,21 +9983,52 @@ function prevDraw(){
      a diagram; with one it is a chart you can judge a beat from. */
   o+=`<path class="rose" d="M600 26v46M600 26l-9 13M600 26l9 13"></path>`
     +`<text class="lbl" x="600" y="96">N</text>`;
+  /* and the breeze the route was worked out in, blowing the way it
+     blows - tail upwind, head down - because an arrow that points at
+     where the wind came from is the one thing everyone reads backwards */
+  if(w){
+    const r=(w.twd+180)*Math.PI/180, ux=Math.sin(r), uy=-Math.cos(r);
+    const cx=52, cy=52, L=26;
+    o+=`<path class="wind" d="M${f(cx-ux*L)} ${f(cy-uy*L)}L${f(cx+ux*L)} ${f(cy+uy*L)}`
+      +`M${f(cx+ux*L)} ${f(cy+uy*L)}l${f(-ux*13-uy*9)} ${f(-uy*13+ux*9)}`
+      +`M${f(cx+ux*L)} ${f(cy+uy*L)}l${f(-ux*13+uy*9)} ${f(-uy*13-ux*9)}"></path>`
+      +`<text class="lbl" x="52" y="104">`
+      +String(Math.round(w.twd)).padStart(3,'0')+`°</text>`
+      +`<text class="lbl" x="52" y="126">`
+      +(w.guess ? 'WIND' : w.tws.toFixed(0)+' KT')+`</text>`;
+  } else {
+    o+=`<text class="lbl" x="52" y="46" text-anchor="start">NO WIND</text>`
+      +`<text class="lbl" x="52" y="68" text-anchor="start">RHUMB LINES</text>`;
+  }
   const bar=niceBar(span, k, W-2*CP.PAD);
   const by0=H-14;
   o+=`<path class="rose" d="M40 ${by0}v-12M40 ${by0}h${f(bar.px)}M${f(40+bar.px)} ${by0}v-12"></path>`
     +`<text class="lbl" x="${f(40+bar.px/2)}" y="${by0-20}">`+bar.txt+`</text>`;
   $('cp-svg').innerHTML=o;
 
-  /* the total, walked in the order it is sailed */
+  /* the total, walked in the order it is sailed - and what it costs to
+     have to tack for it, which is the number a start-time sum wants */
   let nm=0; const LL=[D.midLL].concat(D.seq.map(s=>({lat:s.m.lat, lon:s.m.lon})))
     .concat(D.seq.length?[D.midLL]:[]);
   for(let i=1;i<LL.length;i++) nm+=seaNm(LL[i-1].lat,LL[i-1].lon,LL[i].lat,LL[i].lon);
   const legs=Math.max(0, LL.length-1);
+  const more = legs && sailedNm > nm*1.01;
   $('cp-foot').textContent = legs
     ? legs+(legs===1?' LEG · ':' LEGS · ')+nm.toFixed(2)+' NM'
+      +(more ? ' · '+sailedNm.toFixed(2)+' SAILED' : '')
     : 'NO COURSE SET · THE LINE IS THE WHOLE OF IT';
 }
+/* One arrowhead at the middle of a board, if the board is long enough
+   to have a middle worth pointing at. */
+function legArrow(a,b,f){
+  const d=Math.hypot(b.x-a.x,b.y-a.y); if(d<44) return '';
+  const ux=(b.x-a.x)/d, uy=(b.y-a.y)/d;
+  const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2, s=9;
+  return `<path class="arw" d="M${f(cx+ux*s)} ${f(cy+uy*s)}`
+    +`L${f(cx-ux*s+uy*s*0.8)} ${f(cy-uy*s-ux*s*0.8)}`
+    +`L${f(cx-ux*s-uy*s*0.8)} ${f(cy-uy*s+ux*s*0.8)}Z"></path>`;
+}
+
 /* A bar of a round distance, as close to a third of the picture as a
    round one gets. Metres while a course is small enough to think about
    in metres, and miles once it is not - the foot of this card is in

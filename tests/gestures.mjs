@@ -137,6 +137,21 @@ K=await card();
 t.ok(K.rows===9 && K.scrolls, 'nine of them and the box scrolls',
      K.rows+' rows, scrolls '+K.scrolls);
 t.ok(K.fade, 'with its edge faded rather than cut');
+/* The drum used to come with the scroll wiring, and this box has no
+   perspective of its own - so a rotateX on it was not a cylinder, it
+   was a vertical squash. Two clean lines of type went short and grey
+   the moment you touched them, which is a change reading as damage. */
+await p.evaluate(()=>{ const l=$('ns-list'); l.scrollTop=160;
+  l.dispatchEvent(new Event('scroll')); });
+await p.waitForTimeout(400);
+t.ok(await p.evaluate(()=>[...document.querySelectorAll('#ns-list .ns-row')]
+       .every(r=>!r.style.transform && !r.style.opacity)),
+     'and the rows are the same size and weight scrolled as they are at '
+     +'rest - the drum belongs to the two boxes drawn for it',
+     await p.evaluate(()=>{ const r=document.querySelector('#ns-list .ns-row');
+       return (r.style.transform||'none')+' / '+(r.style.opacity||'1'); }));
+await p.evaluate(()=>{ const l=$('ns-list'); l.scrollTop=0;
+  l.dispatchEvent(new Event('scroll')); });
 t.ok(await p.evaluate(()=>{ const l=$('ns-list');
        return getComputedStyle(l).scrollbarWidth==='none'; }),
      'and no scrollbar of the browser\'s own, the same as every other '

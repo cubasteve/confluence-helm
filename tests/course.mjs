@@ -643,12 +643,16 @@ const prev=()=>p.evaluate(()=>{
   const d=[...c.querySelectorAll('.leg')].map(e=>e.getAttribute('d')||'straight');
   return {on:$('cprev').classList.contains('on'),
           legs:c.querySelectorAll('.leg').length,
+          kind:[...c.querySelectorAll('.leg')].map(e=>e.dataset.t).join(),
           arrows:c.querySelectorAll('.arw').length,
           marks:c.querySelectorAll('.mk').length,
           lit:c.querySelectorAll('.mk.on').length,
           nums:[...c.querySelectorAll('text.n')].map(e=>e.textContent),
-          foot:$('cp-foot').textContent, bowed:d.filter(x=>x!=='straight').length,
+          foot:$('cp-foot').textContent, bowed:c.querySelectorAll('.leg.bow').length,
+          ghosts:c.querySelectorAll('.rhumb').length,
+          wind:c.querySelectorAll('.wind').length,
           me:c.querySelectorAll('.me').length,
+          paths:d.filter(x=>x!=='straight').length,
           scrim:getComputedStyle($('cprev')).backgroundColor,
           out:[[q.left,q.top],[q.right,q.top],[q.left,q.bottom],[q.right,q.bottom]]
             .filter(([x,y])=>Math.hypot(x-540,y-540)>534).length}; });
@@ -658,15 +662,51 @@ t.ok(V.on, 'PREVIEW puts it up');
 t.ok(/rgba\(0, 0, 0/.test(V.scrim), 'on a scrim, because what is behind it is '
      +'the thing it is a picture of', V.scrim);
 t.ok(V.out===0, 'and every corner of the card is on the glass');
-t.ok(V.legs===4 && V.arrows===4,
+t.ok(V.legs===4 && V.arrows>=4,
      'three marks is four legs - out to each and home to the line - and '
-     +'every one of them says which way round it goes',
+     +'every board of every one says which way round it goes',
      V.legs+' legs, '+V.arrows+' arrows');
 t.ok(V.marks===3 && V.nums.join()==='1,2,3', 'the marks numbered in the '
      +'order they are rounded', V.nums.join());
 t.ok(V.lit===1, 'with the one being sailed to filled in, the same as the strip');
 t.ok(/3 LEGS|4 LEGS/.test(V.foot) && /\d\.\d\d NM/.test(V.foot),
      'and the whole course measured at the foot', V.foot);
+
+t.head('the legs are what the boat would sail, not the line between buoys');
+/* A beat drawn straight is a leg the boat cannot sail. The angle it CAN
+   sail comes out of the polars this file already carries - the TWA
+   where speed x cos(TWA) is greatest - so the preview tacks where the
+   boat would, at this boat's angle, in the breeze blowing now. */
+t.ok(V.wind===1, 'the breeze the route was worked out in is on the card');
+t.ok(/tack|gybe/.test(V.kind),
+     'and a leg it cannot lay is tacked or gybed rather than drawn '
+     +'through the wind', V.kind);
+t.ok(V.ghosts>=1, 'with the rhumb it cannot sail ghosted underneath, so '
+     +'the bend has something to be a bend away from', String(V.ghosts));
+t.ok(/SAILED/.test(V.foot), 'and the foot says what it costs to have to '
+     +'tack for it, beside the direct distance', V.foot);
+t.ok(await p.evaluate(()=>{
+       const b=$('cp-svg').getBoundingClientRect(), o=[];
+       document.querySelectorAll('#cp-svg .leg').forEach(e=>{
+         const q=e.getBBox();
+         if(q.x<-1||q.y<-1||q.x+q.width>641||q.y+q.height>549) o.push(e.dataset.t); });
+       return o.length===0; }),
+     'a layline runs well outside the box the buoys make, so the fit '
+     +'takes the tacks in too rather than drawing them off the card');
+const angles=await p.evaluate(()=>{ const w=windNow();
+  return {up:vmgAngle(w.tws,true), dn:vmgAngle(w.tws,false)}; });
+t.ok(angles.up>=30 && angles.up<=55 && angles.dn>=120 && angles.dn<=175,
+     'and the angles come off the polars, not out of the air',
+     JSON.stringify(angles));
+
+t.head('with no wind there is nothing to route by, and it says so');
+await p.evaluate(()=>{ window.__wind=windNow; window.windNow=()=>null; prevDraw(); });
+await p.waitForTimeout(250);
+V=await prev();
+t.ok(V.kind==='rhumb,rhumb,rhumb,rhumb', 'every leg is the line between '
+     +'the buoys again', V.kind);
+t.ok(V.wind===0 && V.ghosts===0, 'no arrow, and nothing to ghost');
+t.ok(!/SAILED/.test(V.foot), 'and no sailed distance to claim', V.foot);
 t.ok(V.bowed===0, 'nothing bows when no leg is sailed twice', String(V.bowed));
 
 t.head('a mark rounded twice is one circle, and the legs bow apart');
@@ -686,6 +726,12 @@ t.ok(await p.evaluate(()=>{
        const d=[...document.querySelectorAll('#cp-svg .leg')].map(e=>e.getAttribute('d'));
        return new Set(d).size===d.length; }),
      'each on its own side, not two curves on top of each other');
+
+await p.evaluate(()=>{ window.windNow=window.__wind; prevDraw(); });
+await p.waitForTimeout(200);
+t.ok(/tack|gybe/.test((await prev()).kind),
+     'and with the breeze back, the same two marks are a beat and a run',
+     (await prev()).kind);
 
 t.head('an empty course is the line and nothing else');
 await p.evaluate(()=>{ COURSE.marks=[]; COURSE.side=[]; courseSave();

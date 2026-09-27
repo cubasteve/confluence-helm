@@ -743,6 +743,18 @@ pixel or two at the edges.
 One paint per frame however many scroll events land in it, via
 `drumTick()` and a single `requestAnimationFrame`.
 
+**It is opt-in, and that was a bug for a while.** `rimWatch()` wires a
+box for the fade, the arc and the drum, and the drum used to come with
+the wiring. Boxes that were never drawn for it got it anyway — and
+without a `perspective` on the scroller a `rotateX` is not a cylinder,
+it is a vertical squash. The radio picker was the one that showed: two
+clean lines of type per row at rest, and the moment you scrolled they
+went short and grey and stayed that way. A surface that changes
+appearance under the finger reads as damage, not as motion. The drum is
+now asked for by name, and only the marks grid and the race library ask
+— the two boxes with the `perspective` rule, and the two that turn all
+the time, so nothing about them changes under the finger either.
+
 The cost is real and worth naming: the rows at the edges are dimmed to
 about 0.42 and shrunk, which is harder to read in sunlight than a flat
 row was. The row you are reaching for is the one square on, which is the
