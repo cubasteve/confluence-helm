@@ -629,6 +629,96 @@ t.ok(fired.byHand, 'and starting the countdown by hand disarms it');
 await p.evaluate(()=>renderCourse());
 await seed(); await p.waitForTimeout(300);
 
+t.head('and the course, drawn');
+/* The strip says what the course IS, in order. It cannot say what it
+   looks like - which of the two marks off the point is the third one,
+   whether leg two is a beat or a reach. This is that, off the same
+   positions the dial steers to. */
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
+  COURSE.side=['P','S','P']; courseSave(); renderCourse(); });
+await p.waitForTimeout(250);
+const prev=()=>p.evaluate(()=>{
+  const c=$('.cp'?'cp-svg':'cp-svg'), card=document.querySelector('.cp'),
+        q=card.getBoundingClientRect();
+  const d=[...c.querySelectorAll('.leg')].map(e=>e.getAttribute('d')||'straight');
+  return {on:$('cprev').classList.contains('on'),
+          legs:c.querySelectorAll('.leg').length,
+          arrows:c.querySelectorAll('.arw').length,
+          marks:c.querySelectorAll('.mk').length,
+          lit:c.querySelectorAll('.mk.on').length,
+          nums:[...c.querySelectorAll('text.n')].map(e=>e.textContent),
+          foot:$('cp-foot').textContent, bowed:d.filter(x=>x!=='straight').length,
+          me:c.querySelectorAll('.me').length,
+          scrim:getComputedStyle($('cprev')).backgroundColor,
+          out:[[q.left,q.top],[q.right,q.top],[q.left,q.bottom],[q.right,q.bottom]]
+            .filter(([x,y])=>Math.hypot(x-540,y-540)>534).length}; });
+await tap('#course-prev'); await p.waitForTimeout(400);
+let V=await prev();
+t.ok(V.on, 'PREVIEW puts it up');
+t.ok(/rgba\(0, 0, 0/.test(V.scrim), 'on a scrim, because what is behind it is '
+     +'the thing it is a picture of', V.scrim);
+t.ok(V.out===0, 'and every corner of the card is on the glass');
+t.ok(V.legs===4 && V.arrows===4,
+     'three marks is four legs - out to each and home to the line - and '
+     +'every one of them says which way round it goes',
+     V.legs+' legs, '+V.arrows+' arrows');
+t.ok(V.marks===3 && V.nums.join()==='1,2,3', 'the marks numbered in the '
+     +'order they are rounded', V.nums.join());
+t.ok(V.lit===1, 'with the one being sailed to filled in, the same as the strip');
+t.ok(/3 LEGS|4 LEGS/.test(V.foot) && /\d\.\d\d NM/.test(V.foot),
+     'and the whole course measured at the foot', V.foot);
+t.ok(V.bowed===0, 'nothing bows when no leg is sailed twice', String(V.bowed));
+
+t.head('a mark rounded twice is one circle, and the legs bow apart');
+/* A windward-leeward is two marks sailed twice. Drawn straight, the way
+   back lies exactly on the way out: one line, one arrow, and no way to
+   tell a four-leg course from a two. */
+await p.evaluate(()=>{ COURSE.marks=['rum','gosling','rum']; COURSE.next=0;
+  COURSE.side=['P','S','S']; courseSave(); renderCourse(); prevDraw(); });
+await p.waitForTimeout(300);
+V=await prev();
+t.ok(V.marks===2 && V.nums.join()==='1,3,2',
+     'one circle per buoy, carrying both its numbers', V.nums.join());
+t.ok(V.legs===4 && V.bowed===4,
+     'and all four legs bowed off their pair, so out and back are two '
+     +'lines rather than one drawn twice', V.bowed+' of '+V.legs);
+t.ok(await p.evaluate(()=>{
+       const d=[...document.querySelectorAll('#cp-svg .leg')].map(e=>e.getAttribute('d'));
+       return new Set(d).size===d.length; }),
+     'each on its own side, not two curves on top of each other');
+
+t.head('an empty course is the line and nothing else');
+await p.evaluate(()=>{ COURSE.marks=[]; COURSE.side=[]; courseSave();
+                       renderCourse(); prevDraw(); });
+await p.waitForTimeout(250);
+V=await prev();
+t.ok(V.legs===0 && V.marks===0, 'no legs to draw', V.legs+'/'+V.marks);
+t.ok(/NO COURSE SET/.test(V.foot), 'and it says so rather than measuring '
+     +'nothing at all', V.foot);
+
+t.head('and the ways out of it');
+await p.evaluate(()=>{ const s=$('stage').getBoundingClientRect();
+  $('cprev').dispatchEvent(new MouseEvent('click',
+    {bubbles:true, clientX:s.x+40, clientY:s.y+540})); });
+await p.waitForTimeout(400);
+t.ok(!(await prev()).on, 'a tap on the scrim puts it away');
+await tap('#course-prev'); await p.waitForTimeout(300);
+/* The scrim is the only way out, and deliberately: it dims the app's
+   cross along with the sheet, the same as the start pad and the radio
+   picker do, so the lit thing is the card. A cross you can see but not
+   press is worse than no cross. */
+t.ok(await p.evaluate(()=>{
+       const x=$('app-close').getBoundingClientRect();
+       return document.elementFromPoint(x.left+x.width/2, x.top+x.height/2)
+              ===$('cprev'); }),
+     'the cross under it belongs to the scrim while the picture is up');
+await p.evaluate(()=>prevClose()); await p.waitForTimeout(300);
+t.ok(await p.evaluate(()=>$('app-run').classList.contains('on')),
+     'and closing the picture leaves the app standing');
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=0;
+  COURSE.side=['P','P','P']; courseSave(); renderCourse(); });
+await p.waitForTimeout(200);
+
 t.head('a mark an ocean away is a typo, and the map is not fitted to it');
 await p.evaluate(()=>{ COURSE.marks=['gosling']; courseSave(); drawMap(shownTrack()); });
 await p.waitForTimeout(300);

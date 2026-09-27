@@ -541,6 +541,7 @@ which said *which* part. The row is gone and each one went home:
 | | now | because |
 |---|---|---|
 | `CLEAR` | in the `ROUTE` heading | it empties the route. Disabled while there is no route to empty |
+| `PREVIEW` | in the `ROUTE` heading, beside it | it draws the route. See below |
 | `EDIT` | in the `MARKS` heading | it changes what is in the list |
 | `+ MARK` | the **last tile in the grid** | a mark appears in the grid, so that is where you make one, and it stands in the place the new one will take. It led the grid for a while, which put it under your thumb and also put it in front of eleven marks you have to get past it |
 | `START LINE` | **first in the route**, in line with it | the route starts on the line and comes home to it. It was down among the evening's settings, next to the countdown, as though it were another thing about the clock |
@@ -566,6 +567,69 @@ everything is one red, a coloured border says nothing at all. So the
 strip wraps, and a three-mark course is two rows of chips at 151 px
 rather than one at 72. What is bought for that is the route reading as a
 route: you start on the line, you round these, you come home to it.
+
+### The course, drawn
+
+`PREVIEW`, next to `CLEAR` in the `ROUTE` heading, puts the course on a
+card over the sheet.
+
+The strip says what the course **is**, in order, which is the thing you
+read at the wheel. What it cannot say is what the course *looks like* —
+which of the two marks off the point is the third one, whether leg two
+is a beat or a reach, whether the committee has sent you across the lake
+and back or round the corner. That was the one thing the map was still
+good for from in here, and the map is an app away now.
+
+So this draws it, from the same numbers the dial steers to — `lineEnds()`
+and `markOf()` — which means a mark that is wrong on the water is wrong
+in the same place here. That is most of what this is for.
+
+North up, metres east and north off the pin, no chart: the shape of the
+course is the question, and a satellite tile is 200 KB of answer to a
+different one. One scale on both axes, or the course comes out stretched
+and a stretched course lies about which leg is the long one. It never
+zooms closer than 80 m of span, so a line with no course set does not
+fill the card with two buoys a boat-length apart.
+
+On it:
+
+- **the line**, dashed between its two ends, each end named the way the
+  strip names it — `FLAG`, `BALL`, or whatever you pinged. The labels
+  step outward along the line, because the two ends are a boat-length
+  apart and their names are not.
+- **the marks**, one circle per *buoy* and not per rounding — the second
+  would sit exactly on the first — carrying every number that buoy has
+  in the course, `1,3`, and the side of the rounding still to come in
+  port red or starboard green. The one being sailed to is filled in, the
+  same as the chip in the strip.
+- **the legs**, in the order they are sailed, each with an arrow at its
+  middle where no mark is sitting. The line's midpoint is where the
+  first leg starts and where the last comes home, which is how the strip
+  reads it too.
+- **the boat**, if there is a fix, as the same port-red dot the chart
+  uses for it.
+- **north**, and a **scale bar** — in metres while the course is small
+  enough to think about in metres, in miles once it is not, because the
+  foot of the card is in miles and two units on one picture is a card
+  you have to read twice. The bar keeps the bottom 56 px to itself, so
+  whichever mark lands down there does not sit on it.
+- **the whole thing measured** at the foot: `4 LEGS · 1.82 NM`, walked
+  in the order it is sailed. With no course set it says `NO COURSE SET ·
+  THE LINE IS THE WHOLE OF IT`, which is true.
+
+**Legs that share a pair of ends bow apart.** A windward-leeward is two
+marks sailed twice, and drawn straight the way back lies exactly on the
+way out: one line, one arrow, and no way to tell a four-leg course from
+a two. They curve to opposite sides instead, the way a sailing
+instruction draws them, 13 px of sagitta and another 13 for each further
+pair. The bow comes off the *pair*, not off the direction of travel —
+the way back has the opposite perpendicular, and with the sign of the
+bow flipping too the two cancelled and both legs came out on the same
+side, which is the bug this is written to stay fixed.
+
+The scrim is the way out, and it dims the app's ✕ along with the sheet
+on purpose — the same as the start pad and the radio picker. A cross you
+can see but cannot press is worse than no cross.
 
 ### The four settings
 

@@ -1045,6 +1045,40 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    none on form controls - so every control that sits in a heading has to
    say it again. */
 .cv-hd .cv-act{margin-left:auto}
+/* Two of them in one heading: the first takes the auto margin and the
+   second follows it, rather than both pushing. */
+.cv-hd .cv-act+.cv-act{margin-left:0}
+
+/* --- the course, drawn ---
+   Over the sheet on a scrim, the way the start pad and the radio picker
+   are: what is behind it is the thing it is a picture of, and dimming
+   it is how you say the cross down there is not for this. */
+#cprev{position:absolute;inset:0;z-index:26;background:rgba(0,0,0,.46);
+  opacity:0;pointer-events:none;transition:opacity .22s;
+  display:flex;align-items:center;justify-content:center}
+#cprev.on{opacity:1;pointer-events:auto}
+.cp{width:700px;padding:24px 24px 16px;border-radius:34px;
+  background:var(--panel);border:2px solid var(--hairline);
+  box-shadow:0 18px 44px rgba(0,0,0,.30)}
+#cp-svg{display:block;width:652px;height:558px}
+#cp-svg .leg{stroke:var(--label);stroke-width:3;fill:none;opacity:.55}
+#cp-svg .line{stroke:var(--ink);stroke-width:4;stroke-dasharray:9 7;opacity:.75}
+#cp-svg .end{fill:var(--panel);stroke:var(--ink);stroke-width:3}
+#cp-svg .mk{fill:var(--panel);stroke:var(--accent);stroke-width:4}
+#cp-svg .mk.on{fill:var(--accent)}
+#cp-svg text{fill:var(--accent);font-family:var(--font);font-weight:700;
+  text-anchor:middle}
+/* A CSS rule beats a presentation attribute, so the number on the lit
+   mark cannot set its own fill inline - it was accent on accent, which
+   is a filled blue disc with nothing in it. */
+#cp-svg text.n.on{fill:var(--panel)}
+#cp-svg .lbl{fill:var(--label);font-size:19px;font-weight:600;
+  letter-spacing:.08em}
+#cp-svg .arw{fill:var(--label);stroke:none;opacity:.7}
+#cp-svg .me{fill:var(--port);stroke:none}
+#cp-svg .rose{stroke:var(--label);stroke-width:2.4;fill:none;opacity:.55}
+.cp-foot{height:40px;display:flex;align-items:center;justify-content:center;
+  font-size:21px;font-weight:600;letter-spacing:.14em;color:var(--label)}
 /* Which line the race starts and finishes on: the first thing in the
    route, in line with it, because that is what it is - the route starts
    on the line and comes home to it. It was a readout down among the
@@ -2709,6 +2743,20 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   </div>
 </div>
 
+<!-- ---- the course, drawn ---------------------------------------------
+     The strip says what the course IS, in order, which is the thing you
+     read at the wheel. It cannot say what it LOOKS like - whether the
+     third mark is the one off the point or the one out in the middle,
+     whether the second leg is a beat or a reach. This is that, from the
+     same positions the dial steers to: north up, one circle per buoy,
+     the legs in the order they are sailed. -->
+<div id="cprev">
+  <div class="cp">
+    <svg id="cp-svg" viewBox="0 0 640 548"></svg>
+    <div class="cp-foot" id="cp-foot"></div>
+  </div>
+</div>
+
 <!-- ---- the course, its own app --------------------------------------
    It was a third sheet inside the map, reached by a button on the
    track's rail - which meant that setting a course spun up satellite
@@ -2736,6 +2784,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <!-- ROUTE: the two ends of the line with the marks between them,
            and the one control that belongs to a route - emptying it. -->
       <div class="cv-hd"><span>Route</span>
+        <button class="cv-act" id="course-prev">Preview</button>
         <button class="cv-act" id="course-clr">Clear</button></div>
       <!-- The line is a fixed element rather than part of the strip's
            innerHTML: a menu is anchored to it, and a chip rebuilt from
@@ -9688,6 +9737,167 @@ function renderCourse(){
 const crsTitle=t=>{ $('app-name').textContent=t||'Course'; };
 /* The arc on the way in: a box that scrolls says so once as it opens,
    the way the fade at its edge does, and then gets out of the way. */
+/* ---- the course, drawn -------------------------------------------------
+   Everything here comes from the same numbers the dial steers to -
+   lineEnds() and markOf() - so a mark that is wrong on the water is
+   wrong in the same place here, which is most of what this is for.
+   Metres east and north off the pin, north up, no chart: the shape of
+   the course is the question, and a satellite tile is 200 KB of answer
+   to a different one. */
+const CP={W:640, H:548, PAD:56, MIN:80, BAR:56};
+/* MIN: metres, the closest it zooms. BAR: the strip the scale keeps. */
+function prevPts(){
+  const E=lineEnds();
+  const xy=(la,lo)=>toXY(la,lo,E.pin.lat,E.pin.lon);
+  const pin=xy(E.pin.lat,E.pin.lon), boat=xy(E.boat.lat,E.boat.lon);
+  const seq=[];
+  COURSE.marks.forEach((id,i)=>{ const m=markOf(id);
+    if(m) seq.push({i:i, id:id, m:m, p:xy(m.lat,m.lon)}); });
+  const la=get('pos.lat'), lo=get('pos.lon');
+  const me=(la===null||lo===null)?null:xy(la,lo);
+  /* The line's middle is where a leg starts and where it comes home,
+     which is how the strip reads it too. */
+  const mid={x:(pin.x+boat.x)/2, y:(pin.y+boat.y)/2};
+  const midLL={lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2};
+  return {E:E, pin:pin, boat:boat, seq:seq, me:me, mid:mid, midLL:midLL};
+}
+function prevDraw(){
+  const D=prevPts(), W=CP.W, H=CP.H;
+  const all=[D.pin,D.boat,D.mid].concat(D.seq.map(s=>s.p));
+  if(D.me) all.push(D.me);
+  const xs=all.map(p=>p.x), ys=all.map(p=>p.y);
+  const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs);
+  const y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+  /* One scale for both axes or the course comes out stretched, and a
+     stretched course is a lie about which leg is the long one. */
+  const span=Math.max(x1-x0, y1-y0, CP.MIN);
+  /* The foot of the box is the scale bar's, so the course is fitted
+     above it rather than into it - otherwise whichever mark lands down
+     there sits on the bar. */
+  const HF=H-CP.BAR;
+  const k=Math.min((W-2*CP.PAD)/span, (HF-2*CP.PAD)/span);
+  const mx=(x0+x1)/2, my=(y0+y1)/2;
+  const X=p=>W/2+(p.x-mx)*k, Y=p=>HF/2-(p.y-my)*k;     /* north up */
+  const f=n=>n.toFixed(1);
+  let o='';
+
+  /* the legs first, so everything else sits on top of them.
+     A windward-leeward is two marks sailed twice, and drawn straight
+     the way back lies exactly on the way out: one line, one arrow, and
+     no way to tell a four-leg course from a two. So legs that share a
+     pair of ends bow apart, alternating sides, the way a sailing
+     instruction draws them. */
+  const route=[D.mid].concat(D.seq.map(s=>s.p)).concat(D.seq.length?[D.mid]:[]);
+  const key=(a,b)=>{ const r=p=>Math.round(X(p))+'_'+Math.round(Y(p));
+    const u=r(a), v=r(b); return u<v ? u+'|'+v : v+'|'+u; };
+  const seen={}, nth=[];
+  for(let i=1;i<route.length;i++){
+    const kk=key(route[i-1],route[i]);
+    nth.push(seen[kk]=(seen[kk]===undefined?0:seen[kk]+1));
+  }
+  for(let i=1;i<route.length;i++){
+    const a=route[i-1], b=route[i], n=nth[i-1];
+    const ax=X(a), ay=Y(a), bx=X(b), by=Y(b);
+    const d=Math.hypot(bx-ax,by-ay);
+    const dup=seen[key(a,b)]>0;
+    /* the sagitta, in pixels: the control point goes twice as far */
+    const bow = dup ? (n%2?1:-1)*(13+13*Math.floor(n/2)) : 0;
+    /* Off the pair, not off the direction of travel: the way back has
+       the opposite perpendicular, and with the sign of the bow flipping
+       too the two cancelled and both legs came out on the same side of
+       the straight line - which was the whole thing this fixes. */
+    const fwd=key(a,b).indexOf(Math.round(ax)+'_'+Math.round(ay))===0 ? 1 : -1;
+    const px=d?-(by-ay)/d*fwd:0, py=d?(bx-ax)/d*fwd:0;
+    const qx=(ax+bx)/2+px*bow*2, qy=(ay+by)/2+py*bow*2;
+    o+= bow
+      ? `<path class="leg" d="M${f(ax)} ${f(ay)}Q${f(qx)} ${f(qy)} ${f(bx)} ${f(by)}"></path>`
+      : `<line class="leg" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`;
+    /* which way round it goes, at the middle of the leg where no mark
+       is sitting - and on the bow, if it has one */
+    if(d<34) continue;
+    const ux=(bx-ax)/d, uy=(by-ay)/d;
+    const cx=(ax+2*qx+bx)/4, cy=(ay+2*qy+by)/4, sz=9;   /* the curve at t=½ */
+    o+=`<path class="arw" d="M${f(cx+ux*sz)} ${f(cy+uy*sz)}`
+      +`L${f(cx-ux*sz+uy*sz*0.8)} ${f(cy-uy*sz-ux*sz*0.8)}`
+      +`L${f(cx-ux*sz-uy*sz*0.8)} ${f(cy-uy*sz+ux*sz*0.8)}Z"></path>`;
+  }
+
+  /* the line, with its two ends named the way the strip names them */
+  o+=`<line class="line" x1="${f(X(D.pin))}" y1="${f(Y(D.pin))}"`
+    +` x2="${f(X(D.boat))}" y2="${f(Y(D.boat))}"></line>`;
+  /* The two ends are a boat-length apart and their names are not, so
+     each label steps outward along the line rather than sitting under
+     its own end on top of the other one. */
+  const dx=X(D.boat)-X(D.pin), dy=Y(D.boat)-Y(D.pin);
+  const dl=Math.hypot(dx,dy)||1, ox=dx/dl*34, oy=dy/dl*34;
+  [[D.pin,'pin',-1],[D.boat,'boat',1]].forEach(([p,which,sgn])=>{
+    const m=lineMark(which);
+    o+=`<circle class="end" cx="${f(X(p))}" cy="${f(Y(p))}" r="9"></circle>`
+      +`<text class="lbl" x="${f(X(p)+ox*sgn)}" y="${f(Y(p)+oy*sgn+24)}">`
+      +esc(((m&&m.hdr)||which).toUpperCase())+`</text>`;
+  });
+
+  /* One circle per BUOY, not per rounding - the second would sit exactly
+     on the first. Same rule, and the same 1,3, as the chart. */
+  const at={};
+  D.seq.forEach(s=>{ (at[s.id]=at[s.id]||[]).push(s); });
+  Object.keys(at).forEach(id=>{
+    const g=at[id], p=g[0].p, ns=g.map(s=>s.i);
+    const on=ns.indexOf(COURSE.next)>=0, many=ns.length>1;
+    let j=ns.find(i=>i>=COURSE.next); if(j===undefined) j=ns[ns.length-1];
+    const r=many?23:18;
+    o+=`<circle class="mk${on?' on':''}" cx="${f(X(p))}" cy="${f(Y(p))}" r="${r}"></circle>`
+      +`<text class="n${on?' on':''}" x="${f(X(p))}" y="${f(Y(p)+7)}"`
+      +` font-size="${many?19:22}">${ns.map(i=>i+1).join(',')}</text>`
+      +`<text class="lbl" x="${f(X(p))}" y="${f(Y(p)-r-10)}">`
+      +esc(g[0].m.hdr)+` <tspan fill="${markSide(j)==='P'?'var(--port)':'var(--stbd)'}">`
+      +markSide(j)+`</tspan></text>`;
+  });
+
+  if(D.me) o+=`<circle class="me" cx="${f(X(D.me))}" cy="${f(Y(D.me))}" r="9"></circle>`;
+
+  /* north, and how big the picture is. A course with no scale on it is
+     a diagram; with one it is a chart you can judge a beat from. */
+  o+=`<path class="rose" d="M600 26v46M600 26l-9 13M600 26l9 13"></path>`
+    +`<text class="lbl" x="600" y="96">N</text>`;
+  const bar=niceBar(span, k, W-2*CP.PAD);
+  const by0=H-14;
+  o+=`<path class="rose" d="M40 ${by0}v-12M40 ${by0}h${f(bar.px)}M${f(40+bar.px)} ${by0}v-12"></path>`
+    +`<text class="lbl" x="${f(40+bar.px/2)}" y="${by0-20}">`+bar.txt+`</text>`;
+  $('cp-svg').innerHTML=o;
+
+  /* the total, walked in the order it is sailed */
+  let nm=0; const LL=[D.midLL].concat(D.seq.map(s=>({lat:s.m.lat, lon:s.m.lon})))
+    .concat(D.seq.length?[D.midLL]:[]);
+  for(let i=1;i<LL.length;i++) nm+=seaNm(LL[i-1].lat,LL[i-1].lon,LL[i].lat,LL[i].lon);
+  const legs=Math.max(0, LL.length-1);
+  $('cp-foot').textContent = legs
+    ? legs+(legs===1?' LEG · ':' LEGS · ')+nm.toFixed(2)+' NM'
+    : 'NO COURSE SET · THE LINE IS THE WHOLE OF IT';
+}
+/* A bar of a round distance, as close to a third of the picture as a
+   round one gets. Metres while a course is small enough to think about
+   in metres, and miles once it is not - the foot of this card is in
+   miles, and two units on one picture is a card that has to be read
+   twice. */
+const NM_M=1852;
+function niceBar(span, k, wide){
+  const want=span/3;
+  const steps=[[25,'25 M'],[50,'50 M'],[100,'100 M'],[200,'200 M'],[400,'400 M'],
+               [NM_M/4,'¼ NM'],[NM_M/2,'½ NM'],[NM_M,'1 NM'],[NM_M*2,'2 NM'],
+               [NM_M*5,'5 NM'],[NM_M*10,'10 NM']];
+  let pick=steps[steps.length-1];
+  for(const v of steps) if(v[0]>=want){ pick=v; break; }
+  return {px:Math.min(pick[0]*k, wide), txt:pick[1]};
+}
+const prevOn=()=>$('cprev').classList.contains('on');
+function prevOpen(){ prevDraw(); $('cprev').classList.add('on'); }
+function prevClose(){ $('cprev').classList.remove('on'); }
+$('course-prev').addEventListener('click',prevOpen);
+/* Anywhere off the card is out, the same as every other pop-out here. */
+$('cprev').addEventListener('pointerdown',gClaim);
+$('cprev').addEventListener('click',e=>{ if(e.target===$('cprev')) prevClose(); });
+
 /* The app's open. It keeps its name because a dozen places - and every
    probe that has ever set a course - say openCourse(), and what they
    mean by it did not change when it stopped being a sheet. */
@@ -9702,6 +9912,7 @@ function courseOpen(host){
                    rimDraw($('course-list')); },60);
 }
 function courseClose(){
+  prevClose();
   courseBack(true);               /* any form or menu over it, first */
   $('t-course').classList.remove('on');
   rimDraw(null);
@@ -9713,6 +9924,10 @@ function courseClose(){
    in front of it - the same rule the map's sheets follow. */
 function courseBack(all){
   let took=false;
+  /* Not the preview: it dims the cross along with everything else on
+     purpose, the same as the start pad and the radio picker, so that
+     what is lit is the card and the way out of it is the glass around
+     it. A cross you can see but not use is worse than no cross. */
   if(PICK){ pickClose(); took=true; if(!all) return true; }
   if(MK)  { mkClose();   took=true; if(!all) return true; }
   if(GN)  { gnClose();   took=true; if(!all) return true; }
