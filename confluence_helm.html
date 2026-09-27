@@ -754,11 +754,20 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* --- the picker -------------------------------------------------
    Full-bleed over the panel, exactly as the race library sits over
    the map. */
-#netsheet{position:absolute;inset:0;background:var(--panel);opacity:0;
+/* A pop-out over the panel, not a page in front of it. It was an opaque
+   sheet filling the glass, which meant picking a network hid the panel
+   you were picking it from and the whole face went somewhere else for
+   the ten seconds a scan takes. A scrim and a card says the same thing
+   without the journey - and dims what is behind so nothing back there
+   looks tappable while it is up. The same shape the start time pad
+   takes. */
+#netsheet{position:absolute;inset:0;background:rgba(0,0,0,.46);opacity:0;
   pointer-events:none;transition:opacity .22s;display:flex;flex-direction:column;
   align-items:center;justify-content:center;color:var(--ink)}
 #netsheet.on{opacity:1;pointer-events:auto}
-.ns{width:600px;display:flex;flex-direction:column}
+.ns{width:640px;max-height:860px;display:flex;flex-direction:column;
+  padding:22px 26px 18px;border-radius:30px;background:var(--panel);
+  border:2px solid var(--hairline);box-shadow:0 18px 44px rgba(0,0,0,.30)}
 .ns-head{display:flex;align-items:center;justify-content:space-between;
   padding-bottom:14px;border-bottom:2px solid var(--hairline)}
 .ns-title{font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
@@ -775,25 +784,34 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .sw.on{background:var(--stbd)}
 .sw.on b{transform:translateX(48px)}
 
-/* Fixed at four rows. A scan that returns a different count every few
-   seconds must not make the sheet breathe in and out under your hand. */
-.ns-list{height:448px;overflow:hidden}
-.ns-row{display:flex;align-items:center;gap:18px;height:112px;
+/* A fixed window that SCROLLS. It was a fixed window that PAGED, four
+   rows at a time behind an up and a down arrow - which was the right
+   answer for a full page with room for the arrows, and is two more
+   controls than a card this size can spare. The height stays fixed for
+   the original reason: a scan that returns a different count every few
+   seconds must not make the card breathe in and out under your hand.
+   Rows are 92 rather than 112 - the box is smaller, so the things in it
+   are too, and four still show. */
+.ns-list{height:376px;overflow-y:auto;overscroll-behavior:contain}
+.ns-list.over{-webkit-mask-image:linear-gradient(to bottom,
+  transparent 0,#000 var(--fa),#000 calc(100% - var(--fz)),transparent 100%)}
+.ns-list{--fa:0px; --fz:0px}
+.ns-row{display:flex;align-items:center;gap:18px;height:92px;
   border-bottom:2px solid var(--hairline)}
 .ns-row:active{background:var(--chip)}
 .ns-row .bars{width:34px;height:34px;flex:none;color:var(--label)}
 .ns-row.live .bars{color:var(--accent)}
 .ns-main{flex:1;min-width:0}
-.ns-name{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:.03em;
+.ns-name{font-size:26px;font-weight:600;color:var(--ink);letter-spacing:.03em;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .ns-row.live .ns-name{color:var(--accent)}
 /* Working: the name goes to the accent like a live one, and the line
    under it too, so the row reads as the thing that is happening. */
 .ns-row.working .ns-name,.ns-row.working .ns-sub{color:var(--accent)}
 .ns-row.working{background:var(--chip)}
-.ns-sub{font-size:20px;font-weight:600;color:var(--label);letter-spacing:.1em;
-  margin-top:6px;text-transform:uppercase}
-.ns-empty{height:448px;display:flex;align-items:center;justify-content:center;
+.ns-sub{font-size:18px;font-weight:600;color:var(--label);letter-spacing:.1em;
+  margin-top:4px;text-transform:uppercase}
+.ns-empty{height:376px;display:flex;align-items:center;justify-content:center;
   font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
 
 /* --- power: two tiers ---
@@ -805,10 +823,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    Tiles rather than rows because five 112 px rows do not fit a 448 px
    window - the fifth used to fall off the bottom, behind a pager that
    was never wired to this list. */
-/* The list window is 448px because that is four rows. The tiers are
-   shorter than that, and a fixed height left DONE stranded 108px below
-   them - so on this sheet the window takes its height from what is in
-   it and the whole block centres properly. */
+/* The list window is fixed because that is four rows. The tiers are
+   shorter than that, and a fixed height left DONE stranded below them -
+   so on this sheet the window takes its height from what is in it and
+   the whole block centres properly. */
 .ns-list.tiers{height:auto;padding-top:26px}
 .pw-tier{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 .pw-tier.low{grid-template-columns:repeat(2,1fr);
@@ -2482,14 +2500,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         </div>
         <button class="sw" id="ns-sw"><b></b></button>
       </div>
-      <div class="ns-list" id="ns-list"></div>
-      <div class="ns-pager">
-        <button class="mini" id="ns-up">▲</button>
-        <div class="ns-count" id="ns-count"></div>
-        <button class="mini" id="ns-down">▼</button>
-      </div>
-      <div class="ns-pager">
+      <div class="ns-list noscroll" id="ns-list"></div>
+      <!-- The count moves in beside the two buttons now that the arrows
+           it sat between are gone. One row where there were two, which
+           is most of what a card this size had to find. -->
+      <div class="ns-pager" id="ns-foot">
         <button class="mini wide" id="ns-scan">SCAN</button>
+        <div class="ns-count" id="ns-count"></div>
         <button class="mini wide" id="ns-done">DONE</button>
       </div>
       <div class="ns-msg" id="ns-msg"></div>
@@ -5728,7 +5745,6 @@ const NET={ kind:'wifi', dev:null, page:0, rows:[], powered:false, ap:false,
             confirm:'', confirmT:null, poll:null, tick:null,
             /* the row an action is happening to, and what to say on it */
             workKey:'', workTxt:'', workAt:0, workNext:null };
-const PAGE=4;                      /* rows per page - matches .ns-list height */
 
 /* SSIDs and Bluetooth names come off the air and go into innerHTML.
    Anyone within range can call their access point <img onerror=...>,
@@ -5888,7 +5904,7 @@ function netPanelClose(){ clearInterval(NET.poll); NET.poll=null; closeNet(); }
 
 /* ---- the picker ---- */
 function openNet(kind,dev){
-  NET.kind=kind; NET.page=0; NET.rows=[]; NET.busy=''; NET.scanning=false;
+  NET.kind=kind; NET.rows=[]; NET.busy=''; NET.scanning=false;
   NET.confirm=''; clearTimeout(NET.confirmT);
   const devs=(NET.st.wifi&&NET.st.wifi.devices)||[];
   NET.dev = kind==='wifi' ? (devs.find(d=>d.dev===dev)||devs[0]||null) : null;
@@ -5902,11 +5918,9 @@ function openNet(kind,dev){
   const pw_=kind==='power';
   $('ns-sw').style.display   = pw_?'none':'';
   $('ns-scan').style.display = pw_?'none':'';
-  /* No pager on this sheet at all now: the tiers show everything at
-     once, and this pager never worked here anyway - it pages NET.rows,
-     which is empty for power actions, so both arrows looked live and
-     did nothing. */
-  $('ns-up').parentElement.style.display = pw_ ? 'none' : '';
+  /* Power has nothing to count either - the tiers show everything at
+     once - so its foot is DONE and nothing else. */
+  $('ns-count').style.display = pw_?'none':'';
   showAsk(false);
   showPw(false); setMsg('');
   netsheet.classList.add('on');
@@ -5914,6 +5928,10 @@ function openNet(kind,dev){
     if(!ok) return closeNet();      /* helper died since the panel opened */
     renderRows(); netRefresh(); netTick(); });
 }
+/* Anywhere off the card is 'not now'. The card stops the tap itself, so
+   this only ever fires on the scrim around it. */
+netsheet.addEventListener('pointerdown',gClaim);
+netsheet.addEventListener('click',e=>{ if(e.target===netsheet) closeNet(); });
 function closeNet(){
   netsheet.classList.remove('on');
   clearTimeout(NET.tick); NET.tick=null;
@@ -5950,8 +5968,6 @@ async function netRefresh(rescan){
     NET.rows=j.devices||[];
   }
   NET.scanning=!!j.scanning;
-  const pages=Math.max(1,Math.ceil(NET.rows.length/PAGE));
-  if(NET.page>=pages) NET.page=pages-1;
   renderRows();
   if(NET.scanning && !NET.busy) setMsg('SCANNING…');
   else if(!NET.busy && $('ns-msg').textContent==='SCANNING…') setMsg('');
@@ -6066,9 +6082,6 @@ function renderRows(){
   box.classList.remove('tiers');          /* radios use the fixed window */
   $('ns-sw').classList.toggle('on',!!NET.powered);
   $('ns-scan').textContent = wifi ? 'SCAN' : (NET.scanning?'SCANNING':'SCAN');
-  /* A live-looking arrow that does nothing is worse than a dim one. */
-  $('ns-up')  .classList.toggle('dim', NET.page<=0);
-  $('ns-down').classList.toggle('dim', (NET.page+1)*PAGE>=NET.rows.length);
   if(!NET.powered){
     box.innerHTML='<div class="ns-empty">'
       +(wifi?'THIS ADAPTER IS OFF':'BLUETOOTH IS OFF')+'</div>';
@@ -6077,12 +6090,12 @@ function renderRows(){
     box.innerHTML='<div class="ns-empty">'
       +(wifi?'NO NETWORKS IN RANGE':'NOTHING FOUND YET<br>TAP SCAN')+'</div>';
     $('ns-count').textContent=''; return; }
-  const pages=Math.max(1,Math.ceil(NET.rows.length/PAGE));
-  const from=NET.page*PAGE;
-  box.innerHTML=NET.rows.slice(from,from+PAGE)
-    .map((r,i)=>rowHtml(r,from+i,wifi)).join('');
-  $('ns-count').textContent = pages>1 ? (NET.page+1)+' / '+pages
-                                      : NET.rows.length+(wifi?' NETWORKS':' DEVICES');
+  /* All of them, and the box scrolls. It used to slice PAGE at a time
+     behind two arrows; the count said 2 / 3 then, and says how many
+     there are now, which is the thing you actually wanted to know. */
+  box.innerHTML=NET.rows.map((r,i)=>rowHtml(r,i,wifi)).join('');
+  $('ns-count').textContent = NET.rows.length+(wifi?' NETWORKS':' DEVICES');
+  scrollFit(box);
 }
 
 /* ---- the row that is working ------------------------------------------
@@ -6284,9 +6297,15 @@ $('ns-list').addEventListener('click',e=>{
   if(hit) netTap(+hit.dataset.i);
 });
 $('ns-done')  .addEventListener('click',closeNet);
-$('ns-up')  .addEventListener('click',()=>{ if(NET.page>0){NET.page--;renderRows();} });
-$('ns-down').addEventListener('click',()=>{
-  if((NET.page+1)*PAGE<NET.rows.length){ NET.page++; renderRows(); } });
+/* The arrows are gone; the list scrolls under a finger instead. Nothing
+   under #stage scrolls itself - touch-action is none all the way down -
+   so it is driven from pointer events like every other list here. */
+const nsDragged=dragScroll($('ns-list'));
+rimWatch($('ns-list'), false);      /* the fade, but no arc: a track out
+                                       on the rim beside a card in the
+                                       middle of the glass reads as
+                                       belonging to something else */
+
 $('ns-scan').addEventListener('click',()=>{
   if(NET.busy||!NET.powered) return;
   setMsg('SCANNING…');
@@ -6298,7 +6317,7 @@ $('ns-sw').addEventListener('click',()=>{
   const on=!NET.powered;
   if(!on && NET.kind==='wifi'
      && needsConfirm('sw','TAP AGAIN TO STOP THE HOTSPOT')) return;
-  NET.powered=on; NET.rows=[]; NET.page=0; renderRows();   /* answer the touch now */
+  NET.powered=on; NET.rows=[]; renderRows();   /* answer the touch now */
   netDo(on?'TURNING ON':'TURNING OFF',
         NET.kind==='wifi'?'/wifi/power':'/bt/power',
         NET.kind==='wifi'?{dev:NET.dev?NET.dev.dev:'',on:on}:{on:on});

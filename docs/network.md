@@ -21,6 +21,27 @@ Tapping one opens a picker: scan, join, forget, pair, connect, and a switch
 for that adapter. The picker is the only place the adapters are named in
 words - `BUILT-IN · wlan0`, `USB ADAPTER · wlan1`.
 
+**It is a pop-out over the panel, not a page in front of it.** A 640 px
+card on a scrim that dims what is behind, the same shape the start time
+pad takes. It was an opaque sheet filling the glass, which meant picking
+a network hid the panel you were picking it from, and the whole face
+went somewhere else for the ten seconds a scan takes. A tap on the scrim
+puts it away, as `DONE` does.
+
+**The list scrolls rather than pages.** It was four rows behind an up and
+a down arrow — the right answer for a full page with room for the
+arrows, and two controls more than a card this size can spare. Every
+network is rendered and the box scrolls, hidden bar and faded edge like
+every other list here, driven from pointer events because nothing under
+`#stage` scrolls itself. The window stays a fixed four rows for the
+reason it always was: a scan that returns a different count every few
+seconds must not make the card breathe in and out under your hand.
+
+The count moved in beside `SCAN` and `DONE`, which is one row where
+there were two, and it says how many there are — `9 NETWORKS` — rather
+than which page of them you are on. Rows are 92 px rather than 112: the
+box is smaller, so the things in it are too.
+
 **One button per adapter, not one for "WiFi".** This boat has two radios
 with opposite jobs: the onboard one runs the hotspot everything aboard is
 joined to, and the dongle reaches out to a marina. A single switch cannot

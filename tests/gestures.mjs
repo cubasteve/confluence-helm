@@ -104,6 +104,52 @@ t.ok(forgets.join()==='Steve iPhone',
      'a forget only on what it remembers, never on the hotspot it is running',
      JSON.stringify(forgets));
 
+t.head('the picker is a pop-out over the panel, not a page in front of it');
+/* It was an opaque sheet filling the glass, so picking a network hid
+   the panel you were picking it from for the ten seconds a scan takes. */
+const card=()=>p.evaluate(()=>{
+  const s=$('stage').getBoundingClientRect(),
+        c=$('ns-list-view').getBoundingClientRect(), l=$('ns-list');
+  return {w:Math.round(c.width), h:Math.round(c.height),
+          scrim:getComputedStyle($('netsheet')).backgroundColor,
+          panelSeen:getComputedStyle($('p-sheet')).display!=='none',
+          rows:l.querySelectorAll('.ns-row').length,
+          scrolls:l.scrollHeight>l.clientHeight,
+          fade:l.classList.contains('over'),
+          count:$('ns-count').textContent,
+          arrows:!!document.getElementById('ns-up')}; });
+let K=await card();
+t.ok(K.w<=700 && K.h<1080, 'a card, not the whole glass', K.w+'x'+K.h);
+t.ok(/rgba\(0, 0, 0/.test(K.scrim), 'on a scrim that dims what is behind, '
+     +'so nothing back there looks tappable while it is up', K.scrim);
+t.ok(K.panelSeen, 'and the panel it came from is still there underneath');
+t.ok(!K.arrows, 'the up and down arrows are gone - two controls a card '
+     +'this size cannot spare');
+t.ok(K.rows===3, 'every network is rendered rather than a page of them',
+     String(K.rows));
+t.ok(/3 NETWORKS/.test(K.count), 'and the count says how many there are, '
+     +'which is what 2 / 3 never told you', K.count);
+/* a list long enough to need it scrolls, and says so at its edge */
+await p.evaluate(()=>{ NET.rows=[...Array(9).keys()].map(i=>({ssid:'N'+i,
+  secure:true, saved:false, active:false, signal:80-i*5})); renderRows(); });
+await p.waitForTimeout(300);
+K=await card();
+t.ok(K.rows===9 && K.scrolls, 'nine of them and the box scrolls',
+     K.rows+' rows, scrolls '+K.scrolls);
+t.ok(K.fade, 'with its edge faded rather than cut');
+t.ok(await p.evaluate(()=>{ const l=$('ns-list');
+       return getComputedStyle(l).scrollbarWidth==='none'; }),
+     'and no scrollbar of the browser\'s own, the same as every other '
+     +'list here');
+/* the scrim is the way out, as it is on the start time pad */
+await p.evaluate(()=>{ const s=$('stage').getBoundingClientRect();
+  $('netsheet').dispatchEvent(new MouseEvent('click',
+    {bubbles:true, clientX:s.x+40, clientY:s.y+540})); });
+await p.waitForTimeout(400);
+t.ok(!await p.evaluate(()=>$('netsheet').classList.contains('on')),
+     'a tap on the scrim puts it away');
+await p.evaluate(()=>openNet('wifi','wlan0')); await p.waitForTimeout(800);
+
 t.head('joining takes two taps');
 posts.length=0;
 await p.click('.ns-row[data-i="2"]'); await p.waitForTimeout(250);
