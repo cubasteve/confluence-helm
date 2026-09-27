@@ -25,7 +25,7 @@ t.head('OFF builds nothing at all');
 t.ok(await p.evaluate(()=>CFG.click)==='glass',
      'the voice out of the box is the pane itself under a fingernail',
      await p.evaluate(()=>CFG.click));
-await p.evaluate(()=>{ CFG.click='off'; openApp(APPS.find(a=>a.id==='tracks')); });
+await p.evaluate(()=>{ CFG.click='off'; openCourse(); });
 await p.waitForTimeout(800);
 await p.evaluate(()=>{ COURSE.marks=['rum']; COURSE.next=0; COURSE.side=['P'];
   courseSave(); openCourse(); });
@@ -55,7 +55,7 @@ t.ok(await p.evaluate(()=>CLICK_KEYS.filter(k=>k!=='off')
      +'sounds at one loudness');
 
 t.head('a control makes one, and a gesture does not');
-await p.evaluate(()=>{ CFG.click='tick'; openApp(APPS.find(a=>a.id==='tracks')); });
+await p.evaluate(()=>{ CFG.click='tick'; openCourse(); });
 await p.waitForTimeout(800);
 await p.evaluate(()=>{ COURSE.marks=['rum']; COURSE.next=0; COURSE.side=['P'];
   courseSave(); openCourse(); });

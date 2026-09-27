@@ -14,9 +14,7 @@ await p.addInitScript(()=>localStorage.setItem('marks', JSON.stringify(
 await p.goto(process.env.HELM_URL||'http://localhost:8080/confluence_helm.html');
 await p.waitForTimeout(1600); await p.evaluate(()=>bootSettle());
 await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); phoneSet(true,'test'); });
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
-await p.waitForTimeout(700);
-await p.evaluate(()=>openCourse()); await p.waitForTimeout(600);
+await p.evaluate(()=>openCourse()); await p.waitForTimeout(700);
 let pass=0,fail=0; const ok=(c,m,x='')=>{console.log((c?'  PASS  ':'  FAIL  ')+m+(x?'   '+x:''));c?pass++:fail++;};
 const row=id=>p.evaluate(i=>{ const r=document.querySelector('.cv-tile[data-mark="'+i+'"]');
   return { sub:r.querySelector('s').textContent,
@@ -36,7 +34,7 @@ console.log('\n=== a club mark opens in EDIT now ===');
 await p.click('#course-edit'); await p.waitForTimeout(400);
 await p.click('.cv-tile[data-mark="cb12"] b'); await p.waitForTimeout(500);
 let f=await p.evaluate(()=>({open:$('course-add').style.display!=='none',
-  title:$('course-title').textContent, id:MK&&MK.id,
+  title:$('app-name').textContent, id:MK&&MK.id,
   name:$('mk-name').textContent, lat:$('mk-lat').textContent, lon:$('mk-lon').textContent}));
 ok(f.open && f.id==='cb12', 'it opens on the mark you tapped', JSON.stringify(f));
 ok(f.title==='Correct mark', 'and calls it a correction, not an edit', f.title);
@@ -83,7 +81,7 @@ ok(geo.dist<5, 'and the leg says we are standing on it, so it followed the corre
 
 console.log('\n=== a mark of your own is still edited, not overridden ===');
 await p.click('.cv-tile[data-mark="u1abc"] b'); await p.waitForTimeout(500);
-ok((await p.evaluate(()=>$('course-title').textContent))==='Edit mark',
+ok((await p.evaluate(()=>$('app-name').textContent))==='Edit mark',
    'and called what it is');
 await p.evaluate(()=>{ MK.f='lat'; MK.lat='28 50.000'; mkPaint(); });
 await p.click('#mk-save'); await p.waitForTimeout(500);
@@ -96,7 +94,7 @@ console.log('\n=== the book is one tap away ===');
 await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(2600);                     /* markRevert reloads */
 await p.evaluate(()=>bootSettle());
-await p.evaluate(()=>{ openApp(APPS.find(a=>a.id==='tracks')); openCourse(); });
+await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
 v=await mark('cb12');
 ok(!v.moved, 'the correction is gone');

@@ -116,12 +116,28 @@ the app's own chrome now goes:
   needed it; an app does not.
 
 That cross is the only way out of anything here, and it **goes back one
-step**: with the course sheet or the library in front of the map it
-closes that, and the app on the next tap. The course sheet had a `DONE`
-of its own beside its heading until the cross took the job — two ways
-out on a 1080 circle is not a convenience, it is a question about which
-one you meant. Every other app has nothing in front of it, so the first
-tap closes it, as it always did.
+step** where there is one: with the library in front of the map it
+closes that, and the app on the next tap; in the course app it leaves
+the mark form or an open menu first. The course sheet had a `DONE` of
+its own beside its heading until the cross took the job — two ways out
+on a 1080 circle is not a convenience, it is a question about which one
+you meant. With nothing in front of it, the first tap closes the app,
+as it always did.
+
+**The course is no longer one of the map's sheets.** It was reached by
+a `COURSE` button on the track rail, which meant that setting a course
+first spun up satellite tiles and up to 800 path segments — ten minutes
+before a gun, on the busiest the Pi gets — for a sheet that reads none
+of it. Marks come from a form with a keypad, or from the club; nothing
+in it touches the chart. What reads the course is the dial: `NEXT MARK`,
+the leg, the rounding, the finish. So it is its own app now, second on
+the dock, right off the radar. The rail is six buttons again and each is
+back to 92 px.
+
+The map still draws the course on the chart — numbered circles, the
+rounding side lettered, the view fitted to include them — because
+`COURSE` is the boat's state and not the sheet's. That was always true;
+it is just visible now that the editor has left.
 - **the library's hint line**, which had the foot to itself and was
   underneath it. It has moved up, and now says what the two row
   buttons do rather than repeating how to close a sheet.

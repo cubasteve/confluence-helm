@@ -47,7 +47,8 @@ await fling(3,-260,0); ok((await p.evaluate(()=>PAGE_I))===2, 'the music page');
 await fling(3,260,0);  ok((await p.evaluate(()=>PAGE_I))===1, 'and back');
 await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks'))); await p.waitForTimeout(800);
 ok(await p.evaluate(()=>tmap.classList.contains('open')), 'the track map');
-await p.evaluate(()=>openCourse()); await p.waitForTimeout(600);
+await p.evaluate(()=>closeApp()); await p.waitForTimeout(400);
+await p.evaluate(()=>openCourse()); await p.waitForTimeout(700);
 const rows=await p.$$eval('#course-list .cv-tile',n=>n.length);
 ok(rows>=10, 'the course sheet, with every mark on it', String(rows));
 await p.evaluate(()=>{ courseEdit=true; renderCourse(); });
@@ -65,12 +66,13 @@ const X=await p.evaluate(()=>{ const e=$('app-close'), r=e.getBoundingClientRect
 ok(X.svg && X.txt==='', 'a cross, with no word left on it', JSON.stringify(X));
 ok(X.w===76 && X.h===76, 'round, and the height the pill was', X.w+'x'+X.h);
 ok(X.foot===38, 'in the same place, so nothing above it moves', String(X.foot));
-/* It goes back one step: the course sheet is in front of the app, so
-   the first tap takes that and the second takes the app. */
+/* It goes back one step where there is one: the mark form is in front
+   of the course, so the first tap takes that and the second the app. */
+await p.evaluate(()=>mkOpen()); await p.waitForTimeout(300);
 await p.click('#app-close'); await p.waitForTimeout(500);
-ok(!await p.evaluate(()=>$('t-course').classList.contains('on'))
+ok(await p.evaluate(()=>getComputedStyle($('course-add')).display)==='none'
    && await p.evaluate(()=>$('app-run').classList.contains('on')),
-   'one tap puts the sheet away and leaves the app up');
+   'one tap puts the form away and leaves the app up');
 await p.click('#app-close'); await p.waitForTimeout(600);
 ok(!await p.evaluate(()=>$('app-run').classList.contains('on')),
    'and the next shuts the app');

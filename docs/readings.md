@@ -457,7 +457,9 @@ RACE box advances the course on a double tap.
 
 ![The course sheet](img/course-sheet.png)
 
-The next mark comes from the course set in the Tracks app. **The course
+The next mark comes from the course set in the **Course app** — second
+on the dock, right off the radar. It was a sheet inside Tracks until
+the tiles it made you wait for turned out to be tiles it never used. **The course
 reads across the top as a strip**, in the order you will sail it —
 `FLAG – BALL  1 RUM  2 GOSLING  3 CB 12  FINISH`, the line it starts on
 first and the same line at the end — and every mark this boat knows

@@ -3,9 +3,7 @@
 import {open, tally} from './helpers.mjs';
 const t=tally();
 const {b,p}=await open(t,{demo:true, geo:{latitude:28.8215,longitude:-81.2740,accuracy:4}});
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
-await p.waitForTimeout(700);
-await p.evaluate(()=>openCourse()); await p.waitForTimeout(500);
+await p.evaluate(()=>openCourse()); await p.waitForTimeout(700);
 
 /* Type into the form the way the on-screen keyboard does. */
 const type=(field,txt)=>p.evaluate(([f,s])=>{ MK.f=f; MK[f]=s; mkPaint(); },[field,txt]);

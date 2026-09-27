@@ -66,10 +66,35 @@ const chipNo=i=>chip(i)+' i';                          /* its number: the way ou
 const course=()=>p.evaluate(()=>({marks:COURSE.marks.slice(), next:COURSE.next,
                                   side:(COURSE.side||[]).slice()}));
 
-t.head('the sheet opens on the course button, and closes on it');
-await tap('#trk-course');
+t.head('the course is its own app, off the dock beside the radar');
+/* It was a third sheet inside the map, which meant satellite tiles and
+   800 path segments decoded first, ten minutes before a gun, for a
+   sheet that reads none of it. */
+await p.evaluate(()=>{ closeApp(); }); await p.waitForTimeout(400);
+await p.evaluate(()=>openApps()); await p.waitForTimeout(500);
+t.ok(await p.evaluate(()=>APPS.map(a=>a.id).join())==='radar,course,tracks,golden',
+     'second on the dock, right off the radar',
+     await p.evaluate(()=>APPS.map(a=>a.id).join()));
+t.ok(await p.evaluate(()=>{ const r=$('app-row');
+       return r.scrollWidth<=r.clientWidth; }),
+     'and four tiles still fit the 600 px row without it scrolling',
+     await p.evaluate(()=>$('app-row').scrollWidth+' of '+$('app-row').clientWidth));
+t.ok(!await p.evaluate(()=>!!document.getElementById('trk-course')),
+     'with nothing left on the track rail to reach it by');
+await p.evaluate(()=>{ const i=APPS.findIndex(a=>a.id==='course');
+  document.querySelector('#app-row [data-app="'+i+'"]').click(); });
+await p.waitForTimeout(800);
 let S=await sheet();
 t.ok(await p.evaluate(()=>$('t-course').classList.contains('on')), 'it is up');
+t.ok(await p.evaluate(()=>$('t-course').parentElement.id)==='app-body',
+     'in the app frame, not over the map',
+     await p.evaluate(()=>$('t-course').parentElement.id));
+t.ok(await p.evaluate(()=>!tmap.classList.contains('open')),
+     'and the map is not running behind it - no tiles, no track');
+t.ok(await p.evaluate(()=>$('app-name').textContent)==='Course',
+     'the app pill is the sheet\'s title now, rather than a second one '
+     +'under it saying COURSE twice',
+     await p.evaluate(()=>$('app-name').textContent));
 const marks=x=>x.filter(r=>r.mark);
 t.ok(marks(S).length===11, 'all eleven of the club\'s marks, as tiles', String(S.length));
 let L=await line();
@@ -142,17 +167,22 @@ t.ok(await p.evaluate(()=>{const t=document.querySelector('.cv-tile.add');
 t.ok(!await p.evaluate(()=>$('course-done')),
      'there is no DONE beside the heading - the cross at the foot is the '
      +'one way out, and it goes back one step');
+/* The cross still goes back one step - there is just one fewer step to
+   go back through now that the sheet is the app rather than a thing
+   over one. */
+await p.evaluate(()=>mkOpen()); await p.waitForTimeout(300);
 await tap('#app-close');
-t.ok(!await p.evaluate(()=>$('t-course').classList.contains('on')),
-     'the first tap puts the sheet away');
-t.ok(await p.evaluate(()=>$('app-run').classList.contains('on')),
-     'and leaves the app it was over standing');
+t.ok(await p.evaluate(()=>getComputedStyle($('course-add')).display)==='none'
+     && await p.evaluate(()=>$('app-run').classList.contains('on')),
+     'the first tap leaves the mark form, not the app');
 await tap('#app-close');
 t.ok(!await p.evaluate(()=>$('app-run').classList.contains('on')),
-     'the second closes that');
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+     'and with nothing in front of it, the cross closes the app');
+t.ok(await p.evaluate(()=>$('t-course').parentElement.id)==='stage',
+     'the sheet going home before the app frame is wiped',
+     await p.evaluate(()=>$('t-course').parentElement.id));
+await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
-await tap('#trk-course');
 
 t.head('a tap puts a mark in the course, and the strip is the order');
 await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; COURSE.side=[]; courseSave(); renderCourse(); });

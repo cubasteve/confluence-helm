@@ -4,7 +4,7 @@
 import {open, tally} from './helpers.mjs';
 const t=tally();
 const {b,p}=await open(t,{demo:true});
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
 
 const bar=sel=>p.evaluate(s=>{ const el=document.querySelector(s);

@@ -281,7 +281,13 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .approw{display:flex;align-items:flex-start;justify-content:center;gap:26px;
   flex-wrap:nowrap;overflow-x:auto;padding:0;width:600px;max-width:100%;
   margin:0 auto}
-.approw .tile{width:150px;flex:0 0 150px}
+/* Four apps since the course got its own tile, and four at 150 with 26
+   between them is 678 in a row that is 600 - which is a dock that
+   scrolls rather than a dock you can see. 136 and 18 comes to 598, and
+   is still 54 px of tile on the phone. The fifth app scrolls whatever
+   we do here, and the row is built for that. */
+.approw{gap:18px}
+.approw .tile{width:136px;flex:0 0 136px}
 .approw .tile span{white-space:pre-line}
 /* A launched app. */
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
@@ -1009,9 +1015,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   pointer-events:none;transition:opacity .22s;display:flex;
   flex-direction:column;align-items:center;justify-content:center}
 #t-lib.on,#t-course.on{opacity:1;pointer-events:auto}
-/* Seven on the rail now, so each is 84 wide rather than 92: 7 x 84 sits
-   inside the 600 the rail spans. */
-.rbtn{width:84px}
+/* Six on the rail since the course left it for its own app - back to
+   92 apiece, which is 552 of the 600 the rail spans. */
+.rbtn{width:92px}
 /* ---- the course sheet ----
    The course reads across the face as a strip of chips in the order they
    are rounded, and the marks sit under it as tiles to tap into it. That
@@ -2684,77 +2690,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><b>GPX</b></button>
     <button class="rbtn" id="trk-clr"><svg viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
-    <button class="rbtn" id="trk-course"><svg viewBox="0 0 24 24">
-      <circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/>
-      <circle cx="17" cy="17" r="2.5"/><path d="M8 16.5L16 7.5M18 8.5v6"/></svg><b>COURSE</b></button>
-  </div>
-  <!-- The course sheet: the course across the top in the order it is
-       rounded, the marks under it to tap into it, and everything about
-       the evening that is not the course on one row under those. COURSE
-       over the lot, where RACE TRACK and LIBRARY sit on the sheets
-       either side of it. -->
-  <div id="t-course">
-    <div class="t-title" id="course-title">Course</div>
-    <div id="course-main">
-      <div class="cv">
-        <!-- The evening, first: what is left once the line has gone up
-             to the route where it belongs. It sat across the foot, which
-             put the thing you set ONCE below the two you work at all
-             evening - and read bottom-up. The club is one of them,
-             keeping its own colour: see --club. -->
-        <div class="cv-set">
-          <button class="cvr" id="cv-start"></button>
-          <button class="cvr" id="cv-mins"></button>
-          <button class="cvr" id="cv-mode"></button>
-          <button class="cvr club" id="cv-sync"></button>
-        </div>
-        <!-- ROUTE: the two ends of the line with the marks between them,
-             and the one control that belongs to a route - emptying it. -->
-        <div class="cv-hd"><span>Route</span>
-          <button class="cv-act" id="course-clr">Clear</button></div>
-        <!-- The line is a fixed element rather than part of the strip's
-             innerHTML: a menu is anchored to it, and a chip rebuilt from
-             a string is a new node, which pickPlace reads as the control
-             having left the document and closes the menu over. Its
-             content is rewritten; the node stays. #cv-route is
-             display:contents, so the chips inside it wrap in the strip
-             as though they were its own children. -->
-        <div class="cv-strip" id="cv-strip">
-          <button class="cv-line" id="cv-line"></button>
-          <span id="cv-route"></span></div>
-        <!-- MARKS: every buoy this boat knows, the first tile being the
-             way to add one, and the one control that belongs to a list -
-             changing what is in it. -->
-        <div class="cv-hd"><span>Marks</span>
-          <button class="cv-act" id="course-edit">Edit</button></div>
-        <div class="cv-grid noscroll" id="course-list"></div>
-      </div>
-    </div>
-    <!-- A mark of your own: a name, and a position typed or taken from
-         the GPS. Degrees and decimal minutes as the sailing instructions
-         give them, or decimal degrees; west and south are minus.
-         Opened empty by + MARK, and prefilled by a tap on one of your
-         own marks while EDIT is on - a position that could only be
-         written and never read back was a position you had to delete
-         and retype to correct. -->
-    <div id="course-add" style="display:none">
-      <div class="mk-row"><div class="mk-field on" data-f="name"><span class="mk-lbl">NAME</span><span class="mk-val" id="mk-name"></span><span class="pw-cur"></span></div></div>
-      <div class="mk-row">
-        <div class="mk-field" data-f="lat"><span class="mk-lbl">LAT</span><span class="mk-val" id="mk-lat"></span><span class="pw-cur"></span></div>
-        <div class="mk-field" data-f="lon"><span class="mk-lbl">LON</span><span class="mk-val" id="mk-lon"></span><span class="pw-cur"></span></div>
-        <button class="cbtn" id="mk-here">HERE</button>
-      </div>
-      <!-- Which buoy it is. A mark you made on the water is a thing you
-           are looking at; the sheet can draw it if it is told which. -->
-      <div class="mk-buoys" id="mk-buoy"></div>
-      <div class="kb small" id="mk-kb"></div>
-      <div class="ns-msg" id="mk-msg"></div>
-      <div class="course-bar">
-        <button class="cbtn" id="mk-cancel">CANCEL</button>
-        <button class="cbtn on" id="mk-save">SAVE</button>
-      </div>
-    </div>
-
   </div>
   <div id="t-lib">
     <div class="t-title">Library</div>
@@ -2772,6 +2707,79 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div id="qr-url"></div>
     <div id="qr-alt"></div>
   </div>
+</div>
+
+<!-- ---- the course, its own app --------------------------------------
+   It was a third sheet inside the map, reached by a button on the
+   track's rail - which meant that setting a course spun up satellite
+   tiles and 800 path segments first, ten minutes before a gun, for a
+   sheet that needs none of it. Nothing here reads the chart: marks
+   come from a form with a keypad, or from the club. What reads the
+   course is the dial - NEXT MARK, the leg, the rounding, the finish -
+   and that is a page away, not an app away.
+   The map still draws the course on the chart, because COURSE is the
+   boat's, not the sheet's. -->
+<div id="t-course">
+  <div id="course-main">
+    <div class="cv">
+      <!-- The evening, first: what is left once the line has gone up
+           to the route where it belongs. It sat across the foot, which
+           put the thing you set ONCE below the two you work at all
+           evening - and read bottom-up. The club is one of them,
+           keeping its own colour: see --club. -->
+      <div class="cv-set">
+        <button class="cvr" id="cv-start"></button>
+        <button class="cvr" id="cv-mins"></button>
+        <button class="cvr" id="cv-mode"></button>
+        <button class="cvr club" id="cv-sync"></button>
+      </div>
+      <!-- ROUTE: the two ends of the line with the marks between them,
+           and the one control that belongs to a route - emptying it. -->
+      <div class="cv-hd"><span>Route</span>
+        <button class="cv-act" id="course-clr">Clear</button></div>
+      <!-- The line is a fixed element rather than part of the strip's
+           innerHTML: a menu is anchored to it, and a chip rebuilt from
+           a string is a new node, which pickPlace reads as the control
+           having left the document and closes the menu over. Its
+           content is rewritten; the node stays. #cv-route is
+           display:contents, so the chips inside it wrap in the strip
+           as though they were its own children. -->
+      <div class="cv-strip" id="cv-strip">
+        <button class="cv-line" id="cv-line"></button>
+        <span id="cv-route"></span></div>
+      <!-- MARKS: every buoy this boat knows, the first tile being the
+           way to add one, and the one control that belongs to a list -
+           changing what is in it. -->
+      <div class="cv-hd"><span>Marks</span>
+        <button class="cv-act" id="course-edit">Edit</button></div>
+      <div class="cv-grid noscroll" id="course-list"></div>
+    </div>
+  </div>
+  <!-- A mark of your own: a name, and a position typed or taken from
+       the GPS. Degrees and decimal minutes as the sailing instructions
+       give them, or decimal degrees; west and south are minus.
+       Opened empty by + MARK, and prefilled by a tap on one of your
+       own marks while EDIT is on - a position that could only be
+       written and never read back was a position you had to delete
+       and retype to correct. -->
+  <div id="course-add" style="display:none">
+    <div class="mk-row"><div class="mk-field on" data-f="name"><span class="mk-lbl">NAME</span><span class="mk-val" id="mk-name"></span><span class="pw-cur"></span></div></div>
+    <div class="mk-row">
+      <div class="mk-field" data-f="lat"><span class="mk-lbl">LAT</span><span class="mk-val" id="mk-lat"></span><span class="pw-cur"></span></div>
+      <div class="mk-field" data-f="lon"><span class="mk-lbl">LON</span><span class="mk-val" id="mk-lon"></span><span class="pw-cur"></span></div>
+      <button class="cbtn" id="mk-here">HERE</button>
+    </div>
+    <!-- Which buoy it is. A mark you made on the water is a thing you
+         are looking at; the sheet can draw it if it is told which. -->
+    <div class="mk-buoys" id="mk-buoy"></div>
+    <div class="kb small" id="mk-kb"></div>
+    <div class="ns-msg" id="mk-msg"></div>
+    <div class="course-bar">
+      <button class="cbtn" id="mk-cancel">CANCEL</button>
+      <button class="cbtn on" id="mk-save">SAVE</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ============== AMBIENT / SCREENSAVER ==============
@@ -9501,10 +9509,7 @@ $('qr-box').addEventListener('click',e=>{
 $('qr-sheet').addEventListener('click',e=>{ e.stopPropagation(); hideQR(); });
 
 const closeLib=()=>{ rimDraw(null);
-  hideQR(); $('t-lib').classList.remove('on'); $('t-course').classList.remove('on');
-  courseEdit=false; $('course-edit').classList.remove('on');
-  pickClose();
-  if(MK) mkClose(); if(GN) gnClose(); };
+  hideQR(); $('t-lib').classList.remove('on'); };
 /* ---- the course sheet --------------------------------------------------
    The course reads across the top as chips, in the order it is rounded;
    every mark this boat knows sits under it as a tile. Tap a tile to put
@@ -9676,17 +9681,45 @@ function renderCourse(){
      :                     'SYNC')+'</span>', '⌄');
   if(cvpOn()) pickPaint();
 }
-/* COURSE, over the sheet, the way RACE TRACK sits over the map and
-   LIBRARY over the races. The sub-views borrow it to say what they are
-   and hand it back. */
-const crsTitle=t=>{ $('course-title').textContent=t||'Course'; };
+/* The app's own name pill, at the top of the glass. The sheet used to
+   carry a title of its own under it, which was COURSE written twice;
+   now the sub-views borrow the pill to say what they are - New mark,
+   Correct mark - and hand it back. */
+const crsTitle=t=>{ $('app-name').textContent=t||'Course'; };
 /* The arc on the way in: a box that scrolls says so once as it opens,
    the way the fade at its edge does, and then gets out of the way. */
-function openCourse(){ $('t-course').classList.add('on'); crsTitle(); renderCourse();
+/* The app's open. It keeps its name because a dozen places - and every
+   probe that has ever set a course - say openCourse(), and what they
+   mean by it did not change when it stopped being a sheet. */
+function openCourse(){ openApp(APPS.find(a=>a.id==='course')); }
+function courseOpen(host){
+  host.appendChild($('t-course'));
+  $('t-course').classList.add('on');
+  crsTitle(); renderCourse();
   /* Measured after the sheet is up: a box that is display:none has no
      height, and every row would come out at the same angle. */
   setTimeout(()=>{ scrollFit($('course-list')); drumPaint($('course-list'));
-                   rimDraw($('course-list')); },60); }
+                   rimDraw($('course-list')); },60);
+}
+function courseClose(){
+  courseBack(true);               /* any form or menu over it, first */
+  $('t-course').classList.remove('on');
+  rimDraw(null);
+  /* Home before closeApp wipes the body it is sitting in. */
+  $('stage').appendChild($('t-course'));
+}
+/* One step out of whatever is over the sheet. Returns true if it took
+   one, so the cross can close the app only when there was nothing left
+   in front of it - the same rule the map's sheets follow. */
+function courseBack(all){
+  let took=false;
+  if(PICK){ pickClose(); took=true; if(!all) return true; }
+  if(MK)  { mkClose();   took=true; if(!all) return true; }
+  if(GN)  { gnClose();   took=true; if(!all) return true; }
+  if(courseEdit){ courseEdit=false; $('course-edit').classList.remove('on');
+                  renderCourse(); took=true; if(!all) return true; }
+  return took;
+}
 /* Both sheets live in the same overlay, so one close serves both - and
    the arc, which belongs to whichever of them was up. */
 
@@ -9998,8 +10031,6 @@ function startModeSet(m){
   CFG.startMode=m; prefsSave(); renderCourse();
 }
 
-$('trk-course').addEventListener('click',()=>{
-  if($('t-course').classList.contains('on')) closeLib(); else { hideQR(); $('t-lib').classList.remove('on'); openCourse(); } });
 $('course-list').addEventListener('click',e=>{
   if(courseDragged()) return;                 /* a scroll, not a choice */
   const tile=e.target.closest('.cv-tile'); if(!tile) return;
@@ -12465,6 +12496,17 @@ const APPS=[
    ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
       +'<path d="M12 12l6.4-6.4"/>',
    open:radarOpen, close:radarClose},
+  /* Two marks and the way between them, curved because nothing on the
+     water is a straight line. Quiet on purpose: it sits next to the
+     radar, and the three candidates that read loudest - a triangle of
+     buoys, an arrow rounding a mark, a buoy on the water - were all a
+     ring with something in it at 42 px, which is what the radar already
+     is. This one is the only shape on the dock that is two things and
+     a path. */
+  {id:'course', name:'Course',
+   ico:'<circle cx="5.8" cy="17.6" r="2.4"/><circle cx="18.2" cy="6.4" r="2.4"/>'
+      +'<path d="M5.8 15.2C5.8 9.4 18.2 14.6 18.2 8.8"/>',
+   open:courseOpen, close:courseClose},
   /* The route cutting across the glass with the boat riding it, the way
      Tesla draws the road under the car. The band is its two edges rather
      than a fill, because everything else on this panel is an open
@@ -12552,9 +12594,13 @@ function appFail(msg){
    asks about; every other app has nothing in front of it and the cross
    closes it on the first tap, as it always did. */
 $('app-close').addEventListener('click',()=>{
-  const sheet=$('t-course').classList.contains('on')
-           || $('t-lib').classList.contains('on');
-  if(sheet) closeLib(); else closeApp();
+  /* One step at a time, and only where there is a step to take: the
+     map has its library over it, the course has its mark form and its
+     menus. Every other app has nothing in front of it and the cross
+     closes it on the first tap, as it always did. */
+  if(APP.on && APP.on.id==='course' && courseBack()) return;
+  if($('t-lib').classList.contains('on')) return closeLib();
+  closeApp();
 });
 
 /* ---- fullscreen -------------------------------------------------------

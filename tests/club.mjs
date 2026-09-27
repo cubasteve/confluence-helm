@@ -44,9 +44,8 @@ const clear=()=>p.evaluate(()=>{ COURSE={marks:[],next:0,side:[]}; courseSave();
 
 /* The course sheet hangs off the tracks app, as it does for the probe
    next door. */
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
-await tap('#trk-course');
 
 t.head('the readout is on the sheet and says what it is for');
 let S=await said();

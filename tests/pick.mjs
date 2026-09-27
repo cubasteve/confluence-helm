@@ -87,9 +87,7 @@ t.ok((await box()).on, 'and it is still open');
 await p.mouse.click(540, 60); await p.waitForTimeout(250);
 
 t.head('the course sheet opens the same box');
-await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
-await p.waitForTimeout(700);
-await p.evaluate(()=>openCourse()); await p.waitForTimeout(300);
+await p.evaluate(()=>openCourse()); await p.waitForTimeout(600);
 await tapAt('#cv-mode');
 B=await box();
 t.ok(B.on && B.rows===2, 'the sequence menu is the menu', JSON.stringify(B.rows));
