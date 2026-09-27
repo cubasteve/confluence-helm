@@ -229,6 +229,79 @@ t.ok(!/TAP/.test(W.txt) && W.off, 'and one output is not a choice', W.txt);
 W=await who({available:true, mode:'gpio', gpio:17});
 t.ok(W.txt==='GPIO 17' && W.off, 'a wire on a pin has no output to pick', W.txt);
 
+t.head('the horn and the glass share one box');
+/* They were two cards, two headings and two thirds of a row of the
+   panel spent on saying 'sound' twice. */
+const snd=st=>p.evaluate(st=>{ paintSounder(st);
+  return {card:!!$('snd-slab').offsetHeight,
+          slab:$('snd-slab').querySelector('.slab').textContent,
+          labels:[...$('snd-slab').querySelectorAll('.sndlbl')]
+                   .filter(k=>k.offsetHeight).map(k=>k.textContent).join(),
+          horn:getComputedStyle($('snd-row')).display!=='none',
+          who:getComputedStyle($('snd-who')).display!=='none',
+          voice:!!$('clk-voice').offsetHeight}; }, st);
+let N=await snd({available:true, mode:'audio', pinned:false, outs:OUT2,
+                 device:'pulse'});
+t.ok(N.slab==='Sound', 'one box, named for what it is about', N.slab);
+t.ok(N.labels==='Horn,Touch', 'with the two noises named down the left, '
+     +'because two headings inside one box is the two boxes back again',
+     N.labels);
+t.ok(N.horn && N.who && N.voice, 'all of it on a boat with a sounder',
+     JSON.stringify(N));
+N=await snd({available:false});
+t.ok(N.card && N.voice, 'and on a boat with none the box stays and the '
+     +'touch sound with it - it comes out of whatever is playing the page, '
+     +'so it works where there is no helper to ask', JSON.stringify(N));
+t.ok(!N.horn && !N.who, 'while the horn and its output go, rather than '
+     +'standing there meaning nothing');
+t.ok(N.labels==='Touch', 'leaving one label, which is now the only thing '
+     +'saying which noise it is', N.labels);
+await p.evaluate(()=>paintSounder({available:true, mode:'audio', pinned:false,
+  outs:[{dev:'pulse',name:'PIPEWIRE / PULSE'}], device:'pulse'}));
+
+t.head('the saver can put the display out, and says whether it really can');
+/* A page cannot turn a display off. It can paint pixels black, which on
+   an LCD saves nothing - the backlight is behind them. What can is the
+   helper, when the kernel gives it a backlight device. The tile has to
+   say which of those it is about to do. */
+const dk=()=>p.evaluate(()=>({sub:$('ssd-sub').textContent,
+  on:$('ssd-btn').classList.contains('on'), cfg:CFG.saverDark}));
+await p.evaluate(()=>{ CFG.saverDark=false; drawDark(); BL={available:true};
+                       drawDark(); });
+let D=await dk();
+t.ok(D.sub==='OFF' && !D.on, 'off to start with', JSON.stringify(D));
+await p.evaluate(()=>$('ssd-btn').click()); await p.waitForTimeout(200);
+D=await dk();
+t.ok(D.cfg && D.on, 'a tap turns it on');
+t.ok(D.sub==='BACKLIGHT', 'and with a backlight to reach it says so - that '
+     +'is the one setting on this rig that saves power worth the name',
+     D.sub);
+await p.evaluate(()=>{ BL={available:false}; drawDark(); });
+t.ok((await dk()).sub==='BLACK ONLY',
+     'without one it says BLACK ONLY rather than claiming a saving it '
+     +'is not making', (await dk()).sub);
+
+posts.length=0;
+await p.evaluate(()=>{ BL={available:true}; closePanel(); ssStart(); });
+await p.waitForTimeout(500);
+t.ok(await p.evaluate(()=>$('saver').classList.contains('dark')),
+     'the saver comes up black rather than ambient');
+t.ok(await p.evaluate(()=>ssRaf===null),
+     'with no animation frame running behind it');
+t.ok(posts.some(o=>o.path==='/backlight' && o.body.pct===0 && o.body.off===true),
+     'and the backlight asked for nought, with the flag that lifts the '
+     +'slider\'s 5% floor - the floor is about being stranded, and a '
+     +'saver any touch ends cannot strand you',
+     JSON.stringify(posts.filter(o=>o.path==='/backlight').map(o=>o.body)));
+posts.length=0;
+await p.evaluate(()=>ssStop()); await p.waitForTimeout(400);
+t.ok(posts.some(o=>o.path==='/backlight' && o.body.pct===100),
+     'and waking puts the brightness back where it was',
+     JSON.stringify(posts.filter(o=>o.path==='/backlight').map(o=>o.body)));
+await p.evaluate(()=>{ CFG.saverDark=false; prefsSave(); drawDark();
+                       openPanel(); });
+await p.waitForTimeout(400);
+
 t.head('the panel fits the glass');
 /* It stopped fitting once it was a single 600 px column of sections -
    600 px wide on a circle of radius 540 is only lit between y=91 and
@@ -247,9 +320,22 @@ const sh=()=>p.evaluate(()=>{ const e=$('p-sheet'), r=e.getBoundingClientRect();
           cards:[...e.querySelectorAll('.card')].filter(k=>k.offsetHeight).length,
           outside:[...new Set(out)]}; });
 let S=await sh();
-t.ok(S.cards===4, 'four cards - display, the shallow alarm, the touch sound, '
-     +'and the sounder when there is one. The start is not among them: it '
-     +'moved to the course sheet with the rest of the start', String(S.cards));
+/* and the merged one is the same size as the others, which is the only
+   reason it is not out past the rim: it sits in the lower left where
+   the glass is running out, and at 256 tall its bottom corner was three
+   pixels off it. */
+t.ok(await p.evaluate(()=>{
+       const h=[...$('p-sheet').querySelectorAll('.card')].filter(k=>k.offsetHeight)
+         .map(k=>Math.round(k.getBoundingClientRect().height));
+       return Math.max(...h)-Math.min(...h) <= 4; }),
+     'every card the same height, the sound box included',
+     await p.evaluate(()=>[...$('p-sheet').querySelectorAll('.card')]
+       .filter(k=>k.offsetHeight)
+       .map(k=>Math.round(k.getBoundingClientRect().height)).join()));
+t.ok(S.cards===3, 'three cards - display, the shallow alarm, and sound, '
+     +'which is the horn and the glass in one box. The start is not among '
+     +'them: it moved to the course sheet with the rest of the start',
+     String(S.cards));
 t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
 t.ok(!S.over, 'so nothing is faded off an edge');
 t.ok(S.outside.length===0, 'and no card corner is out in the black',

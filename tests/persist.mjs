@@ -15,7 +15,7 @@ const store=k=>p.evaluate(k=>localStorage.getItem(k), k);
 t.head('the preferences');
 await p.evaluate(()=>{ CFG.theme='night'; CFG.depthUnit='m'; CFG.depthAlarm=4;
   CFG.depthWarn=8; CFG.dim=55; CFG.windDemo=false; CFG.startMode='window';
-  prefsSave(); });
+  CFG.startMins=0; CFG.saverDark=true; prefsSave(); });
 await reboot();
 let C=await p.evaluate(()=>({theme:CFG.theme, u:CFG.depthUnit, a:CFG.depthAlarm,
   w:CFG.depthWarn, dim:CFG.dim, wd:CFG.windDemo}));
@@ -31,6 +31,18 @@ t.ok(await p.evaluate(()=>CFG.startMode)==='window',
 t.ok(await p.evaluate(()=>{ renderCourse();
        return $('cv-mode').querySelector('b').textContent.trim()==='WINDOW'; }),
      'with the course sheet reading it back');
+/* nought is a length like any other, and the one most easily lost by
+   code that tests a number for truth rather than for membership */
+t.ok(await p.evaluate(()=>CFG.startMins)===0,
+     'a countdown of OFF, which is nought and not nothing',
+     String(await p.evaluate(()=>CFG.startMins)));
+t.ok(await p.evaluate(()=>{ renderCourse();
+       return $('cv-mins').querySelector('b').textContent.trim(); })==='OFF',
+     'read back on the sheet as OFF');
+t.ok(await p.evaluate(()=>CFG.saverDark)===true,
+     'and whether the saver puts the display out, which is a fact about '
+     +'the boat rather than about today',
+     String(await p.evaluate(()=>CFG.saverDark)));
 t.ok(await p.evaluate(()=>document.body.className)==='night',
      'and the theme is actually applied, not just remembered',
      await p.evaluate(()=>document.body.className));
@@ -40,7 +52,8 @@ t.ok(await p.evaluate(()=>$('theme-lbl').textContent)==='NIGHT',
 t.head('a stored value that is nonsense is ignored, not obeyed');
 await p.evaluate(()=>localStorage.setItem('helmPrefs', JSON.stringify(
   {theme:'chartreuse', depthUnit:'fathoms', depthAlarm:900, dim:-40,
-   windDemo:'yes', phoneGps:1, startMode:'pursuit'})));
+   windDemo:'yes', phoneGps:1, startMode:'pursuit', startMins:7,
+   saverDark:'dark'})));
 await reboot();
 C=await p.evaluate(()=>({theme:CFG.theme, u:CFG.depthUnit, a:CFG.depthAlarm,
   dim:CFG.dim, wd:CFG.windDemo, ph:CFG.phoneGps}));
@@ -53,6 +66,13 @@ t.ok(C.wd===true && C.ph===false, 'a string where a boolean belongs is not a boo
 t.ok(await p.evaluate(()=>CFG.startMode)==='gun',
      'and a start format nobody wrote falls back to the strict one',
      await p.evaluate(()=>CFG.startMode));
+t.ok(await p.evaluate(()=>CFG.startMins)===5,
+     'a countdown length off the list does the same - seven minutes is '
+     +'not one of the four, whatever storage says',
+     String(await p.evaluate(()=>CFG.startMins)));
+t.ok(await p.evaluate(()=>CFG.saverDark)===false,
+     'and a string where the saver wants a boolean is not one',
+     String(await p.evaluate(()=>CFG.saverDark)));
 t.ok(t.errs.length===0, 'and none of it throws on the way up',
      t.errs.join(' | '));
 

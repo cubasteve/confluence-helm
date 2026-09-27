@@ -466,7 +466,12 @@ course.** Every tap adds a rounding, so tapping the same tile twice
 sails past that buoy twice — the tile then says `IN COURSE · 1,3` and
 the map draws one circle at the buoy carrying both numbers. The mark
 being sailed to is the chip with the ring round it. With no course set,
-the only leg is back to the line.
+the only leg is back to the line — and that is exactly what the strip
+shows: `FLAG – BALL  FINISH`, start here and come back here, nothing
+between. It used to carry `NOTHING YET · TAP A MARK BELOW, OR SYNC THE
+CLUB'S`, a sentence explaining the two things directly under it — a grid
+of marks with `TAP TO ADD` written on every tile, and a readout that
+says `SYNC`. An empty route looks like an empty route now.
 
 **A tap on a chip's number takes that one rounding out**, and the rest
 close up. Removal lives on the chip rather than on the tile because the
@@ -570,7 +575,7 @@ glance and only occasionally change.
 | | reads | a tap |
 |---|---|---|
 | `START TIME` | `6:25 PM`, or `NOT SET` | opens the pad that types it — see below |
-| `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, and round again |
+| `COUNTDOWN` | `5 MIN` | **steps** it: 5, 10, 15, `OFF`, and round again |
 | `SEQUENCE` | `GUN` or `WINDOW` | opens a menu: both, with what each does to the line |
 | `CLUB` | `SYNC`, `CHECKING…`, `4 MARKS?` | asks the club site and opens on the answer — see below |
 
@@ -583,12 +588,24 @@ same as the strip and the marks below it, so its ends line up with
 both — it was 940 and hanging 62 px proud of each when there were five
 readings and a button row holding it higher up the glass.
 
-The countdown is the only one that opens nothing. Three values is not
+The countdown is the only one that opens nothing. Four values is not
 worth opening, scrolling and dismissing something for. It is how long
 the countdown runs — the club's sequence is five minutes, and a regatta
 that runs ten or fifteen needs saying once. Change it while nothing is
 running and the RACE pill carries the new length at once rather than at
 the next reset.
+
+**`OFF` is a countdown of nothing.** Press `START` and the gun goes at
+once and the race is running. It is not the clock turned off — the race
+clock runs and the line still starts and finishes you — it is the
+*sequence* being none. A practice start, a pursuit where your gun has
+already gone, or a race you joined late all want it, and the only way to
+get one before was to start a five and sit through it. It is written
+`OFF` rather than `0 MIN` because nought of something reads as a broken
+number, and this is the absence of the thing rather than none of it.
+Being a length like any other, it is remembered across a restart — and
+it is the one most easily lost by code that tests a number for truth
+instead of for membership, so `persist` asserts it by name.
 
 **The menu is the dial's readings picker** — the same box, the same
 code: painted in `--panel` over a hairline so it reads as something in

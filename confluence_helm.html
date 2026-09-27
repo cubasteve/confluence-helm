@@ -615,7 +615,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .tile .sub{font-size:14px;font-weight:600;letter-spacing:.06em;
   color:var(--accent);margin-top:-4px}
 .tile.off .sub{color:var(--label)}
-#ss-ico,#race-ico{fill:none;stroke:currentColor;stroke-width:1.9;
+#ss-ico,#ssd-ico,#race-ico{fill:none;stroke:currentColor;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
 #ss-ico text{fill:currentColor;stroke:none;font-family:var(--font)}
 .tile.on{color:var(--accent)}
@@ -654,9 +654,19 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* The sounder row. The button keeps its own width rather than taking the
    row, because what it says beside itself - the output it is actually
    driving - is the half of the answer a silent test does not give. */
-.sndrow{display:flex;align-items:center;gap:18px;margin-top:4px}
-.sndrow .mini.wide{flex:none;width:168px;height:74px}
-.sndwho{display:block;width:100%;margin-top:12px;
+/* Two rows in a box the others fill with one, so the rows are tighter
+   and the buttons shorter: this card has to come out the same height as
+   DISPLAY and SHALLOW ALARM beside it, and it sits in the lower left
+   where the glass is running out - at 256 tall its bottom corner was
+   three pixels off the rim. */
+.sndrow{display:flex;align-items:center;gap:18px;margin-top:2px}
+.sndrow .mini.wide{flex:none;width:168px;height:64px}
+/* Which noise this row is about. Down the left rather than over each
+   button: two headings inside one box is the two boxes back again, and
+   a word beside a control is read as belonging to it. */
+.sndlbl{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.14em;
+  color:var(--label);text-transform:uppercase}
+.sndwho{display:block;width:100%;margin-top:8px;
   font-size:19px;font-weight:600;letter-spacing:.08em;
   color:var(--label);text-transform:uppercase;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
@@ -880,6 +890,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* --- ambient screensaver --- */
 #saver{position:absolute;inset:0;background:var(--bg);opacity:0;z-index:30;
   pointer-events:none;transition:opacity .5s}
+/* Black, not the theme's background: the point is the fewest lit pixels
+   there can be, and on an OLED that is the whole of the saving. Its
+   children are hidden rather than left to paint into the dark. */
+#saver.dark{background:#000}
+#saver.dark > *{display:none}
 #saver.on{opacity:1;pointer-events:auto}
 #ss-cv{position:absolute;inset:0;width:100%;height:100%}
 .ss-mid{position:absolute;inset:0;display:flex;flex-direction:column;
@@ -1033,7 +1048,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    so what the second tap would replace the strip with is the strip. */
 .cv-chip.ghost{background:none;border:2px dashed var(--club);color:var(--club)}
 .cv-chip.ghost i{background:var(--club)}
-.cv-empty{font-size:20px;letter-spacing:.12em;color:var(--label)}
 /* The marks: what the buoy looks like, what it is called, and where it
    stands in the course. Four across and 92 tall - smaller than they
    were, because a drawing of the buoy says in a glance what a line of
@@ -2372,6 +2386,21 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <span id="ss-lbl2">SAVER</span>
         <span class="sub" id="ss-sub">OFF</span>
       </button>
+      <!-- What the saver DOES, beside how long it waits. Two settings
+           and two controls: folding a kind into a cycle of delays would
+           have made seven taps to get round, and they are independent -
+           you want the same wait whichever it does.
+           Its second line is the honest one. With a backlight this can
+           reach, DARK means the backlight goes to nought, which is most
+           of what the panel draws and the only setting on this rig that
+           saves power worth the name. Without one, all a page can do is
+           paint the pixels black behind a backlight that stays lit - so
+           it says BLACK ONLY, and does not pretend. -->
+      <button class="tile" id="ssd-btn">
+        <svg id="ssd-ico" viewBox="0 0 24 24"></svg>
+        <span>DARK</span>
+        <span class="sub" id="ssd-sub">OFF</span>
+      </button>
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
 
@@ -2396,34 +2425,37 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
     </div>
 
-    <!-- What the glass sounds like under a finger. A cycle rather than
-         a list of six: the only way to choose a sound is to hear it, so
-         the control that changes it plays it, and one button is the
-         whole of both. Always shown - it comes out of whatever is
-         playing the page, so it works on the phone too, where there is
-         no sounder to report. -->
-    <div class="card">
-    <div class="slab">Touch sound</div>
-    <div class="sndrow">
-      <button class="mini wide" id="clk-voice"></button>
-    </div>
-    </div>
-
-    <!-- Shown only when netd reports a sounder. Its whole job is the
-         question you cannot answer from the cockpit any other way: is
-         the thing plugged in, and can I hear it from back there. So it
-         sounds the GUN, not a polite chirp - the loudest noise the boat
-         will make, which is the one you need to have heard before a
-         start rather than during one.
-         The CARD carries the display, not the rows: an empty bordered
-         box on a boat with no sounder would be worse than the gap. -->
-    <div class="card sndslab" id="snd-slab" style="display:none">
-    <div class="slab">Sounder</div>
+    <!-- Everything this boat makes a noise with, in one box. They were
+         two - TOUCH SOUND and SOUNDER - which is two bordered cards, two
+         headings and two thirds of a row of the panel spent on saying
+         'sound' twice. They are not the same noise, so the box names
+         both: one is the horn on the coachroof and the other is the
+         glass under your finger, and the labels down the left are what
+         tells them apart now that the headings do not.
+         The box is here whatever the boat has. The TOUCH row always
+         applies - it comes out of whatever is playing the page, so it
+         works on the phone, where there is no helper to ask - and the
+         HORN row and the output under it appear only when netd reports
+         a sounder. An empty bordered box on a boat with no sounder
+         would be worse than the gap, which is why the old card hid
+         itself; half a box has no such problem. -->
+    <div class="card" id="snd-slab">
+    <div class="slab">Sound</div>
+    <!-- The horn's whole job is the question you cannot answer from the
+         cockpit any other way: is the thing plugged in, and can I hear
+         it from back there. So TEST sounds the GUN, not a polite chirp -
+         the loudest noise the boat will make, which is the one you need
+         to have heard before a start rather than during one. -->
     <div class="sndrow" id="snd-row">
+      <span class="sndlbl">Horn</span>
       <button class="mini wide" id="snd-test">TEST</button>
     </div>
-    <!-- Where it comes out. A tap cycles whatever netd says this Pi has:
-         the jack, and anything in front of ALSA - which is how a
+    <div class="sndrow">
+      <span class="sndlbl">Touch</span>
+      <button class="mini wide" id="clk-voice"></button>
+    </div>
+    <!-- Where the horn comes out. A tap cycles whatever netd says this
+         Pi has: the jack, and anything in front of ALSA - which is how a
          Bluetooth speaker is reached. Not a button on a GPIO rig, where
          there is one wire and no choice.
          On its own line: beside the button it had 225 px, and PIPEWIRE /
@@ -2833,6 +2865,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
   host:SK_HOST, theme:'auto', demo:false, phoneGps:false,
+
+  /* What the screensaver does when it comes up: show the ambient
+     readings, or put the display out. See ssDark. */
+  saverDark:false,
 
   /* Which noise a control makes under a finger. A capacitive panel in a
      cockpit gives nothing back: no travel, no detent, and gloved or wet
@@ -4057,9 +4093,15 @@ const LINE_AUTO={startWindow:180000, away:60, slack:0.1, maxJump:80};
    has done it already. They part again afterwards: on a WINDOW night
    the crossing is still your start and the clock moves to it, and on a
    GUN night the gun stands and a late crossing is lost time. */
-/* The countdown's three lengths. A tap on the readout steps them, which
-   is quicker than a menu for three values. */
-const START_MINS=[5,10,15];
+/* The countdown's lengths, and OFF. A tap on the readout steps them,
+   which is quicker than a menu for four values.
+   OFF is a countdown of nothing: press START and the gun goes at once
+   and the race is running. It is not a way of turning the clock off -
+   the race clock still runs and the line still works - it is the
+   sequence being none. A practice start, a pursuit where your gun has
+   already gone, or a race you joined late all want it, and before this
+   the only way to get one was to start a five and sit through it. */
+const START_MINS=[5,10,15,0];
 const START_MODES=['gun','window'];
 let lineWas=null, lineArmed=false;
 /* Nothing automatic happens until you have started the countdown by
@@ -5547,7 +5589,9 @@ const PREF_DEFS={
   /* Five, ten or fifteen minutes - the three sequences anyone runs. */
   startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
   /* Which noise the glass makes under a finger, or none. */
-  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
+  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null,
+  /* And whether the saver goes dark rather than ambient. */
+  saverDark:  v=>typeof v==='boolean' ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5815,6 +5859,9 @@ async function netStatus(){
   /* First word from the helper, or the mechanism changed under us: repaint
      the slider and push the saved brightness at the hardware. */
   if(first || BL.available!==hadBL) applyDim(CFG.dim);
+  /* DARK's second line says what it will actually do, and that is not
+     known until the helper has answered about a backlight. */
+  if(first || BL.available!==hadBL) drawDark();
   if(!w.available && !b.available && !pwr.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
   $('conn-sec').style.display='';
@@ -6168,9 +6215,12 @@ function netForget(i){
    Kept so the tap knows what to cycle to without asking again. */
 let SND={outs:[], dev:'', pinned:false};
 function paintSounder(st){
+  /* The box stays; the horn's two rows come and go. Touch sound is in
+     here too and applies to every rig, so hiding the whole card on a
+     boat with no sounder would take a working control with it. */
   const on=!!(st&&st.available);
-  $('snd-slab').style.display=on?'':'none';
-  $('snd-row') .style.display=on?'':'none';
+  $('snd-row').style.display=on?'':'none';
+  $('snd-who').style.display=on?'':'none';
   sheetFit();                    /* two more rows, or two fewer */
   if(!on) return;
   const audio = st.mode==='audio';
@@ -9467,10 +9517,14 @@ function renderCourse(){
     +'<path d="M8.4 12h7.2" stroke-dasharray="2.6 2.4"/></svg><b>'
     +esc(LE.pinged ? 'PINGED'
          : lineMark('pin').hdr+' – '+lineMark('boat').hdr)+'</b><u>⌄</u>';
-  $('cv-route').innerHTML = ids.length
-    ? ids.map(chip).join('')+'<div class="cv-chip fin">FINISH</div>'
-    : '<span class="cv-empty">NOTHING YET · TAP A MARK BELOW, '
-      +'OR SYNC THE CLUB’S</span>';
+  /* With no marks the route is the line and the finish, which is what a
+     race with no course actually is: start here, come back here. It
+     said NOTHING YET · TAP A MARK BELOW, OR SYNC THE CLUB'S, which was
+     a sentence telling you about the two things directly under it - the
+     grid of marks with TAP TO ADD on every tile, and a readout that
+     says SYNC. An empty route now looks like an empty route. */
+  $('cv-route').innerHTML =
+    ids.map(chip).join('')+'<div class="cv-chip fin">FINISH</div>';
 
   wCls('course-list','edit', courseEdit);
   /* CLEAR has nothing to clear until there is a route. */
@@ -9516,7 +9570,10 @@ function renderCourse(){
      which neither says alone. */
   rd('cv-start','START TIME', GUNAT!==null ? gunTxt(GUNAT) : 'NOT SET','⋯');
   wCls('cv-start','in', GUNAT!==null);
-  rd('cv-mins','COUNTDOWN', CFG.startMins+' MIN','＋');
+  /* OFF rather than 0 MIN: nought of something reads as a broken
+     number, and this is the absence of the thing rather than none of
+     it. */
+  rd('cv-mins','COUNTDOWN', CFG.startMins ? CFG.startMins+' MIN' : 'OFF','＋');
   rd('cv-mode','SEQUENCE', CFG.startMode==='window'?'WINDOW':'GUN','⌄');
   const c2=CLUB;
   rd('cv-sync','CLUB', ICO_SYNC+'<span>'+(
@@ -9702,7 +9759,7 @@ function clubTap(){
   cvpOpen('club');
   if(cvpOn() && !was && CLUB.step==='idle') clubFetch();
 }
-/* Five, ten, fifteen, five. Three values a thumb can step through. */
+/* Five, ten, fifteen, off, five. Four values a thumb can step through. */
 function minsStep(){
   CFG.startMins=START_MINS[(START_MINS.indexOf(CFG.startMins)+1)%START_MINS.length];
   prefsSave();
@@ -10273,9 +10330,37 @@ function ssTick(){
   setTimeout(ssTick,500);
 }
 
-function ssStart(){ if(ssOn)return; ssOn=true; ssInit(); saver.classList.add('on'); ssFrame(); }
-function ssStop(){ ssOn=false; saver.classList.remove('on');
-  if(ssRaf)cancelAnimationFrame(ssRaf); ssRaf=null; lastTouch=Date.now(); }
+/* ---- the saver, dark ----------------------------------------------------
+   A page cannot turn a display off. All it can do on its own is paint
+   the pixels black, and on an LCD that saves nothing worth measuring:
+   the backlight is behind the pixels and stays lit whatever they show.
+   What CAN is the helper, when the kernel gives it a backlight device -
+   and the backlight is most of what a panel draws, so nought there is
+   the one setting on this rig that saves real power.
+   netd floors the brightness slider at 5% on purpose: a helm you cannot
+   see is a helm where you cannot find the slider to turn it back up.
+   The saver passes off:true to lift that floor, and may, because any
+   touch anywhere ends it and puts the brightness back. The floor is
+   about being stranded, and the saver cannot strand you.
+   Painting black is still worth doing when there is no backlight to
+   reach - it stops the ambient animation, which is a rAF a frame - but
+   the panel says BLACK ONLY in that case rather than claiming a saving
+   it is not making. */
+function ssBacklight(on){
+  if(!CFG.saverDark || !BL.available) return;
+  netApi('/backlight', on ? {pct:CFG.dim} : {pct:0, off:true});
+}
+function ssStart(){ if(ssOn)return; ssOn=true;
+  /* Dark first, so the ambient frame never paints in the dark case. */
+  wCls('saver','dark', !!CFG.saverDark);
+  if(CFG.saverDark){ saver.classList.add('on'); ssBacklight(false); return; }
+  ssInit(); saver.classList.add('on'); ssFrame(); }
+function ssStop(){
+  const was=ssOn;
+  ssOn=false; saver.classList.remove('on');
+  if(ssRaf)cancelAnimationFrame(ssRaf); ssRaf=null; lastTouch=Date.now();
+  if(was) ssBacklight(true);
+}
 
 /* ---- ambient: one control, four states --------------------------------
    The old pair - a launch button and an on/off auto toggle - collapse
@@ -10286,6 +10371,20 @@ function ssStop(){ ssOn=false; saver.classList.remove('on');
 const SS_DELAYS=[0, 10000, 60000, 300000];
 const SS_TEXT  =['OFF','10s','1m','5m'];
 let ssStep=0;
+/* A screen with its light out, and the same glyph struck through when it
+   is not going to. */
+function drawDark(){
+  const on=!!CFG.saverDark;
+  $('ssd-ico').innerHTML='<rect x="3" y="5" width="18" height="13" rx="2"/>'
+    +'<path d="M9 21h6"/>'
+    +(on ? '' : '<path d="M6.5 8.2l11 7.6"/>');
+  /* The second line is what it will actually DO on this rig, which is
+     not the same question as whether it is on. */
+  $('ssd-sub').textContent = !on ? 'OFF'
+    : BL.available ? 'BACKLIGHT' : 'BLACK ONLY';
+  $('ssd-btn').classList.toggle('on', on);
+  $('ssd-btn').classList.toggle('off', !on);
+}
 function drawAmbient(){
   const on=ssStep>0;
   $('ss-ico').innerHTML =
@@ -12456,8 +12555,10 @@ const ssRelease=e=>{
   drawAmbient(); lastTouch=Date.now();
 };
 $('ss-btn').addEventListener('pointerup',ssRelease);
+$('ssd-btn').addEventListener('click',()=>{
+  CFG.saverDark=!CFG.saverDark; prefsSave(); drawDark(); });
 $('ss-btn').addEventListener('pointercancel',()=>{ clearTimeout(ssHold); ssHold=null; });
-drawAmbient();
+drawAmbient(); drawDark();
 saver.addEventListener('pointerdown',e=>{ e.stopPropagation(); ssStop(); });
 addEventListener('pointerdown',()=>{ lastTouch=Date.now(); });
 addEventListener('resize',()=>{ if(ssOn) ssInit(); });

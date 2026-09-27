@@ -710,17 +710,27 @@ def backlight_status():
             'dev': os.path.basename(d)}
 
 
-def backlight_set(pct):
+def backlight_set(pct, allow_off=False):
+    """allow_off lifts the floor, and only the screensaver passes it.
+
+    The floor exists because a helm you cannot see is a helm where you
+    cannot find the slider to turn it back up - which is a real way to
+    lose the instruments in the dark, and the slider has no way out of
+    it. The saver has: any touch anywhere ends it and puts the
+    brightness back, so nought there strands nobody. It is also the only
+    setting on this rig that saves a measurable amount of power, because
+    the backlight is most of what the panel draws."""
     d = backlight_dev()
     if not d:
         return {'ok': False, 'error': 'NO BACKLIGHT'}
     try:
         mx = _bl_read(d + '/max_brightness')
-        # Floored at 5%, never 0. A helm you cannot see is a helm where you
-        # cannot find the slider to turn it back up.
-        pct = max(5, min(100, int(pct)))
+        pct = max(0 if allow_off else 5, min(100, int(pct)))
+        # 0 means 0: a floor of one raw step is still a lit panel, and the
+        # whole point of this path is a dark one.
+        raw = 0 if pct == 0 else max(1, int(round(mx * pct / 100.0)))
         with open(d + '/brightness', 'w') as f:
-            f.write(str(max(1, int(round(mx * pct / 100.0)))))
+            f.write(str(raw))
         return {'ok': True, 'pct': pct}
     except PermissionError:
         return {'ok': False, 'error': 'NOT WRITABLE'}
@@ -2144,7 +2154,9 @@ def route(path, body):
                     body.get('kind'), body.get('arm'))
     if path == '/backlight':
         if 'pct' in body:
-            return dict(backlight_set(body['pct']), **backlight_status())
+            return dict(backlight_set(body['pct'],
+                                      allow_off=bool(body.get('off'))),
+                        **backlight_status())
         return dict(backlight_status(), ok=True)
     if path == '/power/do':
         return power_do(str(body.get('action', '')))

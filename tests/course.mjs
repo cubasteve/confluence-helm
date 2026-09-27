@@ -256,7 +256,18 @@ C=await course(); S=await sheet();
 t.ok(C.marks.length===0 && C.next===0, 'nothing left to sail', C.marks.join()+' @'+C.next);
 t.ok(marks(S).length===11 && marks(S).every(r=>r.seq===''),
      'the marks are all still there, unnumbered');
-t.ok((await strip()).length===0, 'and the strip has nothing to show');
+/* An empty route is the line and the finish - start here, come back
+   here, which is what a race with no course between them is. It used to
+   say NOTHING YET · TAP A MARK BELOW, OR SYNC THE CLUB'S, a sentence
+   about the two things directly under it. */
+const T0=await strip();
+t.ok(T0.length===1 && T0[0].fin, 'the strip is the finish and nothing else',
+     T0.map(c=>c.name).join()||'(empty)');
+t.ok(!await p.evaluate(()=>$('cv-strip').textContent.match(/NOTHING YET|TAP A MARK/)),
+     'with no sentence telling you what to do about it',
+     await p.evaluate(()=>$('cv-strip').textContent.trim()));
+t.ok(await p.evaluate(()=>!!$('cv-line')),
+     'and the line still leading it, because that much is always true');
 await tap(row('gosling')); await tap(row('cb12'));
 await p.evaluate(()=>{ COURSE.side=['S','P']; courseSave(); renderCourse(); });
 
@@ -373,11 +384,35 @@ await tap('#cv-mins');
 t.ok((await rd('cv-mins')).val==='15 MIN' && !(await menu()).on,
      'and fifteen, with no menu in sight');
 await tap('#cv-mins');
+t.ok((await rd('cv-mins')).val==='OFF',
+     'and then OFF - a countdown of nothing, written as the absence of '
+     +'the thing rather than as 0 MIN, which reads as a broken number',
+     (await rd('cv-mins')).val);
+t.ok(await p.evaluate(()=>CFG.startMins)===0, 'which is nought minutes',
+     String(await p.evaluate(()=>CFG.startMins)));
+await tap('#cv-mins');
 t.ok((await rd('cv-mins')).val==='5 MIN', 'and round again rather than stopping');
 await tap('#cv-mins');
 t.ok(await p.evaluate(()=>Math.round(tLeft/60000))===10,
      'the countdown itself is the new length, not the old one at the next reset',
      String(await p.evaluate(()=>Math.round(tLeft/60000))));
+
+t.head('OFF starts the race where a countdown would have begun');
+await p.evaluate(()=>{ resetAll(); CFG.startMins=0; prefsSave();
+  tLeft=0; renderCourse();
+  feedPut('pos.lat',28.8190,'sk'); feedPut('pos.lon',-81.2650,'sk'); });
+await p.waitForTimeout(200);
+t.ok(await p.evaluate(()=>tState)==='idle' && await p.evaluate(()=>tLeft)===0,
+     'idle, with nothing to count');
+await p.evaluate(()=>startCountdown()); await p.waitForTimeout(700);
+t.ok(await p.evaluate(()=>tState)==='racing',
+     'START and the gun has gone - no sequence to sit through',
+     await p.evaluate(()=>tState));
+/* Put back what the section below this one is about to read. Surviving
+   a reload is persist.mjs's question, not this file's. */
+await p.evaluate(()=>{ resetAll(); CFG.startMins=10; prefsSave();
+                       tLeft=10*60000; renderCourse(); });
+await p.waitForTimeout(200);
 t.ok(JSON.parse(await p.evaluate(()=>localStorage.getItem('helmPrefs'))).startMins===10,
      'and it is kept over a restart');
 await p.evaluate(()=>{ CFG.startMins=5; prefsSave(); resetAll(); renderCourse(); });

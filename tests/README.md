@@ -49,4 +49,5 @@ is the only way to test a machine you are not sitting at.
 | test | what it holds to account |
 |---|---|
 | `sound_test` | which sounder this Pi has, the tone itself, the pattern, and the pin never left high |
+| `backlight_test` | the only thing on the rig that changes how much light the panel puts out: the slider's 5% floor, the saver lifting it to nought, and a panel that is there but not writable |
 | `score_test` | the times the club's form takes, what goes over the wire, and the limits pointed at somebody else's server |

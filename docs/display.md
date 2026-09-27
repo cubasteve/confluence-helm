@@ -950,6 +950,40 @@ then reboot. `netd.py` says which it found at startup:
 The helper floors it at 5% and never writes zero. A helm you cannot see is
 a helm where you cannot find the slider to turn it back up.
 
+### The saver can put the display out
+
+`DARK`, beside `SAVER` on the Display card. `SAVER` is how long the helm
+waits; `DARK` is what it does when it gets there — the ambient readings,
+or nothing at all. Two controls because they are two settings and you
+want the same wait whichever it does; folding the kind into the cycle of
+delays would have made seven taps to get round it.
+
+**Whether this saves power depends on the rig, and the tile says which.**
+A page cannot turn a display off. All it can do on its own is paint the
+pixels black, and on an LCD that saves nothing worth measuring: the
+backlight is behind the pixels and stays lit whatever they show. What
+*can* is `netd`, when the kernel gives it a `/sys/class/backlight`
+device — and the backlight is most of what a panel draws, so nought
+there is the one setting on this instrument that saves real power. So
+the tile's second line reads `BACKLIGHT` when there is one to reach and
+`BLACK ONLY` when there is not, rather than claiming a saving it is not
+making. `ls /sys/class/backlight` on the Pi answers the same question
+from a terminal.
+
+**Everything else keeps running.** The page ticks, Signal K is still
+polled, the race clock still counts and the countdown still fires its
+signals — `DARK` is about the panel's light and nothing else. The one
+thing it does stop is the ambient animation, which is a
+`requestAnimationFrame` a frame; on a rig with no backlight to cut, that
+is the whole of the saving.
+
+**`netd` floors the brightness slider at 5% and this path lifts it.**
+The floor is there because a helm you cannot see is a helm where you
+cannot find the slider to turn it back up. The saver passes `off:true`
+and may, because any touch anywhere ends it and puts the brightness
+back: the floor is about being stranded, and a saver cannot strand you.
+`tests/backlight_test.py` holds both halves of that.
+
 ## Touch lock
 
 A small padlock in the same place on every page - just above the page
@@ -1034,7 +1068,31 @@ Alert text carries whole units rather than tenths on purpose: to a tenth
 the banner would rewrite itself several times a second for no added
 meaning.
 
-## Touch sound
+## Sound
+
+The horn and the glass share one box on the control panel. They were two
+cards — `TOUCH SOUND` and `SOUNDER` — which is two bordered boxes, two
+headings and two thirds of a row of the panel spent on saying *sound*
+twice. They are not the same noise, so the box names both down its left
+edge: `HORN` is the thing on the coachroof and `TOUCH` is the glass
+under your finger. Labels beside the controls rather than headings over
+them, because two headings inside one box is the two boxes back again.
+
+**The box is there whatever the boat has.** `TOUCH` applies to every
+rig — it comes out of whatever is playing the page, so it works on the
+phone, where there is no `netd` to ask — while `HORN` and the output
+line under it appear only when `netd` reports a sounder. The old card
+hid itself entirely on a boat with none, which was right when it was
+only the horn: an empty bordered box would have been worse than the gap.
+Half a box has no such problem.
+
+It comes out the same height as `DISPLAY` and `SHALLOW ALARM` beside it,
+which is not only tidiness: it sits in the lower left where the glass is
+running out, and at 256 tall its bottom corner was three pixels off the
+rim. Two rows in a box the others fill with one means tighter rows and
+shorter buttons. A probe holds every card to within 4 px of the others.
+
+### What the glass sounds like
 
 A capacitive panel gives nothing back. No travel, no detent: gloved,
 wet, or braced against a heel you cannot tell a tap that landed from one
