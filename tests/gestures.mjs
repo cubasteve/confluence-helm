@@ -305,49 +305,6 @@ t.ok(N.labels==='Touch', 'leaving one label, which is now the only thing '
 await p.evaluate(()=>paintSounder({available:true, mode:'audio', pinned:false,
   outs:[{dev:'pulse',name:'PIPEWIRE / PULSE'}], device:'pulse'}));
 
-t.head('the saver can put the display out, and says whether it really can');
-/* A page cannot turn a display off. It can paint pixels black, which on
-   an LCD saves nothing - the backlight is behind them. What can is the
-   helper, when the kernel gives it a backlight device. The tile has to
-   say which of those it is about to do. */
-const dk=()=>p.evaluate(()=>({sub:$('ssd-sub').textContent,
-  on:$('ssd-btn').classList.contains('on'), cfg:CFG.saverDark}));
-await p.evaluate(()=>{ CFG.saverDark=false; drawDark(); BL={available:true};
-                       drawDark(); });
-let D=await dk();
-t.ok(D.sub==='OFF' && !D.on, 'off to start with', JSON.stringify(D));
-await p.evaluate(()=>$('ssd-btn').click()); await p.waitForTimeout(200);
-D=await dk();
-t.ok(D.cfg && D.on, 'a tap turns it on');
-t.ok(D.sub==='BACKLIGHT', 'and with a backlight to reach it says so - that '
-     +'is the one setting on this rig that saves power worth the name',
-     D.sub);
-await p.evaluate(()=>{ BL={available:false}; drawDark(); });
-t.ok((await dk()).sub==='BLACK ONLY',
-     'without one it says BLACK ONLY rather than claiming a saving it '
-     +'is not making', (await dk()).sub);
-
-posts.length=0;
-await p.evaluate(()=>{ BL={available:true}; closePanel(); ssStart(); });
-await p.waitForTimeout(500);
-t.ok(await p.evaluate(()=>$('saver').classList.contains('dark')),
-     'the saver comes up black rather than ambient');
-t.ok(await p.evaluate(()=>ssRaf===null),
-     'with no animation frame running behind it');
-t.ok(posts.some(o=>o.path==='/backlight' && o.body.pct===0 && o.body.off===true),
-     'and the backlight asked for nought, with the flag that lifts the '
-     +'slider\'s 5% floor - the floor is about being stranded, and a '
-     +'saver any touch ends cannot strand you',
-     JSON.stringify(posts.filter(o=>o.path==='/backlight').map(o=>o.body)));
-posts.length=0;
-await p.evaluate(()=>ssStop()); await p.waitForTimeout(400);
-t.ok(posts.some(o=>o.path==='/backlight' && o.body.pct===100),
-     'and waking puts the brightness back where it was',
-     JSON.stringify(posts.filter(o=>o.path==='/backlight').map(o=>o.body)));
-await p.evaluate(()=>{ CFG.saverDark=false; prefsSave(); drawDark();
-                       openPanel(); });
-await p.waitForTimeout(400);
-
 t.head('the panel fits the glass');
 /* It stopped fitting once it was a single 600 px column of sections -
    600 px wide on a circle of radius 540 is only lit between y=91 and

@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """The backlight, and the floor under it.
 
-netd is the only thing on this rig that can actually change how much
-light the panel puts out - a browser can paint pixels black and the
-backlight stays lit behind them. So the brightness slider goes through
-here, and so does the screensaver when it is set to put the display out.
+netd is the only thing that can actually change how much light a panel
+puts out - a browser can paint pixels black and the backlight stays lit
+behind them. So the brightness slider goes through here.
 
-Those two want different floors. The slider is floored at 5%, because a
-helm you cannot see is a helm where you cannot find the slider to turn
-it back up. The saver is not, because any touch anywhere ends it and
-puts the brightness back - it cannot strand anybody, and nought is the
-whole point of it.
+It is floored at 5% and never 0, because a helm you cannot see is a helm
+where you cannot find the slider to turn it back up. A screensaver that
+put the display out briefly lifted that floor; it came off again, on the
+panel this runs on there is no backlight device to write to at all, and
+the display's own power button does the real thing while leaving the Pi
+running. The floor is the interesting part and it is what is tested.
+
+These are the first tests this code has had, which is why they stayed
+when the thing that prompted them did not.
 
     python3 tests/backlight_test.py
 """
@@ -54,16 +57,9 @@ class Floor(unittest.TestCase):
         self.assertEqual(netd.backlight_set(-40)['pct'], 5)
         self.assertGreater(raw(p), 0)
 
-    def test_the_saver_can(self):
+    def test_and_the_ceiling_holds_too(self):
         netd, p = rig()
-        r = netd.backlight_set(0, allow_off=True)
-        self.assertTrue(r['ok'])
-        self.assertEqual(r['pct'], 0)
-        self.assertEqual(raw(p), 0, 'nought means nought, not one step')
-
-    def test_and_the_floor_is_the_only_thing_it_lifts(self):
-        netd, p = rig()
-        self.assertEqual(netd.backlight_set(140, allow_off=True)['pct'], 100)
+        self.assertEqual(netd.backlight_set(140)['pct'], 100)
         self.assertEqual(raw(p), 255)
 
 
@@ -110,7 +106,7 @@ class Reported(unittest.TestCase):
         os.environ['HELM_SYSFS'] = d
         netd = importlib.reload(importlib.import_module('netd'))
         self.assertFalse(netd.backlight_status()['available'])
-        self.assertFalse(netd.backlight_set(50, allow_off=True)['ok'])
+        self.assertFalse(netd.backlight_set(50)['ok'])
 
 
 if __name__ == '__main__':

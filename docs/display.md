@@ -950,39 +950,37 @@ then reboot. `netd.py` says which it found at startup:
 The helper floors it at 5% and never writes zero. A helm you cannot see is
 a helm where you cannot find the slider to turn it back up.
 
-### The saver can put the display out
+### Why there is no display-off option
 
-`DARK`, beside `SAVER` on the Display card. `SAVER` is how long the helm
-waits; `DARK` is what it does when it gets there — the ambient readings,
-or nothing at all. Two controls because they are two settings and you
-want the same wait whichever it does; folding the kind into the cycle of
-delays would have made seven taps to get round it.
+There was one, briefly: a `DARK` tile beside `SAVER` that put the
+display out instead of showing the ambient readings. It came off again,
+and the reason is worth keeping.
 
-**Whether this saves power depends on the rig, and the tile says which.**
-A page cannot turn a display off. All it can do on its own is paint the
-pixels black, and on an LCD that saves nothing worth measuring: the
+**A page cannot turn a display off.** All it can do on its own is paint
+the pixels black, and on an LCD that saves nothing worth measuring — the
 backlight is behind the pixels and stays lit whatever they show. What
 *can* is `netd`, when the kernel gives it a `/sys/class/backlight`
-device — and the backlight is most of what a panel draws, so nought
-there is the one setting on this instrument that saves real power. So
-the tile's second line reads `BACKLIGHT` when there is one to reach and
-`BLACK ONLY` when there is not, rather than claiming a saving it is not
-making. `ls /sys/class/backlight` on the Pi answers the same question
-from a terminal.
+device, because the backlight is most of what a panel draws.
 
-**Everything else keeps running.** The page ticks, Signal K is still
-polled, the race clock still counts and the countdown still fires its
-signals — `DARK` is about the panel's light and nothing else. The one
-thing it does stop is the ambient animation, which is a
-`requestAnimationFrame` a frame; on a rig with no backlight to cut, that
-is the whole of the saving.
+The panel this runs on is an HDMI round display, and the kernel exposes
+no backlight for it — that class is mostly for DSI and DPI panels wired
+to the Pi's own connectors. So the tile read `BLACK ONLY` on the boat,
+which is what it was built to say rather than claim a saving it was not
+making, and a control whose honest label is "this does nothing for you"
+is a control to delete.
 
-**`netd` floors the brightness slider at 5% and this path lifts it.**
-The floor is there because a helm you cannot see is a helm where you
-cannot find the slider to turn it back up. The saver passes `off:true`
-and may, because any touch anywhere ends it and puts the brightness
-back: the floor is about being stranded, and a saver cannot strand you.
-`tests/backlight_test.py` holds both halves of that.
+**The display's own power button does the real thing.** It cuts the
+backlight and the panel's electronics, and the Pi keeps running
+underneath — still logging the track, still counting the race clock,
+still serving the page. The one thing to check, once, at the dock: an
+HDMI display powering off can read as unplugged, and the Pi may come
+back at a different resolution. `video=HDMI-A-1:1080x1080@60D` in
+`cmdline.txt` holds the mode while the panel is dark.
+
+`netd`'s backlight path stays, because the brightness slider uses it on
+any rig that does have one, and it now has `tests/backlight_test.py` —
+the first tests it has ever had, which is why they stayed when the thing
+that prompted them did not.
 
 ## Touch lock
 

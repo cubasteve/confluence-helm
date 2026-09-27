@@ -615,7 +615,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .tile .sub{font-size:14px;font-weight:600;letter-spacing:.06em;
   color:var(--accent);margin-top:-4px}
 .tile.off .sub{color:var(--label)}
-#ss-ico,#ssd-ico,#race-ico{fill:none;stroke:currentColor;stroke-width:1.9;
+#ss-ico,#race-ico{fill:none;stroke:currentColor;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
 #ss-ico text{fill:currentColor;stroke:none;font-family:var(--font)}
 .tile.on{color:var(--accent)}
@@ -908,11 +908,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* --- ambient screensaver --- */
 #saver{position:absolute;inset:0;background:var(--bg);opacity:0;z-index:30;
   pointer-events:none;transition:opacity .5s}
-/* Black, not the theme's background: the point is the fewest lit pixels
-   there can be, and on an OLED that is the whole of the saving. Its
-   children are hidden rather than left to paint into the dark. */
-#saver.dark{background:#000}
-#saver.dark > *{display:none}
 #saver.on{opacity:1;pointer-events:auto}
 #ss-cv{position:absolute;inset:0;width:100%;height:100%}
 .ss-mid{position:absolute;inset:0;display:flex;flex-direction:column;
@@ -2404,21 +2399,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         <span id="ss-lbl2">SAVER</span>
         <span class="sub" id="ss-sub">OFF</span>
       </button>
-      <!-- What the saver DOES, beside how long it waits. Two settings
-           and two controls: folding a kind into a cycle of delays would
-           have made seven taps to get round, and they are independent -
-           you want the same wait whichever it does.
-           Its second line is the honest one. With a backlight this can
-           reach, DARK means the backlight goes to nought, which is most
-           of what the panel draws and the only setting on this rig that
-           saves power worth the name. Without one, all a page can do is
-           paint the pixels black behind a backlight that stays lit - so
-           it says BLACK ONLY, and does not pretend. -->
-      <button class="tile" id="ssd-btn">
-        <svg id="ssd-ico" viewBox="0 0 24 24"></svg>
-        <span>DARK</span>
-        <span class="sub" id="ssd-sub">OFF</span>
-      </button>
       <input id="dim" type="range" min="25" max="100" value="100">
     </div>
 
@@ -2882,10 +2862,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
   host:SK_HOST, theme:'auto', demo:false, phoneGps:false,
-
-  /* What the screensaver does when it comes up: show the ambient
-     readings, or put the display out. See ssDark. */
-  saverDark:false,
 
   /* Which noise a control makes under a finger. A capacitive panel in a
      cockpit gives nothing back: no travel, no detent, and gloved or wet
@@ -5606,9 +5582,7 @@ const PREF_DEFS={
   /* Five, ten or fifteen minutes - the three sequences anyone runs. */
   startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
   /* Which noise the glass makes under a finger, or none. */
-  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null,
-  /* And whether the saver goes dark rather than ambient. */
-  saverDark:  v=>typeof v==='boolean' ? v : null
+  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -5875,9 +5849,6 @@ async function netStatus(){
   /* First word from the helper, or the mechanism changed under us: repaint
      the slider and push the saved brightness at the hardware. */
   if(first || BL.available!==hadBL) applyDim(CFG.dim);
-  /* DARK's second line says what it will actually do, and that is not
-     known until the helper has answered about a backlight. */
-  if(first || BL.available!==hadBL) drawDark();
   if(!w.available && !b.available && !pwr.available){
     $('conn-sec').style.display='none'; NET.tilesHtml=''; closeNet(); return false; }
   $('conn-sec').style.display='';
@@ -10349,37 +10320,16 @@ function ssTick(){
   setTimeout(ssTick,500);
 }
 
-/* ---- the saver, dark ----------------------------------------------------
-   A page cannot turn a display off. All it can do on its own is paint
-   the pixels black, and on an LCD that saves nothing worth measuring:
-   the backlight is behind the pixels and stays lit whatever they show.
-   What CAN is the helper, when the kernel gives it a backlight device -
-   and the backlight is most of what a panel draws, so nought there is
-   the one setting on this rig that saves real power.
-   netd floors the brightness slider at 5% on purpose: a helm you cannot
-   see is a helm where you cannot find the slider to turn it back up.
-   The saver passes off:true to lift that floor, and may, because any
-   touch anywhere ends it and puts the brightness back. The floor is
-   about being stranded, and the saver cannot strand you.
-   Painting black is still worth doing when there is no backlight to
-   reach - it stops the ambient animation, which is a rAF a frame - but
-   the panel says BLACK ONLY in that case rather than claiming a saving
-   it is not making. */
-function ssBacklight(on){
-  if(!CFG.saverDark || !BL.available) return;
-  netApi('/backlight', on ? {pct:CFG.dim} : {pct:0, off:true});
-}
-function ssStart(){ if(ssOn)return; ssOn=true;
-  /* Dark first, so the ambient frame never paints in the dark case. */
-  wCls('saver','dark', !!CFG.saverDark);
-  if(CFG.saverDark){ saver.classList.add('on'); ssBacklight(false); return; }
-  ssInit(); saver.classList.add('on'); ssFrame(); }
-function ssStop(){
-  const was=ssOn;
-  ssOn=false; saver.classList.remove('on');
-  if(ssRaf)cancelAnimationFrame(ssRaf); ssRaf=null; lastTouch=Date.now();
-  if(was) ssBacklight(true);
-}
+/* There was a DARK option here that put the display out with the saver.
+   It came off again: a page cannot turn a display off, and on the panel
+   this runs on the kernel exposes no backlight, so all it could ever do
+   was paint the pixels black behind a backlight that stayed lit - which
+   saves nothing you could measure. The display's own power button does
+   the real thing, and leaves the Pi running. */
+function ssStart(){ if(ssOn)return; ssOn=true; ssInit();
+  saver.classList.add('on'); ssFrame(); }
+function ssStop(){ ssOn=false; saver.classList.remove('on');
+  if(ssRaf)cancelAnimationFrame(ssRaf); ssRaf=null; lastTouch=Date.now(); }
 
 /* ---- ambient: one control, four states --------------------------------
    The old pair - a launch button and an on/off auto toggle - collapse
@@ -10390,20 +10340,6 @@ function ssStop(){
 const SS_DELAYS=[0, 10000, 60000, 300000];
 const SS_TEXT  =['OFF','10s','1m','5m'];
 let ssStep=0;
-/* A screen with its light out, and the same glyph struck through when it
-   is not going to. */
-function drawDark(){
-  const on=!!CFG.saverDark;
-  $('ssd-ico').innerHTML='<rect x="3" y="5" width="18" height="13" rx="2"/>'
-    +'<path d="M9 21h6"/>'
-    +(on ? '' : '<path d="M6.5 8.2l11 7.6"/>');
-  /* The second line is what it will actually DO on this rig, which is
-     not the same question as whether it is on. */
-  $('ssd-sub').textContent = !on ? 'OFF'
-    : BL.available ? 'BACKLIGHT' : 'BLACK ONLY';
-  $('ssd-btn').classList.toggle('on', on);
-  $('ssd-btn').classList.toggle('off', !on);
-}
 function drawAmbient(){
   const on=ssStep>0;
   $('ss-ico').innerHTML =
@@ -12574,10 +12510,8 @@ const ssRelease=e=>{
   drawAmbient(); lastTouch=Date.now();
 };
 $('ss-btn').addEventListener('pointerup',ssRelease);
-$('ssd-btn').addEventListener('click',()=>{
-  CFG.saverDark=!CFG.saverDark; prefsSave(); drawDark(); });
 $('ss-btn').addEventListener('pointercancel',()=>{ clearTimeout(ssHold); ssHold=null; });
-drawAmbient(); drawDark();
+drawAmbient();
 saver.addEventListener('pointerdown',e=>{ e.stopPropagation(); ssStop(); });
 addEventListener('pointerdown',()=>{ lastTouch=Date.now(); });
 addEventListener('resize',()=>{ if(ssOn) ssInit(); });
