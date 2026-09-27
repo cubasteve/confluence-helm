@@ -699,6 +699,92 @@ t.ok(angles.up>=30 && angles.up<=55 && angles.dn>=120 && angles.dn<=175,
      'and the angles come off the polars, not out of the air',
      JSON.stringify(angles));
 
+t.head('and it rounds the marks, on the side the course says');
+/* A course does not go through a buoy, and which way round is the
+   question the whole leg is sailed about. Leave it to port and the mark
+   stays on your left all the way round, which is a turn to port. */
+let R=await p.evaluate(()=>[...document.querySelectorAll('#cp-svg .rnd')]
+  .map(e=>({s:e.dataset.s, d:e.getAttribute('d')})));
+t.ok(R.length===3, 'one rounding per mark in the course', String(R.length));
+t.ok(R.map(r=>r.s).join()==='P,S,P',
+     'each on the side the strip says - and the chips said P,S,P',
+     R.map(r=>r.s).join());
+t.ok(R.every(r=>/^M[\d.\- ]+A[\d.]+ [\d.]+ 0 [01] [01] /.test(r.d)),
+     'drawn as an arc about the mark, in on a tangent and out on one',
+     R[0]&&R[0].d.slice(0,46));
+/* port rounds one way and starboard the other, and the sweep flag is
+   the only thing in the path that says which */
+const sweeps=R.map(r=>r.d.split(' ').slice(-3)[0]);
+t.ok(sweeps[0]===sweeps[2] && sweeps[1]!==sweeps[0],
+     'the two ports turn one way and the starboard the other',
+     R.map((r,i)=>r.s+sweeps[i]).join(' '));
+t.ok(await p.evaluate(()=>{
+       const c=[...document.querySelectorAll('#cp-svg .mk')]
+         .map(e=>+e.getAttribute('r'));
+       return Math.max(...c) < 30; }),
+     'and the arc stands outside the mark\'s own circle, or it would be '
+     +'hidden under it - which is how it shipped the first time');
+
+t.head('on the water it is drawn on');
+/* The club draws its course on a chart, and not for decoration: RUM and
+   GOSLING are two dots in a field until a shoreline says which end of
+   the lake they are at. Same tiles as the track page, same cache - and
+   the same silence when there are neither. */
+await p.route('https://server.arcgisonline.com/**', r=>r.fulfill({status:200,
+  contentType:'image/svg+xml',
+  body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">'
+      +'<rect width="256" height="256" fill="#2f4f3a"/></svg>'}));
+/* Earlier sections drew the map with no tile server at all, which sets
+   netBad and stops the page asking again for a while. */
+await p.evaluate(()=>{ netBad=0; prevDraw(); }); await p.waitForTimeout(2200);
+const map=await p.evaluate(()=>({
+  imgs:document.querySelectorAll('#cp-svg image').length,
+  clipped:!!document.querySelector('#cp-svg g[clip-path]'),
+  defs:!!document.getElementById('cp-clip'),
+  wash:document.querySelectorAll('#cp-svg .wash').length,
+  order:[...$('cp-svg').children].map(e=>e.tagName).slice(0,3).join()}));
+t.ok(map.imgs>0, 'the water is under it', String(map.imgs));
+t.ok(map.defs && map.clipped, 'clipped to the card, not spilling over the '
+     +'scale bar and out of the corners - and the clip is written with the '
+     +'drawing, because innerHTML eats a defs put in the markup once');
+t.ok(map.wash===1, 'with the imagery washed back, because a satellite '
+     +'picture is all mid-greens and mid-blues and so is every line here');
+await p.unroute('https://server.arcgisonline.com/**');
+
+t.head('and the forecast, for a course set before the instruments are awake');
+/* The masthead is the truth and always wins. But the course is set at
+   the dock, and a preview that says NO WIND is a preview that cannot
+   route. Open-Meteo answers without a key, in degrees the wind is FROM,
+   which is TWD as it stands. */
+await p.route('https://api.open-meteo.com/**', r=>r.fulfill({status:200,
+  contentType:'application/json',
+  body:JSON.stringify({current:{wind_speed_10m:11.5, wind_direction_10m:217}})}));
+const wx=await p.evaluate(async()=>{
+  WX=null; localStorage.removeItem('wx');
+  await wxFetch(28.82,-81.27);
+  return {wx:WX && {twd:WX.twd, tws:WX.tws},
+          kept:JSON.parse(localStorage.getItem('wx')||'null'),
+          src:(windNow()||{}).src};
+});
+t.ok(wx.wx && wx.wx.twd===217 && wx.wx.tws===11.5,
+     'it comes back as a wind', JSON.stringify(wx.wx));
+t.ok(wx.kept && wx.kept.twd===217, 'and is kept, because the first thing a '
+     +'Wednesday does is reload the page');
+t.ok(wx.src==='boat', 'the masthead still wins while the boat has one - a '
+     +'forecast is what you use when there is nothing to ask', wx.src);
+const only=await p.evaluate(()=>{
+  const k='environment.wind.directionTrue', a='environment.wind.angleTrueWater';
+  const keep={}; [k,a,'navigation.courseOverGroundTrue'].forEach(x=>{ keep[x]=S[x]; delete S[x]; });
+  const w=windNow();
+  Object.keys(keep).forEach(x=>{ if(keep[x]) S[x]=keep[x]; });
+  return w;
+});
+t.ok(only && only.src==='forecast' && Math.round(only.twd)===217,
+     'and with nothing aboard to ask, the route is worked out off it',
+     JSON.stringify(only));
+await p.unroute('https://api.open-meteo.com/**');
+await p.evaluate(()=>{ WX=null; localStorage.removeItem('wx'); });
+
 t.head('with no wind there is nothing to route by, and it says so');
 await p.evaluate(()=>{ window.__wind=windNow; window.windNow=()=>null; prevDraw(); });
 await p.waitForTimeout(250);

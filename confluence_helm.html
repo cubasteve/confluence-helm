@@ -1077,6 +1077,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #cp-svg .arw{fill:var(--label);stroke:none;opacity:.7}
 #cp-svg .me{fill:var(--port);stroke:none}
 #cp-svg .rose{stroke:var(--label);stroke-width:2.4;fill:none;opacity:.55}
+/* Heavier at night, where the imagery would otherwise be the brightest
+   thing on the glass and undo an hour of dark adaptation. */
+#cp-svg .wash{fill:var(--panel);opacity:.62;stroke:none}
+body.dusk #cp-svg .wash{opacity:.72}
+body.night #cp-svg .wash{opacity:.84}
 /* The breeze the route was worked out in. Warm rather than grey: it is
    the one thing on this card that is not the course. */
 #cp-svg .wind{stroke:var(--warn);stroke-width:3;fill:none;
@@ -1086,6 +1091,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #cp-svg .leg[data-t="tack"],#cp-svg .leg[data-t="gybe"]{opacity:.8}
 #cp-svg .rhumb{stroke:var(--label);stroke-width:2;fill:none;opacity:.22;
   stroke-dasharray:6 8}
+/* The rounding itself, in the colour of the side it is left on - the
+   same port red and starboard green the chips and the chart use, and
+   at night the one red they both become. */
+#cp-svg .rnd{fill:none;stroke-width:4.5;stroke-linecap:round}
+#cp-svg .rnd[data-s="P"]{stroke:var(--port)}
+#cp-svg .rnd[data-s="S"]{stroke:var(--stbd)}
 .cp-foot{height:40px;display:flex;align-items:center;justify-content:center;
   font-size:21px;font-weight:600;letter-spacing:.14em;color:var(--label)}
 /* Which line the race starts and finishes on: the first thing in the
@@ -8851,21 +8862,31 @@ function drawTiles(v){
   const key=z+'|'+v.mx.toFixed(8)+'|'+v.my.toFixed(8)+'|'+v.scale.toFixed(2);
   if(key===tileKey) return;
   tileKey=key;
-  const n=Math.pow(2,z), px=v.scale/n, rad=MAP_R/v.scale;
-  const x0=Math.floor((v.mx-rad)*n), x1=Math.floor((v.mx+rad)*n);
-  const y0=Math.floor((v.my-rad)*n), y1=Math.floor((v.my+rad)*n);
-  if((x1-x0+1)*(y1-y0+1)>TILE_CAP){ g.innerHTML=''; return; }
+  const out=tileTags(v, z, MAP_CX, MAP_CY, MAP_R, MAP_R);
+  g.innerHTML = out===null ? '' : out;
+}
+/* The <image> tags for one view, at one zoom, in a box half as wide as
+   halfW and half as tall as halfH about (cx,cy). Two callers now - the
+   chart on the track page and the course preview - and one of them is
+   the thing you look at while the boat is moving, so the loop they
+   share stays exactly what it was. null means too many to be sane. */
+function tileTags(v, z, cx, cy, halfW, halfH){
+  const n=Math.pow(2,z), px=v.scale/n;
+  const rw=halfW/v.scale, rh=halfH/v.scale;
+  const x0=Math.floor((v.mx-rw)*n), x1=Math.floor((v.mx+rw)*n);
+  const y0=Math.floor((v.my-rh)*n), y1=Math.floor((v.my+rh)*n);
+  if((x1-x0+1)*(y1-y0+1)>TILE_CAP) return null;
   let out='';
   for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
     if(x<0||y<0||x>=n||y>=n) continue;
-    const sx=MAP_CX+(x/n-v.mx)*v.scale, sy=MAP_CY+(y/n-v.my)*v.scale;
+    const sx=cx+(x/n-v.mx)*v.scale, sy=cy+(y/n-v.my)*v.scale;
     out+=`<image href="${CFG.tileBase}/${z}/${x}/${y}.jpg"`
         +` x="${sx.toFixed(1)}" y="${sy.toFixed(1)}"`
         +` width="${(px+1).toFixed(1)}" height="${(px+1).toFixed(1)}"`
         +` preserveAspectRatio="none"`
         +` onerror="tileMiss(this,${z},${x},${y})"/>`;
   }
-  g.innerHTML=out;
+  return out;
 }
 
 /* ---- zoom and pan: the glass is the control ---------------------------
@@ -9783,9 +9804,43 @@ function vmgAngle(tws, up){
   }
   return best;
 }
+/* ---- the forecast, for when the boat has no wind of its own ----------
+   The masthead is the truth and always wins. But the course is set at
+   the dock, often before the instruments are awake and always before
+   the boat has sailed anywhere, and a preview that says NO WIND is a
+   preview that cannot route. Open-Meteo answers without a key and
+   without a login, gives the direction the wind is FROM in degrees -
+   which is TWD as it stands - and costs one request a quarter hour.
+   Cached in localStorage, because the first thing a Wednesday does is
+   reload the page. */
+const WX_URL='https://api.open-meteo.com/v1/forecast';
+const WX_TTL=900000;                    /* 15 min - Open-Meteo's own step */
+let WX=(()=>{ try{ return JSON.parse(localStorage.getItem('wx')||'null')||null; }
+              catch(e){ return null; } })();
+let wxBusy=false;
+function wxFresh(){ return WX && Date.now()-WX.at < WX_TTL ? WX : null; }
+async function wxFetch(lat,lon,then){
+  if(wxBusy || wxFresh()) return;
+  wxBusy=true;
+  try{
+    const u=WX_URL+'?latitude='+lat.toFixed(3)+'&longitude='+lon.toFixed(3)
+      +'&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn';
+    const r=await fetchT(u, 7000);
+    const j=r.ok ? await r.json() : null;
+    const c=j&&j.current;
+    if(c && c.wind_direction_10m!==undefined){
+      WX={at:Date.now(), twd:+c.wind_direction_10m, tws:+c.wind_speed_10m||0};
+      try{ localStorage.setItem('wx',JSON.stringify(WX)); }catch(e){}
+      if(then) then();
+    }
+  }catch(e){}                           /* no signal at the dock is normal */
+  finally{ wxBusy=false; }
+}
 /* The breeze as the route needs it: where it is from, in degrees, and
-   how hard, in knots. Same fallback the start line uses - a boat with
-   no true-wind instrument but a heading and an angle still has one. */
+   how hard, in knots. The masthead first - same fallback the start line
+   uses, since a boat with no true-wind instrument but a heading and an
+   angle still has one - and the forecast only if there is nothing
+   aboard to ask. */
 function windNow(){
   let twd=get('environment.wind.directionTrue');
   twd = twd===null ? null : twd*DEG;
@@ -9793,9 +9848,13 @@ function windNow(){
     const h=get('navigation.courseOverGroundTrue'), t=get('environment.wind.angleTrueWater');
     if(h!==null&&t!==null) twd=(h+t)*DEG;
   }
-  if(twd===null) return null;
-  const ts=get('environment.wind.speedTrue');
-  return {twd:((twd%360)+360)%360, tws: ts===null ? 8 : ts*MS_TO_KT, guess: ts===null};
+  if(twd!==null){
+    const ts=get('environment.wind.speedTrue');
+    return {twd:((twd%360)+360)%360, tws: ts===null ? 8 : ts*MS_TO_KT,
+            guess: ts===null, src:'boat'};
+  }
+  const w=wxFresh();
+  return w ? {twd:((w.twd%360)+360)%360, tws:w.tws||6, guess:false, src:'forecast'} : null;
 }
 /* The two boards of a leg the boat cannot sail straight, or null if it
    can. Metres in, metres out. */
@@ -9825,6 +9884,62 @@ function tackBoards(a, b, w){
   if(!pick) return null;
   return {kind:kind, twa:twa, pts:[pick.p], nm:(pick.t1+pick.t2)/1852};
 }
+/* ---- rounding a mark --------------------------------------------------
+   A course does not go THROUGH a buoy, and which way round it goes is
+   the question the whole leg is sailed about. Leave it to port and the
+   mark stays on your left the whole way round, which is a turn to port:
+   counter-clockwise on a north-up picture, and clockwise on the screen
+   because SVG counts y downward. Starboard is the other way.
+   The route comes in on a tangent, goes round the arc, and leaves on
+   the tangent that points at what is next - the shape the club draws on
+   its own course sheet, and the shape you actually sail.
+   The radius is pixels, not metres: 30 m of rounding across two miles
+   of lake is a pixel and a half, and this is a diagram of a rounding,
+   not a survey of one. */
+const ROUND_R=30;         /* outside the mark's own circle, or it hides */
+/* The two tangent points from P onto the circle, as angles about M. */
+function tangents(P,M,r){
+  const dx=P.x-M.x, dy=P.y-M.y, d=Math.hypot(dx,dy);
+  if(d<=r*1.02) return null;            /* inside it: no tangent to take */
+  const base=Math.atan2(dy,dx), off=Math.acos(r/d);
+  return [base+off, base-off];
+}
+/* Where the route touches the circle coming from A and leaving toward
+   B, going round the way `cw` says, plus the arc between them. Screen
+   space. */
+function markRound(A,M,B,r,cw){
+  const ti=tangents(A,M,r), to=tangents(B,M,r);
+  if(!ti||!to) return null;
+  const TAU=Math.PI*2;
+  const pt=t=>({x:M.x+r*Math.cos(t), y:M.y+r*Math.sin(t)});
+  /* Which way the boat is moving at a point on the circle, going round
+     the way it is going round. On a screen y counts downward, so these
+     are the screen tangents and `cw` is SVG's sweep flag, not a
+     direction anyone would name out loud. */
+  const tang=t=>cw ? {x:-Math.sin(t), y:Math.cos(t)}
+                   : {x: Math.sin(t), y:-Math.cos(t)};
+  /* Of the two tangents from a point, the one the boat can actually use:
+     arriving, it must reach the circle already moving the way the arc
+     goes; leaving, it must set off that way. The other tangent of the
+     pair grazes the mark on the wrong side, which is how this first came
+     out as a three-pixel nick instead of a rounding. */
+  const pick=(cands, arriveFrom, departTo)=>{
+    for(const t of cands){
+      const T=pt(t), d=tang(t);
+      const v = arriveFrom ? {x:T.x-arriveFrom.x, y:T.y-arriveFrom.y}
+                           : {x:departTo.x-T.x,   y:departTo.y-T.y};
+      if(v.x*d.x+v.y*d.y > 0) return t;
+    }
+    return null;
+  };
+  const a=pick(ti, A, null), b=pick(to, null, B);
+  if(a===null||b===null) return null;
+  let sweep = cw ? (b-a) : (a-b);
+  sweep=((sweep%TAU)+TAU)%TAU;
+  return {in:pt(a), out:pt(b), sweep:sweep,
+          big:sweep>Math.PI?1:0, cw:cw?1:0};
+}
+
 /* A polyline with its corners eased, so a tack reads as a boat turning
    rather than a diagram bending. Screen space, and the radius is capped
    by the shorter of the two boards it sits between. */
@@ -9888,13 +10003,45 @@ function prevDraw(){
   const mx=(x0+x1)/2, my=(y0+y1)/2;
   const X=p=>W/2+(p.x-mx)*k, Y=p=>HF/2-(p.y-my)*k;     /* north up */
   const f=n=>n.toFixed(1);
-  let o='';
+  /* The clip lives in the drawing, not in the markup: prevDraw replaces
+     this SVG's innerHTML every time, and a <defs> written once in the
+     HTML is gone the first time it does. */
+  let o='<defs><clipPath id="cp-clip"><rect x="0" y="0" width="'+W
+    +'" height="'+(H-CP.BAR)+'" rx="22"></rect></clipPath></defs>';
+
+  /* ---- the water it is all on ----
+     The club's own course sheet is a chart with the marks drawn on it,
+     and the reason is not decoration: RUM and GOSLING are two dots in a
+     field until the shoreline says which end of the lake they are at.
+     Same tiles as the track page, same cache, same pack on disk - so
+     water you have looked at once works out there with no signal.
+     The routing maths stays in metres off the pin; this is the one
+     place that needs Mercator, because a tile is a Mercator square. The
+     two agree to a fraction of a pixel over a lake. */
+  const lat0=D.E.pin.lat, lon0=D.E.pin.lon;
+  const clat=lat0+my/111320, clon=lon0+mx/(111320*Math.cos(lat0*Math.PI/180));
+  const mv={ mx:merc(clat,clon).x, my:merc(clat,clon).y,
+             scale:k*40075017*Math.cos(clat*Math.PI/180) };
+  let z=Math.round(Math.log2(mv.scale/256));
+  if(CFG.basemap && isFinite(z)){
+    z=Math.max(CFG.tileMinZ, Math.min(CFG.tileMaxZ, z));
+    const tags=tileTags(mv, z, W/2, HF/2, W/2, HF/2);
+    if(tags) o+='<g clip-path="url(#cp-clip)">'+tags
+      /* A satellite picture is the wrong contrast to draw a course on -
+         it is all mid-greens and mid-blues, which is where every line
+         here lives. The club's chart is pale for the same reason, so
+         this washes the imagery back until the course is the thing on
+         it rather than the thing lost in it. */
+      +`<rect x="0" y="0" width="${W}" height="${HF}" class="wash"></rect></g>`;
+  }
 
   /* the legs first, so everything else sits on top of them.
      Each one is what the boat would sail, not the line between the two
      buoys: a beat tacks once to the layline at this boat's own best
      VMG angle for the breeze that is blowing, a run gybes the same way,
-     and a leg it can lay is drawn straight.
+     and a leg it can lay is drawn straight. Then every mark gets its
+     rounding - in on a tangent, round the side the course says, out on
+     the tangent that points at what is next.
      With no wind to route by there is nothing to tack about, and then
      the old problem comes back - a windward-leeward is two marks sailed
      twice, and drawn straight the way home lies exactly on the way out.
@@ -9906,14 +10053,45 @@ function prevDraw(){
     const kk=board[i-1] ? 'sailed'+i : key(route[i-1],route[i]);
     nth.push(seen[kk]=(seen[kk]===undefined?0:seen[kk]+1));
   }
+  /* Every leg as a run of screen points first, so the roundings can
+     trim the ends of the two legs that meet at each mark before any of
+     it is drawn. */
+  const L=[];
+  for(let i=1;i<route.length;i++){
+    const brd=board[i-1];
+    L.push([{x:X(route[i-1]),y:Y(route[i-1])}]
+      .concat(brd?brd.pts.map(q=>({x:X(q),y:Y(q)})):[])
+      .concat([{x:X(route[i]),y:Y(route[i])}]));
+  }
+  /* The roundings. route[0] and the last are the line, which is crossed
+     and not rounded; everything between is a mark with a side. */
+  const arcs=[];
+  for(let v=1;v<route.length-1;v++){
+    const M={x:X(route[v]), y:Y(route[v])};
+    const inL=L[v-1], outL=L[v];
+    const A=inL[inL.length-2], B=outL[1];
+    /* Port: the mark stays to port all the way round, which is a turn
+       to port - counter-clockwise north-up, and clockwise on a screen
+       whose y counts downward. */
+    const cw = markSide(D.seq[v-1].i)==='P';
+    const rr = Math.min(ROUND_R,
+                        Math.hypot(A.x-M.x,A.y-M.y)/2.4,
+                        Math.hypot(B.x-M.x,B.y-M.y)/2.4);
+    const rd = rr>4 ? markRound(A,M,B,rr,cw) : null;
+    if(!rd) continue;
+    inL[inL.length-1]=rd.in;
+    outL[0]=rd.out;
+    arcs.push({d:`M${f(rd.in.x)} ${f(rd.in.y)}A${f(rr)} ${f(rr)} 0 `
+                +rd.big+' '+rd.cw+' '+f(rd.out.x)+' '+f(rd.out.y),
+               side:cw?'P':'S'});
+  }
   let sailedNm=0;
   for(let i=1;i<route.length;i++){
-    const a=route[i-1], b=route[i], n=nth[i-1], brd=board[i-1];
+    const a=route[i-1], b=route[i], n=nth[i-1], brd=board[i-1], P=L[i-1];
     const ax=X(a), ay=Y(a), bx=X(b), by=Y(b);
     const d=Math.hypot(bx-ax,by-ay);
     if(brd){
       /* tacked or gybed: the boards, with the turn eased */
-      const P=[{x:ax,y:ay}].concat(brd.pts.map(q=>({x:X(q),y:Y(q)}))).concat([{x:bx,y:by}]);
       /* the line between the buoys, ghosted under the boards: without
          it a tacked leg is just a bent line, and with it you can see
          what the bend is for */
@@ -9932,18 +10110,21 @@ function prevDraw(){
        the straight line - which was the whole thing this fixes. */
     const fwd=key(a,b).indexOf(Math.round(ax)+'_'+Math.round(ay))===0 ? 1 : -1;
     const px=d?-(by-ay)/d*fwd:0, py=d?(bx-ax)/d*fwd:0;
-    const qx=(ax+bx)/2+px*bow*2, qy=(ay+by)/2+py*bow*2;
+    const S=P[0], E=P[P.length-1];            /* trimmed by the roundings */
+    const qx=(S.x+E.x)/2+px*bow*2, qy=(S.y+E.y)/2+py*bow*2;
     o+= bow
-      ? `<path class="leg bow" data-t="rhumb" d="M${f(ax)} ${f(ay)}Q${f(qx)} ${f(qy)} ${f(bx)} ${f(by)}"></path>`
-      : `<line class="leg" data-t="rhumb" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`;
+      ? `<path class="leg bow" data-t="rhumb" d="M${f(S.x)} ${f(S.y)}Q${f(qx)} ${f(qy)} ${f(E.x)} ${f(E.y)}"></path>`
+      : `<line class="leg" data-t="rhumb" x1="${f(S.x)}" y1="${f(S.y)}" x2="${f(E.x)}" y2="${f(E.y)}"></line>`;
     sailedNm+=Math.hypot(b.x-a.x,b.y-a.y)/1852;
     if(d<34) continue;
     const ux=(bx-ax)/d, uy=(by-ay)/d;
-    const cx=(ax+2*qx+bx)/4, cy=(ay+2*qy+by)/4, sz=9;   /* the curve at t=½ */
+    const cx=(S.x+2*qx+E.x)/4, cy=(S.y+2*qy+E.y)/4, sz=9;  /* the curve at t=1/2 */
     o+=`<path class="arw" d="M${f(cx+ux*sz)} ${f(cy+uy*sz)}`
       +`L${f(cx-ux*sz+uy*sz*0.8)} ${f(cy-uy*sz-ux*sz*0.8)}`
       +`L${f(cx-ux*sz-uy*sz*0.8)} ${f(cy-uy*sz+ux*sz*0.8)}Z"></path>`;
   }
+  /* and the roundings over the legs they join */
+  arcs.forEach(a=>{ o+=`<path class="rnd" data-s="${a.side}" d="${a.d}"></path>`; });
 
   /* the line, with its two ends named the way the strip names them */
   o+=`<line class="line" x1="${f(X(D.pin))}" y1="${f(Y(D.pin))}"`
@@ -9972,7 +10153,7 @@ function prevDraw(){
     o+=`<circle class="mk${on?' on':''}" cx="${f(X(p))}" cy="${f(Y(p))}" r="${r}"></circle>`
       +`<text class="n${on?' on':''}" x="${f(X(p))}" y="${f(Y(p)+7)}"`
       +` font-size="${many?19:22}">${ns.map(i=>i+1).join(',')}</text>`
-      +`<text class="lbl" x="${f(X(p))}" y="${f(Y(p)-r-10)}">`
+      +`<text class="lbl" x="${f(X(p))}" y="${f(Y(p)-Math.max(r,ROUND_R)-12)}">`
       +esc(g[0].m.hdr)+` <tspan fill="${markSide(j)==='P'?'var(--port)':'var(--stbd)'}">`
       +markSide(j)+`</tspan></text>`;
   });

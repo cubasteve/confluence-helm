@@ -602,6 +602,15 @@ On it:
   in the course, `1,3`, and the side of the rounding still to come in
   port red or starboard green. The one being sailed to is filled in, the
   same as the chip in the strip.
+- **the rounding**, drawn as an arc about each mark in the colour of the
+  side it is left on. See below.
+- **the water**, underneath all of it: the same satellite tiles the
+  track page uses, from the same cache and the same on-disk pack. The
+  club's own course sheet is a chart with the marks drawn on it, and the
+  reason is not decoration — `RUM` and `GOSLING` are two dots in a field
+  until a shoreline says which end of the lake they are at. With no
+  tiles cached and no signal there is simply no imagery, which is what
+  the track page does too.
 - **the legs**, in the order they are sailed — and each one is what the
   boat would actually sail, not the line between the two buoys. See
   below. The line's midpoint is where the first leg starts and where the
@@ -616,6 +625,34 @@ On it:
 - **the whole thing measured** at the foot: `4 LEGS · 1.82 NM`, walked
   in the order it is sailed. With no course set it says `NO COURSE SET ·
   THE LINE IS THE WHOLE OF IT`, which is true.
+
+#### It rounds the marks
+
+A course does not go **through** a buoy, and which way round it goes is
+the question the whole leg is sailed about. So the route comes in on a
+tangent, goes round an arc on the side the strip says, and leaves on the
+tangent that points at whatever is next — the shape the club draws on its
+own course sheet, and the shape you actually sail.
+
+Leave a mark to port and it stays on your left the whole way round,
+which is a turn to port: counter-clockwise north-up, and *clockwise* on
+a screen whose y counts downward, which is the sign error waiting for
+anyone who edits this. The arc takes the port red or the starboard
+green, the same two colours the chips and the chart use.
+
+Of the two tangents from a point onto a circle, only one is usable:
+arriving, the boat must reach the circle *already moving the way the arc
+goes*; leaving, it must set off that way. The other of each pair grazes
+the mark on the wrong side, and picking by "smallest sweep" instead —
+which is how this was written first — produced a three-pixel nick rather
+than a rounding.
+
+The radius is **30 px, not metres**. Thirty metres of rounding across two
+miles of lake is a pixel and a half; this is a diagram of a rounding, not
+a survey of one. It has to stand outside the mark's own 18 px circle or
+it is hidden underneath it, which is also how it shipped the first time.
+It is capped at a fraction of the two legs it sits between, so a mark
+close to the line does not get an arc bigger than the leg reaching it.
 
 #### It tacks where you would tack
 
@@ -652,10 +689,29 @@ the buoys make, so the route is worked out in metres *before* the
 picture is scaled — otherwise the tack happens off the edge of the card,
 which is the one place it is no use.
 
-With no wind instrument and no heading-plus-angle to fall back on, there
-is nothing to route by: every leg is a rhumb line, the card says
-`NO WIND · RHUMB LINES` where the arrow would be, and the foot drops the
-sailed distance rather than claiming one.
+#### And the wind can come off the forecast
+
+The masthead is the truth and always wins. But the course is set at the
+dock, often before the instruments are awake and always before the boat
+has sailed anywhere, and a preview that says `NO WIND` is a preview that
+cannot route. So when there is no true wind aboard and no
+heading-plus-angle to make one from, the card asks **Open-Meteo**:
+
+```
+api.open-meteo.com/v1/forecast?latitude=…&longitude=…
+  &current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn
+```
+
+No key, no login, no account. `wind_direction_10m` is the direction the
+wind is **from**, in degrees, which is TWD as it stands. One request per
+quarter hour — Open-Meteo's own step — cached in `localStorage`, because
+the first thing a Wednesday does is reload the page. It fails quietly:
+no signal at the dock is the normal case, not an error.
+
+With neither instrument nor forecast there is nothing to route by: every
+leg is a rhumb line, the card says `NO WIND · RHUMB LINES` where the
+arrow would be, and the foot drops the sailed distance rather than
+claiming one.
 
 **Legs that share a pair of ends bow apart.** A windward-leeward is two
 marks sailed twice, and drawn straight the way back lies exactly on the
