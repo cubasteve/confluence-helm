@@ -864,6 +864,42 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mini.wide.danger{color:var(--alarm);border-color:var(--alarm)}
 .ns-row.danger .ns-name{color:var(--alarm)}
 
+/* --- slide to confirm ---
+   A tap is one event, and on a wet round panel at speed it is an event
+   a sleeve, a knuckle or a wave can produce on its own. Reboot and
+   shut down take every instrument on the boat with them, so the
+   confirm here is a thumb carrying the knob the width of the card -
+   something nothing but a hand doing it on purpose ever does.
+   touch-action:none because the stage would otherwise read the drag as
+   a pan before the knob ever sees it. */
+.slide{position:relative;height:104px;border-radius:52px;background:var(--chip);
+  border:2px solid var(--hairline);overflow:hidden;touch-action:none;
+  margin-bottom:4px}
+.slide-fill{position:absolute;left:0;top:0;bottom:0;width:0;
+  background:var(--accent);opacity:.16}
+.slide-word{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  text-align:center;font-size:22px;font-weight:600;letter-spacing:.14em;
+  color:var(--label)}
+.slide-knob{position:absolute;left:6px;top:6px;width:88px;height:88px;padding:0;
+  border:none;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  transition:left .2s cubic-bezier(.22,.9,.3,1)}
+/* No easing while a finger is on it - the knob has to sit under the
+   thumb, not chase it. */
+.slide.live .slide-knob{transition:none}
+.slide-knob svg{width:38px;height:38px;fill:none;stroke:var(--panel);
+  stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* Red for the two that end the day: the same alarm the tiles that got
+   you here are drawn in. */
+.slide.danger{border-color:var(--alarm)}
+.slide.danger .slide-fill{background:var(--alarm)}
+.slide.danger .slide-knob{background:var(--alarm)}
+.slide.danger .slide-word{color:var(--alarm)}
+/* CANCEL is alone in its row now, and a lone flex child sits where it
+   is put rather than where it belongs. */
+#ns-ask-view .ns-pager{justify-content:center}
+#ns-ask-view .ns-pager .mini.wide{flex:none;width:260px}
+
 /* --- password entry ---
    A keyboard of our own. The helm has no keyboard, and Chromium under
    --kiosk has no on-screen one to offer, so without this a WPA key is
@@ -2498,9 +2534,16 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div class="ns" id="ns-ask-view" style="display:none">
       <div class="ask-title" id="ask-title">Reboot?</div>
       <div class="ask-body" id="ask-body"></div>
+      <div class="slide" id="ask-slide">
+        <div class="slide-fill" id="ask-fill"></div>
+        <div class="slide-word" id="ask-word">SLIDE TO CONFIRM</div>
+        <div class="slide-knob" id="ask-knob">
+          <svg viewBox="0 0 24 24"><path d="M5 5l7 7-7 7"></path>
+            <path d="M13 5l7 7-7 7"></path></svg>
+        </div>
+      </div>
       <div class="ns-pager">
         <button class="mini wide" id="ask-no">CANCEL</button>
-        <button class="mini wide danger" id="ask-yes">CONFIRM</button>
       </div>
       <div class="ns-msg" id="ask-msg"></div>
     </div>
@@ -6383,10 +6426,70 @@ function showAsk(on,act){
   NET.ask=act;
   $('ask-title').textContent=act.name+'?';
   $('ask-body') .textContent=act.ask;
+  $('ask-slide').classList.toggle('danger',!!act.danger);
+  askSlideHome();
   setMsg('');
 }
 $('ask-no') .addEventListener('click',()=>{ showAsk(false); setMsg(''); });
-$('ask-yes').addEventListener('click',askYes);
+
+/* ---- the slide ----------------------------------------------------------
+   What CONFIRM used to be. Function declarations rather than a closure:
+   showAsk() is written above this and calls askSlideHome(), and a
+   declaration is hoisted where a const is not. */
+const ASK_PAD=6;          /* the knob's inset, both ends */
+const ASK_HIT=0.94;       /* how far along counts as all the way */
+/* How far in from the left a finger may land and still be taking hold
+   of the knob. The travel is measured from where it lands, so a grab
+   at the far end would have to be dragged off the edge of the glass to
+   finish - this is what stops that being possible. Twice the knob, so
+   it is forgiving without reaching halfway. */
+const ASK_GRAB=200;
+let ASK_DRAG=null;
+/* Measured, not stored: the card is laid out once it is shown, and the
+   knob is 0 wide while the view is display:none. */
+function askSpan(){
+  return Math.max(1, $('ask-slide').clientWidth
+                     - $('ask-knob').offsetWidth - ASK_PAD*2);
+}
+function askPut(u){
+  const x=ASK_PAD+u*askSpan();
+  $('ask-knob').style.left=x+'px';
+  /* The fill follows the middle of the knob, so the track reads as
+     filling rather than as a bar the knob is sitting on top of. */
+  $('ask-fill').style.width=(x+$('ask-knob').offsetWidth/2)+'px';
+  /* Gone by two thirds: by then the knob is over the words anyway. */
+  $('ask-word').style.opacity=String(Math.max(0,1-u*1.5));
+}
+function askSlideHome(){ $('ask-slide').classList.remove('live'); askPut(0); }
+/* The bar takes the finger, not only the knob itself: 88 px of knob is
+   35 px on the phone, under anything you can reliably hit. The knob is
+   a handle rather than a button, so nothing here is tappable and the
+   touch sound is this handler's to make - once when it takes hold, and
+   again at the far end when it commits. */
+$('ask-slide').addEventListener('pointerdown',e=>{
+  if(!NET.ask||NET.busy) return;
+  const r=$('ask-slide').getBoundingClientRect();
+  if(e.clientX-r.left > ASK_GRAB) return;
+  gClaim();                      /* a drag here is never a page swipe */
+  ASK_DRAG={id:e.pointerId, x0:e.clientX, u:0};
+  $('ask-slide').classList.add('live');
+  clickPlay();
+  try{ $('ask-slide').setPointerCapture(e.pointerId); }catch(err){}
+});
+addEventListener('pointermove',e=>{
+  if(!ASK_DRAG||e.pointerId!==ASK_DRAG.id) return;
+  ASK_DRAG.u=Math.max(0,Math.min(1,(e.clientX-ASK_DRAG.x0)/askSpan()));
+  askPut(ASK_DRAG.u);
+});
+['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{
+  if(!ASK_DRAG||e.pointerId!==ASK_DRAG.id) return;
+  const u=ASK_DRAG.u; ASK_DRAG=null;
+  $('ask-slide').classList.remove('live');
+  /* Short of the end is a no. Letting go early springs it back, which
+     is also how you change your mind without reaching for CANCEL. */
+  if(u<ASK_HIT) return askPut(0);
+  askPut(1); clickPlay(); askYes();
+}));
 
 async function askYes(){
   const act=NET.ask; if(!act||NET.busy) return;

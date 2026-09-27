@@ -1148,6 +1148,12 @@ capture phase so nothing downstream can swallow it, and it neither
 claims the gesture nor prevents anything, so nothing downstream can tell
 it ran.
 
+The shutdown sheet's slide-to-confirm bar is in that list, and it is the
+one control that makes the sound twice: once when a thumb lands on it,
+and again at the far end when the slide commits. Taking hold of it and
+letting go short of the end is not an action, and does not sound like
+one.
+
 The context is made on the first tap and kept. One created before any
 gesture starts suspended and browsers resume it only on one — which
 every caller here is, so it comes up on the first thing you touch.

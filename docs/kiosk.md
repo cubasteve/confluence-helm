@@ -308,9 +308,37 @@ usual way an SD card dies, and the helm has no keyboard - so until now the
 only clean shutdown was over SSH, from a phone, over the hotspot the Pi
 itself is running.
 
-Every action gets a full confirm screen with CANCEL and CONFIRM, not the
-second-tap the hotspot uses. A mis-tap there costs the boat its network; a
-mis-tap here costs it every instrument at once.
+Every action gets a full confirm screen, not the second-tap the hotspot
+uses. A mis-tap there costs the boat its network; a mis-tap here costs it
+every instrument at once.
+
+**And that confirm is a slide, not a button.** `CONFIRM` sat one thumb's
+width from the tile that opened it, and a tap is an event a round panel
+produces on its own - a sleeve on the rim, a wave, a knuckle passing
+through. The bar underneath the question has to be carried its whole
+width, 480 px of travel, and 94% of the way counts as all the way; let go
+short of that and it springs home, which is also how you change your mind
+without reaching for `CANCEL`. `CANCEL` stays a tap: backing out is the
+one thing here that should be easy.
+
+The bar takes the finger, not only the knob - 88 px of knob is 35 px on
+a phone, under anything you can reliably hit. Only its left end does,
+though: `ASK_GRAB` is 200 px, twice the knob. Travel is measured from
+where the finger lands, so a grab at the far end could only be finished
+by dragging off the edge of the glass, and a hold that cannot be
+completed is worse than one that never starts.
+
+The knob is a `div`, not a button. Nothing on this bar is tappable, so
+the touch sound belongs to the drag handler: once when it takes hold,
+once at the far end when it commits, and nothing at all for a hold that
+springs back. It follows the thumb with no easing while it is held
+(`.slide.live`), because a knob that chases the finger reads as lag.
+Reboot and shut down draw it in the alarm red their tiles use; the
+recoverable ones get the accent.
+
+The drag `gClaim()`s on `pointerdown`, so the gesture judge cannot read a
+sideways pull across the bar as a page swipe, and the track carries
+`touch-action:none` so the stage does not take it for a pan first.
 
 `poweroff` and `reboot` go through logind, which polkit grants to a local
 *active* session without a password - the same reason `netd.py` runs from

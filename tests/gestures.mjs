@@ -242,6 +242,93 @@ await p.unroute('http://127.0.0.1:8091/bt/connect');
 await p.unroute('http://127.0.0.1:8091/bt/list');
 await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);
 
+t.head('the two that end the day are a slide, not a tap');
+/* A tap is one event, and a round panel takes plenty of them it was
+   never offered - a sleeve on the rim, a wave, a knuckle on the way to
+   something else. CONFIRM sat under a thumb's width of the tile that
+   opened it, and the thing on the other side of it is every instrument
+   on the boat going dark. */
+await p.evaluate(()=>{ openPanel(); openNet('power'); }); await p.waitForTimeout(900);
+const acts=await p.$$eval('.pw-tile b', n=>n.map(e=>e.textContent));
+t.ok(acts.join()==='Reload,Helper,Reboot,Shut down',
+     'the helper\'s actions, the two heavy ones last', JSON.stringify(acts));
+const ask=()=>p.evaluate(()=>{
+  const v=$('ns-ask-view'), c=v.getBoundingClientRect(), b=$('ask-slide');
+  return {up:v.style.display!=='none', title:$('ask-title').textContent,
+          word:$('ask-word').textContent,
+          red:b.classList.contains('danger'),
+          knob:Math.round($('ask-knob').getBoundingClientRect().left
+                          -b.getBoundingClientRect().left),
+          confirm:!!document.getElementById('ask-yes'),
+          msg:$('ask-msg').textContent,
+          corners:[[c.left,c.top],[c.right,c.top],[c.left,c.bottom],[c.right,c.bottom]]
+            .filter(([x,y])=>Math.hypot(x-540,y-540)>534).length}; });
+/* Dispatched on the bar, because that is what a thumb lands on. The
+   moves go to the window: a finger that leaves the 104 px bar mid-drag
+   is the normal case, not an abort. */
+const slide=frac=>p.evaluate(f=>{
+  const bar=$('ask-slide'), k=$('ask-knob').getBoundingClientRect();
+  const span=bar.clientWidth-$('ask-knob').offsetWidth-12;
+  const x0=k.left+k.width/2, y=k.top+k.height/2;
+  const ev=(ty,x,el)=>(el||bar).dispatchEvent(new PointerEvent(ty,
+    {pointerId:9, clientX:x, clientY:y, bubbles:true, pointerType:'touch'}));
+  ev('pointerdown',x0);
+  for(let i=1;i<=10;i++) ev('pointermove', x0+span*f*i/10, window);
+  ev('pointerup', x0+span*f, window);
+}, frac);
+await p.evaluate(()=>{ [...document.querySelectorAll('.pw-tile')]
+  .find(e=>/Shut down/.test(e.textContent)).click(); });
+await p.waitForTimeout(400);
+let Q=await ask();
+t.ok(Q.up && /Shut down/.test(Q.title), 'the tile asks first', Q.title);
+t.ok(!Q.confirm, 'and there is no CONFIRM button left to catch a stray tap');
+t.ok(/SLIDE/.test(Q.word), 'the bar says what to do with it', Q.word);
+t.ok(Q.red, 'in the alarm red the tile that got here is drawn in');
+t.ok(Q.corners===0, 'and the card is inside the glass at every corner');
+posts.length=0;
+/* a tap on the bar is a drag of nothing */
+await slide(0); await p.waitForTimeout(300);
+t.ok(!posts.length, 'a tap on the bar shuts down nothing', JSON.stringify(posts));
+/* The travel is measured from where the finger lands, so a grab at the
+   far end could only be finished by dragging off the edge of the glass.
+   It is not a grab at all. */
+await p.evaluate(()=>{ const bar=$('ask-slide'), r=bar.getBoundingClientRect();
+  const y=r.top+r.height/2, x=r.right-30;
+  const ev=(t,el)=>(el||bar).dispatchEvent(new PointerEvent(t,
+    {pointerId:8, clientX:t==='pointerdown'?x:x+600, clientY:y,
+     bubbles:true, pointerType:'touch'}));
+  ev('pointerdown'); ev('pointermove',window); ev('pointerup',window); });
+await p.waitForTimeout(300);
+t.ok(!posts.length && (await ask()).knob<=8,
+     'and the far end of it is not a handle - a drag begun there would '
+     +'have to finish off the edge of the glass', JSON.stringify(posts));
+await slide(0.5); await p.waitForTimeout(400);
+Q=await ask();
+t.ok(!posts.length, 'and nor does half of one', JSON.stringify(posts));
+t.ok(Q.knob<=8, 'which springs back, so letting go early is how you '
+     +'change your mind', Q.knob+' px along');
+await slide(1); await p.waitForTimeout(700);
+const down=posts.find(x=>x.path==='/power/do');
+t.ok(down && down.body.action==='poweroff', 'carrying it the whole way is '
+     +'what shuts the Pi down', JSON.stringify(posts));
+t.ok(/SHUTTING DOWN/.test((await ask()).msg), 'and it says so rather than '
+     +'closing on a screen that is about to go black', (await ask()).msg);
+
+t.head('the same bar, without the red, for the ones you can undo');
+await p.evaluate(()=>{ showAsk(false); }); await p.waitForTimeout(200);
+await p.evaluate(()=>{ [...document.querySelectorAll('.pw-tile')]
+  .find(e=>/Helper/.test(e.textContent)).click(); });
+await p.waitForTimeout(400);
+Q=await ask();
+t.ok(Q.up && !Q.red, 'restarting netd is not an alarm', JSON.stringify(Q));
+t.ok(Q.knob<=8, 'and the bar comes up at its start, not wherever the last '
+     +'one left it', Q.knob+' px along');
+posts.length=0;
+await p.evaluate(()=>$('ask-no').click()); await p.waitForTimeout(300);
+t.ok(!(await ask()).up && !posts.length, 'CANCEL is still a tap - backing out '
+     +'is the one thing that should be easy', JSON.stringify(posts));
+await p.evaluate(()=>closeNet()); await p.waitForTimeout(400);
+
 t.head('the sounder says where it comes out, and can be pointed elsewhere');
 /* aplay only addresses ALSA, so a Bluetooth speaker is reached through
    whatever sits in front of it - which is why this is a list and not a
