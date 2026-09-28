@@ -293,6 +293,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
 #app-run.on{display:block}
 #app-body{position:absolute;inset:0;overflow:hidden}
+/* The frame's own furniture sits above whatever the app puts in the
+   body. #tmap carries z-index:1 from the days it was a page rather than
+   an app, and inside #app-run that was enough to paint the map over the
+   name pill and the top of the close cross - so the Tracks app was the
+   one app whose name you could not read. */
+#app-name,#app-msg,#app-close{z-index:3}
 #app-name{position:absolute;top:44px;left:50%;transform:translateX(-50%);
   max-width:560px;padding:8px 22px;border-radius:24px;
   background:var(--panel);color:var(--label);
@@ -323,12 +329,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    says the rest of the world looks like - the same reason the radar HUD
    stopped using --ink. */
 #gh-cv{position:absolute;inset:0}
-#gh-head{position:absolute;top:118px;left:50%;transform:translateX(-50%);
-  width:640px;text-align:center;pointer-events:none}
-#gh-now{font-size:44px;font-weight:600;letter-spacing:.14em;color:#FFF6E6;
-  text-shadow:0 2px 18px rgba(0,0,0,.55)}
-#gh-alt{margin-top:6px;font-size:19px;font-weight:600;letter-spacing:.14em;
-  color:rgba(255,255,255,.68);text-shadow:0 1px 10px rgba(0,0,0,.5)}
+#gh-head{}   /* .a-head does it */
+#gh-now{color:#FFF6E6;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+#gh-alt{color:rgba(255,255,255,.68);text-shadow:0 1px 10px rgba(0,0,0,.5)}
 /* The one number you opened it for, and it is allowed to be big. */
 #gh-cd{position:absolute;top:770px;left:50%;transform:translateX(-50%);
   width:660px;text-align:center;pointer-events:none}
@@ -360,7 +363,9 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    this reads on either. */
 /* pointer-events stays off the box so the gaps beside the type do not
    eat a drag on the map; the two children take it back. */
-#rad-hud{position:absolute;top:104px;left:50%;transform:translateX(-50%);
+/* The head sits on the same line as the other three; the HUD's own
+   padding is what puts it 8 px higher than the bare ones. */
+#rad-hud{position:absolute;top:106px;left:50%;transform:translateX(-50%);
   width:460px;text-align:center;pointer-events:none;
   padding:6px 20px 8px;border-radius:18px;background:rgba(0,0,0,.55)}
 #rad-head{pointer-events:auto;cursor:pointer}
@@ -408,10 +413,8 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #rad-strip{display:block;width:100%;height:76px;margin-top:10px}
 #rad-sun{margin-top:6px;font-size:14px;font-weight:600;color:#6C757C;
   letter-spacing:.1em}
-#rad-time{font-size:23px;font-weight:600;letter-spacing:.12em;color:#F2F4F6;
-  line-height:1.25}
-#rad-note{margin-top:7px;font-size:20px;font-weight:600;color:#9AA2A9;
-  letter-spacing:.06em;line-height:1.2}
+#rad-time{color:#F2F4F6}
+#rad-note{color:#9AA2A9}
 /* The credits Esri's unkeyed service asks for, inside the HUD rather
    than along the foot. At the foot they were OUTSIDE THE GLASS: a 274px
    line at y=1070 has its corners 547px from the centre, and the panel
@@ -974,9 +977,29 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   color:var(--ink);display:none}
 #tmap.open{display:block}
 #t-svg{position:absolute;inset:0}
-.t-title{position:absolute;top:112px;left:0;right:0;text-align:center;
-  font-size:28px;font-weight:600;letter-spacing:.24em;color:var(--label);
+/* ---- the four apps' heads ----
+   Radar, Course, Tracks and Golden Hour each open with one line saying
+   what you are looking at and one under it qualifying it. They were
+   three sizes at three heights - 23, 28 and 44 px at y111, y112 and
+   y118 - which read as four apps built by four people. One format now,
+   and only the colour differs: two of them sit on a photograph and two
+   on the panel, so the ink cannot be one value even when the metrics
+   are.
+   The name is NOT among them. The pill at y44 says which app this is
+   in every one of them; a title repeating it is the sheet saying COURSE
+   twice, which is what took the course sheet's own title away. */
+/* One block, one place, in all four - so the second line lands on the
+   same pixel and not seven below it in two of them. */
+.a-head{position:absolute;top:112px;left:50%;transform:translateX(-50%);
+  width:640px;text-align:center;pointer-events:none;color:var(--label)}
+.a-h1{font-size:28px;font-weight:600;letter-spacing:.24em;line-height:1.25;
   text-transform:uppercase}
+.a-h2{margin-top:7px;font-size:17px;font-weight:600;letter-spacing:.1em;
+  line-height:1.2;text-transform:uppercase}
+/* The library's, which is a sheet over the map rather than an app of
+   its own, and keeps the old pinned position. */
+.t-title{position:absolute;top:112px;left:0;right:0;text-align:center;
+  color:var(--label)}
 .t-stats{position:absolute;bottom:348px;left:50%;margin-left:-300px;width:600px;
   display:grid;grid-template-columns:repeat(4,1fr);text-align:center}
 /* Two rows now. Row one sits at y~802-888 (chord 826) and row two at
@@ -1007,8 +1030,10 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    at 97.9% of the radius, ~11 px from the glass edge. Here they sit near
    94%, which is a margin rather than a coincidence.                   */
 .t-rail{position:absolute;bottom:183px;left:50%;margin-left:-310px;width:620px}
-.t-attr{position:absolute;top:150px;left:0;right:0;text-align:center;
-  font-size:17px;letter-spacing:.1em;color:var(--label);opacity:.55}
+/* The credit Esri's unkeyed service asks for, and the line under the
+   course, are the quiet half of the head. Radar's and Golden Hour's
+   sit on a photograph and carry their own ink. */
+#t-attr,#cv-h2{opacity:.62}
 
 /* --- track library --- */
 #t-lib,#t-course{position:absolute;inset:0;background:var(--panel);opacity:0;
@@ -2708,7 +2733,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      patches are obvious. Reads the plugin when it is there, the local
      buffer when it is not. -->
 <div id="tmap">
-  <div class="t-title" id="t-title">Race track</div>
+  <div class="a-head"><div class="a-h1" id="t-title">Tracks</div>
+    <div class="a-h2" id="t-attr">IMAGERY © ESRI</div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
     <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
@@ -2728,7 +2754,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <div><b id="t-avg">–</b><span>AVG KT</span></div>
     <div><b id="t-max">–</b><span>MAX KT</span></div>
   </div>
-  <div class="t-attr" id="t-attr">IMAGERY © ESRI</div>
   <div class="t-status" id="trk-n">no track</div>
   <div class="t-rail rail">
     <button class="rbtn rec" id="trk-rec"><svg viewBox="0 0 24 24">
@@ -2745,7 +2770,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <path d="M6 6l12 12M18 6L6 18"/></svg><b>CLEAR</b></button>
   </div>
   <div id="t-lib">
-    <div class="t-title">Library</div>
+    <div class="t-title a-h1">Library</div>
     <div class="lib-list noscroll" id="lib-list"></div>
     <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
   </div>
@@ -2787,6 +2812,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
    The map still draws the course on the chart, because COURSE is the
    boat's, not the sheet's. -->
 <div id="t-course">
+  <!-- The fourth head. What this sheet is looking at is the course, so
+       that is what it says: how far round it is, and how many marks
+       make it. The name is the pill's job, the same as the other
+       three. -->
+  <div class="a-head"><div class="a-h1" id="cv-h1">No course set</div>
+    <div class="a-h2" id="cv-h2"></div></div>
   <div id="course-main">
     <div class="cv">
       <!-- The evening, first: what is left once the line has gone up
@@ -4707,7 +4738,9 @@ async function publishGPX(pts,label){
   const d=new Date(pts[0].t), pad=n=>String(n).padStart(2,'0');
   const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
              +`-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const nice=(label&&label!=='Race track')?label+'-'+stamp:'Confluence-'+stamp;
+  /* The head reads TRACKS with nothing loaded and the race's name with
+     one, so the name is only a name when it is not the app's own. */
+  const nice=(label&&label!=='Tracks')?label+'-'+stamp:'Confluence-'+stamp;
   trkFlash('sending…',30000);
   const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
   if(!j||!j.ok) return trkFlash((j&&j.error)||'send failed');
@@ -9756,6 +9789,22 @@ function renderCourse(){
   /* The gun, and how long the countdown to it runs. They are next to
      each other because between them they say when the countdown starts,
      which neither says alone. */
+  /* The head: the course as one number, and what makes it. Rhumb, not
+     sailed - the sailed distance needs the whole route worked out and
+     this is painted on every tick of the sheet, where the preview is
+     worked out once when you open it. */
+  const hm=COURSE.marks.map(markOf).filter(Boolean);
+  if(hm.length){
+    const E=lineEnds(), mid={lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2};
+    const way=[mid].concat(hm.map(m=>({lat:m.lat, lon:m.lon})), [mid]);
+    let nm=0;
+    for(let i=1;i<way.length;i++) nm+=seaNm(way[i-1].lat,way[i-1].lon,way[i].lat,way[i].lon);
+    wText('cv-h1', nm.toFixed(1)+' NM');
+    wText('cv-h2', hm.length+' MARK'+(hm.length===1?'':'S')+' ROUND');
+  } else {
+    wText('cv-h1','No course set');
+    wText('cv-h2','THE LINE IS THE WHOLE OF IT');
+  }
   rd('cv-start','START TIME', GUNAT!==null ? gunTxt(GUNAT) : 'NOT SET','⋯');
   wCls('cv-start','in', GUNAT!==null);
   /* OFF rather than 0 MIN: nought of something reads as a broken
@@ -11198,7 +11247,7 @@ function loadRace(id){
 }
 function unloadRace(){
   VIEWTRK=null; MAPVIEW=null; tileKey='';
-  $('t-title').textContent='Race track';
+  $('t-title').textContent='Tracks';
   drawMap(TRK); paintTrack();
 }
 
@@ -12929,8 +12978,8 @@ function radOpen(host){
   host.appendChild(wcv);
   host.insertAdjacentHTML('beforeend',
     '<div id="rad-hud">'
-    +'<div id="rad-head"><span id="rad-time">—</span>'
-    +'<div id="rad-note"></div>'
+    +'<div id="rad-head"><div id="rad-time" class="a-h1">—</div>'
+    +'<div id="rad-note" class="a-h2"></div>'
     +'<div id="rad-cred">Esri · RainViewer · Tomorrow.io · Open-Meteo</div>'
     +'<svg id="rad-chev" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>'
     +'</div>'
@@ -13272,8 +13321,8 @@ function goldenOpen(host){
   cv.id='gh-cv';
   host.appendChild(cv);
   host.insertAdjacentHTML('beforeend',
-    '<div id="gh-head"><div id="gh-now">—</div>'
-    +'<div id="gh-alt"></div></div>'
+    '<div id="gh-head" class="a-head"><div id="gh-now" class="a-h1">—</div>'
+    +'<div id="gh-alt" class="a-h2"></div></div>'
     +'<div id="gh-cd"><span id="gh-next">—</span><b id="gh-in"></b></div>'
     +'<div id="gh-row"></div>');
   GH={cv:cv, drew:0, alt:0, timer:null};

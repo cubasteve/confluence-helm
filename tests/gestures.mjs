@@ -85,6 +85,59 @@ t.ok((await state(p)).page===1, 'and come back');
 await fling(p,3,260,0);
 t.ok((await state(p)).page===1, 'stopping there rather than wrapping');
 
+t.head('four apps, one head');
+/* They opened with three sizes at three heights - 23, 28 and 44 px at
+   y111, y112 and y118 - which reads as four apps built by four people.
+   One block, one format; only the ink differs, because two of them sit
+   on a photograph and two on the panel. */
+const head=async id=>{
+  if(await p.evaluate(()=>!!APP.on)){ await p.evaluate(()=>closeApp()); await p.waitForTimeout(400); }
+  await p.evaluate(i=>openApp(APPS.find(a=>a.id===i)), id);
+  await p.waitForTimeout(1100);
+  return p.evaluate(()=>{
+    const m=e=>{ const s=getComputedStyle(e), r=e.getBoundingClientRect();
+      return {y:Math.round(r.top), fs:s.fontSize, w:s.fontWeight, ls:s.letterSpacing}; };
+    const h1=document.querySelector('#app-run .a-h1'),
+          h2=document.querySelector('#app-run .a-h2'),
+          pill=$('app-name');
+    return {h1:h1&&m(h1), h2:h2&&m(h2), t1:h1&&h1.textContent.trim(),
+            t2:h2&&h2.textContent.trim(), pill:pill.textContent,
+            pillY:Math.round(pill.getBoundingClientRect().top),
+            /* painted, not merely present: #tmap carries z-index:1 from
+               when it was a page, and that used to bury the pill */
+            over:getComputedStyle(pill).zIndex};
+  });
+};
+const H={};
+for(const id of ['radar','course','tracks','golden']) H[id]=await head(id);
+const ids=Object.keys(H);
+t.ok(ids.every(k=>H[k].h1 && H[k].h2),
+     'every one of the four opens with a line and a line under it',
+     ids.map(k=>k+':'+(H[k].t1||'—')).join(' · '));
+t.ok(new Set(ids.map(k=>H[k].h1.y)).size===1,
+     'all four headlines on the same pixel',
+     ids.map(k=>k+' '+H[k].h1.y).join(' · '));
+t.ok(new Set(ids.map(k=>H[k].h2.y)).size===1,
+     'and all four sublines on the same one under it',
+     ids.map(k=>k+' '+H[k].h2.y).join(' · '));
+t.ok(new Set(ids.map(k=>H[k].h1.fs+H[k].h1.w+H[k].h1.ls)).size===1,
+     'one size, one weight, one tracking',
+     ids.map(k=>k+' '+H[k].h1.fs+'/'+H[k].h1.ls).join(' · '));
+t.ok(new Set(ids.map(k=>H[k].h2.fs+H[k].h2.w+H[k].h2.ls)).size===1,
+     'the sublines too', ids.map(k=>k+' '+H[k].h2.fs).join(' · '));
+t.ok(H.tracks.t1==='Tracks' && /ESRI/.test(H.tracks.t2),
+     'the map says TRACKS, not RACE TRACK, over the credit Esri asks for',
+     H.tracks.t1+' / '+H.tracks.t2);
+t.ok(/NM|NO COURSE/i.test(H.course.t1) && /MARK|LINE/i.test(H.course.t2),
+     'the course says how far round it is and what makes it',
+     H.course.t1+' / '+H.course.t2);
+t.ok(new Set(ids.map(k=>H[k].pillY)).size===1 &&
+     ids.every(k=>H[k].over==='3'),
+     'and the name pill is on the same line in all four, painted over '
+     +'whatever the app put in the body rather than under the map',
+     ids.map(k=>k+' '+H[k].pillY+'/'+H[k].over).join(' · '));
+await p.evaluate(()=>closeApp()); await p.waitForTimeout(400);
+
 t.head('the radios');
 await fling(p,1,0,260);
 const tiles=await p.$$eval('#conn-sec .cbtn', n=>n.map(e=>e.dataset.k));
