@@ -10580,7 +10580,10 @@ async function clubFetch(){
 
   const stop=say=>{ CLUB={step:'idle', got:null, say:say}; renderCourse(); };
   if(!j) return stop('NO ANSWER · IS THERE WIFI?');
-  if(!j.course) return stop('NOTHING POSTED FOR '+(j.date||'TODAY'));
+  /* No date on it. The sync asks for today and nothing else, so the
+     date could only ever be today's - and a line that says so is a line
+     spent telling you what day it is. */
+  if(!j.course) return stop('NOTHING POSTED');
 
   const g=j.course;
   /* Two ways a mark can fail to arrive. The site names the ones IT could
@@ -10685,7 +10688,10 @@ function cvpMark(){
 function cvpHead(){
   const k=cvpOn().kind;
   if(k==='mode') return '<div class="pkhd">WHICH SEQUENCE</div>';
-  if(k==='club') return '<div class="pkhd">TONIGHT, FROM THE CLUB</div>';
+  /* No head. The readout you opened it from says CLUB and the menu
+     under it says what came back; TONIGHT, FROM THE CLUB over the top
+     of those was a third way of saying the same thing. */
+  if(k==='club') return '';
   return '<div class="pkhd">WHICH LINE</div>';
 }
 const cvpBody=()=>{ const k=cvpOn().kind;

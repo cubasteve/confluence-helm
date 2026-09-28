@@ -778,7 +778,12 @@ the translating and hands back ids this file already knows.
 **Two taps, never one.** The first asks, and shows what came back — the
 club's course drawn in the strip in dashed outline, in the place it
 would take, the readout reading `4 MARKS?`, and its menu open on when it
-was posted and anything the committee wrote on it. The second tap is
+was posted and anything the committee wrote on it. With nothing posted
+the menu is one line, `NOTHING POSTED`, and no heading over it: the
+readout you opened it from says `CLUB` and the line says what came back,
+so a `TONIGHT, FROM THE CLUB` above those was a third way of saying the
+same thing. No date on it either — the sync asks for today and nothing
+else, so the date could only ever be today's. The second tap is
 `LOAD 4 MARKS` at the foot of that menu, and it is the only thing that
 replaces your course. Tapping a control and having the course you are
 three marks into vanish is not something this sheet should be able to do

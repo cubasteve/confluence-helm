@@ -92,7 +92,15 @@ await clear();
 reply={status:200, body:{date:'2026-10-07', course:null}};
 await tap(CLUB);
 S=await said();
-t.ok(/NOTHING POSTED/.test(S.sub), 'it says so rather than emptying the course', S.sub);
+t.ok(S.sub==='NOTHING POSTED',
+     'it says so rather than emptying the course - and says only that. '
+     +'The date it used to carry could only ever be today\'s, since today '
+     +'is all the sync asks for', S.sub);
+t.ok(await p.evaluate(()=>$('pick-hd').textContent.trim())==='',
+     'with no heading over it: the readout says CLUB and the line says '
+     +'what came back, and TONIGHT, FROM THE CLUB over those was a third '
+     +'way of saying the same thing',
+     await p.evaluate(()=>$('pick-hd').textContent.trim()));
 t.ok(S.menu && !S.foot, 'in the menu, with nothing to load', S.foot);
 t.ok((await course()).marks.length===0, 'and nothing was loaded');
 
