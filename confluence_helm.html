@@ -674,13 +674,25 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    where the glass is running out - at 256 tall its bottom corner was
    three pixels off the rim. */
 .sndrow{display:flex;align-items:center;gap:18px;margin-top:2px}
-.sndrow .mini.wide{flex:none;width:168px;height:64px}
+/* 58 rather than 64: the output's line grew a switch beside it, and
+   the card has to come out the height of the two it sits with. */
+.sndrow .mini.wide{flex:none;width:168px;height:58px}
 /* Which noise this row is about. Down the left rather than over each
    button: two headings inside one box is the two boxes back again, and
    a word beside a control is read as belonging to it. */
 .sndlbl{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.14em;
   color:var(--label);text-transform:uppercase}
-.sndwho{display:block;width:100%;margin-top:8px;
+/* The output, and the switch that holds it awake, on one line. */
+/* The row keeps its height whether or not the switch is in it: the jack
+   does not get one, and a card that is 12 px shorter on a boat wired to
+   the jack is a card out of line with the two beside it. */
+.sndout{display:flex;align-items:center;gap:10px;margin-top:10px;min-height:34px}
+.awake{flex:none;height:34px;padding:0 14px;border-radius:17px;
+  border:2px solid var(--hairline);background:none;font-family:var(--font);
+  font-size:15px;font-weight:600;letter-spacing:.12em;color:var(--label)}
+.awake.on{color:var(--accent);border-color:var(--accent)}
+.awake:active{background:var(--chip)}
+.sndwho{display:block;flex:1;min-width:0;
   font-size:19px;font-weight:600;letter-spacing:.08em;
   color:var(--label);text-transform:uppercase;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;
@@ -2584,7 +2596,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          there is one wire and no choice.
          On its own line: beside the button it had 225 px, and PIPEWIRE /
          PULSE · TAP is not a thing that fits in 225 px. -->
-    <button class="sndwho" id="snd-who"></button>
+    <div class="sndout" id="snd-out">
+      <button class="sndwho" id="snd-who"></button>
+      <!-- Whether to hold that output awake through a start. Only worth
+           offering when it is something that sleeps: the jack's DAC
+           wakes in 120 ms and never powers off. -->
+      <button class="awake" id="snd-awake">AWAKE</button>
+    </div>
     </div>
 
     <!-- deploy.sh rewrites __BUILD__ with the commit it published. A panel
@@ -3088,6 +3106,10 @@ const CFG={
   /* How long the countdown is. Five is the club's sequence; the course
      sheet steps it 5, 10, 15 for a regatta that runs a longer one. */
   startMins:5,
+  /* A Bluetooth speaker sleeps on its own idle timer, and the link the
+     horn goes out on goes cold before that. Kept awake only while the
+     boat has something to say soon - see keepTick. */
+  keepAwake:true,
   /* Which kind of start the line is watching for - see lineWatch. The
      two club nights want opposite things from the same crossing, and
      nothing in the data tells them apart. */
@@ -5109,6 +5131,40 @@ function sigArm(){
   netApi('/buzz',{arm:true});
 }
 
+/* ---- keeping a Bluetooth speaker awake ---------------------------------
+   A speaker asleep is a gun nobody hears, and the two ways it happens
+   are different: the audio server suspends the sink after idle, which
+   takes the front off the next sound (that is what sigArm is for), and
+   the speaker's own idle timer switches it off altogether, which
+   nothing in here can undo afterwards.
+
+   So the same arming silence goes out on a slow timer - 1.2 s of
+   nothing through the very path the horn uses, which resets both
+   clocks. netd rate-limits it, drops it the instant a real signal wants
+   the output, and has nothing to arm on a rig wired to a pin.
+
+   Only while the boat has something to say soon: a gun armed, a
+   countdown running, or a race on. The rest of the day the speaker is
+   welcome to sleep, and on a boat running off a power bank that is not
+   politeness, it is the speaker's battery. And only when there is
+   something to keep awake - the 3.5 mm jack's DAC wakes in 120 ms and
+   never powers off. */
+let KEEP_MS=180000;                /* 3 min, inside the shortest idle
+                                      timer worth planning for. A let so
+                                      a probe can wind it down; nothing
+                                      in the app writes to it. */
+let keepAt=0;
+const keepWanted=()=> CFG.keepAwake
+  && (GUNAT!==null || tState==='countdown' || tState==='racing')
+  && !!SND.dev && SND.dev.indexOf('plughw:')!==0;
+function keepTick(){
+  if(!keepWanted()){ keepAt=0; return; }
+  const now=Date.now();
+  if(keepAt && now-keepAt<KEEP_MS) return;
+  keepAt=now;
+  netApi('/buzz',{arm:true});
+}
+
 /* +/- only mean anything before the gun */
 function nudge(sec){
   if(tState==='countdown') tEnd=Math.max(rnow(), tEnd+sec*1000);
@@ -5158,6 +5214,7 @@ function tick(){
 
   const off = (tState==='racing'||tState==='finished');
   $('t-plus').style.opacity = $('t-minus').style.opacity = off?'.2':'1';
+  keepTick();                      /* rate-limits itself; see KEEP_MS */
   setTimeout(tick,120);
 }
 
@@ -5730,6 +5787,8 @@ const PREF_DEFS={
      than what the ＋ will cycle to. Stepping on from a club's 7 lands
      on 5, which is where indexOf(-1)+1 points and is the right place. */
   startMins:  v=>Number.isFinite(v)&&v>=0&&v<=60 ? Math.round(v) : null,
+  /* Whether to hold a Bluetooth speaker awake through a start. */
+  keepAwake:  v=>typeof v==='boolean' ? v : null,
   /* Which noise the glass makes under a finger, or none. */
   click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
 };
@@ -6344,7 +6403,7 @@ function paintSounder(st){
      boat with no sounder would take a working control with it. */
   const on=!!(st&&st.available);
   $('snd-row').style.display=on?'':'none';
-  $('snd-who').style.display=on?'':'none';
+  $('snd-out').style.display=on?'':'none';
   sheetFit();                    /* two more rows, or two fewer */
   if(!on) return;
   const audio = st.mode==='audio';
@@ -6361,7 +6420,21 @@ function paintSounder(st){
   const pick = audio && SND.outs.length>1 && !SND.pinned;
   $('snd-who').disabled=!pick;
   wCls('snd-who','pick',pick);
+  /* AWAKE only where there is something that sleeps. The jack's DAC
+     wakes in 120 ms and never powers off, and a wire on a pin has no
+     link to lose - so on those the switch is not there to be wondered
+     about. */
+  const sleeps = audio && !!SND.dev && SND.dev.indexOf('plughw:')!==0;
+  $('snd-awake').style.display = sleeps ? '' : 'none';
+  wCls('snd-awake','on', !!CFG.keepAwake);
 }
+$('snd-awake').addEventListener('click',()=>{
+  CFG.keepAwake=!CFG.keepAwake; prefsSave();
+  wCls('snd-awake','on', CFG.keepAwake);
+  /* On, and with a start in hand, the next tick sends one rather than
+     waiting out the three minutes from whenever the last one went. */
+  if(CFG.keepAwake) keepAt=0;
+});
 /* Round the list and back to the start. netd refuses anything it has
    not got, so a stale list costs a message rather than a silent boat. */
 /* The cycle, and the sound of it. Tapping this plays the voice it just

@@ -514,6 +514,68 @@ t.ok(!/TAP/.test(W.txt) && W.off, 'and one output is not a choice', W.txt);
 W=await who({available:true, mode:'gpio', gpio:17});
 t.ok(W.txt==='GPIO 17' && W.off, 'a wire on a pin has no output to pick', W.txt);
 
+t.head('and holds a Bluetooth speaker awake through a start');
+/* A speaker asleep is a gun nobody hears. The same 1.2 s arming silence
+   the countdown already sends at eleven seconds goes out on a slow
+   timer - through the very path the horn uses, so it resets both the
+   audio server's idle clock and the speaker's own. */
+const armPosts=()=>posts.filter(o=>o.path==='/buzz' && o.body && o.body.arm).length;
+await p.evaluate(()=>{ paintSounder({available:true, mode:'audio', pinned:false,
+  outs:[{dev:'plughw:CARD=Headphones,DEV=0',name:'3.5 MM JACK'},
+        {dev:'pulse',name:'PIPEWIRE / PULSE'}], device:'pulse'});
+  KEEP_MS=900; CFG.keepAwake=true; GUNAT=null; tState='idle'; keepAt=0; });
+posts.length=0; await p.waitForTimeout(700);
+t.ok(armPosts()===0, 'nothing goes out with no start in hand - the rest of '
+     +'the day the speaker is welcome to sleep, and that is its battery',
+     String(armPosts()));
+await p.evaluate(()=>{ GUNAT=Date.now()+30*60000; });
+await p.waitForTimeout(300);
+t.ok(armPosts()>=1, 'a gun armed, and it starts', String(armPosts()));
+const one=armPosts();
+await p.waitForTimeout(400);
+t.ok(armPosts()===one, 'and does not run on every tick - it is rate-limited '
+     +'to its own interval', armPosts()+' vs '+one);
+await p.waitForTimeout(700);
+t.ok(armPosts()>one, 'the interval comes round and it goes again',
+     armPosts()+' vs '+one);
+t.ok(posts.filter(o=>o.path==='/buzz').every(o=>o.body.arm && !o.body.ms),
+     'and every one of them is an arm, never a sound - this is silence '
+     +'through the horn\'s own path', JSON.stringify(posts.filter(o=>o.path==='/buzz')
+       .map(o=>o.body).slice(0,3)));
+
+posts.length=0;
+await p.evaluate(()=>{ GUNAT=null; tState='racing'; keepAt=0; });
+await p.waitForTimeout(500);
+t.ok(armPosts()>=1, 'a race running keeps it awake too - the finish is a '
+     +'signal as much as the start is', String(armPosts()));
+
+await p.evaluate(()=>{ tState='idle'; GUNAT=Date.now()+30*60000; keepAt=0;
+  paintSounder({available:true, mode:'audio', pinned:false,
+    outs:[{dev:'plughw:CARD=Headphones,DEV=0',name:'3.5 MM JACK'},
+          {dev:'pulse',name:'PIPEWIRE / PULSE'}],
+    device:'plughw:CARD=Headphones,DEV=0'}); });
+await p.waitForTimeout(300);
+posts.length=0;                    /* anything already in flight */
+await p.waitForTimeout(900);
+t.ok(armPosts()===0, 'pointed at the jack it sends nothing: that DAC wakes '
+     +'in 120 ms and never powers off', String(armPosts()));
+t.ok(!await p.evaluate(()=>$('snd-awake').offsetHeight),
+     'and the switch is not there to be wondered about');
+
+posts.length=0;
+await p.evaluate(()=>{ paintSounder({available:true, mode:'audio', pinned:false,
+  outs:[{dev:'plughw:CARD=Headphones,DEV=0',name:'3.5 MM JACK'},
+        {dev:'pulse',name:'PIPEWIRE / PULSE'}], device:'pulse'}); });
+t.ok(await p.evaluate(()=>$('snd-awake').offsetHeight>0
+       && $('snd-awake').classList.contains('on')),
+     'back on a speaker the switch is there and lit');
+await p.evaluate(()=>$('snd-awake').click());
+posts.length=0; await p.waitForTimeout(700);
+t.ok(armPosts()===0 && !await p.evaluate(()=>CFG.keepAwake),
+     'and turning it off stops it', String(armPosts()));
+await p.evaluate(()=>{ $('snd-awake').click(); KEEP_MS=180000;
+                       GUNAT=null; tState='idle'; keepAt=0; });
+
 t.head('the horn and the glass share one box');
 /* They were two cards, two headings and two thirds of a row of the
    panel spent on saying 'sound' twice. */
@@ -523,7 +585,9 @@ const snd=st=>p.evaluate(st=>{ paintSounder(st);
           labels:[...$('snd-slab').querySelectorAll('.sndlbl')]
                    .filter(k=>k.offsetHeight).map(k=>k.textContent).join(),
           horn:getComputedStyle($('snd-row')).display!=='none',
-          who:getComputedStyle($('snd-who')).display!=='none',
+          /* the output moved onto a row with the AWAKE switch, so what
+             is hidden with the horn is the row */
+          who:$('snd-who').offsetHeight>0,
           voice:!!$('clk-voice').offsetHeight}; }, st);
 let N=await snd({available:true, mode:'audio', pinned:false, outs:OUT2,
                  device:'pulse'});

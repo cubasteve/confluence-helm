@@ -1431,7 +1431,58 @@ find out before a start rather than during one. It goes through the same
 `signal()` the real gun does, flash included: a test down a different
 path would be testing the test.
 
-From the Pi, without the panel:
+### Keeping a Bluetooth speaker awake
+
+A speaker asleep is a gun nobody hears, and it happens two ways.
+
+The audio server suspends the sink after idle, which tears down the
+A2DP stream; the link is then cold and the front of the next sound is
+simply not there. That is the truncated first beep, and the countdown
+already handles it — `sigArm()` sends 1.2 s of silence as the last ten
+seconds open, and `_arm_ms()` in `netd` gives a Bluetooth output ten
+times the jack's 120 ms for exactly this reason.
+
+The other way is the speaker's own idle timer, which switches it off
+altogether after five or ten or fifteen minutes with nothing to play.
+Nothing in here can undo that afterwards.
+
+So the same arming silence goes out on a slow timer — `KEEP_MS`, three
+minutes, inside the shortest idle timer worth planning for. It is the
+same 1.2 s of nothing through the very path the horn uses, so it resets
+both clocks at once, and `netd` rate-limits it, drops it the instant a
+real signal wants the output, and has nothing to arm on a rig wired to
+a pin.
+
+**Only while the boat has something to say soon:** a gun armed, a
+countdown running, or a race on. The rest of the day the speaker is
+welcome to sleep — and on a boat running off a power bank that is not
+politeness, it is the speaker's battery, which is the biggest single
+load on it.
+
+**And only where there is something that sleeps.** The 3.5 mm jack's
+DAC wakes in 120 ms and never powers off, so on the jack nothing is
+sent and the `AWAKE` switch is not there to be wondered about. The row
+keeps its height either way: a card 12 px shorter on a boat wired to the
+jack is a card out of line with the two beside it.
+
+The switch sits beside the output name in the `SOUND` card, lit when it
+is on, and is kept over a restart. Turning it on with a start already in
+hand sends one straight away rather than waiting out three minutes from
+whenever the last one went.
+
+**What this does not fix** is latency. Bluetooth adds 100–250 ms and it
+varies with the codec and the buffer, so a gun that goes out over a
+speaker is late by that much however warm the link is. For the start
+signal the jack is the output to trust; the speaker is for music.
+
+If the sink is being suspended by the audio server rather than the
+speaker sleeping, the cleaner fix is a config line rather than a sound:
+`session.suspend-timeout-seconds` on that node under WirePlumber, or
+unloading `module-suspend-on-idle` on a PulseAudio image. The exact key
+moves with the version, so it is worth checking against the Pi in front
+of you rather than taking it from here.
+
+### Testing it from the Pi
 
 ```bash
 curl -s -X POST -H 'Content-Type: application/json' \
