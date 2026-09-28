@@ -784,6 +784,41 @@ replaces your course. Tapping a control and having the course you are
 three marks into vanish is not something this sheet should be able to do
 by accident.
 
+**The start time comes over with it.** The feed carries the course and
+nothing about the clock, so the window comes from the club's own
+schedule — `assets/schedule.js`, the file its calendar and its Race Day
+page both read — with the rule copied the same way the drawing was:
+
+> Rum Races are every Wednesday of the season, `18:25–18:30`, except
+> early and late in it — Mar 11 to Apr 8, and Sep 30 to Oct 28 — where
+> the window moves to `18:00–18:05` for the light. Everything else that
+> has a window carries its own: Ladies on the Lake at noon, the Jameson
+> Sine Metu at one or two.
+
+Copied rather than fetched. `schedule.js` is 15 KB of JavaScript object
+literal, and parsing someone's source at the dock to learn what time to
+start is a worse dependency than six lines of arithmetic. And it retires
+itself: if the club ever puts `win` in the helm feed, **the payload
+wins** and `clubWindow()` stops being read.
+
+The time is **Florida's**, not the browser's. The panel on the boat is
+in `America/New_York` so it is usually a no-op, but the same page opens
+on a phone in another state, and 18:25 means 18:25 at Lake Monroe either
+way. `clubMoment()` asks `Intl` what that instant reads as in the club's
+zone and applies the difference once, which is the only way to get the
+two Sundays a year right.
+
+Loading sets the gun to the window **opening**, and the sequence to
+`WINDOW` with it — every start the club runs is a window, you time your
+own crossing, and a gun sequence on one is a beep at a moment nobody is
+waiting for. Three things it will not do:
+
+| | |
+|---|---|
+| the window has already opened | the start time is left alone. You are sailing in it, and arming a countdown that runs out the moment it starts is worse than no countdown |
+| the date has no window | `NO START WINDOW FOR THIS DATE · SET IT YOURSELF` |
+| the first tap | changes nothing, the clock included. The menu says `WINDOW OPENS 6:00 PM · LOADING SETS IT` and the button says `LOAD 3 MARKS AND THE TIME`, so what is about to happen is on the screen before it happens |
+
 What did not come across is said **before** you load rather than found
 out at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START
 ON THE LINE` for a course this sheet cannot draw a start for. That is

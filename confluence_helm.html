@@ -10468,6 +10468,70 @@ function courseBack(all){
 const CLUB_COURSE='https://lmsa.pages.dev/api/race/helm';
 let CLUB={step:'idle', got:null, say:''};
 
+/* ---- and what time it starts ------------------------------------------
+   The feed carries the course and nothing about the clock. The start
+   window is in the club's own schedule - assets/schedule.js, the file
+   its calendar and its Race Day page both read - so the rule comes from
+   there, copied, the same way the drawing did:
+
+     Rum Races are every Wednesday of the season, 18:25-18:30, except
+     early and late in it, where the window moves to 18:00-18:05 for the
+     light. Everything else that has a window carries its own.
+
+   Copied rather than fetched: schedule.js is 15 KB of JavaScript object
+   literal, and parsing someone's source at the dock to learn what time
+   to start is a worse dependency than six lines of arithmetic. If the
+   club ever puts `win` in the helm feed, the payload wins and this stops
+   being read - see clubWin() below. */
+const CLUB_TZ='America/New_York';
+const RUM_SEASON={from:'2026-03-11', to:'2026-10-28'};
+const RUM_EARLY=[['2026-03-11','2026-04-08'],['2026-09-30','2026-10-28']];
+/* The dated races that carry a window of their own, from the club's
+   SPECIALS. Everything not in here and not a season Wednesday starts
+   when the sailing instructions say, which is not ours to guess. */
+const CLUB_WINDOWS={
+  '2026-01-31':{open:'12:00', close:'12:05'},   /* Ladies on the Lake */
+  '2026-02-28':{open:'12:00', close:'12:05'},
+  '2026-11-07':{open:'12:00', close:'12:05'},
+  '2026-01-25':{open:'13:00', close:'13:05'},   /* Jameson Sine Metu */
+  '2026-02-22':{open:'14:00', close:'14:05'},
+  '2026-05-31':{open:'14:00', close:'14:05'},
+  '2026-07-26':{open:'14:00', close:'14:05'},
+  '2026-08-23':{open:'14:00', close:'14:05'},
+  '2026-09-27':{open:'14:00', close:'14:05'}
+};
+function clubWindow(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  if(CLUB_WINDOWS[iso]) return CLUB_WINDOWS[iso];
+  if(iso<RUM_SEASON.from || iso>RUM_SEASON.to) return null;
+  /* Wednesday in the club's own zone. Parsed as UTC noon so no offset
+     can drag the date onto the day before. */
+  const d=new Date(iso+'T12:00:00Z');
+  if(d.getUTCDay()!==3) return null;
+  const early=RUM_EARLY.some(r=>iso>=r[0] && iso<=r[1]);
+  return early ? {open:'18:00', close:'18:05'} : {open:'18:25', close:'18:30'};
+}
+/* The club's wall clock is Florida's. The panel on the boat is there
+   too, so this is usually a no-op - but the same page opens on a phone
+   in another state, and 18:25 means 18:25 at Lake Monroe either way.
+   Intl gives the zone's offset for that date, which is the only way to
+   get this right across the two Sundays a year it matters. */
+function clubMoment(iso, hhmm){
+  const [h,m]=hhmm.split(':').map(Number);
+  const guess=Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10), h, m);
+  try{
+    const f=new Intl.DateTimeFormat('en-US',{timeZone:CLUB_TZ, hour12:false,
+      year:'numeric', month:'2-digit', day:'2-digit',
+      hour:'2-digit', minute:'2-digit'});
+    const p={}; f.formatToParts(new Date(guess)).forEach(x=>p[x.type]=x.value);
+    /* What that instant reads as in Florida, minus what we wanted it to
+       read: the offset, applied once. */
+    const shown=Date.UTC(+p.year, +p.month-1, +p.day,
+                         +p.hour%24, +p.minute);
+    return guess + (guess - shown);
+  }catch(e){ return guess; }
+}
+
 async function clubFetch(){
   CLUB={step:'busy', got:null, say:''}; renderCourse();
   let j=null;
@@ -10488,7 +10552,15 @@ async function clubFetch(){
   const marks=(g.marks||[]).filter(id=>markOf(id));
   const dropped=(g.marks||[]).filter(id=>!markOf(id));
   if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
-  CLUB={step:'ready', got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g}, say:''};
+  /* The payload first, if the club ever adds it; the copied rule
+     otherwise. Either way it is a window - every start the club runs is
+     - so the sequence comes over with the time. */
+  const win=g.win||clubWindow(j.date||'');
+  const at=win ? clubMoment(j.date, win.open) : null;
+  CLUB={step:'ready', say:'',
+        got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g,
+             win:win, at:(at!==null && at>Date.now()) ? at : null,
+             gone:!!(at!==null && at<=Date.now())}};
   renderCourse();
 }
 
@@ -10497,6 +10569,17 @@ function clubApply(){
   COURSE.marks=g.marks.slice();
   COURSE.side=g.marks.map(id=>g.side[id]==='S'?'S':'P');
   COURSE.next=0; courseSave(); courseReset();
+  /* The clock comes over with the course. Only forward: a window that
+     has already opened is one you are sailing in, and setting the gun
+     to a time this evening that has gone would arm a countdown that
+     runs out the moment it starts. The sequence goes with it, because
+     every start the club runs is a window - you time your own crossing
+     - and a gun sequence on a window start is a beep at a moment
+     nobody is waiting for. */
+  if(g.at!==null){
+    GUNAT=g.at; gunSave();
+    if(CFG.startMode!=='window'){ CFG.startMode='window'; prefsSave(); }
+  }
   /* Nothing is said about the load afterwards. What was wrong with the
      course - a mark this boat has not got, a start that is not off the
      line - was on the menu you loaded it from, which is the moment it
@@ -10576,6 +10659,14 @@ function cvpClub(){
   if(c.step==='busy') return '<div class="pknote">CHECKING…</div>';
   if(c.step!=='ready') return '<div class="pknote">'+esc(c.say||'ASKING…')+'</div>';
   const g=c.got.raw||{}, out=[];
+  /* The clock, first: it is the one thing here that changes what the
+     panel does tonight rather than what it draws. */
+  if(c.got.at!==null)
+    out.push('WINDOW OPENS '+gunTxt(c.got.at)+' · LOADING SETS IT');
+  else if(c.got.gone)
+    out.push('THE WINDOW HAS OPENED · THE START TIME IS LEFT ALONE');
+  else if(!c.got.win)
+    out.push('NO START WINDOW FOR THIS DATE · SET IT YOURSELF');
   if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
   const miss=(g.unknown||[]).length + (c.got.dropped||[]).length;
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');
@@ -10597,7 +10688,8 @@ function cvpFoot(){
   const c=CLUB;
   if(cvpOn().kind!=='club' || c.step!=='ready') return '';
   return '<button class="pkfoot club" data-load="1">LOAD '
-    +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')+'</button>';
+    +c.got.marks.length+' MARK'+(c.got.marks.length===1?'':'S')
+    +(c.got.at!==null?' AND THE TIME':'')+'</button>';
 }
 function cvpTap(t){
   const md=t.closest('[data-mode]');

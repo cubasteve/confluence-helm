@@ -184,4 +184,99 @@ await ask();
 S=await said();
 t.ok(!/COMMITTEE LINE/.test(S.sub), 'reads as the Romance marks, which it is', S.sub);
 
+t.head('and the start time comes over with it');
+/* The feed carries the course and nothing about the clock. The window
+   is in the club's own schedule - every Wednesday of the season is
+   18:25-18:30, and 18:00-18:05 early and late in it for the light - so
+   the rule is copied the same way the drawing was. */
+const win=d=>p.evaluate(d=>JSON.stringify(clubWindow(d)), d);
+t.ok(await win('2026-09-23')==='{"open":"18:25","close":"18:30"}',
+     'a Wednesday in the middle of the season starts at 18:25',
+     await win('2026-09-23'));
+t.ok(await win('2026-04-01')==='{"open":"18:00","close":"18:05"}',
+     'early in it, at 18:00, for the light', await win('2026-04-01'));
+t.ok(await win('2026-10-07')==='{"open":"18:00","close":"18:05"}',
+     'and late in it, the same', await win('2026-10-07'));
+t.ok(await win('2026-09-24')==='null',
+     'a Thursday is not a Rum Race and has no window to give',
+     await win('2026-09-24'));
+t.ok(await win('2026-11-07')==='{"open":"12:00","close":"12:05"}',
+     'and the dated ones carry their own - Ladies on the Lake at noon',
+     await win('2026-11-07'));
+t.ok(await win('2026-11-11')==='null',
+     'past the last Wednesday of the season, nothing', await win('2026-11-11'));
+/* 18:25 means 18:25 at Lake Monroe, wherever the page is open. */
+t.ok(await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString())
+     ==='2026-09-23T22:25:00.000Z',
+     'and the time is Florida\'s, not the browser\'s - 18:25 EDT is 22:25 Z',
+     await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString()));
+
+await clear();
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun'; prefsSave(); });
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['cb10','gosling','rum'], side:{cb10:'P', gosling:'S', rum:'P'},
+  note:null, posted:1790289195830, line:{pin:'flag',boat:'ball'},
+  startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/WINDOW OPENS/.test(S.sub), 'the menu says when it opens before you load it',
+     S.sub);
+t.ok(/AND THE TIME/.test(S.foot), 'and the button says the time is coming too',
+     S.foot);
+t.ok(await p.evaluate(()=>GUNAT)===null,
+     'the first tap still changes nothing, the clock included');
+await load();
+const set=await p.evaluate(()=>({gun:GUNAT, mode:CFG.startMode,
+  iso:GUNAT===null?null:new Date(GUNAT).toISOString()}));
+t.ok(set.iso==='2026-09-30T22:00:00.000Z',
+     'the load sets the gun to the window opening - the 30th is in the late '
+     +'band, so 18:00 at the lake', String(set.iso));
+t.ok(set.mode==='window',
+     'and the sequence with it: every start the club runs is a window, and '
+     +'a gun sequence on one is a beep at a moment nobody is waiting for',
+     set.mode);
+t.ok(await p.evaluate(()=>+localStorage.getItem('gunAt'))===set.gun,
+     'kept, the same as one typed on the pad');
+
+t.head('a window that has already opened is left alone');
+/* You are sailing in it. Setting the gun to a time this evening that
+   has gone would arm a countdown that runs out the moment it starts. */
+await clear();
+await p.evaluate(()=>{ GUNAT=null; gunSave(); });
+reply={status:200, body:{date:'2026-09-23', course:{
+  marks:['rum'], side:{rum:'P'}, note:null, posted:1,
+  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/HAS OPENED/.test(S.sub), 'it says so rather than saying nothing', S.sub);
+t.ok(!/AND THE TIME/.test(S.foot), 'and does not offer what it will not do',
+     S.foot);
+await load();
+t.ok(await p.evaluate(()=>GUNAT)===null, 'the clock is untouched');
+t.ok((await course()).marks.join()==='rum',
+     'while the course still loads - the marks are the point of the sync');
+
+t.head('a date the club gives no window for');
+await clear();
+reply={status:200, body:{date:'2026-09-24', course:{
+  marks:['rum'], side:{rum:'P'}, note:null, posted:1,
+  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/NO START WINDOW/.test(S.sub), 'says to set it yourself', S.sub);
+
+t.head('and if the club ever puts the time in the feed, the feed wins');
+/* The copy retires itself the day it stops being needed. */
+await clear();
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['rum'], side:{rum:'P'}, note:null, posted:1, win:{open:'19:15', close:'19:20'},
+  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await p.evaluate(()=>{ GUNAT=null; gunSave(); });
+await ask(); await load();
+t.ok(await p.evaluate(()=>GUNAT===null?null:new Date(GUNAT).toISOString())
+     ==='2026-09-30T23:15:00.000Z',
+     'the posted window, not the one we worked out',
+     await p.evaluate(()=>GUNAT===null?null:new Date(GUNAT).toISOString()));
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun'; prefsSave(); });
+
 await t.done(b);
