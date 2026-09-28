@@ -299,9 +299,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    name pill and the top of the close cross - so the Tracks app was the
    one app whose name you could not read. */
 #app-name,#app-msg,#app-close{z-index:3}
+/* --chip, not --panel: on the radar and the sun it sat on a photograph
+   and read as the chip it is, and on the two apps whose own background
+   IS the panel it was the same colour as what it sat on - a name
+   floating in the middle of nothing. One step off the panel shows the
+   shape in all four. */
 #app-name{position:absolute;top:44px;left:50%;transform:translateX(-50%);
   max-width:560px;padding:8px 22px;border-radius:24px;
-  background:var(--panel);color:var(--label);
+  background:var(--chip);color:var(--label);
   font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   opacity:.92;pointer-events:none}
@@ -1033,7 +1038,11 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* The credit Esri's unkeyed service asks for, and the line under the
    course, are the quiet half of the head. Radar's and Golden Hour's
    sit on a photograph and carry their own ink. */
-#t-attr,#cv-h2{opacity:.62}
+#t-attr{opacity:.62}
+/* An empty headline still takes its line box, which left the credit
+   floating 35 px below nothing. With no race loaded it collapses and
+   the credit sits where the sun's state does. */
+.a-h1:empty{display:none}
 
 /* --- track library --- */
 #t-lib,#t-course{position:absolute;inset:0;background:var(--panel);opacity:0;
@@ -2733,7 +2742,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
      patches are obvious. Reads the plugin when it is there, the local
      buffer when it is not. -->
 <div id="tmap">
-  <div class="a-head"><div class="a-h1" id="t-title">Tracks</div>
+  <!-- The head is the pill at the top of the app, and it already says
+       TRACKS. This line is for the race loaded out of the library,
+       which is a name the pill cannot know - and it is empty until
+       there is one. The credit under it is Esri's, and stays whatever
+       is loaded. -->
+  <div class="a-head"><div class="a-h1" id="t-title"></div>
     <div class="a-h2" id="t-attr">IMAGERY © ESRI</div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
     <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
@@ -2812,12 +2826,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
    The map still draws the course on the chart, because COURSE is the
    boat's, not the sheet's. -->
 <div id="t-course">
-  <!-- The fourth head. What this sheet is looking at is the course, so
-       that is what it says: how far round it is, and how many marks
-       make it. The name is the pill's job, the same as the other
-       three. -->
-  <div class="a-head"><div class="a-h1" id="cv-h1">No course set</div>
-    <div class="a-h2" id="cv-h2"></div></div>
   <div id="course-main">
     <div class="cv">
       <!-- The evening, first: what is left once the line has gone up
@@ -4738,9 +4746,9 @@ async function publishGPX(pts,label){
   const d=new Date(pts[0].t), pad=n=>String(n).padStart(2,'0');
   const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
              +`-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  /* The head reads TRACKS with nothing loaded and the race's name with
-     one, so the name is only a name when it is not the app's own. */
-  const nice=(label&&label!=='Tracks')?label+'-'+stamp:'Confluence-'+stamp;
+  /* The head is empty until a race is loaded out of the library, so a
+     name here is always a race's and never the app's. */
+  const nice=label?label+'-'+stamp:'Confluence-'+stamp;
   trkFlash('sending…',30000);
   const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
   if(!j||!j.ok) return trkFlash((j&&j.error)||'send failed');
@@ -9792,22 +9800,6 @@ function renderCourse(){
   /* The gun, and how long the countdown to it runs. They are next to
      each other because between them they say when the countdown starts,
      which neither says alone. */
-  /* The head: the course as one number, and what makes it. Rhumb, not
-     sailed - the sailed distance needs the whole route worked out and
-     this is painted on every tick of the sheet, where the preview is
-     worked out once when you open it. */
-  const hm=COURSE.marks.map(markOf).filter(Boolean);
-  if(hm.length){
-    const E=lineEnds(), mid={lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2};
-    const way=[mid].concat(hm.map(m=>({lat:m.lat, lon:m.lon})), [mid]);
-    let nm=0;
-    for(let i=1;i<way.length;i++) nm+=seaNm(way[i-1].lat,way[i-1].lon,way[i].lat,way[i].lon);
-    wText('cv-h1', nm.toFixed(1)+' NM');
-    wText('cv-h2', hm.length+' MARK'+(hm.length===1?'':'S')+' ROUND');
-  } else {
-    wText('cv-h1','No course set');
-    wText('cv-h2','THE LINE IS THE WHOLE OF IT');
-  }
   rd('cv-start','START TIME', GUNAT!==null ? gunTxt(GUNAT) : 'NOT SET','⋯');
   wCls('cv-start','in', GUNAT!==null);
   /* OFF rather than 0 MIN: nought of something reads as a broken
@@ -11276,7 +11268,7 @@ function loadRace(id){
 }
 function unloadRace(){
   VIEWTRK=null; MAPVIEW=null; tileKey='';
-  $('t-title').textContent='Tracks';
+  $('t-title').textContent='';
   drawMap(TRK); paintTrack();
 }
 

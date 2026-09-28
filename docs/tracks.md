@@ -107,45 +107,47 @@ The tiles stay top-aligned, so the icons still sit level across the row
 and only the dock grows: 149px to 175, with its lowest corners still
 529 from the centre.
 
-### One head, four apps
+### One pill, four apps
 
-Radar, Course, Tracks and Golden Hour each open with a line saying what
-you are looking at and a line under it qualifying it. They were **three
-sizes at three heights** — 23, 28 and 44 px at y111, y112 and y118 —
-which reads as four apps built by four people.
+The name pill at y44 is the header, and it is the same in all four:
+same line, same height, same size and weight and tracking, same padding
+and corner, same background. What sits **under** it is each app's own
+business — and three of the four have nothing to say there.
 
-One block now, `.a-head` at y112, with `.a-h1` (28 px, 600, `.24em`,
-uppercase) over `.a-h2` (17 px, `.1em`). Only the ink differs: Radar and
-Golden Hour sit on a photograph and carry their own light colours and
-text shadows, the other two are label grey on the panel. The metrics are
-one set in one place.
+It used to be `background:var(--panel)`. On Radar and Golden Hour that
+sits on a photograph and reads as the chip it is; on Course and Tracks,
+whose own background *is* the panel, it was the same colour as what it
+sat on — a name floating in the middle of nothing. One step off, to
+`--chip`, shows the shape in all four.
 
-| app | headline | under it |
-|---|---|---|
-| Radar | the sweep's time | what it is doing, or why it is not |
-| Course | how far round the course is | how many marks make it |
-| Tracks | `TRACKS`, or the loaded race's name | `IMAGERY © ESRI`, the credit Esri's unkeyed service asks for |
-| Golden Hour | the sun's state — `DAYLIGHT` | its altitude |
+**And it is painted over the app now.** `#tmap` carries `z-index:1` from
+the days it was a page rather than an app, and inside `#app-run` that
+was enough to paint the map over the pill and the top of the close
+cross. Tracks was the one app whose name you could not read.
+`#app-name`, `#app-msg` and `#app-close` sit at `z-index:3`.
 
-**The name is not among them**, except on the map: the pill at y44 says
-which app this is in every one of them, and a title repeating it is the
-sheet saying `COURSE` twice, which is what took the course sheet's own
-title away. The map's head reads `TRACKS` because it is asked to, and
-becomes the race's name the moment one is loaded out of the library.
+Under the pill:
 
-That last bit has a consequence worth knowing: `publishGPX` names a file
-after the head, so a track sent with nothing loaded is
-`Confluence-<stamp>` rather than `Tracks-<stamp>` — the head is only a
-name when it is not the app's own.
+| app | |
+|---|---|
+| Radar | its HUD: the sweep's time, and what it is doing or why it is not |
+| Course | **nothing**. It said how far round the course was; the strip two rows down says what the course is, which is the question |
+| Tracks | `IMAGERY © ESRI`, the credit Esri's unkeyed service asks for. It said `TRACKS` above that, under a pill already saying `TRACKS` |
+| Golden Hour | the sun's state and its altitude — that is the app |
 
-**And the pill is painted over the app now.** `#tmap` carries
-`z-index:1` from the days it was a page rather than an app, and inside
-`#app-run` that was enough to paint the map over the name pill and the
-top of the close cross. Tracks was the one app whose name you could not
-read. `#app-name`, `#app-msg` and `#app-close` sit at `z-index:3`, above
-whatever the app puts in the body.
+`.a-h1` (28 px, 600, `.24em`) over `.a-h2` (17 px, `.1em`) is still the
+format for what does appear, so the map's line and the sun's match. The
+map's is **empty until a race is loaded** out of the library, and then
+it is that race's name — a name the pill cannot know. An empty `.a-h1`
+collapses (`:empty{display:none}`), so the credit sits where the sun's
+state does rather than 35 px below nothing.
 
-Two things that came with the page becoming an app, both of them the
+That last bit has a consequence: `publishGPX` names a file after that
+line, and it is now empty rather than `Tracks`, so a track sent with
+nothing loaded is `Confluence-<stamp>` — the check is simply whether
+there is a name at all.
+
+Two things that came with the page becoming an appTwo things that came with the page becoming an app, both of them the
 same mistake — furniture that belonged to a page still standing where
 the app's own chrome now goes:
 
