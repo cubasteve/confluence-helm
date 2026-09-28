@@ -1061,42 +1061,41 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   background:var(--panel);border:2px solid var(--hairline);
   box-shadow:0 18px 44px rgba(0,0,0,.30)}
 #cp-svg{display:block;width:652px;height:558px}
-#cp-svg .leg{stroke:var(--label);stroke-width:3;fill:none;opacity:.55}
-#cp-svg .line{stroke:var(--ink);stroke-width:4;stroke-dasharray:9 7;opacity:.75}
-#cp-svg .end{fill:var(--panel);stroke:var(--ink);stroke-width:3}
-#cp-svg .mk{fill:var(--panel);stroke:var(--accent);stroke-width:4}
-#cp-svg .mk.on{fill:var(--accent)}
-#cp-svg text{fill:var(--accent);font-family:var(--font);font-weight:700;
-  text-anchor:middle}
-/* A CSS rule beats a presentation attribute, so the number on the lit
-   mark cannot set its own fill inline - it was accent on accent, which
-   is a filled blue disc with nothing in it. */
-#cp-svg text.n.on{fill:var(--panel)}
-#cp-svg .lbl{fill:var(--label);font-size:19px;font-weight:600;
-  letter-spacing:.08em}
-#cp-svg .arw{fill:var(--label);stroke:none;opacity:.7}
-#cp-svg .me{fill:var(--port);stroke:none}
-#cp-svg .rose{stroke:var(--label);stroke-width:2.4;fill:none;opacity:.55}
-/* Heavier at night, where the imagery would otherwise be the brightest
-   thing on the glass and undo an hour of dark adaptation. */
-#cp-svg .wash{fill:var(--panel);opacity:.62;stroke:none}
-body.dusk #cp-svg .wash{opacity:.72}
-body.night #cp-svg .wash{opacity:.84}
-/* The breeze the route was worked out in. Warm rather than grey: it is
-   the one thing on this card that is not the course. */
-#cp-svg .wind{stroke:var(--warn);stroke-width:3;fill:none;
+/* The club's own ink, hex for hex: its nautical red and green for the
+   two roundings, its navy casing under a white route, its yellow for
+   the line. Not the panel's --port and --stbd, which move with the
+   theme - the point of this card is that it is the same picture as the
+   one on the website. */
+#cp-svg .rt-case{fill:none;stroke:#0b1530;stroke-width:7;opacity:.55;
+  stroke-linejoin:round;stroke-linecap:round}
+#cp-svg .rt{fill:none;stroke:#fff;stroke-width:3;opacity:.95;
+  stroke-linejoin:round;stroke-linecap:round}
+#cp-svg .rnd{fill:none;stroke-width:5.5;stroke-linecap:round}
+#cp-svg .rnd[data-s="P"]{stroke:#D7263D}
+#cp-svg .rnd[data-s="S"]{stroke:#11945A}
+#cp-svg .ln-case{fill:none;stroke:#0b1530;stroke-width:8;opacity:.55}
+#cp-svg .ln{fill:none;stroke:#FFC53D;stroke-width:4;stroke-dasharray:7 6}
+#cp-svg .ln-end{fill:#FFC53D;stroke:#0b1530;stroke-width:2}
+#cp-svg .mk-off{fill:#fff;fill-opacity:.85;stroke:#0b1530;stroke-width:1.5}
+#cp-svg .arw{fill:#fff;stroke:#0b1530;stroke-width:1.2}
+#cp-svg .bt{fill:#fff;font-family:var(--font);font-size:16px;font-weight:700;
+  text-anchor:middle;letter-spacing:.02em}
+#cp-svg .nm{fill:#fff;font-family:var(--font);font-size:15px;font-weight:600;
+  text-anchor:middle;letter-spacing:.08em;paint-order:stroke;
+  stroke:#0b1530;stroke-width:3.5;stroke-linejoin:round}
+#cp-svg .key{fill:#0b1530;fill-opacity:.62}
+#cp-svg .kt{fill:#fff;font-family:var(--font);font-size:13px;font-weight:700;
+  letter-spacing:.1em;text-anchor:middle}
+#cp-svg .kt.sm{font-size:11px;opacity:.8}
+#cp-svg g[transform] .kt[x="28"],#cp-svg g[transform] .kt[x="96"]{text-anchor:start}
+#cp-svg .wind{fill:none;stroke:#FFC53D;stroke-width:2.4;
   stroke-linecap:round;stroke-linejoin:round}
-/* The route the boat sails is the answer, so it is the darker line;
-   the rhumb it cannot sail is a ghost underneath saying why. */
-#cp-svg .leg[data-t="tack"],#cp-svg .leg[data-t="gybe"]{opacity:.8}
-#cp-svg .rhumb{stroke:var(--label);stroke-width:2;fill:none;opacity:.22;
-  stroke-dasharray:6 8}
-/* The rounding itself, in the colour of the side it is left on - the
-   same port red and starboard green the chips and the chart use, and
-   at night the one red they both become. */
-#cp-svg .rnd{fill:none;stroke-width:4.5;stroke-linecap:round}
-#cp-svg .rnd[data-s="P"]{stroke:var(--port)}
-#cp-svg .rnd[data-s="S"]{stroke:var(--stbd)}
+/* Day and dusk get the imagery as the club draws it. Night does not:
+   a satellite picture at full brightness on a dark-adapted eye is an
+   hour of night vision gone, and that is the one thing this panel is
+   not allowed to spend. */
+#cp-svg .wash{fill:#050303;opacity:0;stroke:none;pointer-events:none}
+body.night #cp-svg .wash{opacity:.55}
 .cp-foot{height:40px;display:flex;align-items:center;justify-content:center;
   font-size:21px;font-weight:600;letter-spacing:.14em;color:var(--label)}
 /* Which line the race starts and finishes on: the first thing in the
@@ -9795,15 +9794,396 @@ const crsTitle=t=>{ $('app-name').textContent=t||'Course'; };
    No shifts, no current, no tide gate: one tack to the layline and lay
    the mark, which is the whole of the no-shift answer, and long tack
    first because that is what you do when you do not know better. */
-function vmgAngle(tws, up){
-  let best=up?45:150, bestV=-1;
-  const lo=up?25:110, hi=up?70:180;
-  for(let a=lo;a<=hi;a+=1){
-    const v=targetSpeed(tws,a)*Math.cos(a*Math.PI/180)*(up?1:-1);
-    if(v>bestV){ bestV=v; best=a; }
+/* ==================================================================
+   THE CLUB'S OWN COURSE DRAWING
+
+   Lifted from LMSA's member app - lmsa.pages.dev/assets/race.js, the
+   Race Day page that posts the course we sync from - so that the
+   preview here and the picture on the website are the same picture.
+   Same satellite imagery, same red and green for the two roundings,
+   same 110 m circles, same tacks and gybes, same way of keeping the
+   route off the bank. What differs is only what it is drawn WITH:
+   theirs is Leaflet on a web page, this is one SVG on a round panel.
+
+   Kept as one block, with its own little vector helpers, rather than
+   folded into the file's own: the point of copying it is that it can
+   be compared with theirs line for line when either changes.
+   ================================================================== */
+/* Lake Monroe's shoreline, from OpenStreetMap relation 1172811
+   (natural=water), simplified to about 8 m, by way of the club's
+   assets/lake.js. Data (c) OpenStreetMap contributors, ODbL. It is
+   here for one job: a drawn route that crosses land is put back on
+   the water. */
+const LMSA_LAKE={"outer":[[28.86279,-81.25283],[28.86073,-81.25],[28.86038,-81.24934],[28.85826,-81.24697],[28.85813,-81.24654],[28.85765,-81.24613],[28.85742,-81.24574],[28.85739,-81.24564],[28.85774,-81.2454],[28.85812,-81.24537],[28.85798,-81.24448],[28.85764,-81.24373],[28.85803,-81.24354],[28.85766,-81.2434],[28.85714,-81.24268],[28.85673,-81.24259],[28.85662,-81.24283],[28.85648,-81.24277],[28.85645,-81.24153],[28.85676,-81.24135],[28.85708,-81.24138],[28.85729,-81.24112],[28.85692,-81.24095],[28.85679,-81.24066],[28.85646,-81.2406],[28.85639,-81.2395],[28.85652,-81.23946],[28.85641,-81.23943],[28.85611,-81.23721],[28.85629,-81.23706],[28.85608,-81.23703],[28.856,-81.23601],[28.85578,-81.23534],[28.8559,-81.23523],[28.85574,-81.23523],[28.85552,-81.23465],[28.85587,-81.23443],[28.85544,-81.23436],[28.85496,-81.23297],[28.85501,-81.23254],[28.85536,-81.23259],[28.85509,-81.2323],[28.85513,-81.23248],[28.85496,-81.23246],[28.85494,-81.23159],[28.85473,-81.23056],[28.8552,-81.23007],[28.85506,-81.23004],[28.85469,-81.23042],[28.85439,-81.22914],[28.85324,-81.22691],[28.85302,-81.22691],[28.85247,-81.22734],[28.85193,-81.22808],[28.85181,-81.22788],[28.85149,-81.22812],[28.85177,-81.22809],[28.85162,-81.2285],[28.85207,-81.2306],[28.85207,-81.23208],[28.85262,-81.23437],[28.85269,-81.2359],[28.85237,-81.23854],[28.85225,-81.23877],[28.85235,-81.23911],[28.85222,-81.23968],[28.85235,-81.23964],[28.85278,-81.2362],[28.85272,-81.23432],[28.85218,-81.23207],[28.85213,-81.23025],[28.85195,-81.22914],[28.85171,-81.22844],[28.85212,-81.22807],[28.85251,-81.22746],[28.85318,-81.22702],[28.85432,-81.22915],[28.85488,-81.23169],[28.85486,-81.23296],[28.85573,-81.23573],[28.85618,-81.23847],[28.85627,-81.23951],[28.85607,-81.23966],[28.85628,-81.2399],[28.85631,-81.24151],[28.85621,-81.24249],[28.85527,-81.24214],[28.85413,-81.24207],[28.85388,-81.24219],[28.85373,-81.24209],[28.85367,-81.24184],[28.85383,-81.24098],[28.85362,-81.24049],[28.85417,-81.24036],[28.85551,-81.24033],[28.8557,-81.23984],[28.8549,-81.24024],[28.85444,-81.24018],[28.85339,-81.24047],[28.85327,-81.2404],[28.85343,-81.24003],[28.85387,-81.24003],[28.8542,-81.23969],[28.85447,-81.23976],[28.85413,-81.23958],[28.85383,-81.23986],[28.85336,-81.23987],[28.85318,-81.23841],[28.85311,-81.2391],[28.85319,-81.24042],[28.8535,-81.24101],[28.85344,-81.24226],[28.85327,-81.24182],[28.85321,-81.24226],[28.85329,-81.24247],[28.85365,-81.24273],[28.85365,-81.24298],[28.8529,-81.24385],[28.85277,-81.24463],[28.85292,-81.24518],[28.85284,-81.2455],[28.85249,-81.24547],[28.85227,-81.24515],[28.8519,-81.24506],[28.85213,-81.24468],[28.85198,-81.24438],[28.85181,-81.2443],[28.85159,-81.24428],[28.85106,-81.24468],[28.85092,-81.24485],[28.85098,-81.24526],[28.8502,-81.24562],[28.84825,-81.24502],[28.84759,-81.2444],[28.8476,-81.2446],[28.84751,-81.24452],[28.84745,-81.24463],[28.84744,-81.24439],[28.84711,-81.24439],[28.84667,-81.24396],[28.84652,-81.24335],[28.84666,-81.24331],[28.84679,-81.2435],[28.84684,-81.24321],[28.84675,-81.24307],[28.84687,-81.24227],[28.84678,-81.24235],[28.84678,-81.24213],[28.84667,-81.2421],[28.84672,-81.24145],[28.84662,-81.24143],[28.84664,-81.24125],[28.84616,-81.24105],[28.84587,-81.24027],[28.84545,-81.23981],[28.84553,-81.23932],[28.84575,-81.23894],[28.84545,-81.2383],[28.84546,-81.23811],[28.84573,-81.23798],[28.84569,-81.23783],[28.84505,-81.23644],[28.84461,-81.23644],[28.84452,-81.23581],[28.84404,-81.23525],[28.84406,-81.23501],[28.84392,-81.23497],[28.84493,-81.23472],[28.84519,-81.23448],[28.84541,-81.23396],[28.84505,-81.23451],[28.8442,-81.23471],[28.84409,-81.23441],[28.84417,-81.23415],[28.84398,-81.23366],[28.84381,-81.23374],[28.84385,-81.2335],[28.84374,-81.23351],[28.84374,-81.23334],[28.84323,-81.23323],[28.84317,-81.23272],[28.84281,-81.23257],[28.84249,-81.2326],[28.84247,-81.23246],[28.84222,-81.23241],[28.8418,-81.23166],[28.84183,-81.23135],[28.84163,-81.23112],[28.84128,-81.23104],[28.84106,-81.23121],[28.84101,-81.23102],[28.84074,-81.23099],[28.84072,-81.23116],[28.84046,-81.23101],[28.84007,-81.23127],[28.83983,-81.23099],[28.83948,-81.23097],[28.83944,-81.23109],[28.83932,-81.23088],[28.83911,-81.23087],[28.83899,-81.23104],[28.83892,-81.23082],[28.83889,-81.23098],[28.8387,-81.23084],[28.83866,-81.23095],[28.83835,-81.23094],[28.83837,-81.2308],[28.83814,-81.23082],[28.83806,-81.23096],[28.83804,-81.23077],[28.83788,-81.23075],[28.83776,-81.23102],[28.83766,-81.23075],[28.83755,-81.23098],[28.83746,-81.23086],[28.83671,-81.23104],[28.83661,-81.23127],[28.83635,-81.23086],[28.83628,-81.23096],[28.83639,-81.23119],[28.83627,-81.23126],[28.83621,-81.23114],[28.83602,-81.23115],[28.83593,-81.23129],[28.83587,-81.2311],[28.83575,-81.23129],[28.83582,-81.23116],[28.83568,-81.23122],[28.83571,-81.23105],[28.83533,-81.23097],[28.83517,-81.23114],[28.8353,-81.2311],[28.83526,-81.23122],[28.83477,-81.23119],[28.83466,-81.23092],[28.83443,-81.23093],[28.83375,-81.23043],[28.8333,-81.23034],[28.83317,-81.23019],[28.83106,-81.2306],[28.83093,-81.2308],[28.83087,-81.23062],[28.83072,-81.2309],[28.83066,-81.23048],[28.8304,-81.23001],[28.83055,-81.23003],[28.83046,-81.22992],[28.83058,-81.22994],[28.83072,-81.22952],[28.83073,-81.22907],[28.83069,-81.22885],[28.83027,-81.2285],[28.8301,-81.22858],[28.83012,-81.22842],[28.8297,-81.22829],[28.82958,-81.2284],[28.82939,-81.22831],[28.82925,-81.22853],[28.8291,-81.22835],[28.82882,-81.22845],[28.82838,-81.22807],[28.82766,-81.22817],[28.82755,-81.22786],[28.82725,-81.22762],[28.82728,-81.22748],[28.82702,-81.22699],[28.82671,-81.22663],[28.82603,-81.22661],[28.82614,-81.22683],[28.82606,-81.22691],[28.82593,-81.22661],[28.82578,-81.22661],[28.82584,-81.22673],[28.82576,-81.22681],[28.82553,-81.22679],[28.82535,-81.22651],[28.82526,-81.22655],[28.82535,-81.22663],[28.82527,-81.22689],[28.82512,-81.22676],[28.8249,-81.22683],[28.82491,-81.22671],[28.82487,-81.22689],[28.8245,-81.22686],[28.82459,-81.22689],[28.82447,-81.22693],[28.82434,-81.22728],[28.82443,-81.22727],[28.82442,-81.22745],[28.82432,-81.22738],[28.82423,-81.22748],[28.8243,-81.22763],[28.82413,-81.22753],[28.8242,-81.22769],[28.8241,-81.22762],[28.82392,-81.22779],[28.82388,-81.228],[28.82372,-81.22811],[28.82379,-81.22825],[28.82321,-81.22776],[28.8229,-81.22776],[28.82264,-81.22796],[28.82255,-81.22819],[28.82295,-81.22871],[28.82277,-81.22934],[28.82279,-81.22966],[28.82326,-81.23029],[28.82374,-81.23069],[28.82338,-81.23211],[28.82344,-81.23287],[28.82381,-81.23318],[28.82373,-81.23332],[28.82389,-81.23341],[28.82429,-81.2342],[28.82703,-81.23611],[28.82699,-81.23651],[28.82683,-81.23669],[28.82721,-81.23691],[28.82741,-81.23761],[28.82738,-81.23771],[28.82725,-81.23766],[28.82726,-81.23795],[28.82714,-81.23787],[28.82709,-81.23795],[28.82715,-81.23827],[28.82709,-81.23814],[28.82699,-81.2382],[28.82707,-81.23838],[28.82694,-81.23835],[28.82684,-81.23856],[28.8265,-81.24005],[28.82639,-81.24004],[28.82616,-81.24043],[28.82624,-81.24059],[28.82615,-81.2407],[28.8261,-81.2406],[28.82596,-81.24085],[28.82584,-81.24142],[28.82563,-81.24165],[28.82573,-81.24182],[28.8256,-81.24173],[28.82569,-81.24206],[28.82557,-81.24195],[28.82555,-81.24218],[28.82535,-81.24219],[28.82528,-81.24255],[28.82517,-81.24257],[28.82524,-81.24267],[28.82487,-81.24305],[28.82493,-81.24318],[28.8248,-81.24353],[28.82488,-81.24363],[28.82477,-81.24358],[28.8247,-81.24408],[28.82451,-81.24421],[28.82443,-81.24414],[28.82451,-81.24432],[28.82434,-81.24426],[28.82384,-81.24451],[28.82334,-81.24524],[28.82319,-81.24516],[28.82311,-81.24489],[28.82315,-81.24444],[28.82299,-81.24413],[28.82303,-81.24389],[28.82289,-81.24372],[28.8228,-81.24306],[28.82287,-81.24231],[28.82274,-81.24142],[28.8229,-81.2409],[28.82282,-81.2408],[28.82279,-81.24099],[28.82277,-81.24014],[28.8226,-81.2398],[28.82252,-81.23913],[28.82206,-81.23883],[28.8221,-81.23872],[28.82195,-81.23872],[28.82178,-81.23846],[28.8213,-81.23825],[28.82107,-81.23796],[28.8211,-81.23778],[28.82085,-81.23718],[28.82045,-81.23682],[28.82039,-81.23635],[28.82031,-81.23638],[28.8203,-81.23555],[28.8205,-81.2354],[28.82056,-81.23551],[28.82075,-81.2353],[28.8206,-81.23537],[28.82029,-81.23512],[28.82025,-81.23455],[28.81979,-81.23317],[28.8198,-81.23288],[28.81946,-81.23254],[28.81952,-81.23242],[28.81875,-81.23202],[28.81878,-81.23219],[28.81739,-81.23228],[28.8167,-81.23279],[28.81621,-81.23345],[28.81615,-81.23384],[28.81651,-81.2345],[28.81646,-81.23473],[28.81625,-81.23491],[28.81607,-81.23477],[28.81615,-81.23523],[28.81597,-81.23493],[28.81569,-81.23483],[28.81573,-81.23417],[28.81678,-81.2312],[28.81715,-81.23053],[28.81777,-81.22983],[28.81863,-81.2282],[28.81876,-81.22761],[28.81874,-81.22709],[28.81889,-81.22697],[28.8193,-81.22712],[28.81964,-81.22684],[28.81928,-81.22701],[28.81869,-81.22689],[28.81831,-81.2259],[28.81743,-81.22468],[28.81709,-81.2234],[28.81713,-81.22329],[28.81788,-81.22339],[28.81776,-81.22317],[28.81789,-81.22285],[28.8177,-81.22317],[28.81701,-81.22311],[28.8167,-81.22265],[28.816,-81.22209],[28.81609,-81.22169],[28.81653,-81.22124],[28.81661,-81.22058],[28.81641,-81.22128],[28.81603,-81.22153],[28.8158,-81.22203],[28.81546,-81.22206],[28.81533,-81.22181],[28.81539,-81.22112],[28.81527,-81.2208],[28.81373,-81.21974],[28.81363,-81.21935],[28.8138,-81.21906],[28.8136,-81.21902],[28.81367,-81.21914],[28.81352,-81.21922],[28.81359,-81.21937],[28.81343,-81.21951],[28.81358,-81.21958],[28.81365,-81.21989],[28.81398,-81.22002],[28.81404,-81.22018],[28.8142,-81.22016],[28.81443,-81.22045],[28.81512,-81.2209],[28.81526,-81.22207],[28.81637,-81.22264],[28.81653,-81.22288],[28.81682,-81.22359],[28.8172,-81.22543],[28.81814,-81.22662],[28.81837,-81.22728],[28.81829,-81.22781],[28.8178,-81.22886],[28.81694,-81.23002],[28.81645,-81.23097],[28.81606,-81.23102],[28.81563,-81.23084],[28.81538,-81.23055],[28.81533,-81.2303],[28.81527,-81.23035],[28.81549,-81.23085],[28.81619,-81.23131],[28.81621,-81.23162],[28.81602,-81.23223],[28.81585,-81.2322],[28.81595,-81.23243],[28.81532,-81.23381],[28.81516,-81.23375],[28.81435,-81.23406],[28.81433,-81.23437],[28.81398,-81.23489],[28.81392,-81.23559],[28.81374,-81.2358],[28.81405,-81.23576],[28.81404,-81.23587],[28.81374,-81.23596],[28.81365,-81.23632],[28.81351,-81.23634],[28.81322,-81.23697],[28.81286,-81.23726],[28.81273,-81.23762],[28.81252,-81.23756],[28.81223,-81.23779],[28.81216,-81.23815],[28.81228,-81.23815],[28.81226,-81.23837],[28.81211,-81.23819],[28.81216,-81.23787],[28.81204,-81.23811],[28.81186,-81.23809],[28.81191,-81.23829],[28.81206,-81.23821],[28.81195,-81.23853],[28.81183,-81.23842],[28.81172,-81.23853],[28.81181,-81.23875],[28.81149,-81.23937],[28.8116,-81.23947],[28.81159,-81.23977],[28.81129,-81.24027],[28.81129,-81.24092],[28.8114,-81.24114],[28.81119,-81.24161],[28.81131,-81.24239],[28.81122,-81.2429],[28.81134,-81.24304],[28.81116,-81.24363],[28.81132,-81.24383],[28.81141,-81.24481],[28.81157,-81.24498],[28.81165,-81.24571],[28.81177,-81.24579],[28.81165,-81.24604],[28.81179,-81.24611],[28.81187,-81.24637],[28.8118,-81.24671],[28.81213,-81.24723],[28.81238,-81.24721],[28.81242,-81.24732],[28.81298,-81.25144],[28.81302,-81.25565],[28.81271,-81.25946],[28.81312,-81.26274],[28.81397,-81.26547],[28.81543,-81.26544],[28.81543,-81.26501],[28.81532,-81.26501],[28.81508,-81.2642],[28.81521,-81.26415],[28.81506,-81.26416],[28.81501,-81.26392],[28.81519,-81.26375],[28.81594,-81.26353],[28.81618,-81.26368],[28.81708,-81.26652],[28.81599,-81.26737],[28.81585,-81.26731],[28.81553,-81.26615],[28.81417,-81.26614],[28.81477,-81.26792],[28.81588,-81.26788],[28.81586,-81.26828],[28.81486,-81.26822],[28.81574,-81.27107],[28.81614,-81.27688],[28.8163,-81.27715],[28.81496,-81.27728],[28.81635,-81.27739],[28.81624,-81.27756],[28.81637,-81.28026],[28.81634,-81.28318],[28.81639,-81.28399],[28.81679,-81.2862],[28.81713,-81.28748],[28.81749,-81.28817],[28.81816,-81.28898],[28.82157,-81.29239],[28.82303,-81.29437],[28.82336,-81.29499],[28.82477,-81.29784],[28.82495,-81.29865],[28.82527,-81.30188],[28.82541,-81.30232],[28.82544,-81.30331],[28.82574,-81.3039],[28.82567,-81.30434],[28.82591,-81.30472],[28.82587,-81.30518],[28.82616,-81.30623],[28.82707,-81.30761],[28.82739,-81.30831],[28.82801,-81.30894],[28.8282,-81.30954],[28.82902,-81.31021],[28.829,-81.31066],[28.82947,-81.31137],[28.82981,-81.31161],[28.83016,-81.31255],[28.83041,-81.31278],[28.83037,-81.3137],[28.83093,-81.31467],[28.83097,-81.31552],[28.83123,-81.31631],[28.8319,-81.31755],[28.83196,-81.31805],[28.83216,-81.31826],[28.83251,-81.31904],[28.83285,-81.3192],[28.83304,-81.31946],[28.83359,-81.31962],[28.83352,-81.31988],[28.83374,-81.32004],[28.83389,-81.32035],[28.83386,-81.321],[28.83434,-81.32157],[28.83452,-81.32248],[28.83569,-81.32319],[28.83655,-81.32338],[28.83649,-81.32358],[28.83676,-81.32374],[28.83735,-81.323],[28.83927,-81.32259],[28.83973,-81.32272],[28.84006,-81.32243],[28.83987,-81.3212],[28.83968,-81.32089],[28.83935,-81.32088],[28.83757,-81.32147],[28.83715,-81.32129],[28.83675,-81.32059],[28.83674,-81.32019],[28.83614,-81.31861],[28.83778,-81.31683],[28.83766,-81.31671],[28.83615,-81.31806],[28.83689,-81.31633],[28.837,-81.31561],[28.83755,-81.31569],[28.83788,-81.31599],[28.83822,-81.31568],[28.83805,-81.31538],[28.83762,-81.31507],[28.83713,-81.315],[28.83705,-81.31471],[28.83736,-81.31396],[28.83733,-81.31344],[28.83793,-81.31126],[28.83802,-81.31118],[28.83812,-81.31129],[28.83752,-81.3132],[28.8374,-81.31453],[28.83791,-81.31503],[28.83828,-81.31448],[28.83924,-81.31346],[28.83899,-81.31314],[28.83896,-81.31276],[28.83901,-81.31266],[28.83918,-81.31274],[28.83924,-81.31234],[28.83913,-81.31212],[28.83931,-81.31197],[28.83881,-81.31132],[28.83846,-81.31126],[28.83786,-81.31084],[28.8377,-81.31058],[28.83772,-81.31041],[28.83819,-81.31043],[28.83826,-81.31023],[28.8384,-81.31023],[28.83852,-81.31005],[28.83843,-81.30983],[28.83802,-81.30963],[28.83812,-81.30891],[28.83829,-81.30883],[28.83872,-81.30916],[28.83876,-81.30877],[28.83904,-81.30864],[28.83913,-81.30804],[28.83893,-81.30776],[28.8391,-81.30759],[28.83953,-81.30756],[28.83979,-81.30694],[28.84043,-81.30745],[28.8404,-81.30771],[28.8405,-81.30773],[28.84082,-81.30845],[28.84218,-81.30936],[28.84311,-81.30919],[28.84366,-81.30954],[28.84463,-81.30954],[28.84492,-81.30929],[28.84511,-81.30895],[28.84309,-81.30713],[28.84329,-81.3068],[28.84379,-81.30652],[28.84408,-81.30584],[28.84513,-81.30475],[28.84572,-81.30433],[28.84673,-81.30423],[28.84739,-81.30368],[28.84827,-81.30377],[28.84884,-81.30361],[28.85013,-81.30364],[28.85037,-81.30354],[28.85093,-81.3028],[28.85154,-81.30258],[28.85653,-81.29752],[28.85714,-81.2965],[28.85735,-81.29559],[28.85818,-81.29454],[28.85891,-81.29408],[28.85958,-81.29404],[28.8602,-81.29383],[28.86191,-81.29215],[28.86235,-81.29121],[28.86311,-81.28998],[28.86356,-81.28955],[28.86387,-81.28834],[28.8648,-81.2865],[28.86456,-81.28555],[28.86404,-81.28542],[28.86392,-81.28514],[28.86399,-81.28495],[28.86433,-81.28452],[28.86455,-81.28379],[28.8656,-81.28273],[28.86604,-81.2829],[28.86615,-81.28354],[28.86592,-81.28465],[28.8663,-81.28571],[28.86595,-81.28749],[28.866,-81.28789],[28.86629,-81.28781],[28.86802,-81.28622],[28.86819,-81.28586],[28.86848,-81.28562],[28.86906,-81.28654],[28.86943,-81.2868],[28.86944,-81.28709],[28.86869,-81.28795],[28.86819,-81.28878],[28.86747,-81.28842],[28.86713,-81.28845],[28.86624,-81.28906],[28.86597,-81.2894],[28.86572,-81.28989],[28.86546,-81.29104],[28.86472,-81.29183],[28.86546,-81.29179],[28.86564,-81.29237],[28.86501,-81.29581],[28.86441,-81.29706],[28.86382,-81.29744],[28.86372,-81.29824],[28.86293,-81.29987],[28.86218,-81.30191],[28.86166,-81.30272],[28.86103,-81.3032],[28.86031,-81.30315],[28.85973,-81.30259],[28.85954,-81.30299],[28.85914,-81.30331],[28.85905,-81.30398],[28.85938,-81.30492],[28.85909,-81.30569],[28.85819,-81.30682],[28.85686,-81.30776],[28.85498,-81.30959],[28.85412,-81.3113],[28.85391,-81.31241],[28.85419,-81.31321],[28.85494,-81.31391],[28.85511,-81.31446],[28.85554,-81.31474],[28.85596,-81.31488],[28.8565,-81.31481],[28.85765,-81.31413],[28.85904,-81.31282],[28.85948,-81.31201],[28.86052,-81.31124],[28.86133,-81.31015],[28.86166,-81.30936],[28.86191,-81.30903],[28.86223,-81.30906],[28.86238,-81.30939],[28.86232,-81.30954],[28.86265,-81.30939],[28.86273,-81.30898],[28.86261,-81.30876],[28.86268,-81.30785],[28.86292,-81.30718],[28.8631,-81.30697],[28.86308,-81.30685],[28.86289,-81.30699],[28.86281,-81.30678],[28.86414,-81.30582],[28.86565,-81.30422],[28.8665,-81.30244],[28.86676,-81.3015],[28.86673,-81.3009],[28.86597,-81.29942],[28.86542,-81.29903],[28.86585,-81.29874],[28.866,-81.29828],[28.86618,-81.2981],[28.86636,-81.2974],[28.86759,-81.29634],[28.86775,-81.29577],[28.86745,-81.29496],[28.86798,-81.29474],[28.86853,-81.29416],[28.86869,-81.2937],[28.86868,-81.2933],[28.86896,-81.29307],[28.86913,-81.29255],[28.86913,-81.29226],[28.86865,-81.29094],[28.86875,-81.28924],[28.86902,-81.28829],[28.86972,-81.28724],[28.86975,-81.2868],[28.86957,-81.28655],[28.86987,-81.2861],[28.86985,-81.28602],[28.86924,-81.28643],[28.86878,-81.28564],[28.86832,-81.2854],[28.86811,-81.28486],[28.8685,-81.28466],[28.86825,-81.28454],[28.86803,-81.28401],[28.86825,-81.28368],[28.8684,-81.28374],[28.86879,-81.28355],[28.86885,-81.28303],[28.86924,-81.28294],[28.86895,-81.28281],[28.8687,-81.28295],[28.86871,-81.28347],[28.86844,-81.28343],[28.86849,-81.28357],[28.86836,-81.28358],[28.86811,-81.28314],[28.86828,-81.28293],[28.86827,-81.28256],[28.86848,-81.28206],[28.86922,-81.28201],[28.86932,-81.28212],[28.8693,-81.28202],[28.86945,-81.28199],[28.86852,-81.28186],[28.86859,-81.28151],[28.86879,-81.28132],[28.86871,-81.28113],[28.86902,-81.28066],[28.86934,-81.27951],[28.86949,-81.27663],[28.86916,-81.27537],[28.86902,-81.2751],[28.86884,-81.27501],[28.86902,-81.27473],[28.86897,-81.27443],[28.86867,-81.27431],[28.8683,-81.27445],[28.86824,-81.2743],[28.86813,-81.27364],[28.86829,-81.27318],[28.86822,-81.27281],[28.86851,-81.27235],[28.86842,-81.2722],[28.86805,-81.27225],[28.86804,-81.27212],[28.86849,-81.27205],[28.86849,-81.27078],[28.86859,-81.27035],[28.86851,-81.2699],[28.86724,-81.26793],[28.86691,-81.26715],[28.866,-81.263],[28.86506,-81.25972],[28.86506,-81.25808],[28.86469,-81.25631],[28.8635,-81.25378],[28.86279,-81.25283]],"islands":[[[28.83916,-81.30318],[28.83934,-81.30326],[28.83948,-81.30371],[28.83965,-81.30378],[28.84101,-81.30334],[28.84167,-81.30291],[28.84222,-81.30285],[28.84182,-81.30328],[28.84146,-81.30423],[28.84151,-81.30538],[28.84126,-81.30563],[28.83955,-81.30506],[28.83927,-81.30445],[28.83903,-81.30428],[28.83916,-81.30318]],[[28.85962,-81.31151],[28.85958,-81.31067],[28.85976,-81.31044],[28.85975,-81.30967],[28.86003,-81.30923],[28.86111,-81.30918],[28.86187,-81.30858],[28.86213,-81.3086],[28.86211,-81.30882],[28.86158,-81.30915],[28.86134,-81.30981],[28.86068,-81.31078],[28.86002,-81.31144],[28.85962,-81.31151]]]};
+/* The club's route builder, near enough verbatim. In: the stops, each
+   {id, side} with 'line' for the start line; the wind, {dir, kn} or
+   null; the marks it may name; the line's two ends. Out: the sailed
+   line, the roundings, the arrows and the distance, all in lat/lon. */
+const LMSA=(function(){
+  "use strict";
+  var PORT="#D7263D", STBD="#11945A", NAVY="#1C2B5E";   // nautical red and green
+  // Flat local metres around the lake; plenty accurate over a few miles.
+  var LAT0=28.835, LON0=-81.265, KY=110574, KX=111320*Math.cos(LAT0*Math.PI/180);
+  function toXY(m){ return {x:(m.lon-LON0)*KX, y:(m.lat-LAT0)*KY}; }
+  function toLL(p){ return {lat:LAT0+p.y/KY, lon:LON0+p.x/KX}; }
+  function sub(a,b){ return {x:a.x-b.x, y:a.y-b.y}; }
+  function add(a,b){ return {x:a.x+b.x, y:a.y+b.y}; }
+  function mul(a,k){ return {x:a.x*k, y:a.y*k}; }
+  function len(a){ return Math.hypot(a.x,a.y); }
+  function unit(a){ var l=len(a)||1; return {x:a.x/l, y:a.y/l}; }
+  function right(d){ return {x:d.y, y:-d.x}; }          // y is north
+  function left(d){ return {x:-d.y, y:d.x}; }
+  function dot(a,b){ return a.x*b.x+a.y*b.y; }
+
+  var R=110;          // rounding radius on the map, metres
+  var LEAD=160;       // metres of approach / run-out drawn through the line
+  var CROSS_OFF=85;   // how far off the middle of the line it is crossed
+  var APPROACH=220;
+  var CLOSE=45, RUN=150;
+  var SHORE_GAP=45;   // metres inside the shoreline a clamped point is put
+  var CELL=30;
+
+  function vec(b){ var r=b*Math.PI/180; return {x:Math.sin(r), y:Math.cos(r)}; }
+  function bearingOf(d){ return (Math.atan2(d.x,d.y)*180/Math.PI+360)%360; }
+  function angleOff(h,w){ return Math.abs(((h-w)%360+540)%360-180); }
+
+  // Split A->B into boards on two headings (tacks or gybes), ending exactly at B.
+  function boards(A,B,h1,h2,tOut){
+    var d=sub(B,A), t1=vec(h1), t2=vec(h2);
+    var det=t1.x*t2.y-t1.y*t2.x;
+    if(Math.abs(det)<1e-6) return null;
+    var a=(d.x*t2.y-d.y*t2.x)/det, b=(t1.x*d.y-t1.y*d.x)/det;
+    if(a<0||b<0) return null;
+    var L=len(d), m=L>2600?3:L>1300?2:1;
+    // Start on whichever board carries on most naturally from the rounding.
+    var first=(t1.x*tOut.x+t1.y*tOut.y)>=(t2.x*tOut.x+t2.y*tOut.y);
+    var pA=first?t1:t2, lA=first?a:b, pB=first?t2:t1, lB=first?b:a;
+    var pts=[A], p=A;
+    for(var i=0;i<m;i++){
+      p=add(p,mul(pA,lA/m)); pts.push(p);
+      p=add(p,mul(pB,lB/m)); pts.push(p);
+    }
+    pts[pts.length-1]=B;
+    return pts.filter(function(q,i){ return i===0||len(sub(q,pts[i-1]))>1; });
   }
-  return best;
-}
+  // Soften the corners (tacks and gybes are turns, not kinks); keeps the ends.
+  function chaikin(pts,rounds){
+    for(var r=0;r<rounds;r++){
+      var out=[pts[0]];
+      for(var i=0;i<pts.length-1;i++){
+        var p=pts[i], q=pts[i+1];
+        out.push(add(mul(p,0.75),mul(q,0.25)), add(mul(p,0.25),mul(q,0.75)));
+      }
+      out.push(pts[pts.length-1]);
+      pts=out;
+    }
+    return pts;
+  }
+  function legRoute(A,B,tOut,tIn,j,wind){
+    var d=sub(B,A), L=len(d), h=bearingOf(d);
+    if(wind){
+      var off=angleOff(h,wind.dir), zig=null, kind="reach";
+      if(off<CLOSE){ zig=boards(A,B,wind.dir-CLOSE,wind.dir+CLOSE,tOut); kind="beat"; }
+      else if(off>RUN){ zig=boards(A,B,wind.dir+180-(180-RUN),wind.dir+180+(180-RUN),tOut); kind="run"; }
+      if(zig&&zig.length>2) return {kind:kind, pts:chaikin(zig,2).slice(1)};
+    }
+    // A reach (or no wind yet): a smooth curve out of one rounding into the
+    // next. With wind it sags to leeward; without, it bows to alternate sides.
+    var n=left(unit(d)), sign=j%2?-1:1;
+    if(wind){ var to=vec(wind.dir+180); sign=(n.x*to.x+n.y*to.y)>=0?1:-1; }
+    var bow=mul(n,L*(wind?0.07:0.12)*sign);
+    var c1=add(add(A,mul(tOut,L*0.36)),bow), c2=add(sub(B,mul(tIn,L*0.36)),bow), pts=[];
+    for(var t=1;t<=30;t++){
+      var u=t/30, v=1-u;
+      pts.push({x:v*v*v*A.x+3*v*v*u*c1.x+3*v*u*u*c2.x+u*u*u*B.x,
+                y:v*v*v*A.y+3*v*v*u*c1.y+3*v*u*u*c2.y+u*u*u*B.y});
+    }
+    return {kind:"reach", pts:pts};
+  }
+
+  /* ---- keeping the route on the water ---- */
+  var WATER=(function(){
+    if(typeof LMSA_LAKE==='undefined'||!LMSA_LAKE) return null;
+    var ring=function(r){ return r.map(function(p){ return toXY({lat:p[0], lon:p[1]}); }); };
+    return {outer:ring(LMSA_LAKE.outer), islands:LMSA_LAKE.islands.map(ring)};
+  })();
+  function inRing(p,r){
+    var c=false;
+    for(var i=0,j=r.length-1;i<r.length;j=i++){
+      if((r[i].y>p.y)!==(r[j].y>p.y) &&
+         p.x<(r[j].x-r[i].x)*(p.y-r[i].y)/(r[j].y-r[i].y)+r[i].x) c=!c;
+    }
+    return c;
+  }
+  function onWater(p){
+    return !WATER||(inRing(p,WATER.outer)&&!WATER.islands.some(function(r){ return inRing(p,r); }));
+  }
+  function nearestShore(p){
+    var best=null, bd=Infinity;
+    [WATER.outer].concat(WATER.islands).forEach(function(r){
+      for(var i=0,j=r.length-1;i<r.length;j=i++){
+        var a=r[j], b=r[i], ab=sub(b,a);
+        var t=((p.x-a.x)*ab.x+(p.y-a.y)*ab.y)/((ab.x*ab.x+ab.y*ab.y)||1);
+        t=Math.max(0,Math.min(1,t));
+        var q=add(a,mul(ab,t)), d=len(sub(p,q));
+        if(d<bd){ bd=d; best=q; }
+      }
+    });
+    return best;
+  }
+  function toWater(p){
+    if(onWater(p)) return p;
+    var q=nearestShore(p);
+    var dir=unit(sub(q,p));
+    for(var gap=SHORE_GAP;gap>=5;gap/=2){
+      var a=add(q,mul(dir,gap));
+      if(onWater(a)) return a;
+    }
+    return q;
+  }
+  function densify(pts,step){
+    var out=[pts[0]];
+    for(var i=1;i<pts.length;i++){
+      var a=pts[i-1], b=pts[i], n=Math.ceil(len(sub(b,a))/step);
+      for(var k=1;k<=n;k++) out.push(add(a,mul(sub(b,a),k/n)));
+    }
+    return out;
+  }
+  function clearOfLand(a,b){
+    var n=Math.ceil(len(sub(b,a))/10);
+    for(var k=0;k<=n;k++) if(!onWater(add(a,mul(sub(b,a),k/(n||1))))) return false;
+    return true;
+  }
+  var GRID=null;
+  function lakeGrid(marks){
+    if(GRID) return GRID;
+    var xs=[], ys=[];
+    marks.forEach(function(m){ var p=toXY(m); xs.push(p.x); ys.push(p.y); });
+    var minX=Math.min.apply(null,xs)-2500, maxX=Math.max.apply(null,xs)+2500;
+    var minY=Math.min.apply(null,ys)-2500, maxY=Math.max.apply(null,ys)+2500;
+    var W=Math.ceil((maxX-minX)/CELL), H=Math.ceil((maxY-minY)/CELL);
+    var wet=new Uint8Array(W*H), rings=[WATER.outer].concat(WATER.islands);
+    for(var r=0;r<H;r++){
+      var y=minY+(r+0.5)*CELL, hits=[];
+      rings.forEach(function(g){
+        for(var i=0,j=g.length-1;i<g.length;j=i++){
+          var a=g[j], b=g[i];
+          if((a.y>y)!==(b.y>y)) hits.push(a.x+(y-a.y)*(b.x-a.x)/(b.y-a.y));
+        }
+      });
+      hits.sort(function(p,q){ return p-q; });
+      for(var h=0;h+1<hits.length;h+=2){
+        var c0=Math.max(0,Math.ceil((hits[h]-minX)/CELL-0.5));
+        var c1=Math.min(W-1,Math.floor((hits[h+1]-minX)/CELL-0.5));
+        for(var c=c0;c<=c1;c++) wet[r*W+c]=1;
+      }
+    }
+    var safe=new Uint8Array(W*H);
+    for(var q=0;q<W*H;q++){
+      var cx=q%W, cy=(q/W)|0;
+      safe[q]=wet[q]&&cx>0&&cy>0&&cx<W-1&&cy<H-1&&
+        wet[q-1]&&wet[q+1]&&wet[q-W]&&wet[q+W]?1:0;
+    }
+    return (GRID={minX:minX, minY:minY, W:W, H:H, safe:safe});
+  }
+  function cellAt(g,p){
+    var cx=Math.max(0,Math.min(g.W-1,Math.floor((p.x-g.minX)/CELL)));
+    var cy=Math.max(0,Math.min(g.H-1,Math.floor((p.y-g.minY)/CELL)));
+    var start=cy*g.W+cx;
+    if(g.safe[start]) return start;
+    for(var rad=1;rad<60;rad++){
+      for(var dy=-rad;dy<=rad;dy++) for(var dx=-rad;dx<=rad;dx++){
+        if(Math.max(Math.abs(dx),Math.abs(dy))!==rad) continue;
+        var x=cx+dx, y=cy+dy;
+        if(x>=0&&y>=0&&x<g.W&&y<g.H&&g.safe[y*g.W+x]) return y*g.W+x;
+      }
+    }
+    return -1;
+  }
+  function cellXY(g,c){ return {x:g.minX+(c%g.W+0.5)*CELL, y:g.minY+(((c/g.W)|0)+0.5)*CELL}; }
+  function waterPath(a,b,marks){
+    var g=lakeGrid(marks), s=cellAt(g,a), t=cellAt(g,b);
+    if(s<0||t<0) return null;
+    var N=g.W*g.H, cost=new Float64Array(N).fill(Infinity);
+    var from=new Int32Array(N).fill(-1), done=new Uint8Array(N);
+    var heap=[], tx=t%g.W, ty=(t/g.W)|0;
+    function h(c){ var dx=Math.abs(c%g.W-tx), dy=Math.abs(((c/g.W)|0)-ty);
+      return Math.max(dx,dy)+0.4142*Math.min(dx,dy); }
+    function push(c,f){
+      heap.push([f,c]); var i=heap.length-1;
+      while(i>0){ var p=(i-1)>>1; if(heap[p][0]<=heap[i][0]) break;
+        var t0=heap[p]; heap[p]=heap[i]; heap[i]=t0; i=p; }
+    }
+    function pop(){
+      var top=heap[0], last=heap.pop();
+      if(heap.length){
+        heap[0]=last; var i=0;
+        for(;;){
+          var l=2*i+1, r=l+1, m=i;
+          if(l<heap.length&&heap[l][0]<heap[m][0]) m=l;
+          if(r<heap.length&&heap[r][0]<heap[m][0]) m=r;
+          if(m===i) break;
+          var t1=heap[m]; heap[m]=heap[i]; heap[i]=t1; i=m;
+        }
+      }
+      return top;
+    }
+    cost[s]=0; push(s,h(s));
+    var STEPS=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+    while(heap.length){
+      var c=pop()[1];
+      if(done[c]) continue;
+      if(c===t) break;
+      done[c]=1;
+      var cx=c%g.W, cy=(c/g.W)|0;
+      for(var k=0;k<8;k++){
+        var x=cx+STEPS[k][0], y=cy+STEPS[k][1];
+        if(x<0||y<0||x>=g.W||y>=g.H) continue;
+        var nc=y*g.W+x;
+        if(!g.safe[nc]||done[nc]) continue;
+        var nd=cost[c]+STEPS[k][2];
+        if(nd<cost[nc]){ cost[nc]=nd; from[nc]=c; push(nc,nd+h(nc)); }
+      }
+    }
+    if(from[t]<0&&s!==t) return null;
+    var cells=[];
+    for(var at=t;at>=0;at=at===s?-1:from[at]) cells.push(cellXY(g,at));
+    cells.reverse();
+    var pts=[a].concat(cells,[b]), out=[a], i0=0;
+    while(i0<pts.length-1){
+      var j=pts.length-1;
+      while(j>i0+1&&!clearOfLand(pts[i0],pts[j])) j--;
+      out.push(pts[j]); i0=j;
+    }
+    return out;
+  }
+  function keepOnWater(pts,marks){
+    if(!WATER) return pts;
+    var d=densify(pts,10), wet=d.map(onWater);
+    if(wet.every(Boolean)) return pts;
+    var out=[], i=0;
+    while(i<d.length){
+      if(wet[i]){ out.push(d[i]); i++; continue; }
+      var j=i; while(j<d.length&&!wet[j]) j++;
+      var a=out.length?out[out.length-1]:null, b=j<d.length?d[j]:null;
+      var way=a&&b?waterPath(a,b,marks):null;
+      if(way) Array.prototype.push.apply(out,way.slice(1,-1));
+      else for(var k=i;k<j;k++) out.push(toWater(d[k]));
+      i=j;
+    }
+    var smooth=chaikin(out,2);
+    return densify(smooth,10).every(onWater)?smooth:out;
+  }
+
+  /* The sailed line. Each rounded mark is passed on its side and circled
+     the way a boat turns round it (port = counter-clockwise), and the legs
+     are curves (or tacks and gybes) joining those turns. The line is
+     crossed off one end to start and the other to finish - the fleet
+     starts at the favoured end, which is the one further upwind on a beat
+     and the one nearer the first mark otherwise. */
+  function sailedLine(stops, wind, MARKS, LINE_ENDS, allMarks){
+    var n=stops.length, nodes=[];
+    var startOnLine=stops[0].id==="line", finishOnLine=n>1&&stops[n-1].id==="line";
+    var lineDir=unit(sub(toXY(LINE_ENDS[1]),toXY(LINE_ENDS[0])));   // Flag -> Ball
+    var NORM=left(lineDir).y>=0?left(lineDir):right(lineDir);
+    var AWAY=mul(NORM,-1);
+    var FLAG=toXY(LINE_ENDS[0]), BALL=toXY(LINE_ENDS[1]);
+    function favouredSign(firstMark){
+      if(!wind) return -1;                   // no reading yet: the Flag side
+      if(firstMark){
+        var h=bearingOf(sub(firstMark,toXY(MARKS.line)));
+        if(angleOff(h,wind.dir)>=CLOSE)
+          return len(sub(firstMark,BALL))<len(sub(firstMark,FLAG))?1:-1;
+      }
+      var up=vec(wind.dir);                  // a beat: the windward end
+      return dot(BALL,up)>dot(FLAG,up)?1:-1;
+    }
+    var startSign=startOnLine
+      ? favouredSign(n>1?toXY(MARKS[stops[1].id]):null)
+      : -1;
+    var P=stops.map(function(s,i){
+      var p=toXY(MARKS[s.id]);
+      if(s.id!=="line") return p;
+      return add(p,mul(lineDir, i===0?startSign*CROSS_OFF
+                               : i===n-1?-startSign*CROSS_OFF : 0));
+    });
+    function crossHeading(target){
+      var square=NORM;
+      if(!target) return square;
+      var toMark=unit(sub(target,P[0]));
+      var h=bearingOf(toMark);
+      if(wind&&angleOff(h,wind.dir)<CLOSE){
+        var a=vec(wind.dir-CLOSE), b=vec(wind.dir+CLOSE);
+        toMark=dot(a,toMark)>=dot(b,toMark)?a:b;
+      }
+      return dot(toMark,NORM)>0.15?toMark:square;
+    }
+    var cross=startOnLine?crossHeading(n>1?toXY(MARKS[stops[1].id]):null):NORM;
+    var Q=P.map(function(p,i){
+      if(i===0&&startOnLine) return add(p,mul(cross,APPROACH));
+      if(i===n-1&&finishOnLine) return add(p,mul(NORM,APPROACH));
+      return p;
+    });
+    for(var i=0;i<n;i++){
+      var prev=i>0?Q[i-1]:null, next=i<n-1?Q[i+1]:null;
+      var dIn=prev?unit(sub(Q[i],prev)):unit(sub(next,Q[i]));
+      var dOut=next?unit(sub(next,Q[i])):dIn;
+      if(i===0&&startOnLine){ dIn=cross; dOut=next?unit(sub(next,Q[i])):cross; }
+      if(i===n-1&&finishOnLine) dIn=dOut=AWAY;
+      var side=i>0&&i<n-1?stops[i].side:null;
+      if(!side){ nodes.push({inP:Q[i], outP:Q[i], tIn:dIn, tOut:dOut, arc:null}); continue; }
+      var off=side==="p"?right:left;     // mark on your left means you sail to its right
+      var E=add(Q[i],mul(off(dIn),R)), X=add(Q[i],mul(off(dOut),R));
+      var a0=Math.atan2(E.y-Q[i].y,E.x-Q[i].x), a1=Math.atan2(X.y-Q[i].y,X.x-Q[i].x);
+      var TAU=Math.PI*2, sweep;
+      if(side==="p"){ sweep=((a1-a0)%TAU+TAU)%TAU; if(sweep>TAU-0.05) sweep=0; }
+      else { sweep=-(((a0-a1)%TAU+TAU)%TAU); if(sweep<-TAU+0.05) sweep=0; }
+      var arc=[], steps=Math.max(2,Math.ceil(Math.abs(sweep)/0.15));
+      for(var k=0;k<=steps;k++){
+        var a=a0+sweep*k/steps;
+        arc.push({x:Q[i].x+R*Math.cos(a), y:Q[i].y+R*Math.sin(a)});
+      }
+      nodes.push({inP:E, outP:X, tIn:dIn, tOut:dOut, arc:arc, side:side});
+    }
+    var line=[], arcs=[], legMids=[], legKinds={};
+    if(startOnLine) line.push(sub(P[0],mul(cross,LEAD)), P[0]);
+    for(var j=0;j<n;j++){
+      var nd=nodes[j];
+      if(nd.arc){ arcs.push({side:nd.side, pts:nd.arc}); Array.prototype.push.apply(line,nd.arc); }
+      else line.push(nd.outP);
+      if(j===n-1) break;
+      var A=nd.outP, B=nodes[j+1].inP;
+      if(len(sub(B,A))<1) continue;
+      var leg=legRoute(A,B,nd.tOut,nodes[j+1].tIn,j,wind);
+      if(leg.kind!=="reach") legKinds[leg.kind]=(legKinds[leg.kind]||0)+1;
+      Array.prototype.push.apply(line,leg.pts);
+      legMids.push(leg.pts[Math.floor(leg.pts.length/2)]);
+    }
+    if(finishOnLine) line.push(P[n-1], add(P[n-1],mul(AWAY,LEAD)));
+    line=keepOnWater(line, allMarks);
+    arcs.forEach(function(a){ a.pts=a.pts.map(toWater); });
+    var metres=0;
+    for(var m=1;m<line.length;m++) metres+=len(sub(line[m],line[m-1]));
+    if(startOnLine) metres-=LEAD;
+    if(finishOnLine) metres-=LEAD;
+    var arrows=[];
+    function arrowNear(p){
+      var bi=1, bd=Infinity;
+      for(var q=1;q<line.length;q++){ var d=len(sub(line[q],p)); if(d<bd){ bd=d; bi=q; } }
+      var dv=sub(line[bi],line[bi-1]);
+      arrows.push({at:toLL(line[bi]), bearing:Math.atan2(dv.x,dv.y)*180/Math.PI});
+    }
+    if(startOnLine) arrows.push({at:toLL(sub(P[0],mul(cross,LEAD*0.45))), bearing:bearingOf(cross)});
+    if(finishOnLine) arrows.push({at:toLL(add(P[n-1],mul(AWAY,LEAD*0.55))), bearing:bearingOf(AWAY)});
+    legMids.forEach(arrowNear);
+    return {line:line.map(toLL),
+            arcs:arcs.map(function(a){ return {side:a.side, pts:a.pts.map(toLL)}; }),
+            arrows:arrows, nm:metres/1852, kinds:legKinds};
+  }
+  return {route:sailedLine, PORT:PORT, STBD:STBD, NAVY:NAVY, R:R,
+          CLOSE:CLOSE, RUN:RUN};
+})();
+
 /* ---- the forecast, for when the boat has no wind of its own ----------
    The masthead is the truth and always wins. But the course is set at
    the dock, often before the instruments are awake and always before
@@ -9858,373 +10238,170 @@ function windNow(){
 }
 /* The two boards of a leg the boat cannot sail straight, or null if it
    can. Metres in, metres out. */
-function tackBoards(a, b, w){
-  const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
-  if(d<1) return null;
-  const brg=((Math.atan2(dx,dy)*DEG)%360+360)%360;
-  const off=Math.abs(wrap180(brg-w.twd));         /* TWA of the rhumb line */
-  const up=vmgAngle(w.tws,true), dn=vmgAngle(w.tws,false);
-  let twa, kind;
-  if(off<up-1){ twa=up; kind='tack'; }
-  else if(off>dn+1){ twa=dn; kind='gybe'; }
-  else return null;                               /* it can be sailed as drawn */
-  const uv=h=>({x:Math.sin(h*Math.PI/180), y:Math.cos(h*Math.PI/180)});
-  const try2=(h1,h2)=>{
-    const u1=uv(h1), u2=uv(h2);
-    const det=u1.x*u2.y-u1.y*u2.x;
-    if(Math.abs(det)<1e-6) return null;
-    const t1=(dx*u2.y-dy*u2.x)/det, t2=(u1.x*dy-u1.y*dx)/det;
-    if(t1<=0||t2<=0) return null;
-    return {t1:t1, t2:t2, p:{x:a.x+u1.x*t1, y:a.y+u1.y*t1}};
-  };
-  const A=try2(w.twd-twa, w.twd+twa), B=try2(w.twd+twa, w.twd-twa);
-  /* Long tack first: with no shifts both are the same water, and this
-     is what a sailor does with the choice. */
-  const pick = (A&&B) ? (A.t1>=B.t1?A:B) : (A||B);
-  if(!pick) return null;
-  return {kind:kind, twa:twa, pts:[pick.p], nm:(pick.t1+pick.t2)/1852};
-}
-/* ---- rounding a mark --------------------------------------------------
-   A course does not go THROUGH a buoy, and which way round it goes is
-   the question the whole leg is sailed about. Leave it to port and the
-   mark stays on your left the whole way round, which is a turn to port:
-   counter-clockwise on a north-up picture, and clockwise on the screen
-   because SVG counts y downward. Starboard is the other way.
-   The route comes in on a tangent, goes round the arc, and leaves on
-   the tangent that points at what is next - the shape the club draws on
-   its own course sheet, and the shape you actually sail.
-   The radius is pixels, not metres: 30 m of rounding across two miles
-   of lake is a pixel and a half, and this is a diagram of a rounding,
-   not a survey of one. */
-const ROUND_R=30;         /* outside the mark's own circle, or it hides */
 /* The two tangent points from P onto the circle, as angles about M. */
-function tangents(P,M,r){
-  const dx=P.x-M.x, dy=P.y-M.y, d=Math.hypot(dx,dy);
-  if(d<=r*1.02) return null;            /* inside it: no tangent to take */
-  const base=Math.atan2(dy,dx), off=Math.acos(r/d);
-  return [base+off, base-off];
-}
 /* Where the route touches the circle coming from A and leaving toward
    B, going round the way `cw` says, plus the arc between them. Screen
    space. */
-function markRound(A,M,B,r,cw){
-  const ti=tangents(A,M,r), to=tangents(B,M,r);
-  if(!ti||!to) return null;
-  const TAU=Math.PI*2;
-  const pt=t=>({x:M.x+r*Math.cos(t), y:M.y+r*Math.sin(t)});
-  /* Which way the boat is moving at a point on the circle, going round
-     the way it is going round. On a screen y counts downward, so these
-     are the screen tangents and `cw` is SVG's sweep flag, not a
-     direction anyone would name out loud. */
-  const tang=t=>cw ? {x:-Math.sin(t), y:Math.cos(t)}
-                   : {x: Math.sin(t), y:-Math.cos(t)};
-  /* Of the two tangents from a point, the one the boat can actually use:
-     arriving, it must reach the circle already moving the way the arc
-     goes; leaving, it must set off that way. The other tangent of the
-     pair grazes the mark on the wrong side, which is how this first came
-     out as a three-pixel nick instead of a rounding. */
-  const pick=(cands, arriveFrom, departTo)=>{
-    for(const t of cands){
-      const T=pt(t), d=tang(t);
-      const v = arriveFrom ? {x:T.x-arriveFrom.x, y:T.y-arriveFrom.y}
-                           : {x:departTo.x-T.x,   y:departTo.y-T.y};
-      if(v.x*d.x+v.y*d.y > 0) return t;
-    }
-    return null;
-  };
-  const a=pick(ti, A, null), b=pick(to, null, B);
-  if(a===null||b===null) return null;
-  let sweep = cw ? (b-a) : (a-b);
-  sweep=((sweep%TAU)+TAU)%TAU;
-  return {in:pt(a), out:pt(b), sweep:sweep,
-          big:sweep>Math.PI?1:0, cw:cw?1:0};
-}
 
 /* A polyline with its corners eased, so a tack reads as a boat turning
    rather than a diagram bending. Screen space, and the radius is capped
    by the shorter of the two boards it sits between. */
-function roundPath(P, r){
-  if(P.length<3) return 'M'+P.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join('L');
-  let o='M'+P[0].x.toFixed(1)+' '+P[0].y.toFixed(1);
-  for(let i=1;i<P.length-1;i++){
-    const a=P[i-1], c=P[i], b=P[i+1];
-    const d1=Math.hypot(c.x-a.x,c.y-a.y), d2=Math.hypot(b.x-c.x,b.y-c.y);
-    const q=Math.min(r, d1/3, d2/3);
-    const p1={x:c.x+(a.x-c.x)/d1*q, y:c.y+(a.y-c.y)/d1*q};
-    const p2={x:c.x+(b.x-c.x)/d2*q, y:c.y+(b.y-c.y)/d2*q};
-    o+='L'+p1.x.toFixed(1)+' '+p1.y.toFixed(1)
-      +'Q'+c.x.toFixed(1)+' '+c.y.toFixed(1)+' '+p2.x.toFixed(1)+' '+p2.y.toFixed(1);
-  }
-  const L=P[P.length-1];
-  return o+'L'+L.x.toFixed(1)+' '+L.y.toFixed(1);
-}
 
-const CP={W:640, H:548, PAD:56, MIN:80, BAR:56};
-/* MIN: metres, the closest it zooms. BAR: the strip the scale keeps. */
-function prevPts(){
+/* ---- the card ---------------------------------------------------------
+   The club's own picture, drawn with our own hands: the satellite
+   imagery it uses, its red and green roundings, its white route on a
+   dark casing, its yellow dashed line, its numbered badges and its
+   legend. LMSA.route() above does the sailing; this does the ink. */
+const CP={W:640, H:548, BAR:34, PAD:0.18};   /* PAD: the club's fitBounds pad */
+const CP_PORT='#D7263D', CP_STBD='#11945A', CP_NAVY='#1C2B5E';
+const CP_CASE='#0b1530', CP_LINE='#FFC53D';
+const CP_PTS=16;                              /* the badge's type size */
+function prevInfo(){
   const E=lineEnds();
-  const xy=(la,lo)=>toXY(la,lo,E.pin.lat,E.pin.lon);
-  const pin=xy(E.pin.lat,E.pin.lon), boat=xy(E.boat.lat,E.boat.lon);
-  const seq=[];
-  COURSE.marks.forEach((id,i)=>{ const m=markOf(id);
-    if(m) seq.push({i:i, id:id, m:m, p:xy(m.lat,m.lon)}); });
-  const la=get('pos.lat'), lo=get('pos.lon');
-  const me=(la===null||lo===null)?null:xy(la,lo);
-  /* The line's middle is where a leg starts and where it comes home,
-     which is how the strip reads it too. */
-  const mid={x:(pin.x+boat.x)/2, y:(pin.y+boat.y)/2};
-  const midLL={lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2};
-  return {E:E, pin:pin, boat:boat, seq:seq, me:me, mid:mid, midLL:midLL};
+  const ENDS=[{lat:E.pin.lat, lon:E.pin.lon}, {lat:E.boat.lat, lon:E.boat.lon}];
+  const M={line:{lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2,
+                 name:'START LINE'}};
+  const stops=[];
+  COURSE.marks.forEach((id,i)=>{
+    const m=markOf(id); if(!m) return;
+    M[id]={lat:m.lat, lon:m.lon, name:m.hdr};
+    stops.push({id:id, side: markSide(i)==='P' ? 'p' : 's'});
+  });
+  /* The club's sequence starts and finishes on the line, and so does
+     ours - that is what the strip has always said, FLAG-BALL at both
+     ends of it. */
+  const seq = stops.length ? [{id:'line', side:null}]
+                 .concat(stops, [{id:'line', side:null}]) : [];
+  const w=windNow();
+  const wind = w ? {dir:w.twd, kn:Math.round(w.tws), src:w.src} : null;
+  const info = seq.length>1
+    ? LMSA.route(seq, wind, M, ENDS, MARKS.filter(m=>isFinite(m.lat))) : null;
+  return {E:E, ENDS:ENDS, M:M, seq:seq, stops:stops, wind:wind, info:info};
 }
 function prevDraw(){
-  const D=prevPts(), W=CP.W, H=CP.H;
-  /* The route first, boards and all, because a layline runs well
-     outside the box the buoys make and a tack drawn off the edge of the
-     card is a tack nobody sees. Metres here; the fit comes after. */
-  const route=[D.mid].concat(D.seq.map(s=>s.p)).concat(D.seq.length?[D.mid]:[]);
-  const w=windNow();
-  const board=[];
-  for(let i=1;i<route.length;i++)
-    board.push(w ? tackBoards(route[i-1],route[i],w) : null);
-  const all=[D.pin,D.boat,D.mid].concat(D.seq.map(s=>s.p));
-  board.forEach(b=>{ if(b) b.pts.forEach(q=>all.push(q)); });
-  if(D.me) all.push(D.me);
-  const xs=all.map(p=>p.x), ys=all.map(p=>p.y);
-  const x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs);
-  const y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
-  /* One scale for both axes or the course comes out stretched, and a
-     stretched course is a lie about which leg is the long one. */
-  const span=Math.max(x1-x0, y1-y0, CP.MIN);
-  /* The foot of the box is the scale bar's, so the course is fitted
-     above it rather than into it - otherwise whichever mark lands down
-     there sits on the bar. */
-  const HF=H-CP.BAR;
-  const k=Math.min((W-2*CP.PAD)/span, (HF-2*CP.PAD)/span);
-  const mx=(x0+x1)/2, my=(y0+y1)/2;
-  const X=p=>W/2+(p.x-mx)*k, Y=p=>HF/2-(p.y-my)*k;     /* north up */
-  const f=n=>n.toFixed(1);
-  /* The clip lives in the drawing, not in the markup: prevDraw replaces
-     this SVG's innerHTML every time, and a <defs> written once in the
-     HTML is gone the first time it does. */
+  const W=CP.W, H=CP.H, HF=H-CP.BAR;
+  const D=prevInfo(), f=n=>n.toFixed(1);
+  /* ---- the fit, the club's: the marks in the course and the line's
+     two ends, padded by 0.18 of the box. ---- */
+  /* The club fits to the marks in the course and the line's two ends -
+     not to the drawn route, which runs on past the line at both ends
+     and out to a layline. Same here, or every course is drawn small to
+     make room for its own run-out. */
+  const pts=[];
+  if(D.stops.length) D.stops.forEach(s=>pts.push(D.M[s.id]));
+  else MARKS.forEach(m=>pts.push(m));
+  D.ENDS.forEach(e=>pts.push(e));
+  const mp=pts.map(p=>merc(p.lat,p.lon));
+  const x0=Math.min(...mp.map(q=>q.x)), x1=Math.max(...mp.map(q=>q.x));
+  const y0=Math.min(...mp.map(q=>q.y)), y1=Math.max(...mp.map(q=>q.y));
+  const spanX=Math.max(x1-x0, 1e-7), spanY=Math.max(y1-y0, 1e-7);
+  const k=Math.min(W/(spanX*(1+CP.PAD*2)), HF/(spanY*(1+CP.PAD*2)));
+  const v={mx:(x0+x1)/2, my:(y0+y1)/2, scale:k};
+  const X=ll=>W/2+(merc(ll.lat,ll.lon).x-v.mx)*k;
+  const Y=ll=>HF/2+(merc(ll.lat,ll.lon).y-v.my)*k;
+  const path=a=>'M'+a.map(p=>f(X(p))+' '+f(Y(p))).join('L');
+
+  /* The clip lives in the drawing, not the markup: prevDraw replaces
+     this SVG's innerHTML every time. */
   let o='<defs><clipPath id="cp-clip"><rect x="0" y="0" width="'+W
-    +'" height="'+(H-CP.BAR)+'" rx="22"></rect></clipPath></defs>';
+    +'" height="'+HF+'" rx="22"></rect></clipPath></defs>'
+    +'<g clip-path="url(#cp-clip)">';
 
   /* ---- the water it is all on ----
-     The club's own course sheet is a chart with the marks drawn on it,
-     and the reason is not decoration: RUM and GOSLING are two dots in a
-     field until the shoreline says which end of the lake they are at.
-     Same tiles as the track page, same cache, same pack on disk - so
-     water you have looked at once works out there with no signal.
-     The routing maths stays in metres off the pin; this is the one
-     place that needs Mercator, because a tile is a Mercator square. The
-     two agree to a fraction of a pixel over a lake. */
-  const lat0=D.E.pin.lat, lon0=D.E.pin.lon;
-  const clat=lat0+my/111320, clon=lon0+mx/(111320*Math.cos(lat0*Math.PI/180));
-  const mv={ mx:merc(clat,clon).x, my:merc(clat,clon).y,
-             scale:k*40075017*Math.cos(clat*Math.PI/180) };
-  let z=Math.round(Math.log2(mv.scale/256));
+     The same Esri World Imagery the club's map is built on, out of the
+     cache and the pack this panel already keeps for the track page. */
+  let z=Math.round(Math.log2(v.scale/256));
   if(CFG.basemap && isFinite(z)){
     z=Math.max(CFG.tileMinZ, Math.min(CFG.tileMaxZ, z));
-    const tags=tileTags(mv, z, W/2, HF/2, W/2, HF/2);
-    if(tags) o+='<g clip-path="url(#cp-clip)">'+tags
-      /* A satellite picture is the wrong contrast to draw a course on -
-         it is all mid-greens and mid-blues, which is where every line
-         here lives. The club's chart is pale for the same reason, so
-         this washes the imagery back until the course is the thing on
-         it rather than the thing lost in it. */
-      +`<rect x="0" y="0" width="${W}" height="${HF}" class="wash"></rect></g>`;
+    const tags=tileTags(v, z, W/2, HF/2, W/2, HF/2);
+    if(tags) o+=tags;
+  }
+  /* Night is the one place this parts company with the club: a
+     satellite picture at full brightness on a dark-adapted eye is an
+     hour of night vision gone. Day and dusk get it as they draw it. */
+  o+=`<rect class="wash" x="0" y="0" width="${W}" height="${HF}"></rect>`;
+
+  /* ---- the line ---- */
+  const ends=D.ENDS;
+  o+=`<path class="ln-case" d="${path(ends)}"></path>`
+    +`<path class="ln" d="${path(ends)}"></path>`;
+  ends.forEach(e=>{ o+=`<circle class="ln-end" cx="${f(X(e))}" cy="${f(Y(e))}" r="5.5"></circle>`; });
+
+  /* ---- every other mark the boat knows, small and quiet ---- */
+  const used={}; D.stops.forEach(s=>used[s.id]=1);
+  MARKS.forEach(m=>{ if(used[m.id]||m.id==='flag'||m.id==='ball') return;
+    o+=`<circle class="mk-off" cx="${f(X(m))}" cy="${f(Y(m))}" r="4.5"></circle>`; });
+
+  /* ---- the route, and the roundings on it ---- */
+  if(D.info){
+    o+=`<path class="rt-case" d="${path(D.info.line)}"></path>`
+      +`<path class="rt" d="${path(D.info.line)}"></path>`;
+    D.info.arcs.forEach(a=>{
+      o+=`<path class="rnd" data-s="${a.side==='p'?'P':'S'}" d="${path(a.pts)}"></path>`;
+    });
+    D.info.arrows.forEach(a=>{
+      o+=`<path class="arw" transform="translate(${f(X(a.at))} ${f(Y(a.at))}) `
+        +`rotate(${a.bearing.toFixed(1)})" d="M0 -8L5.4 6L0 2.6L-5.4 6Z"></path>`;
+    });
   }
 
-  /* the legs first, so everything else sits on top of them.
-     Each one is what the boat would sail, not the line between the two
-     buoys: a beat tacks once to the layline at this boat's own best
-     VMG angle for the breeze that is blowing, a run gybes the same way,
-     and a leg it can lay is drawn straight. Then every mark gets its
-     rounding - in on a tangent, round the side the course says, out on
-     the tangent that points at what is next.
-     With no wind to route by there is nothing to tack about, and then
-     the old problem comes back - a windward-leeward is two marks sailed
-     twice, and drawn straight the way home lies exactly on the way out.
-     So straight legs that share a pair of ends still bow apart. */
-  const key=(a,b)=>{ const r=p=>Math.round(X(p))+'_'+Math.round(Y(p));
-    const u=r(a), v=r(b); return u<v ? u+'|'+v : v+'|'+u; };
-  const seen={}, nth=[];
-  for(let i=1;i<route.length;i++){
-    const kk=board[i-1] ? 'sailed'+i : key(route[i-1],route[i]);
-    nth.push(seen[kk]=(seen[kk]===undefined?0:seen[kk]+1));
+  /* ---- one badge per mark: S and F for the line, numbers for the
+     roundings, and a mark rounded twice carries both. Red or green for
+     the side, navy when one buoy is rounded both ways. ---- */
+  if(D.seq.length){
+    const badge={}; let num=0;
+    D.seq.forEach((s,i)=>{
+      const b=badge[s.id]||(badge[s.id]={labels:[], sides:{}});
+      if(i===0) b.labels.push('S');
+      else if(i===D.seq.length-1) b.labels.push('F');
+      else { b.labels.push(String(++num)); if(s.side) b.sides[s.side]=1; }
+    });
+    Object.keys(badge).forEach(id=>{
+      const b=badge[id], sd=Object.keys(b.sides);
+      const col = sd.length===1 ? (sd[0]==='p'?CP_PORT:CP_STBD) : CP_NAVY;
+      const txt=b.labels.join('·');
+      const wd=Math.max(26, 13*txt.length+14), ht=26;
+      const cx=X(D.M[id]), cy=Y(D.M[id]);
+      o+=`<g transform="translate(${f(cx)} ${f(cy-16)})">`
+        +`<rect class="bg" x="${f(-wd/2)}" y="${f(-ht/2)}" width="${f(wd)}"`
+        +` height="${ht}" rx="13" fill="${col}"></rect>`
+        +`<text class="bt" x="0" y="6">`+esc(txt)+`</text></g>`;
+      o+=`<text class="nm" x="${f(cx)}" y="${f(cy+26)}">`
+        +esc((D.M[id].name||'').toUpperCase())+`</text>`;
+    });
   }
-  /* Every leg as a run of screen points first, so the roundings can
-     trim the ends of the two legs that meet at each mark before any of
-     it is drawn. */
-  const L=[];
-  for(let i=1;i<route.length;i++){
-    const brd=board[i-1];
-    L.push([{x:X(route[i-1]),y:Y(route[i-1])}]
-      .concat(brd?brd.pts.map(q=>({x:X(q),y:Y(q)})):[])
-      .concat([{x:X(route[i]),y:Y(route[i])}]));
-  }
-  /* The roundings. route[0] and the last are the line, which is crossed
-     and not rounded; everything between is a mark with a side. */
-  const arcs=[];
-  for(let v=1;v<route.length-1;v++){
-    const M={x:X(route[v]), y:Y(route[v])};
-    const inL=L[v-1], outL=L[v];
-    const A=inL[inL.length-2], B=outL[1];
-    /* Port: the mark stays to port all the way round, which is a turn
-       to port - counter-clockwise north-up, and clockwise on a screen
-       whose y counts downward. */
-    const cw = markSide(D.seq[v-1].i)==='P';
-    const rr = Math.min(ROUND_R,
-                        Math.hypot(A.x-M.x,A.y-M.y)/2.4,
-                        Math.hypot(B.x-M.x,B.y-M.y)/2.4);
-    const rd = rr>4 ? markRound(A,M,B,rr,cw) : null;
-    if(!rd) continue;
-    inL[inL.length-1]=rd.in;
-    outL[0]=rd.out;
-    arcs.push({d:`M${f(rd.in.x)} ${f(rd.in.y)}A${f(rr)} ${f(rr)} 0 `
-                +rd.big+' '+rd.cw+' '+f(rd.out.x)+' '+f(rd.out.y),
-               side:cw?'P':'S'});
-  }
-  let sailedNm=0;
-  for(let i=1;i<route.length;i++){
-    const a=route[i-1], b=route[i], n=nth[i-1], brd=board[i-1], P=L[i-1];
-    const ax=X(a), ay=Y(a), bx=X(b), by=Y(b);
-    const d=Math.hypot(bx-ax,by-ay);
-    if(brd){
-      /* tacked or gybed: the boards, with the turn eased */
-      /* the line between the buoys, ghosted under the boards: without
-         it a tacked leg is just a bent line, and with it you can see
-         what the bend is for */
-      o+=`<line class="rhumb" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"></line>`
-        +`<path class="leg" data-t="${brd.kind}" d="${roundPath(P,16)}"></path>`;
-      sailedNm+=brd.nm;
-      for(let j=1;j<P.length;j++) o+=legArrow(P[j-1],P[j],f);
-      continue;
-    }
-    const dup=seen[key(a,b)]>0;
-    /* the sagitta, in pixels: the control point goes twice as far */
-    const bow = dup ? (n%2?1:-1)*(13+13*Math.floor(n/2)) : 0;
-    /* Off the pair, not off the direction of travel: the way back has
-       the opposite perpendicular, and with the sign of the bow flipping
-       too the two cancelled and both legs came out on the same side of
-       the straight line - which was the whole thing this fixes. */
-    const fwd=key(a,b).indexOf(Math.round(ax)+'_'+Math.round(ay))===0 ? 1 : -1;
-    const px=d?-(by-ay)/d*fwd:0, py=d?(bx-ax)/d*fwd:0;
-    const S=P[0], E=P[P.length-1];            /* trimmed by the roundings */
-    const qx=(S.x+E.x)/2+px*bow*2, qy=(S.y+E.y)/2+py*bow*2;
-    o+= bow
-      ? `<path class="leg bow" data-t="rhumb" d="M${f(S.x)} ${f(S.y)}Q${f(qx)} ${f(qy)} ${f(E.x)} ${f(E.y)}"></path>`
-      : `<line class="leg" data-t="rhumb" x1="${f(S.x)}" y1="${f(S.y)}" x2="${f(E.x)}" y2="${f(E.y)}"></line>`;
-    sailedNm+=Math.hypot(b.x-a.x,b.y-a.y)/1852;
-    if(d<34) continue;
-    const ux=(bx-ax)/d, uy=(by-ay)/d;
-    const cx=(S.x+2*qx+E.x)/4, cy=(S.y+2*qy+E.y)/4, sz=9;  /* the curve at t=1/2 */
-    o+=`<path class="arw" d="M${f(cx+ux*sz)} ${f(cy+uy*sz)}`
-      +`L${f(cx-ux*sz+uy*sz*0.8)} ${f(cy-uy*sz-ux*sz*0.8)}`
-      +`L${f(cx-ux*sz-uy*sz*0.8)} ${f(cy-uy*sz+ux*sz*0.8)}Z"></path>`;
-  }
-  /* and the roundings over the legs they join */
-  arcs.forEach(a=>{ o+=`<path class="rnd" data-s="${a.side}" d="${a.d}"></path>`; });
+  o+='</g>';
 
-  /* the line, with its two ends named the way the strip names them */
-  o+=`<line class="line" x1="${f(X(D.pin))}" y1="${f(Y(D.pin))}"`
-    +` x2="${f(X(D.boat))}" y2="${f(Y(D.boat))}"></line>`;
-  /* The two ends are a boat-length apart and their names are not, so
-     each label steps outward along the line rather than sitting under
-     its own end on top of the other one. */
-  const dx=X(D.boat)-X(D.pin), dy=Y(D.boat)-Y(D.pin);
-  const dl=Math.hypot(dx,dy)||1, ox=dx/dl*34, oy=dy/dl*34;
-  [[D.pin,'pin',-1],[D.boat,'boat',1]].forEach(([p,which,sgn])=>{
-    const m=lineMark(which);
-    o+=`<circle class="end" cx="${f(X(p))}" cy="${f(Y(p))}" r="9"></circle>`
-      +`<text class="lbl" x="${f(X(p)+ox*sgn)}" y="${f(Y(p)+oy*sgn+24)}">`
-      +esc(((m&&m.hdr)||which).toUpperCase())+`</text>`;
-  });
+  /* ---- the legend, bottom left, exactly the club's two words ---- */
+  o+=`<g transform="translate(16 ${HF-16})">`
+    +`<rect class="key" x="0" y="-19" width="150" height="26" rx="13"></rect>`
+    +`<circle cx="16" cy="-6" r="5.5" fill="${CP_PORT}"></circle>`
+    +`<text class="kt" x="28" y="-1">PORT</text>`
+    +`<circle cx="84" cy="-6" r="5.5" fill="${CP_STBD}"></circle>`
+    +`<text class="kt" x="96" y="-1">STBD</text></g>`;
 
-  /* One circle per BUOY, not per rounding - the second would sit exactly
-     on the first. Same rule, and the same 1,3, as the chart. */
-  const at={};
-  D.seq.forEach(s=>{ (at[s.id]=at[s.id]||[]).push(s); });
-  Object.keys(at).forEach(id=>{
-    const g=at[id], p=g[0].p, ns=g.map(s=>s.i);
-    const on=ns.indexOf(COURSE.next)>=0, many=ns.length>1;
-    let j=ns.find(i=>i>=COURSE.next); if(j===undefined) j=ns[ns.length-1];
-    const r=many?23:18;
-    o+=`<circle class="mk${on?' on':''}" cx="${f(X(p))}" cy="${f(Y(p))}" r="${r}"></circle>`
-      +`<text class="n${on?' on':''}" x="${f(X(p))}" y="${f(Y(p)+7)}"`
-      +` font-size="${many?19:22}">${ns.map(i=>i+1).join(',')}</text>`
-      +`<text class="lbl" x="${f(X(p))}" y="${f(Y(p)-Math.max(r,ROUND_R)-12)}">`
-      +esc(g[0].m.hdr)+` <tspan fill="${markSide(j)==='P'?'var(--port)':'var(--stbd)'}">`
-      +markSide(j)+`</tspan></text>`;
-  });
-
-  if(D.me) o+=`<circle class="me" cx="${f(X(D.me))}" cy="${f(Y(D.me))}" r="9"></circle>`;
-
-  /* north, and how big the picture is. A course with no scale on it is
-     a diagram; with one it is a chart you can judge a beat from. */
-  o+=`<path class="rose" d="M600 26v46M600 26l-9 13M600 26l9 13"></path>`
-    +`<text class="lbl" x="600" y="96">N</text>`;
-  /* and the breeze the route was worked out in, blowing the way it
-     blows - tail upwind, head down - because an arrow that points at
-     where the wind came from is the one thing everyone reads backwards */
-  if(w){
-    const r=(w.twd+180)*Math.PI/180, ux=Math.sin(r), uy=-Math.cos(r);
-    const cx=52, cy=52, L=26;
-    o+=`<path class="wind" d="M${f(cx-ux*L)} ${f(cy-uy*L)}L${f(cx+ux*L)} ${f(cy+uy*L)}`
-      +`M${f(cx+ux*L)} ${f(cy+uy*L)}l${f(-ux*13-uy*9)} ${f(-uy*13+ux*9)}`
-      +`M${f(cx+ux*L)} ${f(cy+uy*L)}l${f(-ux*13+uy*9)} ${f(-uy*13-ux*9)}"></path>`
-      +`<text class="lbl" x="52" y="104">`
-      +String(Math.round(w.twd)).padStart(3,'0')+`°</text>`
-      +`<text class="lbl" x="52" y="126">`
-      +(w.guess ? 'WIND' : w.tws.toFixed(0)+' KT')+`</text>`;
-  } else {
-    o+=`<text class="lbl" x="52" y="46" text-anchor="start">NO WIND</text>`
-      +`<text class="lbl" x="52" y="68" text-anchor="start">RHUMB LINES</text>`;
+  /* ---- and the wind, top right, the way the club shows it: an arrow
+     lying along the wind, the speed, and the point it is from ---- */
+  if(D.wind){
+    o+=`<g transform="translate(${W-58} 24)">`
+      +`<rect class="key" x="-42" y="0" width="84" height="62" rx="16"></rect>`
+      +`<g transform="translate(0 20) rotate(${D.wind.dir.toFixed(0)})">`
+      +`<path class="wind" d="M0 -9v18M-6 3l6 6 6-6"></path></g>`
+      +`<text class="kt" x="0" y="44">`+D.wind.kn+` KN</text>`
+      +`<text class="kt sm" x="0" y="58">`
+      +(D.wind.src==='forecast'?'FORECAST':point(D.wind.dir))+`</text></g>`;
   }
-  const bar=niceBar(span, k, W-2*CP.PAD);
-  const by0=H-14;
-  o+=`<path class="rose" d="M40 ${by0}v-12M40 ${by0}h${f(bar.px)}M${f(40+bar.px)} ${by0}v-12"></path>`
-    +`<text class="lbl" x="${f(40+bar.px/2)}" y="${by0-20}">`+bar.txt+`</text>`;
   $('cp-svg').innerHTML=o;
 
-  /* the total, walked in the order it is sailed - and what it costs to
-     have to tack for it, which is the number a start-time sum wants */
-  let nm=0; const LL=[D.midLL].concat(D.seq.map(s=>({lat:s.m.lat, lon:s.m.lon})))
-    .concat(D.seq.length?[D.midLL]:[]);
-  for(let i=1;i<LL.length;i++) nm+=seaNm(LL[i-1].lat,LL[i-1].lon,LL[i].lat,LL[i].lon);
-  const legs=Math.max(0, LL.length-1);
-  const more = legs && sailedNm > nm*1.01;
-  $('cp-foot').textContent = legs
-    ? legs+(legs===1?' LEG · ':' LEGS · ')+nm.toFixed(2)+' NM'
-      +(more ? ' · '+sailedNm.toFixed(2)+' SAILED' : '')
-    : 'NO COURSE SET · THE LINE IS THE WHOLE OF IT';
-}
-/* One arrowhead at the middle of a board, if the board is long enough
-   to have a middle worth pointing at. */
-function legArrow(a,b,f){
-  const d=Math.hypot(b.x-a.x,b.y-a.y); if(d<44) return '';
-  const ux=(b.x-a.x)/d, uy=(b.y-a.y)/d;
-  const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2, s=9;
-  return `<path class="arw" d="M${f(cx+ux*s)} ${f(cy+uy*s)}`
-    +`L${f(cx-ux*s+uy*s*0.8)} ${f(cy-uy*s-ux*s*0.8)}`
-    +`L${f(cx-ux*s-uy*s*0.8)} ${f(cy-uy*s+ux*s*0.8)}Z"></path>`;
+  /* ---- and what it comes to, in the club's words ---- */
+  if(!D.info){ $('cp-foot').textContent='NO COURSE SET · THE LINE IS THE WHOLE OF IT'; return; }
+  const kinds=D.info.kinds, bits=[];
+  if(kinds.beat) bits.push(kinds.beat===1?'ONE BEAT':kinds.beat+' BEATS');
+  if(kinds.run)  bits.push(kinds.run===1 ?'ONE RUN' :kinds.run+' RUNS');
+  $('cp-foot').textContent='ABOUT '+D.info.nm.toFixed(1)+' NM SAILED'
+    +(bits.length?' · '+bits.join(' AND '):(D.wind?' · ALL REACHING':''));
 }
 
-/* A bar of a round distance, as close to a third of the picture as a
-   round one gets. Metres while a course is small enough to think about
-   in metres, and miles once it is not - the foot of this card is in
-   miles, and two units on one picture is a card that has to be read
-   twice. */
-const NM_M=1852;
-function niceBar(span, k, wide){
-  const want=span/3;
-  const steps=[[25,'25 M'],[50,'50 M'],[100,'100 M'],[200,'200 M'],[400,'400 M'],
-               [NM_M/4,'¼ NM'],[NM_M/2,'½ NM'],[NM_M,'1 NM'],[NM_M*2,'2 NM'],
-               [NM_M*5,'5 NM'],[NM_M*10,'10 NM']];
-  let pick=steps[steps.length-1];
-  for(const v of steps) if(v[0]>=want){ pick=v; break; }
-  return {px:Math.min(pick[0]*k, wide), txt:pick[1]};
-}
 const prevOn=()=>$('cprev').classList.contains('on');
 function prevOpen(){ prevDraw(); $('cprev').classList.add('on'); }
 function prevClose(){ $('cprev').classList.remove('on'); }

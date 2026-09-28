@@ -568,7 +568,7 @@ strip wraps, and a three-mark course is two rows of chips at 151 px
 rather than one at 72. What is bought for that is the route reading as a
 route: you start on the line, you round these, you come home to it.
 
-### The course, drawn
+### The course, drawn — the club's own picture
 
 `PREVIEW`, next to `CLEAR` in the `ROUTE` heading, puts the course on a
 card over the sheet.
@@ -576,126 +576,61 @@ card over the sheet.
 The strip says what the course **is**, in order, which is the thing you
 read at the wheel. What it cannot say is what the course *looks like* —
 which of the two marks off the point is the third one, whether leg two
-is a beat or a reach, whether the committee has sent you across the lake
-and back or round the corner. That was the one thing the map was still
-good for from in here, and the map is an app away now.
+is a beat or a reach.
 
-So this draws it, from the same numbers the dial steers to — `lineEnds()`
-and `markOf()` — which means a mark that is wrong on the water is wrong
-in the same place here. That is most of what this is for.
+**This is not our drawing.** LMSA's member app already draws exactly
+that on its Race Day page — the course over satellite imagery, the
+roundings in red and green — and we sync the course from that same site.
+So the code is lifted from `lmsa.pages.dev/assets/race.js` and kept in
+one block, `LMSA`, with its own little vector helpers rather than folded
+into this file's: the point of copying it is that it can be compared
+with theirs line for line when either changes. What differs is only what
+it is drawn *with* — theirs is Leaflet on a web page, this is one SVG on
+a round panel.
 
-North up, metres east and north off the pin, no chart: the shape of the
-course is the question, and a satellite tile is 200 KB of answer to a
-different one. One scale on both axes, or the course comes out stretched
-and a stretched course lies about which leg is the long one. It never
-zooms closer than 80 m of span, so a line with no course set does not
-fill the card with two buoys a boat-length apart.
+What comes across whole:
 
-On it:
+| | |
+|---|---|
+| the imagery | Esri World Imagery, the same tiles the track page caches |
+| `#D7263D` / `#11945A` | the club's nautical red and green, for a rounding to port and to starboard |
+| `#1C2B5E` | navy, for a buoy rounded both ways — neither colour is right |
+| `#0b1530` + white | the route: a dark casing at weight 7, white at weight 3 over it |
+| `#FFC53D` | the start line, dashed `7 6`, with a disc at each end |
+| `R = 110 m` | the rounding circle, in metres of real water |
+| `LEAD 160`, `CROSS_OFF 85`, `APPROACH 220` | how far the route runs through the line, off its middle, and out before the first leg |
+| `CLOSE 45`, `RUN 150` | closer than 45° to the wind is beaten up in tacks; past 150° is run down in gybes; between, a reach that sags to leeward |
+| `boards()`, `chaikin()` | the tacks, and the smoothing that makes a tack a turn rather than a kink |
+| the shoreline | Lake Monroe from OpenStreetMap, ~19 KB, so a route that would cross land is put round it |
 
-- **the line**, dashed between its two ends, each end named the way the
-  strip names it — `FLAG`, `BALL`, or whatever you pinged. The labels
-  step outward along the line, because the two ends are a boat-length
-  apart and their names are not.
-- **the marks**, one circle per *buoy* and not per rounding — the second
-  would sit exactly on the first — carrying every number that buoy has
-  in the course, `1,3`, and the side of the rounding still to come in
-  port red or starboard green. The one being sailed to is filled in, the
-  same as the chip in the strip.
-- **the rounding**, drawn as an arc about each mark in the colour of the
-  side it is left on. See below.
-- **the water**, underneath all of it: the same satellite tiles the
-  track page uses, from the same cache and the same on-disk pack. The
-  club's own course sheet is a chart with the marks drawn on it, and the
-  reason is not decoration — `RUM` and `GOSLING` are two dots in a field
-  until a shoreline says which end of the lake they are at. With no
-  tiles cached and no signal there is simply no imagery, which is what
-  the track page does too.
-- **the legs**, in the order they are sailed — and each one is what the
-  boat would actually sail, not the line between the two buoys. See
-  below. The line's midpoint is where the first leg starts and where the
-  last comes home, which is how the strip reads it too.
-- **the boat**, if there is a fix, as the same port-red dot the chart
-  uses for it.
-- **north**, and a **scale bar** — in metres while the course is small
-  enough to think about in metres, in miles once it is not, because the
-  foot of the card is in miles and two units on one picture is a card
-  you have to read twice. The bar keeps the bottom 56 px to itself, so
-  whichever mark lands down there does not sit on it.
-- **the whole thing measured** at the foot: `4 LEGS · 1.82 NM`, walked
-  in the order it is sailed. With no course set it says `NO COURSE SET ·
-  THE LINE IS THE WHOLE OF IT`, which is true.
+The badges are the club's too: `S` and `F` on the line, numbers on the
+roundings, a buoy rounded twice carrying `1·3`, coloured by side. So is
+the legend bottom-left, the wind box top-right, and the sentence at the
+foot — `ABOUT 4.2 NM SAILED · ONE BEAT AND ONE RUN`.
 
-#### It rounds the marks
+Three deliberate departures, and only three:
 
-A course does not go **through** a buoy, and which way round it goes is
-the question the whole leg is sailed about. So the route comes in on a
-tangent, goes round an arc on the side the strip says, and leaves on the
-tangent that points at whatever is next — the shape the club draws on its
-own course sheet, and the shape you actually sail.
+- **Names are drawn on**, where the club uses hover tooltips. There is
+  no hover on a touch panel.
+- **Night dims the imagery.** A satellite picture at full brightness on
+  a dark-adapted eye is an hour of night vision gone, and that is the
+  one thing this panel is not allowed to spend. Day and dusk get it as
+  the club draws it.
+- **The wind can come from the forecast.** See below.
 
-Leave a mark to port and it stays on your left the whole way round,
-which is a turn to port: counter-clockwise north-up, and *clockwise* on
-a screen whose y counts downward, which is the sign error waiting for
-anyone who edits this. The arc takes the port red or the starboard
-green, the same two colours the chips and the chart use.
-
-Of the two tangents from a point onto a circle, only one is usable:
-arriving, the boat must reach the circle *already moving the way the arc
-goes*; leaving, it must set off that way. The other of each pair grazes
-the mark on the wrong side, and picking by "smallest sweep" instead —
-which is how this was written first — produced a three-pixel nick rather
-than a rounding.
-
-The radius is **30 px, not metres**. Thirty metres of rounding across two
-miles of lake is a pixel and a half; this is a diagram of a rounding, not
-a survey of one. It has to stand outside the mark's own 18 px circle or
-it is hidden underneath it, which is also how it shipped the first time.
-It is capped at a fraction of the two legs it sits between, so a mark
-close to the line does not get an arc bigger than the leg reaching it.
-
-#### It tacks where you would tack
-
-A beat drawn straight is a leg the boat cannot sail. The angle it *can*
-sail comes out of the polars this file already carries: for the breeze
-blowing now, `vmgAngle()` walks the table for the TWA where
-`speed × cos(TWA)` is greatest — the best VMG angle, and the thing a
-router would pick. On the club's Capri 22 in 9 knots that comes out
-around **45° upwind and 154° down**.
-
-So each leg is checked against the wind. If the rhumb line is inside the
-upwind angle it becomes a **tack**: one board out, one tack, lay the
-mark — the whole of the no-shift answer — with the **long tack first**,
-because that is what you do when you do not know better. Outside the
-downwind angle it becomes a **gybe**, the same solve at the running
-angle. Anything in between is drawn straight, because the boat can lay
-it. The turn is eased rather than cornered, so a tack reads as a boat
-turning and not as a diagram bending.
-
-Underneath a routed leg the rhumb is **ghosted in as a dashed line**:
-without it a tacked leg is just a bent line, and with it you can see
-what the bend is for. The wind itself is drawn top-left, in the warn
-colour because it is the one thing on the card that is not the course —
-an arrow blowing the way the wind blows, tail upwind, since an arrow
-pointing at where the wind came *from* is the thing everyone reads
-backwards. Under it, `023°` and `9 KT`.
-
-The foot then carries both numbers: `4 LEGS · 4.20 NM · 4.91 SAILED`.
-The second is the one a start-time sum wants, and it only appears when
-the two differ by more than a percent.
-
-**The fit takes the laylines in.** A layline runs well outside the box
-the buoys make, so the route is worked out in metres *before* the
-picture is scaled — otherwise the tack happens off the edge of the card,
-which is the one place it is no use.
+**Keeping the route on the water** is `keepOnWater()`: the drawn line is
+densified to 10 m, any stretch on land is replaced by an A\* path over a
+30 m grid of the lake — shrunk by a cell so detours keep off the bank —
+and the result is smoothed only if smoothing keeps it wet. The grid is
+built once, by scanline over every shoreline ring, islands as holes.
 
 #### And the wind can come off the forecast
 
 The masthead is the truth and always wins. But the course is set at the
 dock, often before the instruments are awake and always before the boat
-has sailed anywhere, and a preview that says `NO WIND` is a preview that
-cannot route. So when there is no true wind aboard and no
-heading-plus-angle to make one from, the card asks **Open-Meteo**:
+has sailed anywhere, and a preview that cannot route is no preview. So
+when there is no true wind aboard and no heading-plus-angle to make one
+from, the card asks **Open-Meteo**:
 
 ```
 api.open-meteo.com/v1/forecast?latitude=…&longitude=…
@@ -706,30 +641,20 @@ No key, no login, no account. `wind_direction_10m` is the direction the
 wind is **from**, in degrees, which is TWD as it stands. One request per
 quarter hour — Open-Meteo's own step — cached in `localStorage`, because
 the first thing a Wednesday does is reload the page. It fails quietly:
-no signal at the dock is the normal case, not an error.
+no signal at the dock is the normal case, not an error. The wind box
+says `FORECAST` under the speed when that is where the number came from.
 
-With neither instrument nor forecast there is nothing to route by: every
-leg is a rhumb line, the card says `NO WIND · RHUMB LINES` where the
-arrow would be, and the foot drops the sailed distance rather than
-claiming one.
+With neither instrument nor forecast, `legRoute()` falls back the way the
+club's does — no tacks, and each leg bowed to alternate sides so a
+windward-leeward is two lines rather than one drawn twice.
 
-**Legs that share a pair of ends bow apart.** A windward-leeward is two
-marks sailed twice, and drawn straight the way back lies exactly on the
-way out: one line, one arrow, and no way to tell a four-leg course from
-a two. They curve to opposite sides instead, the way a sailing
-instruction draws them, 13 px of sagitta and another 13 for each further
-pair. The bow comes off the *pair*, not off the direction of travel —
-the way back has the opposite perpendicular, and with the sign of the
-bow flipping too the two cancelled and both legs came out on the same
-side, which is the bug this is written to stay fixed. Routed legs need
-none of this — a beat and a run between the same two buoys are already
-two different shapes — so only straight ones bow.
+**What we gave up to match them.** This panel carries the boat's own
+polars, and the best-VMG angles they give for a Capri 22 in nine knots
+are 45° and 154° — within four degrees of the club's fixed 45 and 150.
+Using the polars instead is a two-line change, and the reason not to is
+that the picture would stop being the same picture.
 
-The scrim is the way out, and it dims the app's ✕ along with the sheet
-on purpose — the same as the start pad and the radio picker. A cross you
-can see but cannot press is worse than no cross.
-
-### The four settings
+### The four settings### The four settings
 
 **Everything about the evening that is not the course itself is one row
 under the heading**, drawn the way the dial's readings are — a small label

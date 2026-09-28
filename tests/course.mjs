@@ -629,133 +629,134 @@ t.ok(fired.byHand, 'and starting the countdown by hand disarms it');
 await p.evaluate(()=>renderCourse());
 await seed(); await p.waitForTimeout(300);
 
-t.head('and the course, drawn');
+t.head("and the course, drawn - the club's own picture");
 /* The strip says what the course IS, in order. It cannot say what it
-   looks like - which of the two marks off the point is the third one,
-   whether leg two is a beat or a reach. This is that, off the same
-   positions the dial steers to. */
+   looks like. The club's member app already draws that on its Race Day
+   page, over satellite imagery, with the roundings in red and green -
+   and since we sync the course from that same site, this is the same
+   picture drawn from the same code. */
 await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
   COURSE.side=['P','S','P']; courseSave(); renderCourse(); });
 await p.waitForTimeout(250);
 const prev=()=>p.evaluate(()=>{
-  const c=$('.cp'?'cp-svg':'cp-svg'), card=document.querySelector('.cp'),
+  const c=$('cp-svg'), card=document.querySelector('.cp'),
         q=card.getBoundingClientRect();
-  const d=[...c.querySelectorAll('.leg')].map(e=>e.getAttribute('d')||'straight');
   return {on:$('cprev').classList.contains('on'),
-          legs:c.querySelectorAll('.leg').length,
-          kind:[...c.querySelectorAll('.leg')].map(e=>e.dataset.t).join(),
+          route:c.querySelectorAll('.rt').length,
+          casing:c.querySelectorAll('.rt-case').length,
+          arcs:[...c.querySelectorAll('.rnd')].map(e=>e.dataset.s).join(),
           arrows:c.querySelectorAll('.arw').length,
-          marks:c.querySelectorAll('.mk').length,
-          lit:c.querySelectorAll('.mk.on').length,
-          nums:[...c.querySelectorAll('text.n')].map(e=>e.textContent),
-          foot:$('cp-foot').textContent, bowed:c.querySelectorAll('.leg.bow').length,
-          ghosts:c.querySelectorAll('.rhumb').length,
+          line:c.querySelectorAll('.ln').length,
+          ends:c.querySelectorAll('.ln-end').length,
+          off:c.querySelectorAll('.mk-off').length,
+          badges:[...c.querySelectorAll('.bt')].map(e=>e.textContent).join('|'),
+          names:[...c.querySelectorAll('.nm')].map(e=>e.textContent).join('|'),
+          keys:[...c.querySelectorAll('.kt')].map(e=>e.textContent).join('|'),
           wind:c.querySelectorAll('.wind').length,
-          me:c.querySelectorAll('.me').length,
-          paths:d.filter(x=>x!=='straight').length,
-          scrim:getComputedStyle($('cprev')).backgroundColor,
+          imgs:c.querySelectorAll('image').length,
+          foot:$('cp-foot').textContent,
           out:[[q.left,q.top],[q.right,q.top],[q.left,q.bottom],[q.right,q.bottom]]
             .filter(([x,y])=>Math.hypot(x-540,y-540)>534).length}; });
-await tap('#course-prev'); await p.waitForTimeout(400);
+await tap('#course-prev'); await p.waitForTimeout(500);
 let V=await prev();
 t.ok(V.on, 'PREVIEW puts it up');
-t.ok(/rgba\(0, 0, 0/.test(V.scrim), 'on a scrim, because what is behind it is '
-     +'the thing it is a picture of', V.scrim);
 t.ok(V.out===0, 'and every corner of the card is on the glass');
-t.ok(V.legs===4 && V.arrows>=4,
-     'three marks is four legs - out to each and home to the line - and '
-     +'every board of every one says which way round it goes',
-     V.legs+' legs, '+V.arrows+' arrows');
-t.ok(V.marks===3 && V.nums.join()==='1,2,3', 'the marks numbered in the '
-     +'order they are rounded', V.nums.join());
-t.ok(V.lit===1, 'with the one being sailed to filled in, the same as the strip');
-t.ok(/3 LEGS|4 LEGS/.test(V.foot) && /\d\.\d\d NM/.test(V.foot),
-     'and the whole course measured at the foot', V.foot);
-
-t.head('the legs are what the boat would sail, not the line between buoys');
-/* A beat drawn straight is a leg the boat cannot sail. The angle it CAN
-   sail comes out of the polars this file already carries - the TWA
-   where speed x cos(TWA) is greatest - so the preview tacks where the
-   boat would, at this boat's angle, in the breeze blowing now. */
-t.ok(V.wind===1, 'the breeze the route was worked out in is on the card');
-t.ok(/tack|gybe/.test(V.kind),
-     'and a leg it cannot lay is tacked or gybed rather than drawn '
-     +'through the wind', V.kind);
-t.ok(V.ghosts>=1, 'with the rhumb it cannot sail ghosted underneath, so '
-     +'the bend has something to be a bend away from', String(V.ghosts));
-t.ok(/SAILED/.test(V.foot), 'and the foot says what it costs to have to '
-     +'tack for it, beside the direct distance', V.foot);
+t.ok(V.route===1 && V.casing===1,
+     'the route is one line, white over a dark casing, the way the club '
+     +'draws it', V.route+'/'+V.casing);
+t.ok(V.arcs==='P,S,P', 'a rounding at every mark, in the colour of the side '
+     +'it is left on - and the chips said P,S,P', V.arcs);
 t.ok(await p.evaluate(()=>{
-       const b=$('cp-svg').getBoundingClientRect(), o=[];
-       document.querySelectorAll('#cp-svg .leg').forEach(e=>{
-         const q=e.getBBox();
-         if(q.x<-1||q.y<-1||q.x+q.width>641||q.y+q.height>549) o.push(e.dataset.t); });
-       return o.length===0; }),
-     'a layline runs well outside the box the buoys make, so the fit '
-     +'takes the tacks in too rather than drawing them off the card');
-const angles=await p.evaluate(()=>{ const w=windNow();
-  return {up:vmgAngle(w.tws,true), dn:vmgAngle(w.tws,false)}; });
-t.ok(angles.up>=30 && angles.up<=55 && angles.dn>=120 && angles.dn<=175,
-     'and the angles come off the polars, not out of the air',
-     JSON.stringify(angles));
+       const c=[...document.querySelectorAll('#cp-svg .rnd')]
+         .map(e=>getComputedStyle(e).stroke);
+       return c[0]==='rgb(215, 38, 61)' && c[1]==='rgb(17, 148, 90)'; }),
+     'in the club\'s own two colours, hex for hex - #D7263D and #11945A, '
+     +'not the panel\'s port and starboard, which move with the theme',
+     await p.evaluate(()=>[...document.querySelectorAll('#cp-svg .rnd')]
+       .map(e=>getComputedStyle(e).stroke).join(' ')));
+t.ok(V.line===1 && V.ends===2,
+     'the start line dashed between its two ends', V.line+'/'+V.ends);
+t.ok(V.badges==='S·F|1|2|3',
+     'one badge per mark, numbered in the order they are rounded, and the '
+     +'line carrying both S and F because the race starts and finishes on it',
+     V.badges);
+t.ok(/RUM/.test(V.names) && /GOSLING/.test(V.names),
+     'each named, because a dot on a lake is not a mark yet', V.names);
+t.ok(V.keys.indexOf('PORT')>=0 && V.keys.indexOf('STBD')>=0,
+     'with the club\'s legend saying which colour is which', V.keys);
+t.ok(V.arrows>=3, 'and an arrow on each leg and each crossing, so the way '
+     +'round is never in doubt', String(V.arrows));
+t.ok(V.off>0, 'every other mark the boat knows is on it too, small and quiet '
+     +'- the club draws those as well', String(V.off));
 
-t.head('and it rounds the marks, on the side the course says');
-/* A course does not go through a buoy, and which way round is the
-   question the whole leg is sailed about. Leave it to port and the mark
-   stays on your left all the way round, which is a turn to port. */
-let R=await p.evaluate(()=>[...document.querySelectorAll('#cp-svg .rnd')]
-  .map(e=>({s:e.dataset.s, d:e.getAttribute('d')})));
-t.ok(R.length===3, 'one rounding per mark in the course', String(R.length));
-t.ok(R.map(r=>r.s).join()==='P,S,P',
-     'each on the side the strip says - and the chips said P,S,P',
-     R.map(r=>r.s).join());
-t.ok(R.every(r=>/^M[\d.\- ]+A[\d.]+ [\d.]+ 0 [01] [01] /.test(r.d)),
-     'drawn as an arc about the mark, in on a tangent and out on one',
-     R[0]&&R[0].d.slice(0,46));
-/* port rounds one way and starboard the other, and the sweep flag is
-   the only thing in the path that says which */
-const sweeps=R.map(r=>r.d.split(' ').slice(-3)[0]);
-t.ok(sweeps[0]===sweeps[2] && sweeps[1]!==sweeps[0],
-     'the two ports turn one way and the starboard the other',
-     R.map((r,i)=>r.s+sweeps[i]).join(' '));
+t.head('what the route does with the wind');
+/* Copied whole from the club: a leg inside 45 degrees of the wind is
+   beaten up in tacks, one past 150 is run down in gybes, and anything
+   else is a reach that sags to leeward. */
+t.ok(V.wind===1, 'the wind it was worked out in is on the card');
+t.ok(/ABOUT [\d.]+ NM SAILED/.test(V.foot),
+     'and the foot is the club\'s sentence: about so far, sailed', V.foot);
+t.ok(/BEAT|RUN|REACHING/.test(V.foot),
+     'with what kind of legs they are', V.foot);
+const kinds=await p.evaluate(()=>{
+  const w=windNow();
+  const info=prevInfo().info;
+  return {kinds:info.kinds, nm:info.nm, twd:Math.round(w.twd)}; });
+t.ok(kinds.nm>0 && (kinds.kinds.beat||kinds.kinds.run),
+     'a course round this lake in this breeze is not all reaching',
+     JSON.stringify(kinds));
+
+t.head('and it stays on the water');
+/* The club carries Lake Monroe's shoreline for one job: a drawn route
+   that crosses land is put back on the lake. */
+t.ok(await p.evaluate(()=>typeof LMSA_LAKE!=='undefined'
+       && LMSA_LAKE.outer.length>500),
+     'the shoreline came with it, from OpenStreetMap by way of the club',
+     await p.evaluate(()=>typeof LMSA_LAKE!=='undefined'
+       ? LMSA_LAKE.outer.length+' points' : 'missing'));
 t.ok(await p.evaluate(()=>{
-       const c=[...document.querySelectorAll('#cp-svg .mk')]
-         .map(e=>+e.getAttribute('r'));
-       return Math.max(...c) < 30; }),
-     'and the arc stands outside the mark\'s own circle, or it would be '
-     +'hidden under it - which is how it shipped the first time');
+       /* a course across the lake and back, whose rhumb line clips the
+          south shore near the marina */
+       COURSE.marks=['cb8','cb2']; COURSE.side=['P','P']; COURSE.next=0;
+       courseSave(); renderCourse();
+       const info=prevInfo().info;
+       if(!info) return true;
+       const ring=LMSA_LAKE.outer;
+       const inside=(la,lo)=>{ let c=false;
+         for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+           if((ring[i][0]>la)!==(ring[j][0]>la) &&
+              lo<(ring[j][1]-ring[i][1])*(la-ring[i][0])/(ring[j][0]-ring[i][0])+ring[i][1]) c=!c; }
+         return c; };
+       /* the run-out past the line is allowed to leave the lake; the
+          sailed part is not */
+       return info.line.slice(4,-4).every(p=>inside(p.lat,p.lon)); }),
+     'and a route that would have crossed land is put round it');
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
+  COURSE.side=['P','S','P']; courseSave(); renderCourse(); prevDraw(); });
+await p.waitForTimeout(250);
 
 t.head('on the water it is drawn on');
-/* The club draws its course on a chart, and not for decoration: RUM and
-   GOSLING are two dots in a field until a shoreline says which end of
-   the lake they are at. Same tiles as the track page, same cache - and
-   the same silence when there are neither. */
+/* Same imagery the club's map is built on - Esri World Imagery - out of
+   the cache and the pack this panel already keeps for the track page. */
 await p.route('https://server.arcgisonline.com/**', r=>r.fulfill({status:200,
   contentType:'image/svg+xml',
   body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">'
       +'<rect width="256" height="256" fill="#2f4f3a"/></svg>'}));
-/* Earlier sections drew the map with no tile server at all, which sets
-   netBad and stops the page asking again for a while. */
 await p.evaluate(()=>{ netBad=0; prevDraw(); }); await p.waitForTimeout(2200);
 const map=await p.evaluate(()=>({
   imgs:document.querySelectorAll('#cp-svg image').length,
   clipped:!!document.querySelector('#cp-svg g[clip-path]'),
-  defs:!!document.getElementById('cp-clip'),
-  wash:document.querySelectorAll('#cp-svg .wash').length,
-  order:[...$('cp-svg').children].map(e=>e.tagName).slice(0,3).join()}));
+  defs:!!document.getElementById('cp-clip')}));
 t.ok(map.imgs>0, 'the water is under it', String(map.imgs));
 t.ok(map.defs && map.clipped, 'clipped to the card, not spilling over the '
-     +'scale bar and out of the corners - and the clip is written with the '
+     +'foot and out of the corners - and the clip is written with the '
      +'drawing, because innerHTML eats a defs put in the markup once');
-t.ok(map.wash===1, 'with the imagery washed back, because a satellite '
-     +'picture is all mid-greens and mid-blues and so is every line here');
 await p.unroute('https://server.arcgisonline.com/**');
 
 t.head('and the forecast, for a course set before the instruments are awake');
 /* The masthead is the truth and always wins. But the course is set at
-   the dock, and a preview that says NO WIND is a preview that cannot
-   route. Open-Meteo answers without a key, in degrees the wind is FROM,
-   which is TWD as it stands. */
+   the dock, and a preview that cannot route is no preview. Open-Meteo
+   answers without a key, in degrees the wind is FROM, which is TWD. */
 await p.route('https://api.open-meteo.com/**', r=>r.fulfill({status:200,
   contentType:'application/json',
   body:JSON.stringify({current:{wind_speed_10m:11.5, wind_direction_10m:217}})}));
@@ -775,58 +776,43 @@ t.ok(wx.src==='boat', 'the masthead still wins while the boat has one - a '
 const only=await p.evaluate(()=>{
   const k='environment.wind.directionTrue', a='environment.wind.angleTrueWater';
   const keep={}; [k,a,'navigation.courseOverGroundTrue'].forEach(x=>{ keep[x]=S[x]; delete S[x]; });
-  const w=windNow();
+  const w=windNow(), lit=prevInfo();
   Object.keys(keep).forEach(x=>{ if(keep[x]) S[x]=keep[x]; });
-  return w;
+  return {src:w&&w.src, twd:w&&Math.round(w.twd), said:lit.wind&&lit.wind.src};
 });
-t.ok(only && only.src==='forecast' && Math.round(only.twd)===217,
+t.ok(only.src==='forecast' && only.twd===217,
      'and with nothing aboard to ask, the route is worked out off it',
      JSON.stringify(only));
 await p.unroute('https://api.open-meteo.com/**');
 await p.evaluate(()=>{ WX=null; localStorage.removeItem('wx'); });
 
-t.head('with no wind there is nothing to route by, and it says so');
-await p.evaluate(()=>{ window.__wind=windNow; window.windNow=()=>null; prevDraw(); });
-await p.waitForTimeout(250);
-V=await prev();
-t.ok(V.kind==='rhumb,rhumb,rhumb,rhumb', 'every leg is the line between '
-     +'the buoys again', V.kind);
-t.ok(V.wind===0 && V.ghosts===0, 'no arrow, and nothing to ghost');
-t.ok(!/SAILED/.test(V.foot), 'and no sailed distance to claim', V.foot);
-t.ok(V.bowed===0, 'nothing bows when no leg is sailed twice', String(V.bowed));
-
-t.head('a mark rounded twice is one circle, and the legs bow apart');
-/* A windward-leeward is two marks sailed twice. Drawn straight, the way
-   back lies exactly on the way out: one line, one arrow, and no way to
-   tell a four-leg course from a two. */
+t.head('a mark rounded twice carries both its numbers');
 await p.evaluate(()=>{ COURSE.marks=['rum','gosling','rum']; COURSE.next=0;
   COURSE.side=['P','S','S']; courseSave(); renderCourse(); prevDraw(); });
 await p.waitForTimeout(300);
 V=await prev();
-t.ok(V.marks===2 && V.nums.join()==='1,3,2',
-     'one circle per buoy, carrying both its numbers', V.nums.join());
-t.ok(V.legs===4 && V.bowed===4,
-     'and all four legs bowed off their pair, so out and back are two '
-     +'lines rather than one drawn twice', V.bowed+' of '+V.legs);
+t.ok(/1·3/.test(V.badges), 'one badge at the buoy, carrying both', V.badges);
+t.ok(V.arcs==='P,S,S', 'and a rounding for each of the three', V.arcs);
 t.ok(await p.evaluate(()=>{
-       const d=[...document.querySelectorAll('#cp-svg .leg')].map(e=>e.getAttribute('d'));
-       return new Set(d).size===d.length; }),
-     'each on its own side, not two curves on top of each other');
-
-await p.evaluate(()=>{ window.windNow=window.__wind; prevDraw(); });
-await p.waitForTimeout(200);
-t.ok(/tack|gybe/.test((await prev()).kind),
-     'and with the breeze back, the same two marks are a beat and a run',
-     (await prev()).kind);
+       const c=[...document.querySelectorAll('#cp-svg .bt')]
+         .find(e=>/1.3/.test(e.textContent));
+       return getComputedStyle(c.previousElementSibling).fill==='rgb(28, 43, 94)'; }),
+     'in the club\'s navy, because one buoy rounded both ways is neither '
+     +'red nor green',
+     await p.evaluate(()=>{ const c=[...document.querySelectorAll('#cp-svg .bt')]
+       .find(e=>/1.3/.test(e.textContent));
+       return getComputedStyle(c.previousElementSibling).fill; }));
 
 t.head('an empty course is the line and nothing else');
 await p.evaluate(()=>{ COURSE.marks=[]; COURSE.side=[]; courseSave();
                        renderCourse(); prevDraw(); });
 await p.waitForTimeout(250);
 V=await prev();
-t.ok(V.legs===0 && V.marks===0, 'no legs to draw', V.legs+'/'+V.marks);
+t.ok(V.route===0 && !V.arcs, 'no route to draw', V.route+'/'+V.arcs);
 t.ok(/NO COURSE SET/.test(V.foot), 'and it says so rather than measuring '
      +'nothing at all', V.foot);
+t.ok(V.line===1 && V.ends===2, 'the line is still drawn, because it is '
+     +'where the race would start');
 
 t.head('and the ways out of it');
 await p.evaluate(()=>{ const s=$('stage').getBoundingClientRect();
