@@ -212,71 +212,114 @@ t.ok(await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString
      await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString()));
 
 await clear();
-await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun'; prefsSave(); });
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun';
+                       CFG.startMins=5; prefsSave(); });
+/* The site posts the start with the course now: the time the line opens
+   or the gun goes, which of the two it is, and how long the countdown
+   runs up to it. An empty time still means the schedule's usual. */
 reply={status:200, body:{date:'2026-09-30', course:{
   marks:['cb10','gosling','rum'], side:{cb10:'P', gosling:'S', rum:'P'},
-  note:null, posted:1790289195830, line:{pin:'flag',boat:'ball'},
+  note:null, posted:1790289195830, start:{at:'19:10', mode:'gun', countdown:15},
+  line:{pin:'flag',boat:'ball'},
   startsOnLine:true, finishesOnLine:true, unknown:[]}}};
 await ask();
 S=await said();
-t.ok(/WINDOW OPENS/.test(S.sub), 'the menu says when it opens before you load it',
-     S.sub);
-t.ok(/AND THE TIME/.test(S.foot), 'and the button says the time is coming too',
-     S.foot);
+t.ok(/GUN AT/.test(S.sub), 'the menu says which kind of start it is', S.sub);
+t.ok(/15 MIN COUNTDOWN/.test(S.sub), 'and how long the countdown runs', S.sub);
+t.ok(/LOADING SETS ALL THREE/.test(S.sub),
+     'and that loading takes all of it', S.sub);
+t.ok(!/THE USUAL TIME/.test(S.sub),
+     'and does not call a posted time the usual one', S.sub);
 t.ok(await p.evaluate(()=>GUNAT)===null,
      'the first tap still changes nothing, the clock included');
 await load();
-const set=await p.evaluate(()=>({gun:GUNAT, mode:CFG.startMode,
+let set=await p.evaluate(()=>({mode:CFG.startMode, mins:CFG.startMins,
   iso:GUNAT===null?null:new Date(GUNAT).toISOString()}));
-t.ok(set.iso==='2026-09-30T22:00:00.000Z',
-     'the load sets the gun to the window opening - the 30th is in the late '
-     +'band, so 18:00 at the lake', String(set.iso));
-t.ok(set.mode==='window',
-     'and the sequence with it: every start the club runs is a window, and '
-     +'a gun sequence on one is a beep at a moment nobody is waiting for',
-     set.mode);
-t.ok(await p.evaluate(()=>+localStorage.getItem('gunAt'))===set.gun,
-     'kept, the same as one typed on the pad');
+t.ok(set.iso==='2026-09-30T23:10:00.000Z',
+     'the load sets the gun to the posted time, in the club\'s zone',
+     String(set.iso));
+t.ok(set.mode==='gun', 'the sequence to what was posted - a club race is a '
+     +'gun where the Rum Race is an open line', set.mode);
+t.ok(set.mins===15, 'and the countdown with it', String(set.mins));
+t.ok(await p.evaluate(()=>+localStorage.getItem('gunAt'))!==0
+     && await p.evaluate(()=>JSON.parse(localStorage.getItem('helmPrefs')||'{}').startMins)===15
+     && await p.evaluate(()=>JSON.parse(localStorage.getItem('helmPrefs')||'{}').startMode)==='gun',
+     'all three kept, the same as ones set by hand',
+     await p.evaluate(()=>localStorage.getItem('helmPrefs')||'none'));
 
-t.head('a window that has already opened is left alone');
-/* You are sailing in it. Setting the gun to a time this evening that
-   has gone would arm a countdown that runs out the moment it starts. */
+t.head('a posted window, and a countdown the stepper does not offer');
 await clear();
 await p.evaluate(()=>{ GUNAT=null; gunSave(); });
-reply={status:200, body:{date:'2026-09-23', course:{
+reply={status:200, body:{date:'2026-09-30', course:{
   marks:['rum'], side:{rum:'P'}, note:null, posted:1,
+  start:{at:'18:40', mode:'window', countdown:7},
   line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
 await ask();
 S=await said();
-t.ok(/HAS OPENED/.test(S.sub), 'it says so rather than saying nothing', S.sub);
+t.ok(/LINE OPEN FROM/.test(S.sub), 'a window says the line is open, not that '
+     +'a gun goes', S.sub);
+await load();
+set=await p.evaluate(()=>({mode:CFG.startMode, mins:CFG.startMins}));
+t.ok(set.mode==='window' && set.mins===7,
+     'and seven minutes is a countdown even though the ＋ will not step to it',
+     JSON.stringify(set));
+t.ok(await p.evaluate(()=>JSON.parse(localStorage.getItem('helmPrefs')||'{}').startMins)===7
+     && await p.evaluate(()=>PREF_DEFS.startMins(7))===7,
+     'it survives a reload, because what is VALID is wider than what the '
+     +'stepper cycles through',
+     String(await p.evaluate(()=>PREF_DEFS.startMins(7))));
+await p.evaluate(()=>{ minsStep(); });
+t.ok(await p.evaluate(()=>CFG.startMins)===5,
+     'and stepping on from it lands on the first of the four', 
+     String(await p.evaluate(()=>CFG.startMins)));
+
+t.head('no time posted means the schedule\'s usual, as it always did');
+await clear();
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun'; prefsSave(); });
+reply={status:200, body:{date:'2026-09-30', course:{
+  marks:['rum'], side:{rum:'P'}, note:null, posted:1,
+  start:{at:null, mode:'window', countdown:5},
+  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/THE USUAL TIME/.test(S.sub), 'and says that is what it is', S.sub);
+await load();
+t.ok(await p.evaluate(()=>new Date(GUNAT).toISOString())==='2026-09-30T22:00:00.000Z',
+     'the 30th is in the late band, so 18:00 at the lake',
+     await p.evaluate(()=>new Date(GUNAT).toISOString()));
+t.ok(await p.evaluate(()=>CFG.startMode)==='window',
+     'with the posted sequence still taken');
+
+t.head('a start that has gone is left alone');
+/* You are sailing in it. Setting the gun to a time this evening that
+   has gone would arm a countdown that runs out the moment it starts. */
+await clear();
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMins=5; CFG.startMode='gun'; prefsSave(); });
+reply={status:200, body:{date:'2026-09-23', course:{
+  marks:['rum'], side:{rum:'P'}, note:null, posted:1,
+  start:{at:'18:25', mode:'window', countdown:10},
+  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
+await ask();
+S=await said();
+t.ok(/HAS GONE/.test(S.sub), 'it says so rather than saying nothing', S.sub);
 t.ok(!/AND THE TIME/.test(S.foot), 'and does not offer what it will not do',
      S.foot);
 await load();
-t.ok(await p.evaluate(()=>GUNAT)===null, 'the clock is untouched');
+t.ok(await p.evaluate(()=>GUNAT)===null && await p.evaluate(()=>CFG.startMins)===5
+     && await p.evaluate(()=>CFG.startMode)==='gun',
+     'the clock, the countdown and the sequence are all untouched');
 t.ok((await course()).marks.join()==='rum',
      'while the course still loads - the marks are the point of the sync');
 
-t.head('a date the club gives no window for');
+t.head('a date the club gives no start for');
 await clear();
 reply={status:200, body:{date:'2026-09-24', course:{
   marks:['rum'], side:{rum:'P'}, note:null, posted:1,
   line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
 await ask();
 S=await said();
-t.ok(/NO START WINDOW/.test(S.sub), 'says to set it yourself', S.sub);
-
-t.head('and if the club ever puts the time in the feed, the feed wins');
-/* The copy retires itself the day it stops being needed. */
-await clear();
-reply={status:200, body:{date:'2026-09-30', course:{
-  marks:['rum'], side:{rum:'P'}, note:null, posted:1, win:{open:'19:15', close:'19:20'},
-  line:{pin:'flag',boat:'ball'}, startsOnLine:true, finishesOnLine:true, unknown:[]}}};
-await p.evaluate(()=>{ GUNAT=null; gunSave(); });
-await ask(); await load();
-t.ok(await p.evaluate(()=>GUNAT===null?null:new Date(GUNAT).toISOString())
-     ==='2026-09-30T23:15:00.000Z',
-     'the posted window, not the one we worked out',
-     await p.evaluate(()=>GUNAT===null?null:new Date(GUNAT).toISOString()));
-await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun'; prefsSave(); });
+t.ok(/NO START TIME/.test(S.sub), 'says to set it yourself', S.sub);
+await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun';
+                       CFG.startMins=5; prefsSave(); });
 
 await t.done(b);

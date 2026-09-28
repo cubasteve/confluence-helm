@@ -5721,8 +5721,11 @@ const PREF_DEFS={
   phoneGps:   v=>typeof v==='boolean' ? v : null,
   /* And this one because it is a fact about the series, not the day. */
   startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null,
-  /* Five, ten or fifteen minutes - the three sequences anyone runs. */
-  startMins:  v=>START_MINS.indexOf(v)>=0 ? v : null,
+  /* The stepper offers four, but a posted course may set any number of
+     minutes - the club's editor takes one - so what is VALID is wider
+     than what the ＋ will cycle to. Stepping on from a club's 7 lands
+     on 5, which is where indexOf(-1)+1 points and is the right place. */
+  startMins:  v=>Number.isFinite(v)&&v>=0&&v<=60 ? Math.round(v) : null,
   /* Which noise the glass makes under a finger, or none. */
   click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
 };
@@ -10601,15 +10604,25 @@ async function clubFetch(){
   const marks=(g.marks||[]).filter(id=>markOf(id));
   const dropped=(g.marks||[]).filter(id=>!markOf(id));
   if(!marks.length) return stop('NO MARKS THIS BOAT KNOWS');
-  /* The payload first, if the club ever adds it; the copied rule
-     otherwise. Either way it is a window - every start the club runs is
-     - so the sequence comes over with the time. */
-  const win=g.win||clubWindow(j.date||'');
-  const at=win ? clubMoment(j.date, win.open) : null;
+  /* The clock, as the committee posted it. `start.at` is the club's own
+     wall clock, "HH:MM", and an empty one means the schedule's usual -
+     which is what clubWindow() is for and why it is still here. `mode`
+     is which kind of start, and `countdown` how long it runs up to it. */
+  const st=g.start||{};
+  const usual=clubWindow(j.date||'');
+  const hhmm=/^\d{1,2}:\d{2}$/.test(st.at||'') ? st.at : (usual?usual.open:null);
+  const at=hhmm ? clubMoment(j.date, hhmm) : null;
+  const mins=Number.isFinite(+st.countdown) && +st.countdown>=0 && +st.countdown<=60
+    ? Math.round(+st.countdown) : null;
   CLUB={step:'ready', say:'',
         got:{marks:marks, dropped:dropped, side:g.side||{}, raw:g,
-             win:win, at:(at!==null && at>Date.now()) ? at : null,
-             gone:!!(at!==null && at<=Date.now())}};
+             at:(at!==null && at>Date.now()) ? at : null,
+             gone:!!(at!==null && at<=Date.now()),
+             /* Posted, or the schedule's - worth saying which, because
+                one is tonight's decision and the other is every week's. */
+             posted:!!(st.at&&hhmm===st.at),
+             mode:st.mode==='gun' ? 'gun' : 'window',
+             mins:mins}};
   renderCourse();
 }
 
@@ -10627,7 +10640,16 @@ function clubApply(){
      nobody is waiting for. */
   if(g.at!==null){
     GUNAT=g.at; gunSave();
-    if(CFG.startMode!=='window'){ CFG.startMode='window'; prefsSave(); }
+    let pref=false;
+    /* The sequence is the committee's now rather than an assumption:
+       the Rum Race is self-timed off an open line, but a monthly club
+       race is a gun, and the posted course says which. */
+    if(CFG.startMode!==g.mode){ CFG.startMode=g.mode; pref=true; }
+    if(g.mins!==null && CFG.startMins!==g.mins){ CFG.startMins=g.mins; pref=true;
+      /* The pill counts this down while nothing is running, so the
+         change has to reach it now rather than at the next reset. */
+      if(tState==='idle') tLeft=CFG.startMins*60000; }
+    if(pref) prefsSave();
   }
   /* Nothing is said about the load afterwards. What was wrong with the
      course - a mark this boat has not got, a start that is not off the
@@ -10710,12 +10732,19 @@ function cvpClub(){
   const g=c.got.raw||{}, out=[];
   /* The clock, first: it is the one thing here that changes what the
      panel does tonight rather than what it draws. */
-  if(c.got.at!==null)
-    out.push('WINDOW OPENS '+gunTxt(c.got.at)+' · LOADING SETS IT');
-  else if(c.got.gone)
-    out.push('THE WINDOW HAS OPENED · THE START TIME IS LEFT ALONE');
-  else if(!c.got.win)
-    out.push('NO START WINDOW FOR THIS DATE · SET IT YOURSELF');
+  const G=c.got;
+  if(G.at!==null){
+    out.push((G.mode==='gun' ? 'GUN AT ' : 'LINE OPEN FROM ')+gunTxt(G.at)
+             +(G.posted ? '' : ' · THE USUAL TIME'));
+    out.push((G.mins===null ? 'COUNTDOWN UNCHANGED'
+                            : G.mins ? G.mins+' MIN COUNTDOWN'
+                                     : 'NO COUNTDOWN')
+             +' · LOADING SETS ALL THREE');
+  }
+  else if(G.gone)
+    out.push('THAT START HAS GONE · THE CLOCK IS LEFT ALONE');
+  else
+    out.push('NO START TIME FOR THIS DATE · SET IT YOURSELF');
   if(g.posted>1e12) out.push('POSTED '+gunTxt(g.posted));
   const miss=(g.unknown||[]).length + (c.got.dropped||[]).length;
   if(miss) out.push(miss+' MARK'+(miss===1?'':'S')+' THIS BOAT HAS NOT GOT');

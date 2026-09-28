@@ -61,10 +61,21 @@ t.ok(C.wd===true && C.ph===false, 'a string where a boolean belongs is not a boo
 t.ok(await p.evaluate(()=>CFG.startMode)==='gun',
      'and a start format nobody wrote falls back to the strict one',
      await p.evaluate(()=>CFG.startMode));
-t.ok(await p.evaluate(()=>CFG.startMins)===5,
-     'a countdown length off the list does the same - seven minutes is '
-     +'not one of the four, whatever storage says',
+/* The countdown is the one that got WIDER. The stepper offers five,
+   ten, fifteen and off, but the club's editor takes any number and
+   posts it with the course, so seven is a real setting now - it just
+   is not one the ＋ will step to. Out of range still falls back. */
+t.ok(await p.evaluate(()=>CFG.startMins)===7,
+     'a countdown the stepper does not offer is still kept, because a '
+     +'posted course may set one',
      String(await p.evaluate(()=>CFG.startMins)));
+t.ok(await p.evaluate(()=>PREF_DEFS.startMins(90))===null
+     && await p.evaluate(()=>PREF_DEFS.startMins('soon'))===null
+     && await p.evaluate(()=>PREF_DEFS.startMins(0))===0,
+     'an hour and a half is not a countdown and nor is a word, while off '
+     +'is nought and not nothing',
+     JSON.stringify(await p.evaluate(()=>[PREF_DEFS.startMins(90),
+       PREF_DEFS.startMins('soon'), PREF_DEFS.startMins(0)])));
 t.ok(t.errs.length===0, 'and none of it throws on the way up',
      t.errs.join(' | '));
 

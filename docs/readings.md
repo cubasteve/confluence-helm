@@ -784,10 +784,29 @@ replaces your course. Tapping a control and having the course you are
 three marks into vanish is not something this sheet should be able to do
 by accident.
 
-**The start time comes over with it.** The feed carries the course and
-nothing about the clock, so the window comes from the club's own
+**The start comes over with it.** The site posts it with the course now
+— `start: {at, mode, countdown}` — so three things arrive together:
+
+| | |
+|---|---|
+| `at` | the club's own wall clock, `"18:25"`. Empty means *the schedule's usual*, which is what a course that said nothing always meant |
+| `mode` | `window` or `gun`. The Rum Race is self-timed off an open line; a monthly club race is a gun, and the committee now says which |
+| `countdown` | how many minutes the countdown runs up to it |
+
+Loading takes all three: `GUNAT`, `CFG.startMode`, `CFG.startMins`. The
+menu says so before you commit — `GUN AT 7:10 PM` over
+`15 MIN COUNTDOWN · LOADING SETS ALL THREE` — and the first tap still
+changes nothing.
+
+The `＋` on `COUNTDOWN` steps through five, ten, fifteen and off, but the
+club's editor takes any number, so **what is valid is wider than what the
+stepper cycles to**: `startMins` accepts 0–60 and survives a reload.
+Stepping on from a posted seven lands on five, which is where
+`indexOf(-1)+1` points and is the right place for it to land.
+
+**When `at` is empty** the window still comes from the club's own
 schedule — `assets/schedule.js`, the file its calendar and its Race Day
-page both read — with the rule copied the same way the drawing was:
+page both read — with the rule copied:
 
 > Rum Races are every Wednesday of the season, `18:25–18:30`, except
 > early and late in it — Mar 11 to Apr 8, and Sep 30 to Oct 28 — where
@@ -797,9 +816,9 @@ page both read — with the rule copied the same way the drawing was:
 
 Copied rather than fetched. `schedule.js` is 15 KB of JavaScript object
 literal, and parsing someone's source at the dock to learn what time to
-start is a worse dependency than six lines of arithmetic. And it retires
-itself: if the club ever puts `win` in the helm feed, **the payload
-wins** and `clubWindow()` stops being read.
+start is a worse dependency than six lines of arithmetic. The menu says
+which of the two you are getting: a posted time is stated plainly, the
+schedule's says `· THE USUAL TIME`.
 
 The time is **Florida's**, not the browser's. The panel on the boat is
 in `America/New_York` so it is usually a no-op, but the same page opens
@@ -808,16 +827,12 @@ way. `clubMoment()` asks `Intl` what that instant reads as in the club's
 zone and applies the difference once, which is the only way to get the
 two Sundays a year right.
 
-Loading sets the gun to the window **opening**, and the sequence to
-`WINDOW` with it — every start the club runs is a window, you time your
-own crossing, and a gun sequence on one is a beep at a moment nobody is
-waiting for. Three things it will not do:
+Two things it will not do:
 
 | | |
 |---|---|
-| the window has already opened | the start time is left alone. You are sailing in it, and arming a countdown that runs out the moment it starts is worse than no countdown |
-| the date has no window | `NO START WINDOW FOR THIS DATE · SET IT YOURSELF` |
-| the first tap | changes nothing, the clock included. The menu says `WINDOW OPENS 6:00 PM · LOADING SETS IT` and the button says `LOAD 3 MARKS AND THE TIME`, so what is about to happen is on the screen before it happens |
+| the start has already gone | the clock, the countdown and the sequence are all left alone. You are sailing in it, and arming a countdown that runs out the moment it starts is worse than no countdown. The course still loads — the marks are the point of the sync |
+| no start for the date | `NO START TIME FOR THIS DATE · SET IT YOURSELF` |
 
 What did not come across is said **before** you load rather than found
 out at the mark: `1 MARK THIS BOAT HAS NOT GOT`, and `IT DOES NOT START
