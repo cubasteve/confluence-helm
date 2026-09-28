@@ -1035,10 +1035,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    at 97.9% of the radius, ~11 px from the glass edge. Here they sit near
    94%, which is a margin rather than a coincidence.                   */
 .t-rail{position:absolute;bottom:183px;left:50%;margin-left:-310px;width:620px}
-/* The credit Esri's unkeyed service asks for, and the line under the
-   course, are the quiet half of the head. Radar's and Golden Hour's
-   sit on a photograph and carry their own ink. */
-#t-attr{opacity:.62}
 /* An empty headline still takes its line box, which left the credit
    floating 35 px below nothing. With no race loaded it collapses and
    the credit sits where the sun's state does. */
@@ -2745,10 +2741,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <!-- The head is the pill at the top of the app, and it already says
        TRACKS. This line is for the race loaded out of the library,
        which is a name the pill cannot know - and it is empty until
-       there is one. The credit under it is Esri's, and stays whatever
-       is loaded. -->
-  <div class="a-head"><div class="a-h1" id="t-title"></div>
-    <div class="a-h2" id="t-attr">IMAGERY © ESRI</div></div>
+       there is one. Nothing else: IMAGERY (c) ESRI stood here and was
+       asked for off the glass. The radar's HUD still credits Esri
+       along with its other three sources. -->
+  <div class="a-head"><div class="a-h1" id="t-title"></div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
     <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
     <g clip-path="url(#t-clip)">

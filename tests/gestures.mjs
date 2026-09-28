@@ -138,9 +138,10 @@ t.ok(H.course.under.length===0,
      +'is the strip, two rows down', JSON.stringify(H.course.under));
 t.ok(H.tracks.h1===null || H.tracks.h1==='',
      'the map does not say TRACKS twice', String(H.tracks.h1));
-t.ok(H.tracks.under.length===1 && /ESRI/.test(H.tracks.under[0]),
-     'only the credit Esri asks for, which is not status and not ours to '
-     +'drop', JSON.stringify(H.tracks.under));
+t.ok(H.tracks.under.length===0,
+     'and nothing else under it - IMAGERY (c) ESRI stood there and was '
+     +'asked for off the glass; the radar\'s HUD still credits Esri with '
+     +'its other three sources', JSON.stringify(H.tracks.under));
 t.ok(H.golden.under.length===2 && /DAYLIGHT|NIGHT|TWILIGHT|GOLDEN/.test(H.golden.under[0]),
      'and the sun keeps what it says, because that is the app',
      JSON.stringify(H.golden.under));

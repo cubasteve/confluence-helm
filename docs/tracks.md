@@ -132,15 +132,23 @@ Under the pill:
 |---|---|
 | Radar | its HUD: the sweep's time, and what it is doing or why it is not |
 | Course | **nothing**. It said how far round the course was; the strip two rows down says what the course is, which is the question |
-| Tracks | `IMAGERY © ESRI`, the credit Esri's unkeyed service asks for. It said `TRACKS` above that, under a pill already saying `TRACKS` |
+| Tracks | **nothing**, until a race is loaded. It said `TRACKS` under a pill already saying `TRACKS`, over `IMAGERY © ESRI` |
 | Golden Hour | the sun's state and its altitude — that is the app |
 
 `.a-h1` (28 px, 600, `.24em`) over `.a-h2` (17 px, `.1em`) is still the
 format for what does appear, so the map's line and the sun's match. The
 map's is **empty until a race is loaded** out of the library, and then
 it is that race's name — a name the pill cannot know. An empty `.a-h1`
-collapses (`:empty{display:none}`), so the credit sits where the sun's
-state does rather than 35 px below nothing.
+collapses (`:empty{display:none}`), so a map with nothing loaded shows
+nothing but its pill.
+
+**The Esri credit came off the glass**, by request. It was the line
+under the map's head. Worth knowing what that means: the imagery comes
+from Esri's unkeyed World Imagery service, whose terms ask for
+attribution, and this app now shows it in one place only — the radar's
+HUD, which credits `Esri` along with BrightVoyant, Tomorrow.io and
+Open-Meteo. The tiles are used by the map, the course preview and the
+radar alike.
 
 That last bit has a consequence: `publishGPX` names a file after that
 line, and it is now empty rather than `Tracks`, so a track sent with
