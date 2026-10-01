@@ -129,7 +129,7 @@ t.ok(Math.abs(K.la-28.8301)<1e-9 && Math.abs(K.lo+81.2701)<1e-9,
 await p.evaluate(()=>{ markRevert('cb8'); }); await p.waitForTimeout(1500);
 await p.evaluate(()=>bootSettle()); await p.waitForTimeout(700);
 t.ok(await p.evaluate(()=>!isMoved('cb8')
-       && Math.abs(markOf('cb8').lat-DM(28,49.881))<1e-9),
+       && Math.abs(markOf('cb8').lat-DM(28,49.863))<1e-9),
      'and putting it back gives the book\'s position again, across a restart too');
 
 t.head('a scheduled gun outlives a restart, but not the day');

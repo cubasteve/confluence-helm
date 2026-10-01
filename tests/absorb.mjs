@@ -41,7 +41,7 @@ t.ok(S.moved, 'shown as moved, with the book underneath to go back to');
 
 t.head('a survey that agrees with the book leaves nothing behind');
 const {b:b2,p:p2}=await open(t,{demo:true, storage:{marks:JSON.stringify(
-  [{id:'green', name:'GREEN BUOY', hdr:'GREEN', lat:28+49.030/60, lon:-(81+16.170/60)}])}});
+  [{id:'green', name:'GREEN BUOY', hdr:'GREEN', lat:28+49.030/60, lon:-(81+16.168/60)}])}});
 const S2=await p2.evaluate(()=>({
   stored:JSON.parse(localStorage.getItem('marks')||'[]').map(m=>m.id),
   moves:Object.keys(JSON.parse(localStorage.getItem('markMoves')||'{}')),

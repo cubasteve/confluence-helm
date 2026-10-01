@@ -26,7 +26,7 @@ const mark=id=>p.evaluate(i=>{ const m=markOf(i);
 
 console.log('\n=== the book, to start with ===');
 let v=await mark('cb12');
-ok(Math.abs(v.lat-(28+49.284/60))<1e-9, 'CB 12 is where the sheet says', String(v.lat));
+ok(Math.abs(v.lat-(28+49.262/60))<1e-9, 'CB 12 is where the sheet says', String(v.lat));
 ok(!v.moved, 'and nothing has been corrected');
 ok((await row('cb12')).undo===false, 'so there is nothing to put back');
 
@@ -38,7 +38,7 @@ let f=await p.evaluate(()=>({open:$('course-add').style.display!=='none',
   name:$('mk-name').textContent, lat:$('mk-lat').textContent, lon:$('mk-lon').textContent}));
 ok(f.open && f.id==='cb12', 'it opens on the mark you tapped', JSON.stringify(f));
 ok(f.title==='Correct mark', 'and calls it a correction, not an edit', f.title);
-ok(f.lat==='28 49.284' && f.lon==='-81 16.508', 'prefilled from the book',
+ok(f.lat==='28 49.262' && f.lon==='-81 16.515', 'prefilled from the book',
    f.lat+' / '+f.lon);
 await p.screenshot({path:OUT+'mark-correct.png'});
 
@@ -72,7 +72,7 @@ console.log('\n=== everything downstream follows it ===');
    110 m the correction moved it. One number tells both. */
 const geo=await p.evaluate(()=>{ COURSE.marks=['cb12']; COURSE.next=0; courseSave();
   const g=markGeo();
-  const book=seaNm(get('pos.lat'),get('pos.lon'),28+49.284/60,-(81+16.508/60))*1852;
+  const book=seaNm(get('pos.lat'),get('pos.lon'),28+49.262/60,-(81+16.515/60))*1852;
   return {hdr:g.n.hdr, dist:Math.round(g.dist), toBook:Math.round(book)}; });
 ok(geo.hdr==='CB 12', 'the leg is to CB 12', JSON.stringify(geo));
 ok(geo.toBook>80, 'the book put it a hundred metres from here', geo.toBook+' m');
@@ -98,7 +98,7 @@ await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
 v=await mark('cb12');
 ok(!v.moved, 'the correction is gone');
-ok(Math.abs(v.lat-(28+49.284/60))<1e-9 && Math.abs(v.lon-(-(81+16.508/60)))<1e-9,
+ok(Math.abs(v.lat-(28+49.262/60))<1e-9 && Math.abs(v.lon-(-(81+16.515/60)))<1e-9,
    'and the sheet\'s number is back', v.lat+', '+v.lon);
 ok((await p.evaluate(()=>JSON.parse(localStorage.getItem('markMoves')||'{}')))
      .cb12===undefined, 'off disk too');

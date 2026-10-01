@@ -3776,16 +3776,16 @@ const DM=(d,m)=>d+m/60;
    Romance flag and b its sail ball, which are the two ends of the line.
    A mark of your own gets the accent. */
 const MARKS=[
-  {id:'flag',   name:'ROMANCE FLAG',      hdr:'FLAG',   buoy:'f', lat:DM(28,49.123), lon:-DM(81,15.874)},
-  {id:'ball',   name:'ROMANCE SAIL BALL', hdr:'BALL',   buoy:'b', lat:DM(28,49.150), lon:-DM(81,15.721)},
-  {id:'rum',    name:'RUM MARK',          hdr:'RUM',    buoy:'y', lat:DM(28,50.130), lon:-DM(81,15.840)},
-  {id:'gosling',name:'GOSLING MARK',      hdr:'GOSLING',buoy:'y', lat:DM(28,49.800), lon:-DM(81,15.150)},
-  {id:'cb8',    name:'CHANNEL BUOY 8',    hdr:'CB 8',   buoy:'r', lat:DM(28,49.881), lon:-DM(81,17.193)},
-  {id:'cb10',   name:'CHANNEL BUOY 10',   hdr:'CB 10',  buoy:'r', lat:DM(28,49.501), lon:-DM(81,16.897)},
-  {id:'cb12',   name:'CHANNEL BUOY 12',   hdr:'CB 12',  buoy:'r', lat:DM(28,49.284), lon:-DM(81,16.508)},
-  {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', buoy:'r', lat:DM(28,49.004), lon:-DM(81,14.566)},
-  {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  buoy:'w', lat:DM(28,50.851), lon:-DM(81,14.916)},
-  {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  buoy:'w', lat:DM(28,51.201), lon:-DM(81,15.212)},
+  {id:'flag',   name:'ROMANCE FLAG',      hdr:'FLAG',   buoy:'f', lat:DM(28,49.133), lon:-DM(81,15.824)},
+  {id:'ball',   name:'ROMANCE SAIL BALL', hdr:'BALL',   buoy:'b', lat:DM(28,49.134), lon:-DM(81,15.824)},
+  {id:'rum',    name:'RUM MARK',          hdr:'RUM',    buoy:'y', lat:DM(28,50.101), lon:-DM(81,15.832)},
+  {id:'gosling',name:'GOSLING MARK',      hdr:'GOSLING',buoy:'y', lat:DM(28,49.842), lon:-DM(81,15.168)},
+  {id:'cb8',    name:'CHANNEL BUOY 8',    hdr:'CB 8',   buoy:'r', lat:DM(28,49.863), lon:-DM(81,17.298)},
+  {id:'cb10',   name:'CHANNEL BUOY 10',   hdr:'CB 10',  buoy:'r', lat:DM(28,49.558), lon:-DM(81,16.908)},
+  {id:'cb12',   name:'CHANNEL BUOY 12',   hdr:'CB 12',  buoy:'r', lat:DM(28,49.262), lon:-DM(81,16.515)},
+  {id:'cb2',    name:'CHANNEL BUOY 2 · EAST', hdr:'CB 2', buoy:'r', lat:DM(28,48.999), lon:-DM(81,14.562)},
+  {id:'man1',   name:'MANATEE MARK 1',    hdr:'MAN 1',  buoy:'w', lat:DM(28,50.889), lon:-DM(81,14.963)},
+  {id:'man2',   name:'MANATEE MARK 2',    hdr:'MAN 2',  buoy:'w', lat:DM(28,51.245), lon:-DM(81,15.266)},
   /* Surveyed from this boat before it was on any club list, and carried
      as a mark of your own since. The club publishes it now and the
      members' site has it, so it belongs up here - and a course pulled
@@ -3793,7 +3793,7 @@ const MARKS=[
      teepee of three pilings rather than the red's single stick.
      Checked against site/assets/schedule.js in the club's own repo, as
      all eleven were: the same position to the metre. */
-  {id:'green',  name:'GREEN BUOY',        hdr:'GREEN',  buoy:'g', lat:DM(28,49.030), lon:-DM(81,16.170)},
+  {id:'green',  name:'GREEN BUOY',        hdr:'GREEN',  buoy:'g', lat:DM(28,49.030), lon:-DM(81,16.168)},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
 /* Marks of your own, from the course sheet's NEW MARK: kept in browser
