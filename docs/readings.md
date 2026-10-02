@@ -803,6 +803,24 @@ menu says so before you commit — `GUN AT 7:10 PM` over
 `15 MIN COUNTDOWN · LOADING SETS ALL THREE` — and the first tap still
 changes nothing.
 
+**A start that has already gone is refused**, with
+`THAT START HAS GONE · THE CLOCK IS LEFT ALONE`, and the clock is left
+where you had it. That is the right behaviour and it is also what rotted
+the `club` probe: the fixture posts a start for 2026-09-30, which passed
+three days after it was written, and from then on thirteen assertions
+failed because the app was correctly refusing a race that was over.
+
+The fix is a frozen clock rather than a newer date — a newer date only
+resets the fuse. `club.mjs` pins `Date.now()` to 16:00 at the lake on the
+fixture's own day for the length of the start section and restores it
+after. It has to span the whole section, not each sync: `clubApply` reads
+the clock parsing the reply, and then the periodic gun check reads it
+again and **drops a gun that has already gone** — so a freeze that covered
+only the sync set `GUNAT` correctly and had it cleared out from under the
+assertion 120 ms later. Everything else in that file keeps its fixed
+dates, because the rest is tested for what the calendar says about them,
+which does not change.
+
 The `＋` on `COUNTDOWN` steps through five, ten, fifteen and off, but the
 club's editor takes any number, so **what is valid is wider than what the
 stepper cycles to**: `startMins` accepts 0–60 and survives a reload.

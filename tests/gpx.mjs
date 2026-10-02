@@ -178,16 +178,16 @@ t.ok(!!geo.ell && !geo.rect && !geo.circle,
 t.ok(geo.ell.rx===geo.RX && geo.ell.ry===geo.RY && geo.ell.cx===geo.CX
      && geo.ell.cy===geo.CY,
      'and the drawing agrees with the arithmetic', JSON.stringify(geo.ell));
-t.ok(geo.ell.rx*2===840 && geo.ell.ry*2===460,
-     'it is 840 by 460 - wider than the 776 oblong and 1.84x the round 456',
+t.ok(geo.ell.rx*2===840 && geo.ell.ry*2===520,
+     'it is 840 by 520 - 1.84x the round 456 across and 1.14x down it',
      JSON.stringify(geo.ell));
 t.ok(geo.HW===geo.RX+4 && geo.HH===geo.RY+4,
      'with the tile box 4 px proud of the curve, so there is something '
      +'behind it - as MAP_R 232 stood proud of r 228');
-t.ok(geo.ell.cy-geo.ell.ry===120 && geo.ell.cy+geo.ell.ry===580,
-     'and it sits higher than the circle did - 120 to 580 against 176 to '
-     +'636 - because the race title that stood at y=112 has gone',
-     JSON.stringify(geo.ell));
+t.ok(geo.ell.cy-geo.ell.ry===110 && geo.ell.cy+geo.ell.ry===630,
+     'and it runs 110 to 630 against the circle\'s 176 to 632 - higher at '
+     +'the top, because the race title that stood at y=112 has gone, and '
+     +'deeper at the bottom', JSON.stringify(geo.ell));
 
 t.head('and it sits inside the glass with an even margin');
 /* Taken to its limit the oval reaches 972 across before the curve meets
@@ -220,13 +220,19 @@ const band=await p.evaluate(()=>{
   return {pill:r('app-name'),
           stats:{top:st.top-sg.top, bot:st.bottom-sg.top}};
 });
-t.ok(band.pill.bot < 120, 'the name pill is clear above it, and it is the '
+t.ok(band.pill.bot < 110, 'the name pill is clear above it, and it is the '
      +'only thing up there now', JSON.stringify(band.pill));
-t.ok(120-band.pill.bot >= 24, 'with room to read as a gap rather than a '
-     +'collision', (120-band.pill.bot)+' px');
-t.ok(band.stats.top >= 580, 'the stats row is clear below it - the chart ran '
-     +'into those numbers once already, which is why there is still more '
-     +'room at that end', JSON.stringify(band.stats));
+t.ok(110-band.pill.bot >= 20, 'with room to read as a gap rather than a '
+     +'collision', (110-band.pill.bot)+' px');
+t.ok(band.stats.top >= 630, 'the stats row is clear below it - the chart ran '
+     +'into those numbers once already', JSON.stringify(band.stats));
+t.ok(band.stats.top-630 >= 20, 'by a gap, not by a pixel',
+     (band.stats.top-630)+' px');
+/* 520 of the 577 px between the pill and the numbers. There is not much
+   left to take, which is the point of measuring it rather than eyeballing. */
+t.ok((geo.ell.ry*2)/(band.stats.top-band.pill.bot) > 0.88,
+     'and it uses most of the band there is between them',
+     Math.round(100*(geo.ell.ry*2)/(band.stats.top-band.pill.bot))+'%');
 
 t.head('the zoom is exactly what it was');
 /* The ask was a wider view at the SAME zoom, and those pull against each

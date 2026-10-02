@@ -2787,7 +2787,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          across than down. Same top and bottom edges as the circle had,
          so nothing was given up to get it - see MAP_RX. -->
     <defs><clipPath id="t-clip">
-      <ellipse cx="540" cy="350" rx="420" ry="230"/></clipPath></defs>
+      <ellipse cx="540" cy="370" rx="420" ry="260"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <!-- The camera. A pinch or a drag transforms THIS group while the
            finger is down and commits to MAPVIEW on release, so the tiles
@@ -9010,16 +9010,20 @@ const tmap=$('tmap');
    looking like a viewport and starts looking like a letterbox, and the
    even margin is the whole of why this shape reads.
 
-   It sits higher than the circle did - y=120 to 580 against 176 to 636 -
-   because the race title that used to stand at y=112 has gone. That line
-   only ever said which race was loaded out of the library, it was blank
-   the rest of the time, and it was the one thing between the name pill
-   and the chart. The export still wants the name, so the name moved to
-   VIEWNAME rather than being read back off a heading.
+It sits higher than the circle did AND is deeper than it: y=110 to 630
+   against 176 to 632, 520 tall where the circle was 456. What made the
+   room at the top was deleting the race title that used to stand at
+   y=112. That line only ever said which race was loaded out of the
+   library, it was blank the rest of the time, and it was the one thing
+   between the name pill and the chart. The export still wants the name,
+   so it moved to VIEWNAME rather than being read back off a heading.
 
-   34 px below the pill and 82 above the stats row. The chart ran into
-   those numbers once, which is why there is still more room below than
-   above - that end is the one with something to hit.
+   What is left is 26 px under the pill and 31 over the stats row, which
+   is most of the band there is: the pill ends at 84 and the numbers start
+   at 661, and 520 of that 577 is the oval. It is not centred in the band
+   - it sits 10 px high of centre - because the ask was to lift it and
+   then to deepen it, and splitting the difference evenly would have given
+   back part of the lift.
 
    RX and RY are the clip; HW and HH are the tile box around it. Nothing
    about this is round any more, so the off-view test and the tile box both
@@ -9033,7 +9037,7 @@ const tmap=$('tmap');
    the opposite of the point. Leaving the fit where it was means a track
    lands at exactly the size it always did and all 2.19x of the extra
    glass fills with water. */
-const MAP_CX=540, MAP_CY=350, MAP_RX=420, MAP_RY=230,
+const MAP_CX=540, MAP_CY=370, MAP_RX=420, MAP_RY=260,
       MAP_HW=MAP_RX+4, MAP_HH=MAP_RY+4, MAP_FIT=232;
 
 /* When the plugin owns recording, the points live on the boat and TRK

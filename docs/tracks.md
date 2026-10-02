@@ -209,10 +209,10 @@ its `r 228`.
 | | circle | oblong (one commit) | ellipse |
 |---|---|---|---|
 | width | 456 | 776 | **840** (1.84×) |
-| height | 456 | 460 | 460 |
-| area | 163 300 px² | 356 960 px² | 303 500 px² (1.86×) |
-| vertical | 176–632 | 176–636 | **120–580** |
-| worst point | — | 94.5% of the radius | 88.4% |
+| height | 456 | 460 | **520** (1.14×) |
+| area | 163 300 px² | 356 960 px² | 343 060 px² (2.10×) |
+| vertical | 176–632 | 176–636 | **110–630** |
+| worst point | — | 94.5% of the radius | 87.5% |
 
 **Why an oval and not the oblong.** On round glass an oval reads as a
 viewport cut *into* the panel; a rectangle reads as a rectangle dropped
@@ -239,10 +239,16 @@ name pill and the chart. The export still wants that name, so it moved to
 anyway, since reading `publishGPX`'s label out of `textContent` made the
 filename depend on a line of text existing on the glass.
 
-The oval now sits 34 px below the pill and 82 px above the stats row.
-There is deliberately more room at the bottom: that is the end with
-something to hit, and the chart ran into those numbers once already, as
-the paragraph above records.
+The oval then grew downward into what was left: 520 tall against the
+circle's 456, running y=110 to 630.
+
+That is most of the band there is. The pill ends at 84 and the stats row
+starts at 661, so 520 of those 577 px are oval — 26 px of air above and 31
+below. It is not centred in the band, sitting 10 px high of centre,
+because the ask was to lift it and *then* to deepen it, and splitting the
+remainder evenly would have handed back part of the lift. There is a probe
+on the ratio, because "most of the band" is the sort of claim that is only
+true until someone adds a row.
 
 One probe had to follow it. `gestures` reads "the app's heading" as the
 first `.a-h1` inside `#app-run`, and with the map's own heading gone that

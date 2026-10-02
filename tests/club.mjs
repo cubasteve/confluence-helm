@@ -219,6 +219,29 @@ t.ok(await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString
      'and the time is Florida\'s, not the browser\'s - 18:25 EDT is 22:25 Z',
      await p.evaluate(()=>new Date(clubMoment('2026-09-23','18:25')).toISOString()));
 
+/* ---- the clock has to stand still for the next three --------------
+   The app rightly refuses a start that has already been and gone, and
+   every case below posts one for 2026-09-30. This file is full of fixed
+   dates and most of them are fine: they are tested for what the CALENDAR
+   says about them, which does not change. These three are tested against
+   now(), which does - so they passed the day they were written, went red
+   three days later when the 30th fell into the past, and would have
+   stayed red for good.
+
+   Held across the whole section and let go at the end of it, rather than
+   around each sync: clubApply reads Date.now() parsing the reply, and
+   then the periodic gun check reads it again and DROPS a gun that has
+   already gone - so a freeze that only covered the sync set the clock
+   correctly and had it cleared out from under the assertion 120 ms later.
+   It is not held for the whole file, because a page whose clock never
+   moves is a different page from the one the rest of this tests. */
+const CLUB_NOW=Date.UTC(2026,8,30,20,0,0);     /* 16:00 at the lake */
+const freezeClock=()=>p.evaluate(ms=>{ window.__realNow=Date.now;
+                                       Date.now=()=>ms; }, CLUB_NOW);
+const thawClock  =()=>p.evaluate(()=>{ if(window.__realNow){
+    Date.now=window.__realNow; delete window.__realNow; } });
+await freezeClock();
+
 await clear();
 await p.evaluate(()=>{ GUNAT=null; gunSave(); CFG.startMode='gun';
                        CFG.startMins=5; prefsSave(); });
@@ -297,6 +320,7 @@ t.ok(await p.evaluate(()=>new Date(GUNAT).toISOString())==='2026-09-30T22:00:00.
      await p.evaluate(()=>new Date(GUNAT).toISOString()));
 t.ok(await p.evaluate(()=>CFG.startMode)==='window',
      'with the posted sequence still taken');
+await thawClock();           /* the clock belongs to the page again */
 
 t.head('a start that has gone is left alone');
 /* You are sailing in it. Setting the gun to a time this evening that
