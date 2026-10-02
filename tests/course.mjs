@@ -324,9 +324,12 @@ t.ok(X.ring.border>=2, 'the badge has an edge of its own - without one a dark '
      +'than a control sitting on it', X.ring.border+' px');
 t.ok(X.ring.shadow, 'and a ring of the chip\'s own colour outside that, which '
      +'is the gap keeping the two curves off each other');
-t.ok(X.ring.glyph < X.ring.w*0.5,
-     'the cross is small against the badge it sits in',
-     X.ring.glyph+' in '+X.ring.w);
+/* A band, not a ceiling. Too big and the cross crowds its own border;
+   too small and it swims in white space, which is what 10 in 24 did. */
+t.ok(X.ring.glyph/X.ring.w > 0.45 && X.ring.glyph/X.ring.w < 0.62,
+     'the cross fills its badge without crowding the border',
+     X.ring.glyph+' in '+X.ring.w+' = '
+     +Math.round(100*X.ring.glyph/X.ring.w)+'%');
 
 /* The cross takes the tap as well as marking it: a finger aimed at a
    cross that lands two pixels off should not flip the rounding to the

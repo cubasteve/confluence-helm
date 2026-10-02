@@ -507,10 +507,21 @@ Two details that look like fussiness and are not:
   hairlines of whatever face fontconfig found and reads as a smudge; two
   round-capped paths are the same mark at any size and in any theme, and
   match the cross on the app frame and the one on a user mark's tile.
-  Being drawn is also what lets the mark shrink without fading: the cross
-  is 10 px in a 20 px of clear middle, and the stroke went *up* as it came
-  down — 2.8 in a 12 viewBox drawn at 10 is 2.3 real pixels, about what
-  2.4 at 13 was.
+  Being drawn is also what lets the mark shrink without fading: the stroke
+  went *up* as the cross came down — 2.8 in a 12 viewBox drawn at 10 is
+  2.3 real pixels, about what 2.4 at 13 was.
+
+  The badge then came in to meet it, 24 px to 20, leaving the cross where
+  it was: 10 px in a 16 px clear middle, 2 px of air either side instead
+  of 5. The gap was what looked wrong, not the mark. Its centre did not
+  move — `left` and `top` came out by the 2 the radius lost — so it still
+  sits on the number's top-right corner, and now clears the name beside it
+  by 2 px rather than by exactly nothing.
+
+  The probe on this is a **band**, not a ceiling: above 45% of the badge
+  and below 62%. Too big and the cross crowds its own border; too small
+  and it swims, which is what 10 in 24 (42%) did. A one-sided check passed
+  both, which the control caught.
 - It sits **beside the number, not inside it**. The number's text is what
   the strip *is* — the probes read it, and so would anything else that
   wants to know which rounding this is — and a glyph smuggled in would

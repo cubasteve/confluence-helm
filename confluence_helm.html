@@ -1220,8 +1220,8 @@ body.night #cp-svg .wash{opacity:.55}
    is the gap: it keeps the border clear of the accent so the two curves
    are not touching. border-box means the border eats into the 24, so the
    footprint is unchanged. */
-.cv-chip .xno{position:absolute;left:36px;top:4px;width:24px;height:24px;
-  border-radius:12px;background:var(--panel);color:var(--ink);
+.cv-chip .xno{position:absolute;left:38px;top:6px;width:20px;height:20px;
+  border-radius:10px;background:var(--panel);color:var(--ink);
   border:2px solid var(--ink-dim);
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 0 0 2px var(--chip)}
@@ -1229,9 +1229,15 @@ body.night #cp-svg .wash{opacity:.55}
    hairlines of whatever face fontconfig found and reads as a smudge; two
    round-capped paths are the same mark at any size, in any theme, and
    match the cross on the app frame and the one on a user mark's tile. */
-/* 10 in a 20 of clear middle. The stroke goes UP as the mark comes
-   down: 2.8 in a 12 viewBox drawn at 10 is 2.3 real pixels, about what
-   2.4 at 13 was, so a smaller cross is not also a fainter one. */
+/* 10 in a 16 of clear middle: 2 px of air either side of the cross
+   rather than 5. The badge came in from 24 to 20 and the cross stayed
+   where it was, because the gap was the thing that looked wrong, not the
+   mark. Centre is unmoved - left and top came out by the 2 the radius
+   lost - so it still sits on the number's top-right corner and still
+   clears the name beside it, now by 2 px rather than exactly 0.
+   The stroke goes UP as the mark comes down: 2.8 in a 12 viewBox drawn
+   at 10 is 2.3 real pixels, about what 2.4 at 13 was, so a smaller cross
+   is not also a fainter one. */
 .cv-chip .xno svg{width:10px;height:10px;fill:none;stroke:currentColor;
   stroke-width:2.8;stroke-linecap:round}
 .cv-chip i{font-style:normal;width:44px;height:44px;border-radius:22px;flex:none;
