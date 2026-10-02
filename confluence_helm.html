@@ -147,6 +147,15 @@ body{display:flex;align-items:center;justify-content:center}
 #dots i{width:12px;height:12px;border-radius:50%;background:var(--label);
   opacity:.3;transition:opacity .25s,transform .25s,background .25s}
 #dots i.on{opacity:1;background:var(--accent);transform:scale(1.2)}
+/* The race reach's dot, first in the row because Tracks sits left of the
+   dial. Hidden outright when no race is running, so the row is two dots
+   again and nothing says there is a page that is not there. It never
+   takes .on: the frame covers the dots while Tracks is up, so the only
+   job it has is saying "there is one more place to go" from the dial. */
+#dot-reach{display:none}
+#dot-reach.live{display:block;animation:dotIn .42s cubic-bezier(.16,1,.3,1)}
+@keyframes dotIn{from{opacity:0;transform:translateX(9px) scale(.4)}
+                 to{opacity:.3;transform:none}}
 
 /* ---- windowed mode ----------------------------------------------------
    No page can change a monitor's resolution - the Fullscreen API only
@@ -292,6 +301,16 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* A launched app. */
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
 #app-run.on{display:block}
+/* Opened from the dock an app appears, which is right: a dock is a menu
+   and what it launches is a thing in front of you. Reached from the dial
+   during a race it is a PAGE, and a page slides - from the left, because
+   that is the side it sits on. Same duration and same easing as #svg and
+   #music so the three of them read as one row rather than two mechanisms.
+   .slid is the off-screen position and .anim is only ever on for the
+   length of the move: a transform transition left on permanently would
+   animate the frame every time fitStage ran. */
+#app-run.slid{transform:translateX(-100%)}
+#app-run.anim{transition:transform .42s cubic-bezier(.16,1,.3,1)}
 #app-body{position:absolute;inset:0;overflow:hidden}
 /* The frame's own furniture sits above whatever the app puts in the
    body. #tmap carries z-index:1 from the days it was a page rather than
@@ -2409,7 +2428,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
 
 </svg>
 
-<div id="dots"><i></i><i></i></div>
+<div id="dots"><i id="dot-reach"></i><i></i><i></i></div>
 
 <!-- The menu. One of them, for the dial's readings, the music page's and
      the course sheet's settings - see pickOpen. Outside all three: #music
@@ -5215,6 +5234,7 @@ function tick(){
   const off = (tState==='racing'||tState==='finished');
   $('t-plus').style.opacity = $('t-minus').style.opacity = off?'.2':'1';
   keepTick();                      /* rate-limits itself; see KEEP_MS */
+  paintDots();                     /* the reach dot follows tState, not a swipe */
   setTimeout(tick,120);
 }
 
@@ -5340,13 +5360,30 @@ function dumpProbe(log){
 const PAGE_MIN=1, PAGE_MAX=2;
 let PAGE_I=1;
 const PAGE_EL={1:()=>$('svg'), 2:()=>music};
+/* The indicator for the race reach, and the whole of it: two dots means
+   the dial and the music, three means Tracks is one swipe away. It
+   appears when a countdown or a race starts and goes when it ends, so
+   the row never offers a place that is not there. Called from tick as
+   well as from layoutPages, because tState changes in five places and
+   none of them is a page move - and it is cheap to call either way, the
+   class only being touched when the answer changes. */
+let dotLive=null;
+function paintDots(){
+  const on=raceOn();
+  if(on===dotLive) return;
+  dotLive=on;
+  $('dot-reach').classList.toggle('live',on);
+}
 function layoutPages(){
   for(let i=PAGE_MIN;i<=PAGE_MAX;i++)
     PAGE_EL[i]().style.transform='translateX('+((i-PAGE_I)*100)+'%)';
   music.classList.toggle('open',PAGE_I===2);
   if(typeof mqPage==='function') mqPage();   /* stop the names travelling off-page */
+  /* The first dot is the reach's and is not a page, so the page dots
+     start at index 1. */
   const d=$('dots').children;
-  for(let i=0;i<d.length;i++) d[i].classList.toggle('on',i===PAGE_I-PAGE_MIN);
+  for(let i=1;i<d.length;i++) d[i].classList.toggle('on',i-1===PAGE_I-PAGE_MIN);
+  paintDots();
 }
 /* The three ways off the page you are on, each refusing while the helm
    is locked. The judge above already will not call them - this is the
@@ -5382,22 +5419,60 @@ function goPage(i){
    in front of goPage rather than replacing it. Nothing is displaced: on
    the dial, goPage(0) clamps to 1 and does nothing, so three fingers
    right was a dead gesture there until now. */
+/* REACHED is the difference between a page and an app, and everything
+   else keys off it. Tracks launched from the dock is an app: it appears,
+   the map pans and pinches under your fingers, and the cross closes it.
+   Tracks REACHED from the dial is a page: it slides in from the left, the
+   map is a picture that follows the boat, and a three-finger swipe sends
+   it back. The same app, two manners, decided by how you got there.
+
+   It is not raceOn() because the race ending must not change the manner
+   of a page you are already standing on. Reaching it needs a race;
+   staying on it does not, or a gun going off while you read a track
+   would freeze the swipe you came in with and leave the cross as the
+   only way out. */
+let REACHED=false, reachBusy=false;
+const reachLive=()=>REACHED && !!APP.on && APP.on.id==='tracks';
+
 function raceReach(){
-  if(locked()||APP.on) return;
+  if(locked()||APP.on||reachBusy||!raceOn()) return;
   const t=APPS.find(a=>a.id==='tracks'); if(!t) return;
   markSlide('reach-open');
+  REACHED=true;
+  const f=$('app-run');
+  f.classList.add('slid');     /* off to the left BEFORE it is displayed */
   openApp(t);
+  /* Two frames, not one. display:none to block and the transform change
+     in the same style recalculation is not a transition - the browser
+     has nothing to animate from - and the frame simply appeared. The
+     first frame commits the off-screen position, the second moves it. */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    f.classList.add('anim');
+    f.classList.remove('slid');
+    setTimeout(()=>f.classList.remove('anim'), SLIDE_MS+80);
+  }));
 }
+
 /* One step out, the same step the cross at the foot takes: a sheet in
    front of the map closes first and the app itself next, so a swipe can
-   never shut the app out from under the library and lose the race you
-   were reading. Returns true when it consumed the gesture. */
+   never shut Tracks out from under the library and lose the race you
+   were reading. Returns true when it consumed the gesture - including
+   while the slide is still running, so a second swipe lands on nothing
+   rather than starting a move on top of one. */
 function reachBack(){
-  if(!APP.on||APP.on.id!=='tracks') return false;
+  if(reachBusy) return true;
+  if(!reachLive()) return false;
   if($('t-lib').classList.contains('on')){ closeLib(); return true; }
   markSlide('reach-close');
-  closeApp();
-  goPage(PAGE_MIN);          /* back to the dial, and a no-op when already there */
+  const f=$('app-run');
+  reachBusy=true;
+  f.classList.add('anim','slid');
+  setTimeout(()=>{
+    f.classList.remove('anim','slid');
+    reachBusy=false;
+    closeApp();                /* clears REACHED - see closeApp */
+    goPage(PAGE_MIN);          /* the dial, and a no-op when already there */
+  }, SLIDE_MS);
   return true;
 }
 
@@ -5503,12 +5578,6 @@ function gStart(){
   return G;
 }
 const gClaim=()=>{ gStart().claimed=true; };
-/* The other half of a claim, for a control that wants the gesture only
-   while it is a gesture it has a use for. The track map pans with one
-   finger and zooms with two; three is not the map's at all, so rather
-   than swallowing a swipe it cannot read, it hands the gesture back and
-   the judge below sees it. */
-const gRelease=()=>{ if(G) G.claimed=false; };
 /* On WINDOW, not #stage. #stage is border-radius:50%, and a rounded box
    does not hit-test outside its own shape - so a touch that lands on the
    rim, or on the digitizer's report of it a pixel or two proud of the
@@ -5652,7 +5721,7 @@ function judgeGesture(g){
      you are reading, thrown by the same thumb that scrolls it. The cross
      at the foot closes an app now, and only the cross. */
   if(APP.on){ if(drawDown && fromTop(sy)) openPanel();
-              else if(left && raceOn()) reachBack();
+              else if(left||right) reachBack();
               return; }
   /* The dock came UP from the bottom, so DOWN sends it back - but only
      from the dock's own patch of glass. It covers a strip at the foot
@@ -9096,18 +9165,18 @@ let tmapLastTap=0;
     cam=null; tileKey='';
     drawMap(shownTrack());
   };
-  /* Three fingers is never the map's: one pans, two zoom, and a third
-     is the race reach asking to leave. Drop whatever pan or pinch had
-     started and hand the gesture back. The fingers of a deliberate
-     three-finger swipe land within a few tens of milliseconds of each
-     other, so there is nothing on screen worth preserving - and the
-     transform goes back to identity so the half-started pan does not
-     sit there as a crooked map on the way out. */
-  const letGo=()=>{ ptrs.clear(); pin=null; drag=null; lock=false; cam=null;
-                    $('t-cam').removeAttribute('transform'); gRelease(); };
   svg.addEventListener('pointerdown',e=>{
     if(!MAPVIEW) return;                    /* nothing to move */
-    if(ptrs.size>=2) return letGo();
+    /* Reached from the dial during a race, the map is a picture rather
+       than a control: it follows the boat, and every swipe on it belongs
+       to the page. Claiming nothing is what makes going back smooth. The
+       first try at this let the map start a pan and handed the gesture
+       back when a third finger landed - which worked, but the two
+       fingers that arrived first had already panned and pinched, so the
+       map lurched on the way out every time. A manual pan is something
+       you do reading a track afterwards, which is the dock app, and
+       there this does not fire. */
+    if(reachLive()) return;
     gClaim();
     ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
     try{ svg.setPointerCapture(e.pointerId); }catch(err){}
@@ -13611,6 +13680,7 @@ function openApp(a){
 function closeApp(){
   const a=APP.on; if(!a) return;
   APP.on=null;
+  REACHED=false;        /* whatever closed it, this is no longer a page */
   /* The app gives its own memory back FIRST, while its nodes are still
      in the document - a canvas already detached can still hold its
      backing store, and an in-flight fetch does not care either way. */

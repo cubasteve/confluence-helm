@@ -736,10 +736,12 @@ Z=await state(p);
 t.ok(Z.page===1 && !Z.app, 'and three right comes back to the dial rather '
      +'than opening Tracks from a page that is not the dial', JSON.stringify(Z));
 
-t.head('a third finger on the map is the map handing the gesture back');
-/* The map gClaims every touch on it - one finger pans, two zoom - so
-   without gRelease a three-finger swipe inside Tracks was swallowed and
-   there was no way out but the cross. */
+t.head('reached from the dial the map is a picture, not a control');
+/* The map gClaims every touch on it - one finger pans, two zoom - and a
+   claimed gesture is never judged. The first try handed the gesture back
+   when a third finger landed, which worked but lurched the map on the way
+   out, because the first two fingers had already panned and pinched. A
+   reached page claims nothing at all. */
 await fling(p,3,260,0);
 t.ok((await state(p)).app==='tracks', 'Tracks is open again');
 await p.evaluate(()=>{ MAPVIEW={mx:0.5,my:0.5,scale:256*Math.pow(2,15)}; });
@@ -753,16 +755,24 @@ const onMap=(n,dx)=>p.evaluate(([n,dx])=>{
   ids.forEach((id,i)=>ev('pointermove',id, x+i*36+dx));
   ids.forEach((id,i)=>ev('pointerup',  id, x+i*36+dx));
 },[n,dx]);
+const cam=()=>p.evaluate(()=>{ const c=document.getElementById('t-cam');
+  return c?(c.getAttribute('transform')||''):''; });
 await onMap(1,-260); await p.waitForTimeout(650);
-t.ok((await state(p)).app==='tracks',
-     'one finger on the map is the map\'s own pan and closes nothing');
+t.ok((await cam())==='',
+     'one finger does not pan it - the map follows the boat during a race, '
+     +'and a manual pan is something you do reading a track afterwards',
+     JSON.stringify(await cam()));
+t.ok(await p.evaluate(()=>MAPVIEW && MAPVIEW.mx===0.5),
+     'and nothing is committed behind it either',
+     JSON.stringify(await p.evaluate(()=>MAPVIEW)));
+t.ok((await state(p)).app==='tracks', 'and closes nothing: one finger is not a swipe');
+await onMap(2,-260); await p.waitForTimeout(650);
+t.ok((await cam())==='', 'two do not pinch it either');
 await onMap(3,-260); await p.waitForTimeout(650);
 Z=await state(p);
-t.ok(!Z.app, 'three fingers on the map itself still closes the app',
+t.ok(!Z.app, 'and three fingers on the map itself go back to the dial, '
+     +'with no lurch on the way because nothing ever started',
      JSON.stringify(Z));
-t.ok(await p.evaluate(()=>!document.getElementById('t-cam')
-       ||!document.getElementById('t-cam').getAttribute('transform')),
-     'and the abandoned pan is not left on screen as a crooked map');
 
 t.head('the reach is the race\'s, and gives it back afterwards');
 await race('racing');
@@ -775,5 +785,103 @@ await fling(p,3,260,0);
 Z=await state(p);
 t.ok(!Z.app && Z.page===1,
      'once the race is over the gesture is dead glass again', JSON.stringify(Z));
+
+t.head('either direction goes back');
+/* There is nothing to the left of Tracks to page to, so a swipe that way
+   meaning nothing was only ever a chance to get it wrong with cold hands. */
+await race('countdown');
+await fling(p,3,260,0);
+t.ok((await state(p)).app==='tracks', 'reached again');
+await fling(p,3,260,0);                    /* the way you came in */
+t.ok(!(await state(p)).app, 'three RIGHT goes back too, not just three left');
+
+t.head('it slides in, so it arrives the way a page arrives');
+/* display:none to block and the transform change in one style
+   recalculation is not a transition - the frame simply appeared, which is
+   what made going back feel like a jump cut. Two frames is the fix, and
+   the classes are the evidence: .slid is the off-screen position, .anim is
+   on only for the length of the move. */
+const frame=()=>p.evaluate(()=>{ const f=document.getElementById('app-run');
+  return {on:f.classList.contains('on'), slid:f.classList.contains('slid'),
+          anim:f.classList.contains('anim')}; });
+await race('countdown');
+await p.evaluate(()=>raceReach());
+let F=await frame();
+t.ok(F.on && F.slid, 'it is displayed off to the left before it moves',
+     JSON.stringify(F));
+t.ok(!F.anim, 'with no transition yet, or there would be nothing to move from');
+await p.waitForTimeout(90);
+F=await frame();
+t.ok(F.anim && !F.slid, 'two frames later it is moving to the dial\'s place',
+     JSON.stringify(F));
+await p.waitForTimeout(600);
+F=await frame();
+t.ok(F.on && !F.anim && !F.slid,
+     'and the transition comes off at the end, so fitStage cannot animate '
+     +'the frame later by accident', JSON.stringify(F));
+await fling(p,3,-260,0);
+t.ok(!(await state(p)).app, 'and the swipe back closes it');
+t.ok(await p.evaluate(()=>{ const f=document.getElementById('app-run');
+       return !f.classList.contains('slid') && !f.classList.contains('anim'); }),
+     'leaving no transform behind on the frame the dock reuses');
+
+t.head('the dot says the third page is there');
+const dot=()=>p.evaluate(()=>{ const d=document.getElementById('dot-reach');
+  return {live:d.classList.contains('live'),
+          shown:getComputedStyle(d).display!=='none',
+          dots:[...document.getElementById('dots').children]
+                 .filter(e=>getComputedStyle(e).display!=='none').length}; });
+await race('idle');
+await p.waitForTimeout(260);               /* tick paints it, not a swipe */
+let D=await dot();
+t.ok(!D.live && !D.shown, 'idle: no dot, because there is no third page');
+t.ok(D.dots===2, 'two dots, the dial and the music', JSON.stringify(D));
+await race('countdown');
+await p.waitForTimeout(260);
+D=await dot();
+t.ok(D.live && D.shown, 'a countdown brings it up');
+t.ok(D.dots===3, 'three dots now - one more place to go', JSON.stringify(D));
+await race('racing'); await p.waitForTimeout(260);
+t.ok((await dot()).live, 'and it stays up through the race');
+await race('idle'); await p.waitForTimeout(260);
+t.ok(!(await dot()).live, 'and goes when the race does');
+
+t.head('the page dot is still the page\'s');
+/* The reach dot is first in the row and is NOT a page, so the page dots
+   are offset by one. Getting that wrong lit the reach dot for the dial. */
+t.ok(await p.evaluate(()=>{ const d=document.getElementById('dots').children;
+       return !d[0].classList.contains('on') && d[1].classList.contains('on')
+              && !d[2].classList.contains('on'); }),
+     'on the dial it is the dial\'s dot that is lit, not the reach\'s');
+await fling(p,3,-260,0);
+t.ok(await p.evaluate(()=>{ const d=document.getElementById('dots').children;
+       return !d[0].classList.contains('on') && !d[1].classList.contains('on')
+              && d[2].classList.contains('on'); }),
+     'and on the music page it is the music\'s');
+await fling(p,3,260,0);
+
+t.head('from the dock it is an app, not a page');
+/* The same app, two manners. Launched from the dock the map pans under
+   your fingers and the cross closes it, race or no race - which is what
+   you want reading a track back. REACHED is the whole difference. */
+await race('racing');
+await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
+await p.waitForTimeout(900);
+t.ok((await state(p)).app==='tracks', 'opened from the dock mid-race');
+t.ok(!await p.evaluate(()=>REACHED), 'and it is not a reached page');
+await fling(p,3,-260,0);
+t.ok((await state(p)).app==='tracks',
+     'so a three-finger swipe does NOT close it - the cross does');
+/* The transform is the LIVE pan; a finished one is folded into MAPVIEW
+   and the transform cleared, so the committed view is what to look at. */
+await p.evaluate(()=>{ MAPVIEW={mx:0.5,my:0.5,scale:256*Math.pow(2,15)}; });
+await onMap(1,-260); await p.waitForTimeout(650);
+t.ok(await p.evaluate(()=>!!MAPVIEW && MAPVIEW.mx!==0.5),
+     'and the map pans under one finger again, the way it always did',
+     JSON.stringify(await p.evaluate(()=>MAPVIEW)));
+await p.evaluate(()=>closeApp());
+await p.waitForTimeout(400);
+t.ok(!(await state(p)).app, 'the cross closes it');
+await race('idle');
 
 await t.done(b);

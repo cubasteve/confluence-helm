@@ -71,8 +71,9 @@ swipe off the dial, open and full size, and one swipe back.
 
 ```
       [tracks]  <->   DIAL   <->   music       while a race is running
-                       * .          . *        (the dots still say two:
-                                                tracks is a reach, not a page)
+         .             * .          . *        (three dots now - the first
+                                                is the reach's, and it is
+                                                not a page: see below)
 ```
 
 **It is a page in reach, not a page in `PAGE_EL`.** Tracks is an app with
@@ -87,7 +88,8 @@ so the gesture is the only part it got.
 **The direction follows the carousel, not the fingers.** The dial is what
 you come back to, so Tracks sits to the *left* of it and is reached
 exactly the way page 1 is reached from page 2: fingers travelling right,
-which is `right` in the judge. Fingers left comes back.
+which is `right` in the judge. Fingers left comes back — and so does
+fingers right, for the reason below.
 
 That choice is what keeps the music page. Three fingers left still pages
 to music mid-race, because the reach took the gesture that did *nothing* —
@@ -99,27 +101,111 @@ just the way back to the dial.
 
 **The exception to "only the cross".** A swipe does close an app here,
 which the section above says nothing does. The narrowness is the defence:
-it is three fingers, not the one that scrolls; only while a race is
-running; only the Tracks app; and it takes one step out the same way the
-cross does, so the library closes before the app does and a swipe can
-never shut Tracks out from under a race you were reading.
+it is three fingers, not the one that scrolls; only a page you *reached*,
+never one you launched; and it takes one step out the same way the cross
+does, so the library closes before the app does and a swipe can never
+shut Tracks out from under a race you were reading.
 
-**The map had to hand the gesture back.** `#t-svg` `gClaim()`s every
-touch on it — one finger pans, two zoom — and a claimed gesture is never
-judged, so the close swipe was swallowed and there was no way out but the
-cross. Three fingers is not the map's at all, so the third `pointerdown`
-now calls `letGo()`: it drops the pan or pinch in progress, puts
-`#t-cam`'s transform back to identity so a half-started pan is not left
-on screen as a crooked map, and calls `gRelease()` — the other half of
-`gClaim`, which clears the claim so the judge sees the swipe. The fingers
-of a deliberate three-finger swipe land within tens of milliseconds of
-each other, so there is nothing on screen worth preserving, and the view
-is rebuilt from scratch on the way back in regardless.
+**Either direction goes back.** There is nothing to the left of Tracks to
+page to, so a swipe that way meaning *nothing* was only ever a chance to
+get it wrong with cold hands. Three fingers in either direction returns to
+the dial.
 
-The probes cover both halves, and both were checked by breaking them:
-removing the open gesture fails six assertions, and removing `letGo()`
-fails exactly one — "three fingers on the map itself still closes the
-app" — which is the one that would otherwise have gone unnoticed.
+### REACHED: the same app, two manners
+
+The difference between a page and an app is one flag, and everything keys
+off it.
+
+| | from the dock | reached from the dial |
+|---|---|---|
+| arrives | appears | slides in from the left |
+| the map | pans and pinches under your fingers | a picture that follows the boat |
+| leaves by | the cross | three fingers, either way, or the cross |
+
+Launched from the dock, Tracks is an app: a dock is a menu and what it
+launches is a thing in front of you. Reached from the dial during a race,
+it is a page. Same app, same nodes, same `openApp` — `REACHED` decides the
+manner.
+
+It is deliberately *not* `raceOn()`. Reaching the page needs a race;
+standing on it does not. Keying the manner off the live race state meant a
+gun going off while you read a track would freeze the swipe you came in
+with and leave the cross as the only way out, which is the kind of thing
+that is only ever discovered at the wrong moment.
+
+**The map had to stop claiming.** `#t-svg` `gClaim()`s every touch on it,
+and a claimed gesture is never judged. The first version of this handed
+the gesture back when a third finger landed — a `gRelease()` paired with
+`gClaim()` — and it worked, but the two fingers that arrived first had
+already started a pan and a pinch, so the map lurched every time you
+swiped off it. Measured, a single probe swipe moved the committed view's
+`mx` from `0.5` to `0.5000309944`; felt, it was the map jumping as you
+left.
+
+So a reached page claims nothing at all: `if(reachLive()) return;` before
+the claim, and the pan, the pinch and the double-tap refit all go quiet
+for as long as you are standing on it. The justification is that a manual
+pan is something you do *reading a track back*, which is the dock app,
+where none of this fires. The cost is that you cannot pinch into the track
+mid-race. If that turns out to matter, the knob is to freeze only
+multi-finger gestures and accept a shorter lurch.
+
+### The dot is the indicator
+
+Two dots means the dial and the music. Three means Tracks is one swipe
+away. The dot appears when a countdown or a race starts and goes when it
+ends, so the row never offers a place that is not there — and it animates
+in rather than popping, because a dot that was not there a moment ago
+should say so.
+
+It is the first `<i>` in `#dots`, because Tracks sits left of the dial,
+and it is **not a page**: the page dots are therefore offset by one, which
+is the one thing to get wrong here. Getting it wrong lights the reach's
+dot for the dial and there is a probe for exactly that.
+
+It never takes `.on`. The app frame is z25 and the dots are z2, so while
+Tracks is up the dots are covered anyway; the dot's whole job is saying
+"there is one more place to go" from the dial.
+
+`paintDots()` is called from `tick()` rather than from the five places
+`tState` changes, because none of those is a page move and all of them
+would have to remember. It is a cached comparison, so the class is only
+touched when the answer changes.
+
+### Why it slides
+
+`#app-run` is `display:none` until `.on`, and going from `none` to `block`
+with a transform change in the same style recalculation is not a
+transition — the browser has nothing to animate from, so the frame simply
+appeared. That is what made going back feel like a jump cut rather than a
+page move.
+
+Two frames fixes it: one to commit the off-screen position, one to start
+the move.
+
+```
+raceReach()   .slid           frame is at -100%, no transition
+  rAF         .slid           the browser accepts that as the start
+  rAF         .anim           transition on, .slid off -> it moves
+  +500ms                      .anim comes off again
+```
+
+`.anim` comes off at the end on purpose. A transform transition left on
+permanently would animate the frame every time `fitStage()` ran. Same
+duration and same easing as `#svg` and `#music` — `.42s
+cubic-bezier(.16,1,.3,1)` — so the three of them read as one row rather
+than two mechanisms.
+
+Going back runs it in reverse and *then* calls `closeApp()`, because
+`closeApp` empties `#app-body`: tearing the map out from under a slide
+would animate an empty rectangle. `reachBusy` holds for the length of the
+move and swallows a second swipe, so you cannot start a move on top of
+one.
+
+The probes cover all three, and each was checked by breaking it: removing
+the map's early return fails the frozen-map assertions, misnumbering the
+dots fails the two dot assertions, and collapsing the two frames into one
+fails the slide assertions.
 
 ### How many fingers
 
