@@ -10708,12 +10708,21 @@ function prevDraw(){
       const col = sd.length===1 ? (sd[0]==='p'?CP_PORT:CP_STBD) : CP_NAVY;
       const txt=b.labels.join('·');
       const wd=Math.max(26, 13*txt.length+14), ht=26;
+      /* ON the mark, not above it. A mark that is in the course gets no
+         dot of its own - the club skips those, and so do we - so this
+         badge is the only thing drawn at the buoy, and 16 px of offset
+         made it read AS the buoy. The arc is centred on the real
+         position, so the rounding then looked like it was happening
+         beside the mark rather than round it. Centred, the arc wraps the
+         badge and the picture says what is true: at this scale the
+         club's 110 m radius is about 25 px, so a 26 px badge sits inside
+         the loop without covering where the route runs. */
       const cx=X(D.M[id]), cy=Y(D.M[id]);
-      o+=`<g transform="translate(${f(cx)} ${f(cy-16)})">`
+      o+=`<g transform="translate(${f(cx)} ${f(cy)})">`
         +`<rect class="bg" x="${f(-wd/2)}" y="${f(-ht/2)}" width="${f(wd)}"`
         +` height="${ht}" rx="13" fill="${col}"></rect>`
         +`<text class="bt" x="0" y="6">`+esc(txt)+`</text></g>`;
-      o+=`<text class="nm" x="${f(cx)}" y="${f(cy+26)}">`
+      o+=`<text class="nm" x="${f(cx)}" y="${f(cy+34)}">`
         +esc((D.M[id].name||'').toUpperCase())+`</text>`;
     });
   }

@@ -806,6 +806,115 @@ t.ok(await p.evaluate(()=>{
           sailed part is not */
        return info.line.slice(4,-4).every(p=>inside(p.lat,p.lon)); }),
      'and a route that would have crossed land is put round it');
+t.head('the rounding happens AT the mark, and looks like it does');
+/* A mark that is in the course gets no dot of its own - the club skips
+   those and so do we - so the numbered badge is the only thing drawn at
+   the buoy, and it has to BE the buoy. It used to sit 16 px above, which
+   put the arc a badge-height below the only thing on the glass saying
+   where the mark was, and the rounding read as happening beside the mark
+   rather than round it. */
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb10','rum']; COURSE.next=0;
+  COURSE.side=['P','S','P']; courseSave(); renderCourse(); prevDraw(); });
+await p.waitForTimeout(300);
+const onMark=await p.evaluate(()=>{
+  const D=prevInfo();
+  const sv=document.getElementById('cp-svg');
+  /* the fit, recomputed the way prevDraw does, so the badge's drawn
+     position can be checked against the mark's projected one */
+  const g=[...sv.querySelectorAll('g[transform^="translate"]')];
+  const badges=g.map(n=>{
+    const m=/translate\(([-\d.]+) ([-\d.]+)\)/.exec(n.getAttribute('transform'));
+    const t=n.querySelector('text.bt');
+    return m&&t ? {x:+m[1], y:+m[2], txt:t.textContent} : null;
+  }).filter(Boolean);
+  /* and the arcs, whose centres we fit from three points */
+  const kx=la=>111320*Math.cos(la*Math.PI/180), ky=111320;
+  const centres=D.info.arcs.map(a=>{
+    const P=[a.pts[0], a.pts[(a.pts.length/2)|0], a.pts[a.pts.length-1]];
+    const K=kx(P[0].lat);
+    const [x1,y1]=[P[0].lon*K,P[0].lat*ky], [x2,y2]=[P[1].lon*K,P[1].lat*ky],
+          [x3,y3]=[P[2].lon*K,P[2].lat*ky];
+    const d=2*(x1*(y2-y3)+x2*(y3-y1)+x3*(y1-y2));
+    const ux=((x1*x1+y1*y1)*(y2-y3)+(x2*x2+y2*y2)*(y3-y1)+(x3*x3+y3*y3)*(y1-y2))/d;
+    const uy=((x1*x1+y1*y1)*(x3-x2)+(x2*x2+y2*y2)*(x1-x3)+(x3*x3+y3*y3)*(x2-x1))/d;
+    return {lat:uy/ky, lon:ux/K, R:Math.hypot(x1-ux,y1-uy)};
+  });
+  /* how far each arc centre is from the nearest mark in the course */
+  const off=centres.map(c=>{
+    let best=1e9;
+    Object.keys(D.M).forEach(id=>{ const m=D.M[id], K=kx(m.lat);
+      best=Math.min(best, Math.hypot((c.lon-m.lon)*K,(c.lat-m.lat)*ky)); });
+    return best;
+  });
+  return {badges:badges.length, offs:off.map(v=>Math.round(v*100)/100),
+          radii:centres.map(c=>Math.round(c.R))};
+});
+t.ok(onMark.offs.every(v=>v<1),
+     'every rounding arc is centred on its mark, to under a metre',
+     JSON.stringify(onMark.offs));
+/* And on the LIVE mark. The preview could perfectly well be drawing a
+   baked copy of the book from the day it was written, and every check
+   above would still pass because the route and the badges would move
+   together. This is the one that would notice. */
+t.ok(await p.evaluate(()=>{
+       const D=prevInfo();
+       return COURSE.marks.every(id=>{ const m=markOf(id), q=D.M[id];
+         return m && q && m.lat===q.lat && m.lon===q.lon; }); }),
+     'and on the positions MARKS holds right now, not a copy taken when '
+     +'the preview was written');
+/* 110 give or take the flat-earth fit above, which is a metre out at
+   this latitude - the point is that the radius is the club's, not that
+   the probe's own arithmetic is exact. */
+t.ok(onMark.radii.every(r=>Math.abs(r-110)<=2),
+     'at the club\'s own 110 m, which their source calls "big enough to '
+     +'read at lake scale"', JSON.stringify(onMark.radii));
+/* THE BADGE IS THE MARK, measured where it is actually drawn. Fit a
+   circle to each rounding arc in the SVG's own coordinates and the
+   centre of it is the mark; the badge has to be sitting there. Done this
+   way rather than against a remembered pixel so it survives the box
+   being resized - and because the first version of this probe compared
+   the badge to its own name label, which moves with it and so could not
+   catch the thing it was written to catch. */
+const seat=await p.evaluate(()=>{
+  const sv=document.getElementById('cp-svg');
+  const pts=d=>(d.match(/-?[\d.]+/g)||[]).map(Number)
+                 .reduce((a,v,i,A)=>(i%2?a:[...a,{x:v,y:A[i+1]}]),[]);
+  const fit=P=>{ const [a,b,c]=[P[0],P[(P.length/2)|0],P[P.length-1]];
+    const d=2*(a.x*(b.y-c.y)+b.x*(c.y-a.y)+c.x*(a.y-b.y));
+    if(!d) return null;
+    return {x:((a.x*a.x+a.y*a.y)*(b.y-c.y)+(b.x*b.x+b.y*b.y)*(c.y-a.y)
+              +(c.x*c.x+c.y*c.y)*(a.y-b.y))/d,
+            y:((a.x*a.x+a.y*a.y)*(c.x-b.x)+(b.x*b.x+b.y*b.y)*(a.x-c.x)
+              +(c.x*c.x+c.y*c.y)*(b.x-a.x))/d}; };
+  const badges=[...sv.querySelectorAll('text.bt')].map(n=>{
+    const m=/translate\(([-\d.]+) ([-\d.]+)\)/
+              .exec(n.parentNode.getAttribute('transform'));
+    return {x:+m[1], y:+m[2], txt:n.textContent}; });
+  const out=[...sv.querySelectorAll('path.rnd')].map(a=>{
+    const c=fit(pts(a.getAttribute('d'))); if(!c) return null;
+    let best=null;
+    badges.forEach(b=>{ const d=Math.hypot(b.x-c.x, b.y-c.y);
+      if(!best||d<best.d) best={txt:b.txt, d:Math.round(d*10)/10}; });
+    return best; }).filter(Boolean);
+  return {seats:out, badges:badges.length};
+});
+t.ok(seat.seats.length>0, 'there are rounding arcs drawn to check',
+     JSON.stringify(seat));
+t.ok(seat.seats.every(v=>v.d<4),
+     'and the numbered badge sits ON the mark the arc goes round, in the '
+     +'picture as well as in the data - it used to be 16 px above, which '
+     +'is what made the rounding look like it was happening beside the '
+     +'mark rather than round it', JSON.stringify(seat.seats));
+t.ok(await p.evaluate(()=>{
+       const sv=document.getElementById('cp-svg');
+       return [...sv.querySelectorAll('text.bt')].every(n=>{
+         const m=/translate\(([-\d.]+) ([-\d.]+)\)/
+                  .exec(n.parentNode.getAttribute('transform'));
+         const nm=[...sv.querySelectorAll('text.nm')]
+                    .find(k=>Math.abs(+k.getAttribute('x')-(+m[1]))<0.6);
+         return nm && +nm.getAttribute('y') - (+m[2]) >= 26; }); }),
+     'with its name far enough below to clear the badge it now sits under');
+
 await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
   COURSE.side=['P','S','P']; courseSave(); renderCourse(); prevDraw(); });
 await p.waitForTimeout(250);

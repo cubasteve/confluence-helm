@@ -651,7 +651,7 @@ roundings, a buoy rounded twice carrying `1·3`, coloured by side. So is
 the legend bottom-left, the wind box top-right, and the sentence at the
 foot — `ABOUT 4.2 NM SAILED · ONE BEAT AND ONE RUN`.
 
-Three deliberate departures, and only three:
+Four deliberate departures, and only four:
 
 - **Names are drawn on**, where the club uses hover tooltips. There is
   no hover on a touch panel.
@@ -660,6 +660,50 @@ Three deliberate departures, and only three:
   one thing this panel is not allowed to spend. Day and dusk get it as
   the club draws it.
 - **The wind can come from the forecast.** See below.
+- **The numbered badge sits on the mark**, where the club's lands wherever
+  Leaflet's default puts a `divIcon` with `iconSize: null` — down and to
+  the right, since their stylesheet has no rule for `mk-num` at all.
+
+### The badge has to be the mark
+
+This one was a bug of mine, reported as a suspicion that the preview was
+drawing the old coordinates.
+
+A mark that is *in the course* gets no dot of its own — the club skips
+those, `if (used[m.id]) return`, and so do we — so the numbered badge is
+the only thing drawn at the buoy. I had it 16 px above the mark. The arc
+was centred on the real position all along, which put the rounding a
+badge-height below the only thing on the glass saying where the mark was,
+and the whole thing read as a rounding happening *beside* the mark.
+
+The coordinates were never the problem, and the demo sail is what shows
+it. Closest approach of that recorded race to each mark it rounds, under
+the book before the survey correction and after:
+
+| mark | before | after |
+|---|---|---|
+| Romance Flag | 32 m | **6 m** |
+| Romance Ball | 114 m | **6 m** |
+| Rum | 32 m | **20 m** |
+| Gosling | **4 m** | 15 m |
+| CB 10 | 80 m | **6 m** |
+
+Four of the five got closer, two of them dramatically, and Gosling's 4 →
+15 m is inside the noise of a recorded track. The surveyed positions are
+better, not worse.
+
+Three probes hold it now. The arc centres sit within a metre of their
+marks; the badge sits within 4 px of the centre of the arc it belongs to,
+*measured off the drawn SVG* rather than off a remembered number; and
+`prevInfo`'s mark table is checked against `markOf` so a baked copy of
+the book would be caught — which is what the original suspicion would
+have been, had it been true.
+
+The second of those took two attempts. The first version compared the
+badge to its own name label, which moves *with* the badge, so it passed
+happily with the offset put back. A probe that cannot fail is worse than
+no probe, and the only way to find out is to break the thing on purpose
+and watch.
 
 **Keeping the route on the water** is `keepOnWater()`: the drawn line is
 densified to 10 m, any stretch on land is replaced by an A\* path over a
