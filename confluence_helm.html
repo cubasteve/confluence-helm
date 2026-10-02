@@ -1213,16 +1213,27 @@ body.night #cp-svg .wash{opacity:.55}
    what the strip IS, read by the probes and by anything else that wants
    to know which rounding this is, and a glyph smuggled into it would
    make that '1✕'. */
+/* Two rings, and they are doing different jobs. The BORDER draws the
+   badge as a thing with an edge - without it a dark disc on the accent
+   circle reads as a hole punched in the number rather than a control
+   sitting on it. The box-shadow outside it is the chip's own colour, and
+   is the gap: it keeps the border clear of the accent so the two curves
+   are not touching. border-box means the border eats into the 24, so the
+   footprint is unchanged. */
 .cv-chip .xno{position:absolute;left:36px;top:4px;width:24px;height:24px;
   border-radius:12px;background:var(--panel);color:var(--ink);
+  border:2px solid var(--ink-dim);
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 0 0 2px var(--chip)}
 /* Stroked rather than the ✕ character. At this size the glyph is a few
    hairlines of whatever face fontconfig found and reads as a smudge; two
    round-capped paths are the same mark at any size, in any theme, and
    match the cross on the app frame and the one on a user mark's tile. */
-.cv-chip .xno svg{width:13px;height:13px;fill:none;stroke:currentColor;
-  stroke-width:2.4;stroke-linecap:round}
+/* 10 in a 20 of clear middle. The stroke goes UP as the mark comes
+   down: 2.8 in a 12 viewBox drawn at 10 is 2.3 real pixels, about what
+   2.4 at 13 was, so a smaller cross is not also a fainter one. */
+.cv-chip .xno svg{width:10px;height:10px;fill:none;stroke:currentColor;
+  stroke-width:2.8;stroke-linecap:round}
 .cv-chip i{font-style:normal;width:44px;height:44px;border-radius:22px;flex:none;
   background:var(--accent);color:#fff;font-size:19px;font-weight:600;
   display:flex;align-items:center;justify-content:center}

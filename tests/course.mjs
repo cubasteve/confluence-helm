@@ -298,7 +298,16 @@ const crosses=()=>p.evaluate(()=>({
      its place - it catches a plain ✕ character being put back. */
   inside:!!document.querySelector('#cv-route .cv-chip i.no .xno'),
   nums:[...document.querySelectorAll('#cv-route .cv-chip[data-chip] i.no')]
-         .map(i=>i.textContent)}));
+         .map(i=>i.textContent),
+  /* the badge's own edge, and the gap that keeps that edge off the
+     accent circle under it - two rings doing two different jobs */
+  ring:(()=>{ const x=document.querySelector('#cv-route .cv-chip .xno');
+    if(!x) return null; const c=getComputedStyle(x);
+    return {border:parseFloat(c.borderTopWidth)||0,
+            shadow:c.boxShadow!=='none',
+            w:Math.round(x.getBoundingClientRect().width),
+            glyph:Math.round((x.querySelector('svg')||{getBoundingClientRect:
+              ()=>({width:0})}).getBoundingClientRect().width)}; })()}));
 let X=await crosses();
 t.ok(X.route.length===3 && X.route.every(Boolean),
      'every rounding in the route carries one', JSON.stringify(X.route));
@@ -310,6 +319,14 @@ t.ok(!X.inside,
      +'wants to know which rounding this is');
 t.ok(X.nums.join()==='1,2,3', 'so the number is still just the number',
      X.nums.join());
+t.ok(X.ring.border>=2, 'the badge has an edge of its own - without one a dark '
+     +'disc on the accent circle reads as a hole punched in the number rather '
+     +'than a control sitting on it', X.ring.border+' px');
+t.ok(X.ring.shadow, 'and a ring of the chip\'s own colour outside that, which '
+     +'is the gap keeping the two curves off each other');
+t.ok(X.ring.glyph < X.ring.w*0.5,
+     'the cross is small against the badge it sits in',
+     X.ring.glyph+' in '+X.ring.w);
 
 /* The cross takes the tap as well as marking it: a finger aimed at a
    cross that lands two pixels off should not flip the rounding to the

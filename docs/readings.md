@@ -487,18 +487,30 @@ That was true for a long time before anything on the glass admitted it:
 the number dropped the rounding and looked exactly like a number.
 
 The cross is a **label, not a control**. The whole 44 px circle under it
-is still the target — asking a cold thumb on a moving boat to hit 24 px
-would be the opposite of the point — and the cross is simply where the
-eye learns that the circle does something. It takes the tap as well,
+is still the target — asking a cold thumb on a moving boat to hit a 24 px
+badge would be the opposite of the point — and the cross is simply where
+the eye learns that the circle does something. It takes the tap as well,
 because a finger aimed at a cross that lands two pixels off it should not
 flip the rounding to the other side of the mark instead.
 
+**The badge wears two rings**, and they do different jobs. The border is
+its own edge: without one, a dark disc sitting on the accent circle reads
+as a *hole punched in the number* rather than as something resting on it.
+The `box-shadow` outside the border is the chip's own colour, and it is
+the gap — it keeps the border clear of the accent so the two curves are
+not touching. `border-box` means the border eats into the 24 px rather
+than growing it, so the footprint is the same either way.
+
 Two details that look like fussiness and are not:
 
-- It is **drawn, not typed**. At 13 px the `✕` character is a few
+- It is **drawn, not typed**. At this size the `✕` character is a few
   hairlines of whatever face fontconfig found and reads as a smudge; two
   round-capped paths are the same mark at any size and in any theme, and
   match the cross on the app frame and the one on a user mark's tile.
+  Being drawn is also what lets the mark shrink without fading: the cross
+  is 10 px in a 20 px of clear middle, and the stroke went *up* as it came
+  down — 2.8 in a 12 viewBox drawn at 10 is 2.3 real pixels, about what
+  2.4 at 13 was.
 - It sits **beside the number, not inside it**. The number's text is what
   the strip *is* — the probes read it, and so would anything else that
   wants to know which rounding this is — and a glyph smuggled in would
