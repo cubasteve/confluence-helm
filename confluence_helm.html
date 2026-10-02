@@ -2783,7 +2783,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        along with its other three sources. -->
   <div class="a-head"><div class="a-h1" id="t-title"></div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
-    <defs><clipPath id="t-clip"><circle cx="540" cy="404" r="228"/></clipPath></defs>
+    <!-- An oblong, not a circle. A circle 456 across wasted the widest
+         part of the glass either side of it, and a lake is a thing you
+         want more of across than down. Same top and bottom edges as the
+         circle had, so nothing was given up to get it - see MAP_HW. -->
+    <defs><clipPath id="t-clip">
+      <rect x="152" y="176" width="776" height="460" rx="52"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <!-- The camera. A pinch or a drag transforms THIS group while the
            finger is down and commits to MAPVIEW on release, so the tiles
@@ -8986,10 +8991,35 @@ pollMusic(); musicTick();
    stretch rather than needing a separate graph.
    ================================================================== */
 const tmap=$('tmap');
-/* The circle used to reach y=665 with the stats row starting at 640 -
-   the chart ran into the numbers. Up a little and in a little clears
-   both it and the credit line above. */
-const MAP_CX=540, MAP_CY=404, MAP_R=232;
+/* The chart was a circle 456 px across, which on round glass threw away
+   the widest part of the panel: at the height of the chart the glass is
+   nearly 800 px across and the map was using 456 of it. It is an oblong
+   now - 776 by 460, the tile box 4 px proud of the clip at every edge so
+   the rounded corners have something behind them, exactly as the circle's
+   232 stood proud of its 228.
+
+   The edges are chosen rather than inherited. Top and bottom are where the
+   circle's were, so no water was given up to gain the width: above is the
+   empty band under the name pill and the title, and below, y=636 still
+   clears the stats row that starts around 662 - the chart ran into those
+   numbers once and it is not worth doing twice. The width is what the
+   glass allows: with rx=52 the top corners land 510 px from the middle of
+   a 540 radius, 94.5%, which is the margin the rail and the second stats
+   row already use rather than a coincidence.
+
+   HW and HH rather than one R because nothing about the box is round any
+   more: the off-view test and the tile box both have to know which way
+   they are being asked.
+
+   MAP_FIT is the circle the AUTO-FIT still uses, and it is deliberately
+   the old 232. The ask was a wider view at the same zoom, and those pull
+   against each other: a fit measured against the new box would put the
+   track's widest reach at 392 px instead of 232 and zoom in 1.4x on a
+   square course, so you would get a bigger track rather than more lake -
+   the opposite of the point. Leaving the fit where it was means a track
+   lands at exactly the size it always did and all 2.19x of the extra
+   glass fills with water. */
+const MAP_CX=540, MAP_CY=406, MAP_HW=392, MAP_HH=234, MAP_FIT=232;
 
 /* When the plugin owns recording, the points live on the boat and TRK
    stays empty here - trackSample() returns immediately in that mode. So
@@ -9056,18 +9086,22 @@ function fitView(P){
   const mx=(x0+x1)/2, my=(y0+y1)/2;
   /* Fit the farthest actual fix, not the bounding box. A diagonal track's
      bbox corner sits sqrt(2)/2 of a span from centre and pokes out of the
-     circle even when no real point does - which is exactly the bug the
-     first version of this shipped with.                                */
+     fit circle even when no real point does - which is exactly the bug the
+     first version of this shipped with.
+
+     Against MAP_FIT, not the oblong: see the constant. The view got wider,
+     the zoom did not, and that is the whole of what was asked for. */
   let r=1e-6;
   for(const p of P){ const m=merc(p.la,p.lo);
     r=Math.max(r, Math.hypot(m.x-mx, m.y-my)); }
-  return { mx, my, scale:(MAP_R*0.90)/r };
+  return { mx, my, scale:(MAP_FIT*0.90)/r };
 }
 function outOfView(v,P){
   if(!v) return true;
   for(const p of P){
     const m=merc(p.la,p.lo);
-    if(Math.hypot(projX(v,m)-MAP_CX, projY(v,m)-MAP_CY) > MAP_R*0.97) return true;
+    if(Math.abs(projX(v,m)-MAP_CX) > MAP_HW*0.97 ||
+       Math.abs(projY(v,m)-MAP_CY) > MAP_HH*0.97) return true;
   }
   return false;
 }
@@ -9097,7 +9131,7 @@ function drawTiles(v){
   const key=z+'|'+v.mx.toFixed(8)+'|'+v.my.toFixed(8)+'|'+v.scale.toFixed(2);
   if(key===tileKey) return;
   tileKey=key;
-  const out=tileTags(v, z, MAP_CX, MAP_CY, MAP_R, MAP_R);
+  const out=tileTags(v, z, MAP_CX, MAP_CY, MAP_HW, MAP_HH);
   g.innerHTML = out===null ? '' : out;
 }
 /* The <image> tags for one view, at one zoom, in a box half as wide as
@@ -9516,12 +9550,16 @@ async function cacheArea(){
   if(caching) return;
   const v=MAPVIEW;
   if(!v) return flashTrk('open a track first');
-  const rad=(MAP_R/v.scale)*1.25;                /* a margin around the track */
+  /* Per axis, matching the oblong. A square the width of the view would
+     fetch a band above and below it that the chart can never show, and on
+     a dock connection that is the difference between a cache that finishes
+     and one that hits tileCap and refuses. */
+  const radx=(MAP_HW/v.scale)*1.25, rady=(MAP_HH/v.scale)*1.25;
   const jobs=[];
   for(let z=CFG.tileMinZ;z<=CFG.tileMaxZ;z++){
     const nn=Math.pow(2,z);
-    const x0=Math.floor((v.mx-rad)*nn), x1=Math.floor((v.mx+rad)*nn);
-    const y0=Math.floor((v.my-rad)*nn), y1=Math.floor((v.my+rad)*nn);
+    const x0=Math.floor((v.mx-radx)*nn), x1=Math.floor((v.mx+radx)*nn);
+    const y0=Math.floor((v.my-rady)*nn), y1=Math.floor((v.my+rady)*nn);
     for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
       if(x<0||y<0||x>=nn||y>=nn) continue;
       jobs.push([z,x,y]);

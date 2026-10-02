@@ -194,6 +194,55 @@ The chart also ran into the numbers: the clip circle reached y=665 with
 the stats row starting at 640. Up and in a little — `MAP_CY 430→404`,
 `MAP_R 250→232` — clears both it and the credit line above it.
 
+### The chart is an oblong now
+
+A circle 456 across threw away the widest part of round glass. At the
+height of the chart the panel is nearly 800 px across and the map was
+using 456 of it, which on a lake — a thing you want more of across than
+down — is the wrong 456.
+
+It is a rounded rectangle, 776 by 460, clipped by a `<rect rx="52">`
+instead of a `<circle>`. The tile box stands 4 px proud of the clip at
+every edge so the rounded corners have something behind them, exactly as
+the circle's `MAP_R 232` stood proud of its `r 228`.
+
+| | circle | oblong |
+|---|---|---|
+| width | 456 | 776 (1.70×) |
+| height | 456 | 460 |
+| area | 163 300 px² | 356 960 px² (2.19×) |
+| worst corner | — | 94.5% of the radius |
+
+**The edges are chosen, not inherited.** Top and bottom are where the
+circle's were, so no water was given up to gain the width: above is the
+empty band under the name pill and the race title, and below, y=636 still
+clears the stats row that starts around 662 — the chart ran into those
+numbers once, as the paragraph above records, and it was not worth doing
+twice. The width is what the glass allows: with `rx=52` the top corners
+land 510 px from the middle of a 540 radius, which is the same 94-95% the
+rail and the second stats row already keep.
+
+**`MAP_R` became `MAP_HW` and `MAP_HH`**, because nothing about the box is
+round any more and the off-view test and the tile box both have to know
+which way they are being asked. `outOfView` is two axis comparisons rather
+than a `hypot`, and `cacheArea` fetches a matching oblong rather than a
+square — a square the width of the view would pull a band above and below
+that the chart can never show, which on a dock connection is the
+difference between a cache that finishes and one that hits `tileCap`.
+
+**`MAP_FIT` is the one that is deliberately unchanged, at 232.** The ask
+was a wider view *at the same zoom*, and those two pull against each
+other. A fit measured against the new box would put a track's widest reach
+at 392 px instead of 232 and zoom in 1.43× on a square course — you would
+get a bigger track rather than more lake, which is the opposite of the
+point. The first attempt at this did exactly that, and the arithmetic
+caught it before the screenshot did: the probe for it compares a real
+track's fitted scale against `(232*0.90)/r` and would catch anyone later
+"tidying" `MAP_FIT` into `MAP_HW`.
+
+So a course lands at precisely the size it always did, and all 2.19× of
+the extra glass fills with water.
+
 The one gate that had to change is the QR sheet's. It lives inside
 `#tmap`, and raising it while Tracks is shut would put it somewhere
 nobody can see or tap — and `judgeGesture` hands whichever surface is

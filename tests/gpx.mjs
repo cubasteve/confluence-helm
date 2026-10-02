@@ -153,4 +153,107 @@ await p.click('#trk-clr'); await p.waitForTimeout(500);
 t.ok(await p.evaluate(()=>VIEWTRK===null && TRK.length===90),
      'CLEAR on a loaded race just puts it back down again');
 
+t.head('the chart is an oblong, and a wider one than the circle was');
+/* A circle 456 across threw away the widest part of round glass: at the
+   height of the chart the panel is nearly 800 px wide. The edges are
+   chosen - top and bottom where the circle's were, so no water was given
+   up to gain the width. */
+const geo=await p.evaluate(()=>{
+  const c=document.querySelector('#t-clip rect');
+  const r=c&&{x:+c.getAttribute('x'), y:+c.getAttribute('y'),
+              w:+c.getAttribute('width'), h:+c.getAttribute('height'),
+              rx:+c.getAttribute('rx')};
+  return {rect:r, circle:!!document.querySelector('#t-clip circle'),
+          CX:MAP_CX, CY:MAP_CY, HW:MAP_HW, HH:MAP_HH, FIT:MAP_FIT};
+});
+t.ok(!geo.circle && !!geo.rect, 'the clip is a rect, not a circle',
+     JSON.stringify(geo));
+t.ok(geo.rect.rx>=40, 'with its corners taken off, so it reads as an oblong '
+     +'rather than a box dropped on round glass', 'rx '+geo.rect.rx);
+t.ok(geo.rect.w===776 && geo.rect.h===460,
+     'it is 776 by 460 - 1.70x the width of the 456 circle and 2.19x the area',
+     JSON.stringify(geo.rect));
+t.ok(geo.rect.y===176 && geo.rect.y+geo.rect.h===636,
+     'top and bottom within 4 px of the circle it replaced, so the width is '
+     +'a gain rather than a trade', JSON.stringify(geo.rect));
+
+t.head('and it still fits on round glass');
+/* The rail and the second stats row sit near 94% of the radius, which the
+   file calls a margin rather than a coincidence. The corners of the
+   oblong are held to the same. */
+const worst=await p.evaluate(()=>{
+  const c=document.querySelector('#t-clip rect');
+  const x=+c.getAttribute('x'), y=+c.getAttribute('y');
+  const w=+c.getAttribute('width'), h=+c.getAttribute('height');
+  const rx=+c.getAttribute('rx');
+  let d=0;
+  for(const ax of [x+rx, x+w-rx]) for(const ay of [y+rx, y+h-rx])
+    d=Math.max(d, Math.hypot(ax-540, ay-540)+rx);
+  return d;
+});
+t.ok(worst<=540, 'no corner leaves the glass', worst.toFixed(1)+' of 540');
+t.ok(worst/540<=0.95, 'and each is inside the 95% the rest of the page keeps',
+     (100*worst/540).toFixed(1)+'%');
+
+const band=await p.evaluate(()=>{
+  const r=e=>{ const q=document.getElementById(e); if(!q) return null;
+    const b=q.getBoundingClientRect(), s=document.getElementById('stage')
+      .getBoundingClientRect();
+    return {top:b.top-s.top, bot:b.bottom-s.top}; };
+  const st=document.querySelector('.t-stats').getBoundingClientRect();
+  const sg=document.getElementById('stage').getBoundingClientRect();
+  return {pill:r('app-name'), title:r('t-title'),
+          stats:{top:st.top-sg.top, bot:st.bottom-sg.top}};
+});
+t.ok(band.pill.bot < 176, 'the name pill is clear above it',
+     JSON.stringify(band.pill));
+t.ok(band.title.bot <= 176, 'and so is the race title, which is the line that '
+     +'appears only once a race is loaded', JSON.stringify(band.title));
+t.ok(band.stats.top >= 636, 'the stats row is clear below it - the chart ran '
+     +'into those numbers once already', JSON.stringify(band.stats));
+
+t.head('the zoom is exactly what it was');
+/* The ask was a wider view at the SAME zoom, and those pull against each
+   other: a fit measured against the new box would put the track's widest
+   reach at 392 px instead of 232 and zoom in on every course. MAP_FIT is
+   what stops that, and this is the probe that would catch someone
+   "tidying" it to MAP_HW. */
+t.ok(geo.FIT===232, 'the fit still measures against the old 232', 'MAP_FIT '+geo.FIT);
+const fit=await p.evaluate(()=>{
+  const P=shownTrack(); if(!P||!P.length) return null;
+  const v=fitView(P);
+  let x0=1,x1=0,y0=1,y1=0;
+  for(const q of P){ const m=merc(q.la,q.lo);
+    if(m.x<x0)x0=m.x; if(m.x>x1)x1=m.x;
+    if(m.y<y0)y0=m.y; if(m.y>y1)y1=m.y; }
+  const mx=(x0+x1)/2, my=(y0+y1)/2;
+  let r=1e-6;
+  for(const q of P){ const m=merc(q.la,q.lo);
+    r=Math.max(r, Math.hypot(m.x-mx, m.y-my)); }
+  return {scale:v.scale, want:(232*0.90)/r};
+});
+t.ok(fit && Math.abs(fit.scale-fit.want)/fit.want < 1e-9,
+     'and a real track fits at the scale the circle gave it',
+     fit && (fit.scale.toFixed(1)+' vs '+fit.want.toFixed(1)));
+
+t.head('and the track it draws lands inside the oblong');
+await p.evaluate(()=>{ MAPVIEW=null; tileKey=''; drawMap(shownTrack()); });
+await p.waitForTimeout(600);
+const inside=await p.evaluate(()=>{
+  const P=shownTrack(), v=MAPVIEW;
+  if(!P||!v) return null;
+  let ox=0, oy=0;
+  for(const q of P){ const m=merc(q.la,q.lo);
+    ox=Math.max(ox, Math.abs(projX(v,m)-MAP_CX));
+    oy=Math.max(oy, Math.abs(projY(v,m)-MAP_CY)); }
+  return {ox, oy, HW:MAP_HW, HH:MAP_HH};
+});
+t.ok(inside && inside.ox<=inside.HW && inside.oy<=inside.HH,
+     'no fix is clipped', JSON.stringify(inside));
+t.ok(inside && inside.ox < inside.HW*0.75,
+     'and there is real water either side of it now, which is the whole point',
+     'widest fix at '+Math.round(100*inside.ox/inside.HW)+'% of the half-width');
+t.ok(!await p.evaluate(()=>outOfView(MAPVIEW, shownTrack())),
+     'so the view does not immediately ask to be refitted');
+
 await t.done(b);
