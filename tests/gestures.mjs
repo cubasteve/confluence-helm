@@ -97,7 +97,12 @@ const head=async id=>{
   await p.waitForTimeout(1100);
   return p.evaluate(()=>{
     const e=$('app-name'), s=getComputedStyle(e), r=e.getBoundingClientRect();
-    const h1=document.querySelector('#app-run .a-h1');
+    /* ...and the library's head is not the app's. `under` below has
+       always filtered it out; this one did not have to until the map's
+       own heading came off and left the library's as the first .a-h1
+       inside the frame. */
+    const h1=[...document.querySelectorAll('#app-run .a-h1')]
+               .filter(k=>!k.closest('#t-lib'))[0];
     return {txt:e.textContent, y:Math.round(r.top), h:Math.round(r.height),
             fs:s.fontSize, w:s.fontWeight, ls:s.letterSpacing, pad:s.padding,
             radius:s.borderRadius, bg:s.backgroundColor, z:s.zIndex,
@@ -145,15 +150,17 @@ t.ok(H.tracks.under.length===0,
 t.ok(H.golden.under.length===2 && /DAYLIGHT|NIGHT|TWILIGHT|GOLDEN/.test(H.golden.under[0]),
      'and the sun keeps what it says, because that is the app',
      JSON.stringify(H.golden.under));
-/* the map's line is for a race loaded out of the library - a name the
-   pill cannot know */
+/* The map had a line of its own for a race loaded out of the library - a
+   name the pill cannot know. It has gone: it was blank except when a
+   saved race was up, it was the only thing between the pill and the
+   chart, and the chart wanted the room. The name it carried lives in
+   VIEWNAME now, which is where the export reads it. */
 await p.evaluate(()=>{ if(APP.on) closeApp(); }); await p.waitForTimeout(400);
 await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks'))); await p.waitForTimeout(900);
-await p.evaluate(()=>{ $('t-title').textContent='2026-09-23 RUM RACE'; });
-t.ok(await p.evaluate(()=>{ const e=$('t-title');
-       return e.offsetHeight>0 && getComputedStyle(e).fontSize==='28px'; }),
-     'and it comes back for one, in the format it always had');
-await p.evaluate(()=>{ $('t-title').textContent=''; });
+t.ok(!await p.evaluate(()=>!!document.getElementById('t-title')),
+     'the map has no heading of its own at all now');
+t.ok(await p.evaluate(()=>typeof VIEWNAME==='string'),
+     'and the race name it used to show is held off the glass');
 await p.evaluate(()=>closeApp()); await p.waitForTimeout(400);
 
 t.head('the radios');

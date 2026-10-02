@@ -211,7 +211,8 @@ its `r 228`.
 | width | 456 | 776 | **840** (1.84×) |
 | height | 456 | 460 | 460 |
 | area | 163 300 px² | 356 960 px² | 303 500 px² (1.86×) |
-| worst point | — | 94.5% of the radius | 81.6% |
+| vertical | 176–632 | 176–636 | **120–580** |
+| worst point | — | 94.5% of the radius | 88.4% |
 
 **Why an oval and not the oblong.** On round glass an oval reads as a
 viewport cut *into* the panel; a rectangle reads as a rectangle dropped
@@ -226,12 +227,28 @@ the whole of why the shape reads. Renders at 840, 940 and 972 made that
 obvious in a way the arithmetic did not, and there is a probe holding the
 worst point under 90% of the radius so nobody widens it back on a hunch.
 
-**The edges are chosen, not inherited.** Top and bottom are where the
-circle's were, so no water was given up to gain the width: above is the
-empty band under the name pill and the race title, and below, y=636 still
-clears the stats row that starts around 662 — the chart ran into those
-numbers once, as the paragraph above records, and it was not worth doing
-twice.
+**The edges are chosen, not inherited.** The width was pure gain — the
+circle's top and bottom were kept exactly — and then the whole oval moved
+**up**, to y=120–580 against the circle's 176–636.
+
+What made the room was deleting the race title. `#t-title` was a line at
+y=112 that said which race had been loaded out of the library; it was
+blank the rest of the time, and it was the only thing standing between the
+name pill and the chart. The export still wants that name, so it moved to
+**`VIEWNAME`** rather than being read back off a heading — which is better
+anyway, since reading `publishGPX`'s label out of `textContent` made the
+filename depend on a line of text existing on the glass.
+
+The oval now sits 34 px below the pill and 82 px above the stats row.
+There is deliberately more room at the bottom: that is the end with
+something to hit, and the chart ran into those numbers once already, as
+the paragraph above records.
+
+One probe had to follow it. `gestures` reads "the app's heading" as the
+first `.a-h1` inside `#app-run`, and with the map's own heading gone that
+became the **library's** — so the map appeared to be headed "Library". The
+`under` collector beside it had always filtered `#t-lib` out; now the `h1`
+one does too.
 
 **`MAP_R` became four constants.** `MAP_RX`/`MAP_RY` are the clip;
 `MAP_HW`/`MAP_HH` are the tile box 4 px around it. Nothing here is round

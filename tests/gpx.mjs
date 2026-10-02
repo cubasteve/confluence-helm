@@ -147,8 +147,13 @@ await p.click('#lib-list .lib-row[data-id]'); await p.waitForTimeout(800);
 t.ok(await p.evaluate(()=>VIEWTRK&&VIEWTRK.length===90), 'the saved one is what is drawn');
 t.ok(await p.evaluate(()=>TRK.length===90), 'and the live track is untouched');
 t.ok(!await p.evaluate(()=>$('t-lib').classList.contains('on')), 'the library closes behind it');
-t.ok(/^2026-09-23 /.test(await p.evaluate(()=>$('t-title').textContent)),
-     'and the title says which race', await p.evaluate(()=>$('t-title').textContent));
+t.ok(/^2026-09-23 /.test(await p.evaluate(()=>VIEWNAME)),
+     'and the race name is remembered - off the glass, because the heading '
+     +'that used to show it came off to give the chart the room, and the '
+     +'export is the only thing that ever needed it',
+     await p.evaluate(()=>VIEWNAME));
+t.ok(!await p.evaluate(()=>!!document.getElementById('t-title')),
+     'there is no heading left to read it back out of');
 await p.click('#trk-clr'); await p.waitForTimeout(500);
 t.ok(await p.evaluate(()=>VIEWTRK===null && TRK.length===90),
      'CLEAR on a loaded race just puts it back down again');
@@ -179,9 +184,10 @@ t.ok(geo.ell.rx*2===840 && geo.ell.ry*2===460,
 t.ok(geo.HW===geo.RX+4 && geo.HH===geo.RY+4,
      'with the tile box 4 px proud of the curve, so there is something '
      +'behind it - as MAP_R 232 stood proud of r 228');
-t.ok(geo.ell.cy-geo.ell.ry===176 && geo.ell.cy+geo.ell.ry===636,
-     'top and bottom within 4 px of the circle it replaced, so the width is '
-     +'a gain rather than a trade');
+t.ok(geo.ell.cy-geo.ell.ry===120 && geo.ell.cy+geo.ell.ry===580,
+     'and it sits higher than the circle did - 120 to 580 against 176 to '
+     +'636 - because the race title that stood at y=112 has gone',
+     JSON.stringify(geo.ell));
 
 t.head('and it sits inside the glass with an even margin');
 /* Taken to its limit the oval reaches 972 across before the curve meets
@@ -211,15 +217,16 @@ const band=await p.evaluate(()=>{
     const b=q.getBoundingClientRect();
     return {top:b.top-sg.top, bot:b.bottom-sg.top}; };
   const st=document.querySelector('.t-stats').getBoundingClientRect();
-  return {pill:r('app-name'), title:r('t-title'),
+  return {pill:r('app-name'),
           stats:{top:st.top-sg.top, bot:st.bottom-sg.top}};
 });
-t.ok(band.pill.bot < 176, 'the name pill is clear above it',
-     JSON.stringify(band.pill));
-t.ok(band.title.bot <= 176, 'and so is the race title, which is the line that '
-     +'appears only once a race is loaded', JSON.stringify(band.title));
-t.ok(band.stats.top >= 636, 'the stats row is clear below it - the chart ran '
-     +'into those numbers once already', JSON.stringify(band.stats));
+t.ok(band.pill.bot < 120, 'the name pill is clear above it, and it is the '
+     +'only thing up there now', JSON.stringify(band.pill));
+t.ok(120-band.pill.bot >= 24, 'with room to read as a gap rather than a '
+     +'collision', (120-band.pill.bot)+' px');
+t.ok(band.stats.top >= 580, 'the stats row is clear below it - the chart ran '
+     +'into those numbers once already, which is why there is still more '
+     +'room at that end', JSON.stringify(band.stats));
 
 t.head('the zoom is exactly what it was');
 /* The ask was a wider view at the SAME zoom, and those pull against each

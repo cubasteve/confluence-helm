@@ -2781,14 +2781,13 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        there is one. Nothing else: IMAGERY (c) ESRI stood here and was
        asked for off the glass. The radar's HUD still credits Esri
        along with its other three sources. -->
-  <div class="a-head"><div class="a-h1" id="t-title"></div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
     <!-- A sideways circle. A round 456 wasted the widest part of the
          glass either side of it, and a lake is a thing you want more of
          across than down. Same top and bottom edges as the circle had,
          so nothing was given up to get it - see MAP_RX. -->
     <defs><clipPath id="t-clip">
-      <ellipse cx="540" cy="406" rx="420" ry="230"/></clipPath></defs>
+      <ellipse cx="540" cy="350" rx="420" ry="230"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <!-- The camera. A pinch or a drag transforms THIS group while the
            finger is down and commits to MAPVIEW on release, so the tiles
@@ -4788,8 +4787,11 @@ async function publishGPX(pts,label){
   const d=new Date(pts[0].t), pad=n=>String(n).padStart(2,'0');
   const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
              +`-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  /* The head is empty until a race is loaded out of the library, so a
-     name here is always a race's and never the app's. */
+  /* VIEWNAME is empty until a race is loaded out of the library, so a
+     name here is always a race's and never the app's. It used to be read
+     off the heading on the glass, which made the export depend on a line
+     of text existing - and when that heading came off to give the chart
+     the room, the name had to live somewhere that was not a DOM node. */
   const nice=label?label+'-'+stamp:'Confluence-'+stamp;
   trkFlash('sending…',30000);
   const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
@@ -5821,7 +5823,7 @@ $('trk-exp').addEventListener('click',e=>{
      phone there is no helper to publish with - and a plain download is
      what that device wanted anyway. */
   const gpx=(NET.st&&NET.st.gpx)||{};
-  if(gpx.available) publishGPX(shownTrack(), $('t-title').textContent);
+  if(gpx.available) publishGPX(shownTrack(), VIEWNAME);
   else              exportGPX(shownTrack());
 });
 $('trk-clr').addEventListener('click',e=>{
@@ -9008,11 +9010,16 @@ const tmap=$('tmap');
    looking like a viewport and starts looking like a letterbox, and the
    even margin is the whole of why this shape reads.
 
-   The edges are chosen rather than inherited. Top and bottom are where the
-   circle's were, so no water was given up to gain the width: above is the
-   empty band under the name pill and the title, and below, y=636 still
-   clears the stats row that starts around 662 - the chart ran into those
-   numbers once and it is not worth doing twice.
+   It sits higher than the circle did - y=120 to 580 against 176 to 636 -
+   because the race title that used to stand at y=112 has gone. That line
+   only ever said which race was loaded out of the library, it was blank
+   the rest of the time, and it was the one thing between the name pill
+   and the chart. The export still wants the name, so the name moved to
+   VIEWNAME rather than being read back off a heading.
+
+   34 px below the pill and 82 above the stats row. The chart ran into
+   those numbers once, which is why there is still more room below than
+   above - that end is the one with something to hit.
 
    RX and RY are the clip; HW and HH are the tile box around it. Nothing
    about this is round any more, so the off-view test and the tile box both
@@ -9026,7 +9033,7 @@ const tmap=$('tmap');
    the opposite of the point. Leaving the fit where it was means a track
    lands at exactly the size it always did and all 2.19x of the extra
    glass fills with water. */
-const MAP_CX=540, MAP_CY=406, MAP_RX=420, MAP_RY=230,
+const MAP_CX=540, MAP_CY=350, MAP_RX=420, MAP_RY=230,
       MAP_HW=MAP_RX+4, MAP_HH=MAP_RY+4, MAP_FIT=232;
 
 /* When the plugin owns recording, the points live on the boat and TRK
@@ -9298,6 +9305,11 @@ const durTxt=se=>`${Math.floor(se/60)}:${String(Math.round(se%60)).padStart(2,'0
 /* VIEWTRK holds a race loaded out of the library; null means we are
    looking at the live track. Everything downstream asks shownTrack(). */
 let VIEWTRK=null;
+/* The name of that race. It lived on the glass as #t-title until the
+   chart wanted the room, and the export is the only thing that ever
+   needed it - so it lives here now rather than being read back out of a
+   heading that no longer exists. */
+let VIEWNAME='';
 const shownTrack=()=>VIEWTRK||TRK;
 
 function drawMap(pts){
@@ -11519,14 +11531,13 @@ function renderLib(){
 function loadRace(id){
   dbGet(id).then(r=>{
     if(!r) return;
-    VIEWTRK=r.pts; MAPVIEW=null; tileKey='';
-    $('t-title').textContent=r.name;
+    VIEWTRK=r.pts; VIEWNAME=r.name||''; MAPVIEW=null; tileKey='';
     closeLib(); drawMap(VIEWTRK);
   });
 }
 function unloadRace(){
-  VIEWTRK=null; MAPVIEW=null; tileKey='';
-  $('t-title').textContent='';
+  VIEWTRK=null; VIEWNAME='';
+  MAPVIEW=null; tileKey='';
   drawMap(TRK); paintTrack();
 }
 
@@ -13642,7 +13653,7 @@ function tracksClose(){
   $('t-tiles').innerHTML='';        /* decoded satellite bitmaps */
   $('t-path') .innerHTML='';        /* up to 800 segments */
   MAPVIEW=null; lastMapDraw=0;
-  VIEWTRK=null;                     /* a race loaded out of the library */
+  VIEWTRK=null; VIEWNAME='';        /* a race loaded out of the library */
   SRVTRK=null;  srvAt=0;
   /* Home before closeApp wipes the body it is sitting in. */
   $('stage').appendChild(tmap);
