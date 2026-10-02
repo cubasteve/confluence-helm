@@ -5359,6 +5359,48 @@ function goPage(i){
   PAGE_I=i; markSlide('page-'+i); layoutPages();
 }
 
+/* ---- the race reach ---------------------------------------------------
+   Tracks is the one app you want DURING a race rather than after it, and
+   a start sequence is the worst moment to go hunting through the dock:
+   three fingers up, find a tile, and your eyes are off the line for it.
+   So for as long as a countdown or a race is running, Tracks sits where
+   a page sits - one three-finger swipe off the dial, open and full size,
+   and one swipe back to the dial again.
+
+   It is a page in REACH rather than a page in PAGE_EL on purpose. Tracks
+   is an app with a lifecycle - it allocates a map, tiles, and a path of
+   up to 800 segments, and gives them back in tracksClose. A page is a
+   thing that merely slides. Making it both would mean either an app that
+   never frees any of that or a page that does, and the gesture is the
+   only part of being a page that anybody asked for.
+
+   The direction follows the carousel rather than the fingers. The dial is
+   what you come back to, so Tracks sits to the LEFT of it and is reached
+   exactly the way page 1 is reached from page 2: fingers travelling
+   RIGHT, which is `right` here. Fingers left comes back - and still
+   reaches the music page when no race is running, which is why this sits
+   in front of goPage rather than replacing it. Nothing is displaced: on
+   the dial, goPage(0) clamps to 1 and does nothing, so three fingers
+   right was a dead gesture there until now. */
+function raceReach(){
+  if(locked()||APP.on) return;
+  const t=APPS.find(a=>a.id==='tracks'); if(!t) return;
+  markSlide('reach-open');
+  openApp(t);
+}
+/* One step out, the same step the cross at the foot takes: a sheet in
+   front of the map closes first and the app itself next, so a swipe can
+   never shut the app out from under the library and lose the race you
+   were reading. Returns true when it consumed the gesture. */
+function reachBack(){
+  if(!APP.on||APP.on.id!=='tracks') return false;
+  if($('t-lib').classList.contains('on')){ closeLib(); return true; }
+  markSlide('reach-close');
+  closeApp();
+  goPage(PAGE_MIN);          /* back to the dial, and a no-op when already there */
+  return true;
+}
+
 /* Anything that moves the glass out from under the picker closes it:
    the menu is anchored to a cell, and a cell that has slid away or gone
    behind the panel leaves it pointing at nothing. */
@@ -5461,6 +5503,12 @@ function gStart(){
   return G;
 }
 const gClaim=()=>{ gStart().claimed=true; };
+/* The other half of a claim, for a control that wants the gesture only
+   while it is a gesture it has a use for. The track map pans with one
+   finger and zooms with two; three is not the map's at all, so rather
+   than swallowing a swipe it cannot read, it hands the gesture back and
+   the judge below sees it. */
+const gRelease=()=>{ if(G) G.claimed=false; };
 /* On WINDOW, not #stage. #stage is border-radius:50%, and a rounded box
    does not hit-test outside its own shape - so a touch that lands on the
    rim, or on the digitizer's report of it a pixel or two proud of the
@@ -5603,7 +5651,9 @@ function judgeGesture(g){
      was also the wrong control for the job - a flick that shuts the page
      you are reading, thrown by the same thumb that scrolls it. The cross
      at the foot closes an app now, and only the cross. */
-  if(APP.on){ if(drawDown && fromTop(sy)) openPanel(); return; }
+  if(APP.on){ if(drawDown && fromTop(sy)) openPanel();
+              else if(left && raceOn()) reachBack();
+              return; }
   /* The dock came UP from the bottom, so DOWN sends it back - but only
      from the dock's own patch of glass. It covers a strip at the foot
      and leaves the dial in plain sight; a flick anywhere on that dial
@@ -5625,6 +5675,10 @@ function judgeGesture(g){
      gestures that still want three fingers. */
   if(drawDown) return openPanel();
   if(drawUp)   return openApps();
+  /* Tracks sits left of the dial while a race is running - see the race
+     reach above. Ahead of goPage because it is the same gesture, and on
+     the dial goPage would have done nothing with it. */
+  if(right && raceOn() && PAGE_I===PAGE_MIN) return raceReach();
   if(left)     return goPage(PAGE_I+1);
   if(right)    return goPage(PAGE_I-1);
 
@@ -9042,8 +9096,18 @@ let tmapLastTap=0;
     cam=null; tileKey='';
     drawMap(shownTrack());
   };
+  /* Three fingers is never the map's: one pans, two zoom, and a third
+     is the race reach asking to leave. Drop whatever pan or pinch had
+     started and hand the gesture back. The fingers of a deliberate
+     three-finger swipe land within a few tens of milliseconds of each
+     other, so there is nothing on screen worth preserving - and the
+     transform goes back to identity so the half-started pan does not
+     sit there as a crooked map on the way out. */
+  const letGo=()=>{ ptrs.clear(); pin=null; drag=null; lock=false; cam=null;
+                    $('t-cam').removeAttribute('transform'); gRelease(); };
   svg.addEventListener('pointerdown',e=>{
     if(!MAPVIEW) return;                    /* nothing to move */
+    if(ptrs.size>=2) return letGo();
     gClaim();
     ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
     try{ svg.setPointerCapture(e.pointerId); }catch(err){}

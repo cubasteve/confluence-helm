@@ -60,6 +60,67 @@ that shuts the page you are reading, thrown by the same thumb that
 scrolls it. The cross at the foot closes an app now, and only the
 cross.
 
+### The race reach
+
+Tracks is the one app you want *during* a race rather than after it, and
+a start sequence is the worst moment to go hunting through the dock:
+three fingers up, find a tile among four, and your eyes are off the line
+for all of it. So while a countdown or a race is running — `raceOn()`,
+the same predicate the signals and the line calls use — Tracks is one
+swipe off the dial, open and full size, and one swipe back.
+
+```
+      [tracks]  <->   DIAL   <->   music       while a race is running
+                       * .          . *        (the dots still say two:
+                                                tracks is a reach, not a page)
+```
+
+**It is a page in reach, not a page in `PAGE_EL`.** Tracks is an app with
+a lifecycle — it allocates a map, tiles and a path of up to 800 segments,
+and gives all of it back in `tracksClose`. A page is a thing that merely
+slides, always loaded and always costing something, which is the whole
+reason the map stopped being page 0 in the first place. Making it both
+would mean either an app that never frees any of that or a page that
+does. The gesture is the only part of being a page that anybody wanted,
+so the gesture is the only part it got.
+
+**The direction follows the carousel, not the fingers.** The dial is what
+you come back to, so Tracks sits to the *left* of it and is reached
+exactly the way page 1 is reached from page 2: fingers travelling right,
+which is `right` in the judge. Fingers left comes back.
+
+That choice is what keeps the music page. Three fingers left still pages
+to music mid-race, because the reach took the gesture that did *nothing* —
+on the dial, `goPage(0)` clamps to 1 — rather than the one that paged. The
+reach is asked ahead of `goPage` for the same reason it is safe to ask it
+there: it only ever fires on `PAGE_MIN`, where `goPage` had nothing to do
+with that swipe anyway. From the music page, three fingers right is still
+just the way back to the dial.
+
+**The exception to "only the cross".** A swipe does close an app here,
+which the section above says nothing does. The narrowness is the defence:
+it is three fingers, not the one that scrolls; only while a race is
+running; only the Tracks app; and it takes one step out the same way the
+cross does, so the library closes before the app does and a swipe can
+never shut Tracks out from under a race you were reading.
+
+**The map had to hand the gesture back.** `#t-svg` `gClaim()`s every
+touch on it — one finger pans, two zoom — and a claimed gesture is never
+judged, so the close swipe was swallowed and there was no way out but the
+cross. Three fingers is not the map's at all, so the third `pointerdown`
+now calls `letGo()`: it drops the pan or pinch in progress, puts
+`#t-cam`'s transform back to identity so a half-started pan is not left
+on screen as a crooked map, and calls `gRelease()` — the other half of
+`gClaim`, which clears the claim so the judge sees the swipe. The fingers
+of a deliberate three-finger swipe land within tens of milliseconds of
+each other, so there is nothing on screen worth preserving, and the view
+is rebuilt from scratch on the way back in regardless.
+
+The probes cover both halves, and both were checked by breaking them:
+removing the open gesture fails six assertions, and removing `letGo()`
+fails exactly one — "three fingers on the map itself still closes the
+app" — which is the one that would otherwise have gone unnoticed.
+
 ### How many fingers
 
 Two answers, because the two gestures are not the same risk.

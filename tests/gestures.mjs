@@ -700,4 +700,80 @@ t.ok(!(await state(p)).panel,
      'and at the end the drag is handed back, so the same swipe closes it');
 await p.evaluate(()=>{ $('p-sheet').style.maxHeight=''; sheetFit(); });
 
+t.head('the race reach: Tracks is a page away while a race is running');
+/* Three fingers right on the dial was a dead gesture - goPage(0) clamps
+   to 1 - and during a countdown or a race it opens Tracks instead. The
+   probe above already asserts it does nothing when nothing is running. */
+const race=v=>p.evaluate(st=>{ tState=st;
+  tEnd=Date.now()+(st==='countdown'?300000:0); }, v);
+
+let Z=await state(p);
+t.ok(Z.page===1 && !Z.app && Z.race==='idle', 'the dial, idle, nothing open',
+     JSON.stringify(Z));
+await fling(p,3,260,0);
+t.ok(!(await state(p)).app, 'three right while idle opens nothing');
+
+await race('countdown');
+await fling(p,3,260,0);
+Z=await state(p);
+t.ok(Z.app==='tracks', 'in a countdown the same gesture opens Tracks',
+     JSON.stringify(Z));
+t.ok(await p.evaluate(()=>$('app-run').classList.contains('on')),
+     'open full size, the way every app is - there is no other size');
+await fling(p,3,-260,0);
+Z=await state(p);
+t.ok(!Z.app, 'three left closes it');
+t.ok(Z.page===1, 'and leaves you on the dial', JSON.stringify(Z));
+
+t.head('and the music page is still where it was');
+/* The reach takes the gesture that did nothing, not the one that paged.
+   A race is no reason to lose the music. */
+await fling(p,3,-260,0);
+t.ok((await state(p)).page===2, 'three left still reaches music mid-race');
+t.ok(!(await state(p)).app, 'without opening Tracks on the way');
+await fling(p,3,260,0);
+Z=await state(p);
+t.ok(Z.page===1 && !Z.app, 'and three right comes back to the dial rather '
+     +'than opening Tracks from a page that is not the dial', JSON.stringify(Z));
+
+t.head('a third finger on the map is the map handing the gesture back');
+/* The map gClaims every touch on it - one finger pans, two zoom - so
+   without gRelease a three-finger swipe inside Tracks was swallowed and
+   there was no way out but the cross. */
+await fling(p,3,260,0);
+t.ok((await state(p)).app==='tracks', 'Tracks is open again');
+await p.evaluate(()=>{ MAPVIEW={mx:0.5,my:0.5,scale:256*Math.pow(2,15)}; });
+const onMap=(n,dx)=>p.evaluate(([n,dx])=>{
+  const sv=document.getElementById('t-svg'), box=sv.getBoundingClientRect();
+  const x=box.x+box.width/2, y=box.y+box.height/2;
+  const ev=(t,id,cx)=>sv.dispatchEvent(new PointerEvent(t,
+    {pointerId:id, clientX:cx, clientY:y, bubbles:true, pointerType:'touch'}));
+  const ids=[...Array(n).keys()].map(i=>i+1);
+  ids.forEach((id,i)=>ev('pointerdown',id, x+i*36));
+  ids.forEach((id,i)=>ev('pointermove',id, x+i*36+dx));
+  ids.forEach((id,i)=>ev('pointerup',  id, x+i*36+dx));
+},[n,dx]);
+await onMap(1,-260); await p.waitForTimeout(650);
+t.ok((await state(p)).app==='tracks',
+     'one finger on the map is the map\'s own pan and closes nothing');
+await onMap(3,-260); await p.waitForTimeout(650);
+Z=await state(p);
+t.ok(!Z.app, 'three fingers on the map itself still closes the app',
+     JSON.stringify(Z));
+t.ok(await p.evaluate(()=>!document.getElementById('t-cam')
+       ||!document.getElementById('t-cam').getAttribute('transform')),
+     'and the abandoned pan is not left on screen as a crooked map');
+
+t.head('the reach is the race\'s, and gives it back afterwards');
+await race('racing');
+await fling(p,3,260,0);
+t.ok((await state(p)).app==='tracks', 'a race reaches it too, not just a countdown');
+await fling(p,3,-260,0);
+t.ok(!(await state(p)).app, 'and lets it go');
+await race('idle');
+await fling(p,3,260,0);
+Z=await state(p);
+t.ok(!Z.app && Z.page===1,
+     'once the race is over the gesture is dead glass again', JSON.stringify(Z));
+
 await t.done(b);
