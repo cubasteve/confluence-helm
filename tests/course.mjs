@@ -278,6 +278,64 @@ t.ok(C.side.join()==='S,P', 'and the side of the one removed goes with it',
      C.side.join());
 await p.evaluate(()=>{ COURSE.next=0; courseSave(); renderCourse(); });
 
+t.head('and the number says it is the way out');
+/* The number has always dropped the rounding and nothing said so. A
+   cross in its corner does - as a LABEL: the whole 44 px circle is still
+   the target, because asking a cold thumb on a moving boat to hit 24 px
+   would be the opposite of the point. */
+await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=0;
+                       COURSE.side=['S','P','P']; courseSave(); renderCourse(); });
+const crosses=()=>p.evaluate(()=>({
+  route:[...document.querySelectorAll('#cv-route .cv-chip[data-chip]')]
+          .map(c=>!!c.querySelector('.xno')),
+  fin:!!document.querySelector('#cv-route .cv-chip.fin .xno'),
+  /* drawn, not typed: the glyph is a smudge at 13 px */
+  svg:!!document.querySelector('#cv-route .cv-chip .xno svg path'),
+  /* and NOT inside the number. Structurally, not by reading the text:
+     an <svg> contributes nothing to textContent, so a cross nested in
+     the number reads as "1" all the same and a text check passes while
+     the thing it is guarding is broken. The nums check below still earns
+     its place - it catches a plain ✕ character being put back. */
+  inside:!!document.querySelector('#cv-route .cv-chip i.no .xno'),
+  nums:[...document.querySelectorAll('#cv-route .cv-chip[data-chip] i.no')]
+         .map(i=>i.textContent)}));
+let X=await crosses();
+t.ok(X.route.length===3 && X.route.every(Boolean),
+     'every rounding in the route carries one', JSON.stringify(X.route));
+t.ok(!X.fin, 'FINISH does not - it is not a rounding and cannot be dropped');
+t.ok(X.svg, 'it is drawn rather than typed');
+t.ok(!X.inside,
+     'and it lives beside the number rather than inside it - the number is '
+     +'what the strip IS, read by these probes and by anything else that '
+     +'wants to know which rounding this is');
+t.ok(X.nums.join()==='1,2,3', 'so the number is still just the number',
+     X.nums.join());
+
+/* The cross takes the tap as well as marking it: a finger aimed at a
+   cross that lands two pixels off should not flip the rounding to the
+   other side of the mark instead. */
+await tap(chip(1)+' .xno');
+C=await course();
+t.ok(C.marks.join()==='gosling,rum', 'tapping the cross drops that rounding',
+     C.marks.join());
+t.ok(C.side.join()==='S,P', 'and takes its side with it', C.side.join());
+X=await crosses();
+t.ok(X.route.length===2 && X.route.every(Boolean),
+     'and the ones left still carry theirs', JSON.stringify(X.route));
+
+t.head('the club\'s course, waiting, carries no crosses');
+/* The ghost is what the second tap WOULD load. Nothing in it can be
+   dropped, because none of it is yours yet. */
+await p.evaluate(()=>{ CLUB={step:'ready', say:'',
+  got:{marks:['gosling','cb12'], dropped:[], side:{}, raw:{},
+       at:null, gone:false, posted:false, mode:'window', mins:null}};
+  renderCourse(); });
+t.ok(await p.evaluate(()=>
+       document.querySelectorAll('#cv-route .cv-chip.ghost').length===2
+       && !document.querySelector('#cv-route .cv-chip.ghost .xno')),
+     'the dashed chips have none');
+await p.evaluate(()=>{ CLUB={step:'idle',got:null,say:''}; renderCourse(); });
+
 t.head('CLEAR empties the course and leaves the marks alone');
 await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
                        courseSave(); renderCourse(); });

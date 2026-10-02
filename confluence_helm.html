@@ -1195,12 +1195,34 @@ body.night #cp-svg .wash{opacity:.55}
    the route ahead of them costs 190 px of a row that is 816 wide, and
    this is 20 of it back across a three-mark course - which is the
    difference between one row and two on the commonest course there is. */
-.cv-chip{display:flex;align-items:center;gap:8px;height:72px;padding:0 8px;
-  border-radius:36px;background:var(--chip);font-size:23px;font-weight:600;
-  letter-spacing:.01em;color:var(--ink)}
+.cv-chip{position:relative;display:flex;align-items:center;gap:8px;height:72px;
+  padding:0 8px;border-radius:36px;background:var(--chip);font-size:23px;
+  font-weight:600;letter-spacing:.01em;color:var(--ink)}
 /* The number is the rounding, and it is also the way out of the course:
    a tap on it drops that leg. So it is a finger wide, not a label wide -
    44 is 17 on the phone, which is small but is the phone. */
+/* ...and nothing said so. The cross in its corner is a LABEL, not a
+   control: the whole 44 px circle is still the target, and the cross is
+   simply where the eye learns that the circle does something. Asking a
+   cold thumb on a moving boat to hit 22 px would be the opposite of the
+   point. It takes the tap too, because a finger aimed at a cross that
+   lands two pixels off it should not flip the rounding to the other side
+   of the mark instead.
+
+   Beside the number rather than inside it: the number's textContent is
+   what the strip IS, read by the probes and by anything else that wants
+   to know which rounding this is, and a glyph smuggled into it would
+   make that '1✕'. */
+.cv-chip .xno{position:absolute;left:36px;top:4px;width:24px;height:24px;
+  border-radius:12px;background:var(--panel);color:var(--ink);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 2px var(--chip)}
+/* Stroked rather than the ✕ character. At this size the glyph is a few
+   hairlines of whatever face fontconfig found and reads as a smudge; two
+   round-capped paths are the same mark at any size, in any theme, and
+   match the cross on the app frame and the one on a user mark's tile. */
+.cv-chip .xno svg{width:13px;height:13px;fill:none;stroke:currentColor;
+  stroke-width:2.4;stroke-linecap:round}
 .cv-chip i{font-style:normal;width:44px;height:44px;border-radius:22px;flex:none;
   background:var(--accent);color:#fff;font-size:19px;font-weight:600;
   display:flex;align-items:center;justify-content:center}
@@ -10004,7 +10026,9 @@ function renderCourse(){
     if(ghost) return '<div class="cv-chip ghost"><i>'+(i+1)+'</i>'+esc(hdr)+'</div>';
     const sd=markSide(i);
     return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+i+'">'
-      +'<i class="no">'+(i+1)+'</i>'+esc(hdr)
+      +'<i class="no">'+(i+1)+'</i>'
+      +'<b class="xno"><svg viewBox="0 0 12 12">'
+      +'<path d="M3.5 3.5l5 5M8.5 3.5l-5 5"/></svg></b>'+esc(hdr)
       +'<span class="sd'+(sd==='S'?' s':'')+'">'+sd+'</span></div>'; };
   /* The line leads the route, in line with it: you start on it, and the
      FINISH at the other end is the same line come home to. Drawn the way
@@ -11249,7 +11273,7 @@ $('course-main').addEventListener('click',e=>{
      leaves the first alone. */
   const chip=e.target.closest('.cv-chip[data-chip]');
   if(chip){ const i=+chip.dataset.chip;
-    if(e.target.closest('.no')) courseDrop(i);
+    if(e.target.closest('.no,.xno')) courseDrop(i);
     else sides()[i]=markSide(i)==='P'?'S':'P';
     courseSave(); renderCourse(); drawMap(shownTrack()); return; }
   /* The settings row. Three open a menu, the countdown steps, and the

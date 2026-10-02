@@ -482,6 +482,37 @@ rounding of that mark, so there is nothing for a second tap on it to
 mean but *again*. It used to toggle, which read well until the day the
 course wanted the same buoy twice.
 
+**And the number now says so**, with a small cross in its top corner.
+That was true for a long time before anything on the glass admitted it:
+the number dropped the rounding and looked exactly like a number.
+
+The cross is a **label, not a control**. The whole 44 px circle under it
+is still the target — asking a cold thumb on a moving boat to hit 24 px
+would be the opposite of the point — and the cross is simply where the
+eye learns that the circle does something. It takes the tap as well,
+because a finger aimed at a cross that lands two pixels off it should not
+flip the rounding to the other side of the mark instead.
+
+Two details that look like fussiness and are not:
+
+- It is **drawn, not typed**. At 13 px the `✕` character is a few
+  hairlines of whatever face fontconfig found and reads as a smudge; two
+  round-capped paths are the same mark at any size and in any theme, and
+  match the cross on the app frame and the one on a user mark's tile.
+- It sits **beside the number, not inside it**. The number's text is what
+  the strip *is* — the probes read it, and so would anything else that
+  wants to know which rounding this is — and a glyph smuggled in would
+  make that `1✕`.
+
+  The probe guarding that is structural rather than textual, and it took
+  a deliberate break to find out why: an `<svg>` contributes nothing to
+  `textContent`, so a cross nested inside the number still reads as `1`
+  and a text check passes while the thing it guards is broken.
+
+The club's course waiting in dashed outline carries no crosses. None of
+it is yours yet, and nothing in it can be dropped until the second tap
+loads it.
+
 It was a list of rows, one to a mark, with the course's order given as
 numbers down the left margin. Every mark was legible and the one thing
 the sheet exists for — what the course *is*, in order — was the one
