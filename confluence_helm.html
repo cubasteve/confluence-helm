@@ -2783,12 +2783,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        along with its other three sources. -->
   <div class="a-head"><div class="a-h1" id="t-title"></div></div>
   <svg id="t-svg" viewBox="0 0 1080 1080">
-    <!-- An oblong, not a circle. A circle 456 across wasted the widest
-         part of the glass either side of it, and a lake is a thing you
-         want more of across than down. Same top and bottom edges as the
-         circle had, so nothing was given up to get it - see MAP_HW. -->
+    <!-- A sideways circle. A round 456 wasted the widest part of the
+         glass either side of it, and a lake is a thing you want more of
+         across than down. Same top and bottom edges as the circle had,
+         so nothing was given up to get it - see MAP_RX. -->
     <defs><clipPath id="t-clip">
-      <rect x="152" y="176" width="776" height="460" rx="52"/></clipPath></defs>
+      <ellipse cx="540" cy="406" rx="420" ry="230"/></clipPath></defs>
     <g clip-path="url(#t-clip)">
       <!-- The camera. A pinch or a drag transforms THIS group while the
            finger is down and commits to MAPVIEW on release, so the tiles
@@ -8993,23 +8993,30 @@ pollMusic(); musicTick();
 const tmap=$('tmap');
 /* The chart was a circle 456 px across, which on round glass threw away
    the widest part of the panel: at the height of the chart the glass is
-   nearly 800 px across and the map was using 456 of it. It is an oblong
-   now - 776 by 460, the tile box 4 px proud of the clip at every edge so
-   the rounded corners have something behind them, exactly as the circle's
-   232 stood proud of its 228.
+   nearly 800 px across and the map was using 456 of it. It is a sideways
+   circle now - an ellipse 840 by 460, the tile box 4 px proud of the clip
+   so the curve has something behind it, exactly as the circle's 232 stood
+   proud of its 228.
+
+   An ellipse rather than the rounded oblong this was for one commit: on
+   round glass an oval reads as a viewport cut INTO the panel, where a
+   rectangle reads as a rectangle dropped ON it. It also reaches further
+   sideways for the same clearance, because its widest point sits on the
+   centre line instead of at a corner - at these proportions 840 across
+   against the oblong's 776, and it could be taken to 972 before the curve
+   met the rim. It is not: an oval that nearly touches the glass stops
+   looking like a viewport and starts looking like a letterbox, and the
+   even margin is the whole of why this shape reads.
 
    The edges are chosen rather than inherited. Top and bottom are where the
    circle's were, so no water was given up to gain the width: above is the
    empty band under the name pill and the title, and below, y=636 still
    clears the stats row that starts around 662 - the chart ran into those
-   numbers once and it is not worth doing twice. The width is what the
-   glass allows: with rx=52 the top corners land 510 px from the middle of
-   a 540 radius, 94.5%, which is the margin the rail and the second stats
-   row already use rather than a coincidence.
+   numbers once and it is not worth doing twice.
 
-   HW and HH rather than one R because nothing about the box is round any
-   more: the off-view test and the tile box both have to know which way
-   they are being asked.
+   RX and RY are the clip; HW and HH are the tile box around it. Nothing
+   about this is round any more, so the off-view test and the tile box both
+   have to know which way they are being asked.
 
    MAP_FIT is the circle the AUTO-FIT still uses, and it is deliberately
    the old 232. The ask was a wider view at the same zoom, and those pull
@@ -9019,7 +9026,8 @@ const tmap=$('tmap');
    the opposite of the point. Leaving the fit where it was means a track
    lands at exactly the size it always did and all 2.19x of the extra
    glass fills with water. */
-const MAP_CX=540, MAP_CY=406, MAP_HW=392, MAP_HH=234, MAP_FIT=232;
+const MAP_CX=540, MAP_CY=406, MAP_RX=420, MAP_RY=230,
+      MAP_HW=MAP_RX+4, MAP_HH=MAP_RY+4, MAP_FIT=232;
 
 /* When the plugin owns recording, the points live on the boat and TRK
    stays empty here - trackSample() returns immediately in that mode. So
@@ -9100,8 +9108,12 @@ function outOfView(v,P){
   if(!v) return true;
   for(const p of P){
     const m=merc(p.la,p.lo);
-    if(Math.abs(projX(v,m)-MAP_CX) > MAP_HW*0.97 ||
-       Math.abs(projY(v,m)-MAP_CY) > MAP_HH*0.97) return true;
+    /* Against the ellipse, not its bounding box: a fix out in a corner of
+       the box is clipped away by the curve, and a box test would call it
+       visible and never refit. */
+    const ex=(projX(v,m)-MAP_CX)/(MAP_RX*0.97),
+          ey=(projY(v,m)-MAP_CY)/(MAP_RY*0.97);
+    if(ex*ex+ey*ey > 1) return true;
   }
   return false;
 }
