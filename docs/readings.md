@@ -1016,6 +1016,108 @@ in the heading is a toggle, lit in the accent while it is on.
 
 What `SAVE` then does depends on whose mark it is.
 
+### RC — the mark the committee drops
+
+A club race often has one drop: a windward inflatable the race committee
+lays on the morning's wind. Where it lands is not knowable until it is
+laid, so **`RC` is the one mark in the book carrying no position**. It is
+blank until the boat puts one on it, the way the pin and boat ends of the
+line are blank until you ping them — and it goes blank again the next day.
+
+**Setting it is one tap.** Sail up to the mark and press the **⌖** on the
+`RC` tile. That is the whole interaction: it takes the fix, stamps it, and
+the tile goes from `NOT PLACED` to `PLACED 6:42 PM` under your thumb.
+Pressing it again re-places it, which is what you want the day the
+committee shifts the drop. With no fix it says `NO FIX YET` rather than
+doing nothing, because a press that silently fails looks like a broken
+control.
+
+⌖ is on the tile **at all times, not only in `EDIT`** — you press it
+standing at the mark with the boat still moving, which is the worst
+possible moment to be two taps deep in a mode. Putting it back to
+not-placed is the rarer thing and lives in `EDIT`, where every other way
+of taking something off this sheet already lives. One badge shows at a
+time: a 196 px tile with two 40 px discs on it has nothing left to read.
+
+**It is good only for the day it was taken.** This is the one place it
+differs from a pinged line, and the difference is the point:
+
+| | survives until |
+|---|---|
+| a pinged line end | you put it back to the marks — the committee lays the line where it lays it and you sail that line all evening |
+| the `RC` drop | **the end of the day** — it is laid for one race on one morning's wind, and next week it is somewhere else |
+
+Yesterday's position is worse than none, because none says so and an old
+one does not. The test is the calendar day, not an age in hours: a race
+finished at dusk and looked at again after midnight has not moved the
+mark, and *yesterday* is the honest word for it either way.
+
+It lives under its own storage key rather than in `markMoves`. A
+correction says *the book is wrong about where this is*; this says *the
+book cannot know, and here is today's*. Keeping them apart means clearing
+one never touches the other.
+
+**A course can hold it before it exists.** You set the course when the
+committee posts it and ping the mark when you sail past it, so the two do
+not have to happen in that order. Until it is placed:
+
+- the strip draws that rounding **hollow and dashed**, so a glance shows
+  the hole — it is not quietly removed, because the sheet editing your
+  course for you would be worse
+- the leg gives **no bearing and no distance**: `markGeo()` returns null,
+  which is the path the box already has for *no fix yet*, and the line
+  under it says `RC · NOT PLACED YET` so you can tell the two apart
+- the **rounding never arms**, so the course cannot advance past a mark
+  that is not there
+- the **preview leaves it out** and says so at the foot, before the
+  distance — what is drawn is short of a leg, so leading with
+  `ABOUT 4.2 NM` and mentioning the hole afterwards would be the wrong
+  way round
+- the **chart draws nothing** for it
+
+One cost worth stating plainly: twelve tiles plus `NEW MARK` is a fourth
+row, so **the mark grid now scrolls where it used to fit**. Eleven marks
+and the add tile came to exactly three rows. The drum and the edge fade
+exist for precisely this, so it degrades into a mechanism that was
+already there rather than into a bug — but the whole book is no longer
+visible at a glance, and that is a real change.
+
+#### NaN, not null
+
+The unplaced position is `NaN`, and that is load-bearing rather than
+stylistic. **`isFinite(null)` is `true`** — `null` coerces to `0` — so a
+`null` here reads as a mark sitting at zero degrees north, zero east, in
+the Gulf of Guinea, to every `isFinite` guard in the file. Including one
+the course preview already had before any of this existed.
+
+I wrote it as `null` first and the strip chip simply did not go hollow;
+the guard was there and it was answering the wrong question. `NaN` is the
+value that makes all of them say what they mean, and the probe asserts the
+position is `NaN` specifically rather than merely absent.
+
+A reading pass over the same code, run in parallel and without sight of
+the fix, found the trap independently and measured what it costs: a mark
+reading as 0N 0E puts the dial's range at ~4,617 NM with a confident
+bearing to go with it, and sends `lakeGrid` to size its A\* grid from a
+bounding box spanning the Atlantic — about 2.8 × 10¹⁰ cells, which on the
+Pi is a `RangeError` or a hang. The sentinel and the guards are a matched
+pair: every one of them is the global `isFinite`, not `Number.isFinite`,
+so changing either end breaks all of them at once.
+
+#### Two edges it reaches that are not obviously its business
+
+- **It must not become the yardstick.** `mkSave` measures a typed
+  position against the GPS fix, or — with no fix — against a mark from
+  the book, to catch a longitude typed without its west minus. That
+  reference was `MARKS[0]`, and the order of the book is *yours*: `EDIT`
+  drags marks about, and the committee's drop can be dragged to the top
+  like anything else. A `NaN` yardstick measures nothing and would have
+  let a mark typed into Asia straight through — the exact failure that
+  check exists to stop. It now takes the first mark that *has* a
+  position, and refuses outright if there is neither a fix nor one.
+- **Opening it shows blank fields.** `fmtDM(NaN)` is the string `NaN`,
+  which is not what an empty position looks like in a form.
+
 ### Correcting the club's marks
 
 The coordinates in the file come from the sailing instructions, and the

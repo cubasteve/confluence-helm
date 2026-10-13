@@ -1289,6 +1289,32 @@ body.night #cp-svg .wash{opacity:.55}
   border:2px solid var(--alarm);color:var(--alarm);font-size:18px;
   display:flex;align-items:center;justify-content:center}
 .cv-tile .del.undo{border-color:var(--accent);color:var(--accent);font-size:24px}
+/* The committee's. ⌖ is the accent because it is the thing to do with
+   that tile, and it is there whether or not you are in EDIT: you press
+   it standing at the mark with the boat still moving, which is the worst
+   moment to be two taps deep in a mode.
+   In the CORNER, not in the row. Four tiles across a 600 px grid is
+   about 140 each; a 40 px disc in the flex row took a third of that off
+   the words and IN COURSE · 2 came out as IN COURS… - so it comes out of
+   the flow and the text gets its width back, with room kept on the right
+   so the two never touch. The route chips' cross does the same thing for
+   the same reason. */
+.cv-tile .del.here,.cv-tile .del.rcoff{position:absolute;top:9px;right:9px;
+  width:34px;height:34px;border-radius:17px;font-size:18px}
+.cv-tile .del.here{border-color:var(--accent);color:var(--accent)}
+/* The NAME gets out of the badge's way; the sub-line does not have to.
+   The disc is 34 tall at top:9, so it is level with the name row and
+   clear of the line under it - padding the whole text block instead cost
+   the sub-line 38 px it needed, and IN COURSE · 1 came out as IN COURSE…
+   on a tile with room to spare. */
+.cv-tile.rc .tx b{padding-right:38px}
+/* A mark in the book with nowhere to be. Dashed, because that is what
+   this sheet already means by "not yours yet" - the club's course waits
+   in the strip the same way. */
+.cv-tile.unset{border-style:dashed}
+.cv-tile.unset .bu{opacity:.45}
+.cv-chip.unset{background:none;border:2px dashed var(--hairline);color:var(--label)}
+.cv-chip.unset i.no{background:var(--label)}
 .cv-tile .grip{flex:none;width:26px;align-self:stretch;margin-right:-9px;
   display:flex;align-items:center;justify-content:center;font-size:22px;
   color:var(--label)}
@@ -3856,6 +3882,22 @@ const MARKS=[
      Checked against site/assets/schedule.js in the club's own repo, as
      all eleven were: the same position to the metre. */
   {id:'green',  name:'GREEN BUOY',        hdr:'GREEN',  buoy:'g', lat:DM(28,49.030), lon:-DM(81,16.168)},
+  /* The committee's own, and the only mark in the book with no position
+     in it. A club race often has one drop - a windward inflatable the
+     race committee lays on the morning's wind - and where it lands is
+     not knowable until it is laid. So this one is BLANK until the boat
+     puts a position on it, the way the pin and the boat ends of the line
+     are blank until you ping them, and it goes blank again the next day.
+     The shape is 'y' because that is what it is: the same inflatable
+     pillar as the Rum and Gosling marks. What makes it different is not
+     what it looks like, it is that it does not know where it is.
+
+     NaN, not null, and that is load-bearing. isFinite(null) is TRUE -
+     null coerces to 0 - so a null here reads as a mark sitting in the
+     Gulf of Guinea to every isFinite guard in this file, including the
+     one the course preview already had before any of this. NaN is the
+     value that makes all of them say what they mean. */
+  {id:'rc',     name:'COMMITTEE MARK',    hdr:'RC',     buoy:'y', lat:NaN, lon:NaN},
 ];
 const markOf=id=>MARKS.find(m=>m.id===id);
 /* Marks of your own, from the course sheet's NEW MARK: kept in browser
@@ -3970,6 +4012,81 @@ function pingEnd(which){
   if(la===null||lo===null) return;
   LINE[which]={lat:la,lon:lo}; saveLine();
 }
+
+/* ---- the committee's mark ---------------------------------------------
+   The same idea as a pinged line end, with one difference that matters:
+   this one GOES STALE. A pinged line survives until you put it back to
+   the marks, which is right - the committee lays the line where it lays
+   it and you are sailing that line all evening. A windward drop is laid
+   for one race on one morning's wind, and next week it is somewhere
+   else. A position from another day is worse than no position at all,
+   because no position says so and an old one does not.
+
+   So it is stamped with the moment it was taken and only counts on the
+   day it was taken. Not an age in hours: a race finished at dusk and
+   looked at again after midnight has not moved the mark, and 'yesterday'
+   is the honest word for it either way.
+
+   It lives in its own key rather than in markMoves. A correction says
+   'the book is wrong about where this is'; this says 'the book cannot
+   know, and here is today's'. Keeping them apart means clearing one
+   never touches the other. */
+let RCSET=null;
+try{ const o=JSON.parse(localStorage.getItem('rcMark')||'null');
+     if(o && isFinite(o.lat) && isFinite(o.lon) && isFinite(o.at)) RCSET=o; }catch(e){}
+const rcSave=()=>{ try{ RCSET ? localStorage.setItem('rcMark',JSON.stringify(RCSET))
+                              : localStorage.removeItem('rcMark'); }catch(e){} };
+const sameDay=(a,b)=>{ const x=new Date(a), y=new Date(b);
+  return x.getFullYear()===y.getFullYear() && x.getMonth()===y.getMonth()
+      && x.getDate()===y.getDate(); };
+/* Placed, and placed TODAY. Everything else in the app asks this one
+   question and never looks at RCSET itself. */
+const rcPlaced=()=>!!RCSET && sameDay(RCSET.at, Date.now());
+/* The one writer of the mark's position. Called at boot, on every ping,
+   on a clear, and when the day turns over under a panel left running. */
+function rcApply(){
+  const m=markOf('rc'); if(!m) return;
+  if(rcPlaced()){ m.lat=RCSET.lat; m.lon=RCSET.lon; }
+  else          { m.lat=NaN;       m.lon=NaN;       }   /* see MARKS: not null */
+}
+function rcPing(){
+  const la=get('pos.lat'), lo=get('pos.lon');
+  if(la===null||lo===null) return false;
+  RCSET={lat:la, lon:lo, at:Date.now()};
+  rcSave(); rcApply();
+  return true;
+}
+function rcClear(){ RCSET=null; rcSave(); rcApply(); }
+/* Its own, rather than gunTxt's: that one is declared hundreds of lines
+   below renderCourse, and renderCourse runs at boot - a const arrow is
+   in its dead zone until then and the sheet would throw on the way up. */
+const rcClock=()=>{ if(!RCSET) return '';
+  const d=new Date(RCSET.at), h=d.getHours();
+  return ((h%12)||12)+':'+String(d.getMinutes()).padStart(2,'0')
+         +' '+(h<12?'AM':'PM'); };
+/* A word on the tile, for the one thing the tile cannot say by simply
+   changing: a ping that did not happen. Placing it is its own receipt -
+   the line goes from NOT PLACED to PLACED 6:42 PM under your thumb - but
+   a press with no fix would otherwise do nothing at all and look like a
+   control that is broken. The sheet has no message line of its own, and
+   this did not seem worth inventing one for. */
+let rcSay='', rcSayAt=0;
+const rcFlash=m=>{ rcSay=m; rcSayAt=Date.now()+4000;
+  if(APP.on && APP.on.id==='course') renderCourse(); };
+/* Midnight on a panel nobody has touched, and the word above timing out.
+   Cheap enough to ask every tick because it only does anything when one
+   of the two answers changes. */
+let rcDay='';
+function rcTick(){
+  const sheet=APP.on && APP.on.id==='course';
+  if(rcSay && Date.now()>rcSayAt){ rcSay=''; if(sheet) renderCourse(); }
+  const d=new Date();
+  const key=d.getFullYear()+'/'+d.getMonth()+'/'+d.getDate();
+  if(key===rcDay) return;
+  rcDay=key; rcApply();
+  if(sheet) renderCourse();
+}
+rcApply();
 function toXY(lat,lon,lat0,lon0){              // metres east / north
   return { x:(lon-lon0)*111320*Math.cos(lat0*Math.PI/180),
            y:(lat-lat0)*111320 };
@@ -4134,7 +4251,14 @@ function courseNext(){
 function markGeo(){
   const la=get('pos.lat'), lo=get('pos.lon');
   if(la===null||lo===null) return null;
-  const n=courseNext(), C=toXY(n.lat,n.lon,la,lo);
+  const n=courseNext();
+  /* The committee's mark before it has been placed. Null here rather
+     than a bearing to nowhere: every caller already has a path for "no
+     fix yet" - the box shows dashes and courseWatch stops arming the
+     rounding - and "we do not know where that is" wants exactly that
+     path, not a number that looks like an answer. */
+  if(!isFinite(n.lat)||!isFinite(n.lon)) return null;
+  const C=toXY(n.lat,n.lon,la,lo);
   return {n, dist:Math.hypot(C.x,C.y), brg:(Math.atan2(C.x,C.y)*DEG+360)%360};
 }
 const rangeTxt=m=> m<1000 ? Math.round(m)+' M' : (m/1852).toFixed(2)+' NM';
@@ -4288,7 +4412,11 @@ function paintRace(met){
     if(n.id==='finish'){ wText('rp-r2-l', N?'LAST LEG':'NO COURSE SET'); wText('rp-r2','FINISH LINE'); }
     else { const after=i+1<N ? markOf(COURSE.marks[i+1]) : null;
       wText('rp-r2-l', 'MARK '+(i+1)+' OF '+N+' · TO '+(markSide(i)==='P'?'PORT':'STBD'));
-      wText('rp-r2', n.hdr+(after ? ' · THEN '+after.hdr : ' · THEN FINISH')); }
+      /* DIST and BRG are already dashes - markGeo refused. This is the
+         line that says WHY, because a mark you have not placed and a
+         GPS that has not fixed look identical up there. */
+      wText('rp-r2', !isFinite(n.lat) ? n.hdr+' · NOT PLACED YET'
+            : n.hdr+(after ? ' · THEN '+after.hdr : ' · THEN FINISH')); }
   }
 }
 
@@ -5281,6 +5409,7 @@ function tick(){
   $('t-plus').style.opacity = $('t-minus').style.opacity = off?'.2':'1';
   keepTick();                      /* rate-limits itself; see KEEP_MS */
   paintDots();                     /* the reach dot follows tState, not a swipe */
+  rcTick();                        /* the committee's mark goes stale at midnight */
   setTimeout(tick,120);
 }
 
@@ -9421,7 +9550,10 @@ function drawMap(pts){
      it. So a repeated mark carries both its numbers - 1,3 - and shows
      the side of the rounding still to come. */
   const at={};
-  COURSE.marks.forEach((id,i)=>{ if(markOf(id)) (at[id]=at[id]||[]).push(i); });
+  /* isFinite, not just "the book has it": the committee's mark is in the
+     book all week and only has a position on the day it was laid. */
+  COURSE.marks.forEach((id,i)=>{ const m=markOf(id);
+    if(m && isFinite(m.lat) && isFinite(m.lon)) (at[id]=at[id]||[]).push(i); });
   Object.keys(at).forEach(id=>{ const m=markOf(id), ns=at[id];
     const q=merc(m.lat,m.lon), x=projX(v,q), y=projY(v,q);
     const on=ns.indexOf(COURSE.next)>=0, many=ns.length>1;
@@ -10042,7 +10174,14 @@ function renderCourse(){
     const hdr=(markOf(id)||{hdr:id.toUpperCase()}).hdr;
     if(ghost) return '<div class="cv-chip ghost"><i>'+(i+1)+'</i>'+esc(hdr)+'</div>';
     const sd=markSide(i);
-    return '<div class="cv-chip'+(i===COURSE.next?' next':'')+'" data-chip="'+i+'">'
+    /* A rounding of a mark that has not been placed. It stays in the
+       strip - it is in the course, and taking it out when the committee
+       has merely not dropped it yet would be the sheet editing your
+       course for you - but it is drawn hollow so a glance down the strip
+       shows the hole. */
+    const mk=markOf(id), gap=!!mk && !isFinite(mk.lat);
+    return '<div class="cv-chip'+(gap?' unset':'')+(i===COURSE.next?' next':'')
+      +'" data-chip="'+i+'">'
       +'<i class="no">'+(i+1)+'</i>'
       +'<b class="xno"><svg viewBox="0 0 12 12">'
       +'<path d="M3.5 3.5l5 5M8.5 3.5l-5 5"/></svg></b>'+esc(hdr)
@@ -10076,15 +10215,38 @@ function renderCourse(){
        tap it twice and it is rounded twice, and the tile says 1,3. */
     const at=[]; COURSE.marks.forEach((id,k)=>{ if(id===m.id) at.push(k); });
     const moved=isMoved(m.id);
-    const sub = courseEdit ? posDM(m)
-              : at.length ? 'IN COURSE · '+at.map(k=>k+1).join(',')
-                            +(moved?' · CORRECTED':'')
-              : moved     ? 'CORRECTED'
-              :             'TAP TO ADD';
-    const badge = !courseEdit ? ''
+    /* The committee's mark is the one tile that has state of its own.
+       It can be in the course and still have nowhere to be, so what it
+       says is where it STANDS, not what tapping it does - and when it
+       has nowhere to be, that is the only thing worth saying. */
+    const rc = m.id==='rc', here = rc && rcPlaced();
+    /* Short, because four tiles across a 600 row leaves about sixteen
+       characters before this ellipsises - and a sub-line you cannot read
+       the end of is worse than a shorter one. The ⌖ says what to do; the
+       words only have to say where it stands. */
+    const sub = rc && rcSay ? rcSay
+              : rc && !here ? 'NOT PLACED'
+              : courseEdit  ? posDM(m)
+              : at.length   ? 'IN COURSE · '+at.map(k=>k+1).join(',')
+                              +(moved?' · CORRECTED':'')
+              : rc          ? 'PLACED '+rcClock()
+              : moved       ? 'CORRECTED'
+              :               'TAP TO ADD';
+    /* One badge, never two: a 140 px tile with two 40 px discs on it has
+       nothing left to read. ⌖ is on the committee's tile at all times,
+       not only in edit mode - you press it standing at the mark with the
+       boat still moving, which is the worst moment to be two taps deep
+       in a mode - and pressing it again re-places it, which is what you
+       want the day the committee shifts the drop. Putting it back to
+       not-placed is the rarer thing and lives in EDIT, where every other
+       way of taking something off this sheet already lives. */
+    const badge = rc && courseEdit && here ? '<div class="del rcoff">✕</div>'
+      : rc ? '<div class="del here">⌖</div>'
+      : !courseEdit ? ''
       : isUserMark(m.id) ? '<div class="del">✕</div>'
       : moved            ? '<div class="del undo">↺</div>' : '';
     return '<button class="cv-tile'+(at.length?' in':'')
+      +(rc?' rc':'')+(rc&&!here?' unset':'')
       +(at.indexOf(COURSE.next)>=0?' next':'')
       +'" data-mark="'+m.id+'">'+buoySvg(m)
       +'<div class="tx"><b>'+esc(m.hdr)+'</b>'
@@ -10614,9 +10776,15 @@ function prevInfo(){
   const ENDS=[{lat:E.pin.lat, lon:E.pin.lon}, {lat:E.boat.lat, lon:E.boat.lon}];
   const M={line:{lat:(E.pin.lat+E.boat.lat)/2, lon:(E.pin.lon+E.boat.lon)/2,
                  name:'START LINE'}};
-  const stops=[];
+  const stops=[], unplaced=[];
   COURSE.marks.forEach((id,i)=>{
     const m=markOf(id); if(!m) return;
+    /* The committee's mark before it is laid. It stays in the COURSE -
+       you set the course when the committee posts it, and ping the mark
+       when you sail past it - but there is no line to draw through a
+       place nobody knows yet, so the drawing leaves it out and the foot
+       of the sheet says so. */
+    if(!isFinite(m.lat)||!isFinite(m.lon)){ unplaced.push(m.hdr); return; }
     M[id]={lat:m.lat, lon:m.lon, name:m.hdr};
     stops.push({id:id, side: markSide(i)==='P' ? 'p' : 's'});
   });
@@ -10629,7 +10797,8 @@ function prevInfo(){
   const wind = w ? {dir:w.twd, kn:Math.round(w.tws), src:w.src} : null;
   const info = seq.length>1
     ? LMSA.route(seq, wind, M, ENDS, MARKS.filter(m=>isFinite(m.lat))) : null;
-  return {E:E, ENDS:ENDS, M:M, seq:seq, stops:stops, wind:wind, info:info};
+  return {E:E, ENDS:ENDS, M:M, seq:seq, stops:stops, wind:wind, info:info,
+          unplaced:unplaced};
 }
 function prevDraw(){
   const W=CP.W, H=CP.H, HF=H-CP.BAR;
@@ -10642,7 +10811,7 @@ function prevDraw(){
      make room for its own run-out. */
   const pts=[];
   if(D.stops.length) D.stops.forEach(s=>pts.push(D.M[s.id]));
-  else MARKS.forEach(m=>pts.push(m));
+  else MARKS.forEach(m=>{ if(isFinite(m.lat)&&isFinite(m.lon)) pts.push(m); });
   D.ENDS.forEach(e=>pts.push(e));
   const mp=pts.map(p=>merc(p.lat,p.lon));
   const x0=Math.min(...mp.map(q=>q.x)), x1=Math.max(...mp.map(q=>q.x));
@@ -10683,6 +10852,7 @@ function prevDraw(){
   /* ---- every other mark the boat knows, small and quiet ---- */
   const used={}; D.stops.forEach(s=>used[s.id]=1);
   MARKS.forEach(m=>{ if(used[m.id]||m.id==='flag'||m.id==='ball') return;
+    if(!isFinite(m.lat)||!isFinite(m.lon)) return;
     o+=`<circle class="mk-off" cx="${f(X(m))}" cy="${f(Y(m))}" r="4.5"></circle>`; });
 
   /* ---- the route, and the roundings on it ---- */
@@ -10756,11 +10926,21 @@ function prevDraw(){
   $('cp-svg').innerHTML=o;
 
   /* ---- and what it comes to, in the club's words ---- */
-  if(!D.info){ $('cp-foot').textContent='NO COURSE SET · THE LINE IS THE WHOLE OF IT'; return; }
+  /* A mark in the course with nowhere to be is said FIRST and on its
+     own. The distance is the honest distance of what is drawn, and what
+     is drawn is short of a leg - so leading with "ABOUT 4.2 NM" and
+     mentioning the hole afterwards would be the wrong way round. */
+  const miss=(D.unplaced||[]).length
+    ? (D.unplaced.join(' AND ')+' NOT PLACED YET · '
+       +(D.unplaced.length>1?'THEY ARE':'IT IS')+' NOT IN THIS')
+    : '';
+  if(!D.info){ $('cp-foot').textContent =
+    miss || 'NO COURSE SET · THE LINE IS THE WHOLE OF IT'; return; }
   const kinds=D.info.kinds, bits=[];
   if(kinds.beat) bits.push(kinds.beat===1?'ONE BEAT':kinds.beat+' BEATS');
   if(kinds.run)  bits.push(kinds.run===1 ?'ONE RUN' :kinds.run+' RUNS');
-  $('cp-foot').textContent='ABOUT '+D.info.nm.toFixed(1)+' NM SAILED'
+  $('cp-foot').textContent = (miss ? miss+' · ' : '')
+    +'ABOUT '+D.info.nm.toFixed(1)+' NM SAILED'
     +(bits.length?' · '+bits.join(' AND '):(D.wind?' · ALL REACHING':''));
 }
 
@@ -11260,6 +11440,14 @@ $('course-list').addEventListener('click',e=>{
   /* The first tile is not a mark, it is the way to make one. */
   if(tile.dataset.add){ mkOpen(); return; }
   const id=tile.dataset.mark;
+  /* The committee's two, ahead of the general .del below - .here and
+     .rcoff wear that class for the shape and the hit size, and would
+     otherwise be read as "delete this mark from the book". */
+  if(e.target.closest('.here')){
+    if(!rcPing()) return void rcFlash('NO FIX YET');
+    rcSay=''; renderCourse(); drawMap(shownTrack()); return; }
+  if(e.target.closest('.rcoff')){
+    rcClear(); rcSay=''; renderCourse(); drawMap(shownTrack()); return; }
   if(e.target.closest('.undo')){ markRevert(id); return; }
   if(e.target.closest('.del')){ markDelete(id); return; }
   if(e.target.closest('.grip')) return;       /* a handle to drag by */
@@ -11389,8 +11577,11 @@ function parseDM(str){
    keyboard has. */
 function mkOpen(id){
   const m=id?markOf(id):null;
+  /* fmtDM of a mark with nowhere to be is the string 'NaN'. An empty
+     field is what "it has no position" looks like in a form. */
+  const has=!!m && isFinite(m.lat) && isFinite(m.lon);
   MK={f:'name', id:m?m.id:null,
-      name:m?m.name:'', lat:m?fmtDM(m.lat):'', lon:m?fmtDM(m.lon):'',
+      name:m?m.name:'', lat:has?fmtDM(m.lat):'', lon:has?fmtDM(m.lon):'',
       buoy:(m&&m.buoy)||'o',
       kb:{shift:false,sym:false,num:false}};
   pickClose(); crsTitle(!m ? 'New mark' : isUserMark(m.id) ? 'Edit mark' : 'Correct mark');
@@ -11428,7 +11619,19 @@ function mkSave(){
      longitude typed without its west minus put a mark in Asia, fitted
      the map to half the globe and hung the Pi on its tiles. */
   const ref={la:get('pos.lat'), lo:get('pos.lon')};
-  if(ref.la===null||ref.lo===null){ ref.la=MARKS[0].lat; ref.lo=MARKS[0].lon; }
+  if(ref.la===null||ref.lo===null){
+    /* The first mark that HAS a position, not MARKS[0]. The order of
+       this list is yours - EDIT drags marks about - and the committee's
+       drop can be dragged to the top like any other, where it would
+       have handed this check a NaN to measure against and let a mark
+       typed into Asia straight through. */
+    const r=MARKS.find(m=>isFinite(m.lat)&&isFinite(m.lon));
+    if(r){ ref.la=r.lat; ref.lo=r.lon; } }
+  if(!isFinite(ref.la)||!isFinite(ref.lo)){
+    /* No fix and nothing in the book to measure from. Refusing beats
+       guessing: this check is the only thing between a mistyped
+       longitude and a map fitted to half the globe. */
+    $('mk-msg').textContent='NO FIX · CANNOT CHECK THE POSITION'; return; }
   const nm=seaNm(ref.la,ref.lo,lat,lon);
   if(nm>MARK_MAX_NM){ $('mk-msg').textContent=Math.round(nm).toLocaleString()+' NM AWAY · WEST IS MINUS?'; return; }
   let name=MK.name.trim().toUpperCase().replace(/\s+/g,' ');

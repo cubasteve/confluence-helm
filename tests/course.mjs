@@ -96,7 +96,10 @@ t.ok(await p.evaluate(()=>$('app-name').textContent)==='Course',
      +'under it saying COURSE twice',
      await p.evaluate(()=>$('app-name').textContent));
 const marks=x=>x.filter(r=>r.mark);
-t.ok(marks(S).length===11, 'all eleven of the club\'s marks, as tiles', String(S.length));
+t.ok(marks(S).length===12, 'all twelve of the club\'s marks, as tiles - '
+     +'eleven surveyed buoys and the committee\'s drop, which is in the '
+     +'book all week and only has a position on the day it is laid',
+     String(S.length));
 let L=await line();
 t.ok(L.inStrip && L.first, 'the line leads the route, in line with it - you '
      +'start on it, and the FINISH at the other end is it come home to',
@@ -362,7 +365,7 @@ await p.evaluate(()=>{ COURSE.marks=['gosling','cb12','rum']; COURSE.next=1;
 await tap('#course-clr');
 C=await course(); S=await sheet();
 t.ok(C.marks.length===0 && C.next===0, 'nothing left to sail', C.marks.join()+' @'+C.next);
-t.ok(marks(S).length===11 && marks(S).every(r=>r.seq===''),
+t.ok(marks(S).length===12 && marks(S).every(r=>r.seq===''),
      'the marks are all still there, unnumbered');
 /* An empty route is the line and the finish - start here, come back
    here, which is what a race with no course between them is. It used to
@@ -1038,5 +1041,201 @@ t.ok(Math.abs(after-before)/before < 0.01, 'the view stays on the lake',
      before.toFixed(0)+' -> '+after.toFixed(0));
 t.ok(await p.evaluate(()=>$('t-path').querySelectorAll('.t-mark').length)===2,
      'the mark is still drawn - off the edge, where it was typed');
+
+t.head('the committee\'s mark: in the book, with nowhere to be');
+/* A club race often has one drop - a windward inflatable the committee
+   lays on the morning's wind - and where it lands is not knowable until
+   it is laid. So RC is the one mark in the book carrying no position. */
+await p.evaluate(()=>{ rcClear(); courseEdit=false;
+  COURSE={marks:[],next:0,side:[]}; courseSave(); renderCourse(); });
+await p.waitForTimeout(250);
+const rcState=()=>p.evaluate(()=>{
+  const m=markOf('rc'), t=document.querySelector('.cv-tile[data-mark="rc"]');
+  return {inBook:!!m, lat:m?(Number.isNaN(m.lat)?'NaN':m.lat):null,
+          placed:rcPlaced(),
+          sub:t?t.querySelector('s').textContent:null,
+          dashed:t?getComputedStyle(t).borderStyle:null,
+          here:!!(t&&t.querySelector('.here')),
+          off:!!(t&&t.querySelector('.rcoff'))};
+});
+let RC=await rcState();
+t.ok(RC.inBook, 'it is in the book like any other mark');
+t.ok(RC.lat==='NaN', 'and its position is NaN - not null, because '
+     +'isFinite(null) is TRUE and every guard in the file would have read '
+     +'an unplaced mark as sitting at zero,zero', String(RC.lat));
+t.ok(!RC.placed, 'it is not placed');
+t.ok(RC.sub==='NOT PLACED', 'and the tile says so', String(RC.sub));
+t.ok(RC.dashed==='dashed', 'drawn dashed, the way this sheet already says '
+     +'"not yours yet"', String(RC.dashed));
+t.ok(RC.here, 'with the ⌖ on it to set it from here');
+t.ok(!RC.off, 'and nothing to clear, because there is nothing on it');
+
+t.head('⌖ puts the boat\'s own position on it');
+await p.evaluate(()=>{ feedPut('pos.lat',28.8402,'sk');
+                       feedPut('pos.lon',-81.2601,'sk'); });
+await tap('.cv-tile[data-mark="rc"] .here');
+RC=await rcState();
+t.ok(RC.placed, 'it is placed');
+t.ok(Math.abs(RC.lat-28.8402)<1e-9, 'at the boat, to the fix',
+     String(RC.lat));
+t.ok(/^PLACED /.test(RC.sub), 'and the tile says when', String(RC.sub));
+t.ok(RC.dashed!=='dashed', 'and stops being dashed');
+t.ok(await p.evaluate(()=>{ const m=markOf('rc');
+       return isFinite(m.lat) && isFinite(m.lon); }),
+     'so every isFinite guard in the file now sees a real position');
+
+t.head('and it is only good for the day it was taken');
+/* A pinged line survives until you put it back to the marks - the
+   committee lays the line where it lays it and you sail it all evening.
+   A windward drop is laid for one race on one morning's wind. Yesterday's
+   is worse than none, because none says so and an old one does not. */
+await p.evaluate(()=>{ RCSET.at=Date.now()-26*3600*1000; rcSave(); rcApply(); });
+await p.evaluate(()=>renderCourse()); await p.waitForTimeout(200);
+RC=await rcState();
+t.ok(!RC.placed, 'a position stamped yesterday does not count');
+t.ok(RC.lat==='NaN', 'and the mark goes back to having nowhere to be',
+     String(RC.lat));
+t.ok(RC.sub==='NOT PLACED', 'with the tile saying it plainly rather than '
+     +'showing you where the mark used to be', String(RC.sub));
+/* and the clock, not an age in hours: a race finished at dusk and looked
+   at again after midnight has not moved the mark either way. */
+await p.evaluate(()=>{ RCSET={lat:28.84,lon:-81.26,at:Date.now()};
+  rcSave(); rcApply(); renderCourse(); });
+t.ok(await p.evaluate(()=>rcPlaced()), 'today\'s counts again');
+
+t.head('a rounding of a mark with nowhere to be is drawn as a hole');
+await p.evaluate(()=>{ rcClear();
+  COURSE={marks:['rc','gosling'],next:1,side:['P','P']};
+  courseSave(); renderCourse(); });
+await p.waitForTimeout(250);
+const gap=await p.evaluate(()=>{
+  const cs=[...document.querySelectorAll('#cv-route .cv-chip[data-chip]')];
+  return cs.map(c=>({cls:c.className,
+    border:getComputedStyle(c).borderStyle}));
+});
+t.ok(gap[0].cls.indexOf('unset')>=0 && gap[0].border==='dashed',
+     'it stays in the strip - taking it out because the committee has not '
+     +'dropped it yet would be the sheet editing your course - but it is '
+     +'drawn hollow so a glance shows the hole', JSON.stringify(gap[0]));
+t.ok(gap[1].cls.indexOf('unset')<0, 'and the placed ones are not');
+
+t.head('the leg refuses to give a bearing to a place nobody knows');
+await p.evaluate(()=>{ COURSE={marks:['rc'],next:0,side:['P']};
+  courseSave(); renderCourse();
+  feedPut('pos.lat',28.8190,'sk'); feedPut('pos.lon',-81.2650,'sk'); });
+t.ok(await p.evaluate(()=>markGeo())===null,
+     'markGeo returns null rather than a bearing to NaN - every caller '
+     +'already has a path for "no fix yet" and this wants that path');
+t.ok(await p.evaluate(()=>{ tState='racing'; courseReset(); courseWatch();
+       return COURSE.next; })===0,
+     'and the rounding never arms, so it cannot advance past a mark that '
+     +'is not there');
+await p.evaluate(()=>{ tState='idle'; });
+
+t.head('the preview leaves it out, and says it has');
+await p.evaluate(()=>{ COURSE={marks:['gosling','rc','rum'],next:0,
+  side:['P','S','P']}; courseSave(); renderCourse(); prevDraw(); });
+await p.waitForTimeout(400);
+t.ok(await p.evaluate(()=>(prevInfo().unplaced||[]).join()==='RC'),
+     'prevInfo names what it could not draw',
+     await p.evaluate(()=>JSON.stringify(prevInfo().unplaced)));
+t.ok(await p.evaluate(()=>prevInfo().stops.every(s=>s.id!=='rc')),
+     'and leaves it out of the route, because there is no line to draw '
+     +'through a place nobody knows');
+t.ok(/RC NOT PLACED YET/.test(await p.evaluate(()=>$('cp-foot').textContent)),
+     'the foot of the sheet says so, FIRST - the distance drawn is short '
+     +'of a leg, so leading with it would be the wrong way round',
+     await p.evaluate(()=>$('cp-foot').textContent));
+t.ok(await p.evaluate(()=>{
+       const v=prevInfo(); let bad=false;
+       (v.info?v.info.line:[]).forEach(q=>{ if(!isFinite(q.lat)||!isFinite(q.lon)) bad=true; });
+       return !bad; }),
+     'and nothing NaN reaches the drawing');
+
+t.head('nor does the track map draw it');
+await p.evaluate(()=>{ drawMap(shownTrack()); });
+await p.waitForTimeout(300);
+t.ok(await p.evaluate(()=>{
+       const g=document.getElementById('t-path');
+       return !/NaN/.test(g?g.innerHTML:''); }),
+     'no NaN in the chart it writes');
+
+t.head('⌖ with no fix says so rather than doing nothing');
+/* The fix is taken away and put back inside ONE evaluate: this page is
+   running the demo boat, which refills pos.lat on its next tick, so a
+   probe that clears it and then waits is racing a feed it cannot win
+   against. The handler is one line - if(!rcPing()) rcFlash('NO FIX YET')
+   - so the two halves are checked as the two halves. */
+await p.evaluate(()=>{ rcClear(); COURSE={marks:[],next:0,side:[]};
+  courseSave(); renderCourse(); });
+await p.waitForTimeout(200);
+t.ok(await p.evaluate(()=>{
+       const keep=[S['pos.lat'], S['pos.lon']];
+       S['pos.lat']=null; S['pos.lon']=null;
+       const got=rcPing();
+       S['pos.lat']=keep[0]; S['pos.lon']=keep[1];
+       return got===false; }),
+     'with no fix the ping refuses rather than placing the mark at zero');
+t.ok(!await p.evaluate(()=>rcPlaced()), 'so it is not placed');
+await p.evaluate(()=>rcFlash('NO FIX YET'));
+await p.waitForTimeout(150);
+t.ok((await rcState()).sub==='NO FIX YET',
+     'and the tile says why - a press that silently does nothing looks '
+     +'like a control that is broken', String((await rcState()).sub));
+await p.evaluate(()=>{ rcSay=''; renderCourse(); });
+
+t.head('clearing it lives in EDIT, where taking things off this sheet lives');
+await p.evaluate(()=>{ feedPut('pos.lat',28.8402,'sk');
+  feedPut('pos.lon',-81.2601,'sk'); rcPing(); renderCourse(); });
+await p.waitForTimeout(200);
+t.ok(!(await rcState()).off, 'outside EDIT there is no ✕ - one badge at a '
+     +'time, because a tile with two 40 px discs on it has nothing left '
+     +'to read');
+await p.evaluate(()=>{ courseEdit=true; renderCourse(); });
+await p.waitForTimeout(200);
+RC=await rcState();
+t.ok(RC.off, 'in EDIT it appears');
+t.ok(!RC.here, 'and ⌖ stands down, so there is still only one');
+await tap('.cv-tile[data-mark="rc"] .rcoff');
+t.ok(!await p.evaluate(()=>rcPlaced()), 'and it puts the mark back to '
+     +'not-placed');
+await p.evaluate(()=>{ courseEdit=false; rcClear();
+  COURSE={marks:[],next:0,side:[]}; courseSave(); renderCourse(); });
+
+t.head('and it cannot become the yardstick for everything else');
+/* mkSave measures a typed position against the fix, or - with no fix -
+   against a mark from the book, to catch a longitude typed without its
+   west minus. That reference used to be MARKS[0], and the order of this
+   list is YOURS: EDIT drags marks about, and the committee's drop can be
+   dragged to the top like anything else. A NaN yardstick measures
+   nothing and lets a mark typed into Asia straight through - which is
+   the exact failure that check exists to stop. */
+await p.evaluate(()=>{ rcClear();
+  const i=MARKS.findIndex(m=>m.id==='rc');
+  MARKS.unshift(MARKS.splice(i,1)[0]);      /* dragged to the top */
+  renderCourse(); });
+t.ok(await p.evaluate(()=>MARKS[0].id==='rc'), 'the committee mark is first');
+t.ok(await p.evaluate(()=>{
+       const keep=[S['pos.lat'], S['pos.lon']];
+       S['pos.lat']=null; S['pos.lon']=null;
+       mkOpen(); MK.name='ASIA'; MK.lat='28 49.000'; MK.lon='081 16.000';
+       mkSave();                              /* east, no minus */
+       const said=$('mk-msg').textContent;
+       const made=USER_MARKS.some(m=>m.name==='ASIA');
+       S['pos.lat']=keep[0]; S['pos.lon']=keep[1];
+       return !made && /NM AWAY|CANNOT CHECK/.test(said); }),
+     'a longitude typed without its minus is still refused, with the '
+     +'committee mark sitting at the top of the book');
+await p.evaluate(()=>{ courseBack(true); });
+
+t.head('opening it shows empty fields, not the word NaN');
+await p.evaluate(()=>{ mkOpen('rc'); });
+t.ok(await p.evaluate(()=>MK.lat==='' && MK.lon===''),
+     'a mark with nowhere to be opens blank - fmtDM of NaN is the string '
+     +'"NaN", which is not what an empty position looks like in a form',
+     await p.evaluate(()=>JSON.stringify([MK.lat,MK.lon])));
+await p.evaluate(()=>{ courseBack(true);
+  const i=MARKS.findIndex(m=>m.id==='rc');
+  MARKS.push(MARKS.splice(i,1)[0]); renderCourse(); });
 
 await t.done(b);

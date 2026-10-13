@@ -57,11 +57,25 @@ for(const [sel,what] of [['#course-list','the marks grid'],
 }
 
 t.head('a box that fits says nothing at all');
+/* The book is twelve now - eleven surveyed buoys and the committee's
+   drop - and twelve tiles plus NEW MARK is a fourth row, so the real
+   grid no longer fits and this section has to build something that does.
+   That is a true thing about the page rather than a probe working around
+   itself: the stock mark grid scrolls, which is why the drum and the
+   fade exist. The case below still has to be tested, because a box that
+   fits must stay silent. */
+const SPARE=await p.evaluate(()=>MARKS.splice(MARKS.length-3,3));
+await p.evaluate(()=>renderCourse()); await p.waitForTimeout(250);
 let G=await grid();
-t.ok(!G.over, 'eleven marks fit, so no fade', G.scroll+' in '+G.client);
+t.ok(!G.over, 'nine marks fit, so no fade', G.scroll+' in '+G.client);
 t.ok(!G.masked, 'and nothing is masked');
 await scrollTo(0);
 t.ok(!(await arc()).lit, 'and there is no arc to draw');
+await p.evaluate(sp=>{ MARKS.push(...sp); renderCourse(); }, SPARE);
+await p.waitForTimeout(250);
+t.ok((await grid()).over, 'and the twelve the boat actually carries do NOT '
+     +'fit - the committee\'s mark is the one that tipped the grid into a '
+     +'fourth row', (await grid()).scroll+' in '+(await grid()).client);
 t.ok(await p.evaluate(()=>[...$('course-list').children]
        .every(k=>/rotateX/.test(k.style.transform))),
      'and the grid still turns - a drum is what this list IS, not a '
