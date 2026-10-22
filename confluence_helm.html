@@ -581,7 +581,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   transparent 0,#000 var(--fa),#000 calc(100% - var(--fz)),transparent 100%)}
 /* The two full-width rows keep the NARROW column. They sit at the top of
    the circle, where 880 px has its ends out in the black. */
-.senrow, #conn-sec, .sheet > .hint{grid-column:1 / -1;
+.senrow, #conn-sec, .demorow, .sheet > .hint{grid-column:1 / -1;
   width:600px;justify-self:center}
 .card{border:2px solid var(--hairline);border-radius:24px;
   padding:15px 20px 17px;display:flex;flex-direction:column}
@@ -726,11 +726,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .mini.wide.on{color:var(--accent);border-color:var(--accent)}
 /* Under the pair rather than beside it: what the mode means is a
    sentence, and a sentence does not fit in a row of two pills. */
-.senrow{position:relative;margin-bottom:6px}
+.senrow{margin-bottom:6px}
 #sen-svg{display:block;width:340px;height:60px;margin:0 auto}
-/* Absolutely placed rather than laid out in a flex row, so the four
-   glyphs stay centred on the sheet exactly where they were and the
-   toggle takes the slack that was already there beside them. */
+/* The glyph row is the glyphs now. The DEMO pill used to be absolutely
+   placed beside them, taking slack that was already there; it is at the
+   foot of the panel under the build line instead. */
+.demorow{display:flex;justify-content:center;margin-top:12px}
 /* The speed lives on the pill. Three triangles, always drawn: a glyph
    that changed width would move the word beside it every tap, and the
    ghosts are what say a second and a third speed exist at all. */
@@ -738,7 +739,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #demo-ff path{fill:currentColor;opacity:.2}
 #demo-ff path.on{opacity:1}
 #demo-btn{display:inline-flex;align-items:center}
-.demo-tog{position:absolute;right:0;top:8px;height:44px;padding:0 16px;
+.demo-tog{height:44px;padding:0 16px;
   border:2px solid var(--hairline);border-radius:22px;background:none;
   color:var(--label);font:600 21px/1 inherit;letter-spacing:.14em;
   opacity:.5;transition:opacity .2s,color .2s,border-color .2s,background .2s}
@@ -958,8 +959,12 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .hint{font-size:22px;letter-spacing:.2em;color:var(--label);opacity:.7;
   text-align:center;margin-top:10px}
 /* which build is on the glass. Small, permanent, and the only way to tell
-   three copies of this file apart at a glance. */
-.build{margin-left:18px;font-size:19px;letter-spacing:.14em;opacity:.6}
+   three copies of this file apart at a glance.
+   No margin-left: .hint centres its contents, and an 18 px left margin
+   pushed the only thing in it 9 px off centre. It was there from when
+   this line carried a word before the build and the margin was the gap
+   between them. */
+.build{font-size:19px;letter-spacing:.14em;opacity:.6}
 .errlog{font-size:17px;letter-spacing:.06em;color:var(--alarm);opacity:.85;white-space:pre-line;
   text-transform:none;margin-top:8px}
 .errlog:empty{display:none}
@@ -2545,19 +2550,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     </g>
   </g>
     </svg>
-    <!-- Beside the glyphs on purpose. The demo feed writes into the same
-         store the real sensors do, so while it is on those four glyphs
-         are lit green by numbers nobody measured - and this is the only
-         thing on the panel that says so. A slab and a row of its own put
-         that admission somewhere you had to go looking for it. -->
-    <!-- One control, four states: off, and three speeds. The arrows are
-         all three always, so the pill never changes width and so you
-         can see there is somewhere further to go; the ones past the
-         speed you are on are ghosted. -->
-    <button class="demo-tog" id="demo-btn" aria-pressed="false">DEMO<svg
-        id="demo-ff" viewBox="0 0 33 12" aria-hidden="true"
-        ><path d="M0 0 L9 6 L0 12 Z"/><path d="M12 0 L21 6 L12 12 Z"
-        /><path d="M24 0 L33 6 L24 12 Z"/></svg></button>
     </div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
@@ -2655,6 +2647,25 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          over file://, not the deployed one - which is the whole point of
          printing it. -->
     <div class="hint"><span class="build">__BUILD__</span></div>
+    <!-- Under the build line, at the foot of everything. It sat beside the
+         sensor glyphs, which was the right place while it was one of a
+         pair and the glyphs were the thing it was admitting to: the demo
+         feed writes into the same store the real sensors do, so while it
+         is on those four glyphs are lit green by numbers nobody measured.
+         Alone up there it was a lone pill hanging off one end of a
+         centred row. Down here it is the last thing on the panel, which
+         is where a bench control belongs on an instrument that is not on
+         a bench any more.
+         One control, four states: off, and three speeds. The arrows are
+         all three always, so the pill never changes width and so you can
+         see there is somewhere further to go; the ones past the speed you
+         are on are ghosted. -->
+    <div class="demorow">
+      <button class="demo-tog" id="demo-btn" aria-pressed="false">DEMO<svg
+          id="demo-ff" viewBox="0 0 33 12" aria-hidden="true"
+          ><path d="M0 0 L9 6 L0 12 Z"/><path d="M12 0 L21 6 L12 12 Z"
+          /><path d="M24 0 L33 6 L24 12 Z"/></svg></button>
+    </div>
     <div class="hint errlog" id="errlog"></div>
   </div>
 

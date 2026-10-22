@@ -16,6 +16,20 @@ Their liveness is evaluated in DATA rather than DRAW. Left where it was,
 inside the dial's draw gate, the glyphs would freeze whenever the control
 panel was open - which is now the only time you can see them.
 
+**The row is just the glyphs now.** It used to carry a pill at each end -
+`PHONE` on the left and `DEMO` on the right, absolutely placed so the four
+glyphs stayed centred and the pills took slack that was already there.
+That was the right shape while there were two of them and the glyphs were
+what they were admitting to: both feeds write into the same store the
+real sensors do, so while either was on those glyphs were lit green by
+numbers nobody measured, and a pill beside them was the only thing on the
+panel that said so.
+
+`PHONE` has gone, and one pill pinned to one end of a centred row is not a
+layout, it is a leftover. `DEMO` is at the foot of the panel now, under
+the build line, centred - which is where a bench control belongs on an
+instrument that is not on a bench any more.
+
 ## Pages
 
 > **This section described three pages and now there are two.** The track
@@ -416,7 +430,8 @@ A five minute sequence and a seventy four minute race is most of an
 evening, and the parts worth watching — the signals, the gun, the line,
 a rounding, the finish and the card — are minutes apart.
 
-The **DEMO pill is the speed**. Four states, one control:
+The **DEMO pill is the speed**, at the foot of the control panel under
+the build line. Four states, one control:
 
 | taps | | |
 |---|---|---|

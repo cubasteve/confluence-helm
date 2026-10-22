@@ -622,6 +622,39 @@ t.ok(N.labels==='Touch', 'leaving one label, which is now the only thing '
 await p.evaluate(()=>paintSounder({available:true, mode:'audio', pinned:false,
   outs:[{dev:'pulse',name:'PIPEWIRE / PULSE'}], device:'pulse'}));
 
+t.head('the build line and the demo pill sit on the middle of the glass');
+/* .hint centres its contents, and .build carried an 18 px left margin
+   from when this line had a word before the build - so the only thing in
+   it sat 9 px off centre. The DEMO pill was absolutely placed beside the
+   sensor glyphs, which was right while it was one of a pair; alone it was
+   a lone pill hanging off one end of a centred row, so it is under the
+   build line now, at the foot of the panel. */
+const mid=await p.evaluate(()=>{
+  const st=document.getElementById('stage').getBoundingClientRect();
+  const c=st.left+st.width/2;
+  const off=sel=>{ const e=document.querySelector(sel); if(!e) return null;
+    const r=e.getBoundingClientRect(); return +(r.left+r.width/2-c).toFixed(1); };
+  const kids=[...document.getElementById('p-sheet').children]
+               .map(k=>k.className||k.id);
+  return {build:off('.build'), demo:off('#demo-btn'), glyphs:off('#sen-svg'),
+          order:kids, bTop:Math.round(document.querySelector('.build')
+            .getBoundingClientRect().top),
+          dTop:Math.round(document.getElementById('demo-btn')
+            .getBoundingClientRect().top)};
+});
+t.ok(Math.abs(mid.build)<1, 'the build number is on the centre line, not 9 px '
+     +'to the right of it', mid.build+' px off');
+t.ok(Math.abs(mid.demo)<1, 'and so is the demo pill', mid.demo+' px off');
+t.ok(Math.abs(mid.glyphs)<1, 'with the sensor glyphs where they always were',
+     mid.glyphs+' px off');
+t.ok(mid.dTop>mid.bTop, 'the pill is BELOW the build line',
+     'build '+mid.bTop+', demo '+mid.dTop);
+t.ok(mid.order.indexOf('demorow')===mid.order.indexOf('hint')+1,
+     'and immediately after it in the sheet', mid.order.join(' | '));
+t.ok(!await p.evaluate(()=>getComputedStyle(document.getElementById('demo-btn'))
+       .position==='absolute'),
+     'laid out rather than pinned to an edge');
+
 t.head('the panel fits the glass');
 /* It stopped fitting once it was a single 600 px column of sections -
    600 px wide on a circle of radius 540 is only lit between y=91 and
