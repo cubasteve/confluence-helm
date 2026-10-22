@@ -147,7 +147,14 @@ t.ok(H.tracks.under.length===0,
      'and nothing else under it - IMAGERY (c) ESRI stood there and was '
      +'asked for off the glass; the radar\'s HUD still credits Esri with '
      +'its other three sources', JSON.stringify(H.tracks.under));
-t.ok(H.golden.under.length===2 && /DAYLIGHT|NIGHT|TWILIGHT|GOLDEN/.test(H.golden.under[0]),
+/* All six the sun can be in, not the four this listed. sunState()
+   returns DAYLIGHT, GOLDEN HOUR, BLUE HOUR, NAUTICAL TWILIGHT,
+   ASTRONOMICAL TWILIGHT or NIGHT, and the probe ran green for as long as
+   nobody happened to run it during a blue hour. That is a clock-shaped
+   fuse, the same kind the club fixture had: it fails one evening a year
+   later for a reason that has nothing to do with the change in hand. */
+t.ok(H.golden.under.length===2
+     && /DAYLIGHT|GOLDEN HOUR|BLUE HOUR|TWILIGHT|NIGHT/.test(H.golden.under[0]),
      'and the sun keeps what it says, because that is the app',
      JSON.stringify(H.golden.under));
 /* The map had a line of its own for a race loaded out of the library - a

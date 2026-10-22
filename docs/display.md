@@ -369,225 +369,46 @@ already has, so a restart shows the old panel for a moment before the
 network catches up. The query string does not change the origin, so chart
 tiles and the track library in browser storage survive it.
 
-## On a phone
+## The phone is gone
 
-The same page, off the boat's own WiFi:
-`http://<the Pi>:8080/confluence_helm.html`. It is a second screen at
-the rail, or a way to watch the instruments from the foredeck — not a
-bench test of something different, it is the same file the helm is
-running.
+This was a chapter. The helm page ran on a phone: served off the boat
+WiFi as a second screen at the rail, installed to a home screen so it
+opened without the browser around it, and — with `PHONE` and `MOUNT` on
+the control panel — feeding its own GPS in as the boat's speed and
+course, and its own compass and accelerometer in as heading and heel.
 
-**The address of Signal K is derived, not written down.** It used to
-read `localhost:3000`, which is right on the Pi and wrong on anything
-else: `localhost` on a phone means the phone. The page loaded off the
-boat's WiFi, drew its whole face, and sat there with no data and nothing
-saying why — the worst way to fail. It is `location.hostname + ':3000'`
-now, which is whatever address served the page, so one string is right
-from both.
+It earned its place while the panel was being built, because it was the
+only way to sail with the thing before there was a thing to sail with.
+The panel works now and does the bench testing, so the whole of it has
+come out: both pills, the geolocation watch, the device-orientation
+listeners, `CFG.phoneGps`, the manifest, the apple-touch icon and the
+four rendered PNGs, `tests/phone.mjs`, and the lines in `deploy.sh` that
+copied the install set to the boat.
 
-**The page lays out at 1080 CSS px whatever the glass is**, and the
-browser zooms it to fit. That is the whole of `<meta viewport>`:
-
-```html
-<meta name="viewport" content="width=1080,user-scalable=no">
-```
-
-The dial is an SVG and was scaled by its own `viewBox` whatever this
-said. Every HTML overlay on top of it — the panel sheet, the alert
-banner, the score and held-race cards, both keyboards — is authored in
-the same 1080 pixels and did not scale at all. On a 430 px phone the
-600 px sheet hung 85 px off each side, and its 665 px of content spilled
-down over the dial. Now the whole thing scales as one.
-
-On the helm this changes nothing. The glass *is* 1080, so `width=1080`
-and `width=device-width` are the same instruction — the tests assert
-that the panel comes out at exactly 1080 either way.
-
-Note that a **desktop** browser ignores `<meta viewport>` entirely, so a
-narrow desktop window still clips. Phones and tablets honour it, which
-is the case this is for.
-
-**What a phone does not get**, because `netd` is bound to loopback and
-nothing off the Pi can reach it: the radio tiles, the brightness
-slider's hardware half, the sounder, the score submission and publishing
-a GPX to the boat. Each hides itself rather than sitting there dead. The
-countdown still flashes; it just cannot beep.
-
-**And browser storage is per device.** The course, your own marks, the
-slot layout, the saved races and the track are all `localStorage` and
-`IndexedDB` on whichever machine you are looking at. A course set on the
-helm is not on your phone, and a mark added on your phone is not on the
-helm. The phone is a second view of the *instruments*, not of the
-helm's state.
-
-The screen lock is held while the page is up, on any device that
-supports it, so a phone propped in the companionway does not go dark
-mid-beat.
-
-### On the home screen
-
-Add to Home Screen and it opens without the browser around it — no
-address bar, no toolbar sliding in and out over the dial — labelled
-**Helm**, with the notch painted to match the face.
-
-The icon is the boot screen's three waves, the accent one standing:
-
-| File | For |
-|---|---|
-| `icon-180.png` | Apple's touch icon |
-| `icon-192.png`, `icon-512.png` | the manifest |
-| `icon-maskable-512.png` | Android, which may crop it to a circle — so the art sits inside the middle 72% |
-| `icon.svg` | the source the set is drawn from |
-
-These sit *beside* the page rather than inside it, which is the one
-place the single-file rule bends: Apple will not take a `data:` URI for
-a touch icon. `deploy.sh` copies the set to the boat alongside the page,
-and the page works perfectly well without them — mail yourself the one
-file and the only thing you lose is the mark on the home screen, where
-you get a screenshot instead.
-
-**The favicon is inline**, a `data:` URI of the same waves, so a tab is
-right even when the file is opened on its own with nothing beside it.
-
-### With no Pi at all
-
-The file runs on its own. Mail it to yourself and open it out of Files,
-or put it on any web host and open the URL — one HTML file with no
-dependencies is the point of the whole thing, and this is where it pays.
-
-Everything that lives in the page still works: both pages, the panel,
-the countdown and its signals, the RACE box, the course sheet and the
-marks, the race library, the finish card and its QR. Turn **DEMO** on in
-the panel and it has a boat to draw — the feed writes into the same
-store the real sensors do, and it is a saved preference, so it is still
-on after a reload.
-
-What it plays is a **real race**: 74 minutes and 5.65 NM out of Lake
-Monroe Marina on the evening of 2026-09-23, beating up the lake on the
-300s and running back down through the 120s. It opens at the gun,
-18:23 — the 42 minutes before it, the sail out and whatever was
-happening before the start, are not in the file. Delta-encoded onto an
-8-second grid inside the page, within 3 m of the fixes it came from.
-
-The wind over it is the one that was blowing: **north-north-east at
-8 mph gusting 15**, reported from the boat — 7.0 kt from 022 gusting
-13.0, oscillating about ten degrees either side the way a steady breeze
-does, so the shift reading has phases to show.
-
-It agrees with the track, which is the test worth doing. Resolve every
-course she held against 022 and the angles pile up in three places —
-40° off the wind, 100°, and 160 to 170. Close-hauled, reaching,
-running. Three modes where a boat has three.
-
-Hosting it beats a local file. `file://` works in some browsers and has
-its storage quietly disabled in others, and this page keeps your marks
-in `localStorage` and your races in `IndexedDB`. Off a URL both are
-reliable.
-
-### PHONE mode
-
-A second pill beside the sensor glyphs, opposite DEMO. It feeds the
-page from **the phone's own GPS**, and from nothing else:
+**What a phone can still do is unchanged**, because none of it was ever
+part of the above:
 
 | | |
 |---|---|
-| Written | position, speed over ground, course over ground |
-| Not written | wind, depth, heel, pitch, rate of turn, heading |
+| read the QR on the glass | the track you just published, at an address on the boat WiFi |
+| fetch a GPX | AvNav serves `~/avnav/data/user/helm/gpx/`, which is where the helper writes it |
+| play the music | Bluetooth to the cockpit speakers, with the panel showing what is on |
+| join the hotspot | the Pi's access point, which everything aboard is on |
+| open the page | it still renders — nothing refuses a phone, there is simply nothing built for one |
 
-That second row is the point. A phone has one instrument worth having,
-so one instrument is what it publishes. No wind means the bezel band,
-AWA, TWS, TWD, the shift and the polar target all sit at dashes; no
-depth means the sounder reads nothing and **the shallow alarm cannot
-fire**, because `depthWatch` clears the alert outright on a null. A
-phone that invented a depth would be worse than a phone with no depth.
+**One thing genuinely went with it.** `PHONE` was also the answer to
+*the panel is dead and the race is in twenty minutes*: a phone in a
+bracket gave you speed, course, the countdown and its signals, the line
+and its bias, bearing and distance to every mark, the rounding, the
+track and a finish time — most of a race, off an instrument you already
+had in your pocket. There is no fallback now. If the panel fails on the
+water, the race is sailed on a watch.
 
-What is left is a real instrument: speed and course, the countdown and
-its signals, the start line, distance and bearing to every mark,
-rounding, the track, and the finish time on the score card. The line's
-*bias* still needs a wind direction, so that one reads nothing.
-
-It is not DEMO and does not look like it. DEMO is amber because its
-glyphs are lying; PHONE is the accent colour because nothing it draws
-is invented. Turning either on turns the other off — invented wind over
-a real position would be the worst of both.
-
-**Speed and course come from the device when it has them** and from two
-fixes and a clock when it does not, which is often: a phone lying flat,
-or one that has just woken, reports `speed` and `heading` as `null`.
-Below about a knot no course is derived — the bearing between two fixes
-is mostly the GPS wandering. Above about 48 knots the pair is refused
-instead: a phone that slept through a leg or lost its fix under a
-bridge resumes with two fixes far apart and a short clock between them,
-and 190 knots on the face is worse than no speed at all. The position
-itself is always used.
-
-**It stands down for the boat.** Both feeds stamp what they write, so
-the moment Signal K publishes a real value for a path, the feed stops
-writing it — and takes it up again if the boat goes quiet for longer
-than `staleAfter`. Walk aboard with phone mode on and it simply gets
-out of the way.
-
-**It needs a secure context.** Browsers hand out a position over HTTPS
-or from localhost, and nowhere else. A page opened from a file, or
-served over plain `http` from anything but localhost, is refused before
-it is even asked — so the pill says `NEEDS HTTPS` rather than sitting
-there doing nothing. The same line carries `LOCATION REFUSED`,
-`LOOKING FOR A FIX` and `NO GPS ON THIS DEVICE`, and clears itself on
-the next fix.
-
-Like DEMO, it is a saved preference, so a phone you race with comes back
-up reading its own GPS without being told again.
-
-### MOUNT — the compass and the accelerometer
-
-A phone has two more instruments worth having, and both are worth
-exactly nothing unless the phone is **fixed to the boat**. In a hand or
-a pocket they report the hand and the pocket: a heading that swings as
-you look around, a heel angle that is how you happen to be holding it.
-Nothing in the numbers says which of the two it is.
-
-So `MOUNT` is an assertion rather than a preference. Tapping it says two
-things — the phone is fixed to the boat, and it is level *right now* —
-and the tap is what captures the level. Until it is tapped nothing here
-is published at all, on the same rule as the wind and the depth.
-
-| | |
-|---|---|
-| Adds | magnetic heading, heel, pitch |
-| Needs | the phone in a bracket, portrait, top forward |
-| Zeroed | at the moment you tap `MOUNT` |
-
-**It is not remembered**, and deliberately: whether the phone is in its
-bracket is a fact about right now, not a setting, and coming up claiming
-to be level while face down on a bunk is exactly the lie this exists to
-avoid. Turning phone mode off takes it with it. To re-level — the
-bracket knocked, the boat trimmed — tap it off and on.
-
-**The compass earns its place before the gun.** Under way, course over
-the ground is the better number and the GPS already has it. Drifting
-about waiting for a sequence, `COG` is noise and the compass is the only
-thing that knows which way the boat is pointing, which is what the line
-bias and the first beat are about.
-
-Mount it **portrait, top forward, screen facing aft**. Landscape works
-— the screen's own angle is taken off the reading — and so does a phone
-sitting a little crooked in its bracket, because levelling absorbs any
-fixed offset. What it cannot absorb is a **magnet**: keep it away from
-the engine, a speaker and any steel, all of which a magnetometer
-believes completely.
-
-It publishes `navigation.headingMagnetic` rather than true, because that
-is what a magnetometer measures and nothing here knows the local
-variation.
-
-**iOS asks permission**, and only from a real tap — which is what the
-`MOUNT` button is. Refused, the line says `MOTION ACCESS REFUSED`.
-
-Worth checking on the water the first time: heel to starboard and the
-`HEEL` cell should say `STBD`. The sign convention is Signal K's — plus
-roll is starboard down, plus pitch is bow up — mapped from a top-forward
-mount, but it is one line to flip if a bracket turns out to sit the
-other way round.
+The reasoning that survives it is in the touch targets: 110 px keys and
+136 px tiles were sized so they were still 44 px on a 430 px phone, and
+they are still that size. The phone was the hard case that set the
+numbers, and the numbers were right for a cold thumb on a moving boat
+anyway.
 
 ## Running a race in a sitting
 

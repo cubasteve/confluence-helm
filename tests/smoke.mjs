@@ -99,15 +99,20 @@ ok((await p.evaluate(()=>$('sc-big').textContent))==='0.48.15',
    await p.evaluate(()=>$('sc-big').textContent));
 await p.evaluate(()=>{ scoreHide(); resetAll(); });
 
-console.log('\n=== and the two feeds are honest ===');
-await p.evaluate(()=>{ demoSet(false); phoneSet(true,'smoke'); });
+console.log('\n=== and the feed is honest ===');
+/* There were two feeds that wrote without measuring - the demo sail and
+   a phone's own GPS - and this checked that neither invented anything it
+   could not know. Phone mode has gone; the demo is the one that is left,
+   and it is still held to it. */
+await p.evaluate(()=>{ demoSet(false); demoSet(true,'smoke'); });
 await p.waitForTimeout(1000);
-const feed=await p.evaluate(()=>({pos:get('pos.lat'), wind:get('environment.wind.speedTrue'),
-  dpt:get('environment.depth.belowTransducer'), roll:get('att.roll')}));
-ok(feed.pos!==null, 'phone mode has a position', String(feed.pos));
-ok(feed.wind===null && feed.dpt===null && feed.roll===null,
-   'and invents no wind, no depth and no heel', JSON.stringify(feed));
-await p.evaluate(()=>phoneSet(false,'smoke'));
+const feed=await p.evaluate(()=>({pos:get('pos.lat'),
+  wind:get('environment.wind.speedTrue'),
+  dpt:get('environment.depth.belowTransducer')}));
+ok(feed.pos!==null, 'the demo sail has a position', String(feed.pos));
+ok(feed.wind!==null && feed.dpt!==null,
+   'and the wind and the depth it is simulating', JSON.stringify(feed));
+await p.evaluate(()=>demoSet(false,'smoke'));
 
 console.log('\n'+(errs.length?'PAGE ERRORS: '+errs.join(' | '):'no page errors'));
 console.log(pass+' passed, '+fail+' failed');

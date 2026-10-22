@@ -629,15 +629,17 @@ const pad=await p.evaluate(()=>{ gnOpen();
   const k=[...$('gn-kb').querySelectorAll('button')];
   const r=k[0].getBoundingClientRect();
   const out={n:k.length, h:Math.round(r.height), w:Math.round(r.width),
-             /* 430 px of phone showing 1080 px of layout */
-             onPhone:Math.round(r.height*430/1080),
              set:k.filter(x=>/SET/.test(x.textContent)).length,
              bar:[...document.querySelectorAll('#course-gun .cbtn')]
                    .map(x=>x.textContent)};
   gnClose(); return out; });
 t.ok(pad.n===12, 'ten digits, a backspace and a SET', String(pad.n));
-t.ok(pad.onPhone>=44, 'and a key is 44 px on a phone, which is the smallest '
-     +'thing worth asking a thumb to hit', pad.h+' px -> '+pad.onPhone);
+/* 110, which is what 44 came to when this page was also meant to be
+   usable on a 430 px phone. The phone has gone and the number has not:
+   it is a size a cold thumb can hit on a moving boat, which was always
+   the better reason for it. */
+t.ok(pad.h>=110, 'and a key is big enough for a cold thumb on a moving boat',
+     pad.h+' px');
 t.ok(pad.set===1, 'ONE set, on the pad where the last digit leaves your thumb',
      String(pad.set));
 t.ok(await p.evaluate(()=>{ gnOpen();

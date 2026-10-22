@@ -28,12 +28,13 @@ export function tally(){
 }
 
 /* ---- a booted page --------------------------------------------------- */
-/* opts: {phone, touch, geo, netd, api, marks, course, prefs, demo, theme} */
+/* opts: {touch, geo, netd, api, marks, course, prefs, demo, theme}
+   There was a `phone` here that built a 430x932 mobile context. Phone
+   mode is gone and so is its probe; the glass is 1080 square and that is
+   the only shape this harness builds. */
 export async function open(t, opts={}){
   const b=await pw.chromium.launch({executablePath:CHROME});
-  const ctxOpt = opts.phone
-    ? {viewport:{width:430,height:932}, isMobile:true, hasTouch:true, deviceScaleFactor:2}
-    : {viewport:{width:1080,height:1080}};
+  const ctxOpt={viewport:{width:1080,height:1080}};
   if(opts.geo){ ctxOpt.geolocation=opts.geo; ctxOpt.permissions=['geolocation']; }
   const ctx=await b.newContext(ctxOpt);
   if(opts.geo) await ctx.grantPermissions(['geolocation'],{origin:ORIGIN});

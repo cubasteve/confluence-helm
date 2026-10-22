@@ -152,7 +152,7 @@ is real there:
 | where | label | tap | hold |
 |---|---|---|---|
 | the Pi, `start-kiosk.sh` | `KIOSK` | kiosk ⇄ windowed browser | reload the app in place |
-| phone, laptop | `FULL` | the Fullscreen API, as before | reload the app in place |
+| any other browser | `FULL` | the Fullscreen API, as before | reload the app in place |
 | **cage mode** | — | **the tile is not shown** | — |
 
 **In cage mode it is not merely useless, it is harmful.** cage runs one

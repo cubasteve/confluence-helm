@@ -48,16 +48,16 @@ t.ok(await p.evaluate(()=>$('theme-lbl').textContent)==='NIGHT',
 t.head('a stored value that is nonsense is ignored, not obeyed');
 await p.evaluate(()=>localStorage.setItem('helmPrefs', JSON.stringify(
   {theme:'chartreuse', depthUnit:'fathoms', depthAlarm:900, dim:-40,
-   windDemo:'yes', phoneGps:1, startMode:'pursuit', startMins:7})));
+   windDemo:'yes', startMode:'pursuit', startMins:7})));
 await reboot();
 C=await p.evaluate(()=>({theme:CFG.theme, u:CFG.depthUnit, a:CFG.depthAlarm,
-  dim:CFG.dim, wd:CFG.windDemo, ph:CFG.phoneGps}));
+  dim:CFG.dim, wd:CFG.windDemo}));
 t.ok(C.theme==='auto' && C.u==='ft', 'a value off the list falls back to the default',
      C.theme+' '+C.u);
 t.ok(C.a>=1 && C.a<=60, 'a depth alarm out of range is refused', String(C.a));
 t.ok(C.dim>=25, 'and so is a brightness that would black the screen', String(C.dim));
-t.ok(C.wd===true && C.ph===false, 'a string where a boolean belongs is not a boolean',
-     C.wd+' '+C.ph);
+t.ok(C.wd===true, 'a string where a boolean belongs is not a boolean',
+     String(C.wd));
 t.ok(await p.evaluate(()=>CFG.startMode)==='gun',
      'and a start format nobody wrote falls back to the strict one',
      await p.evaluate(()=>CFG.startMode));

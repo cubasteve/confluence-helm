@@ -13,12 +13,8 @@
      width=device-width are the same instruction. -->
 <meta name="viewport" content="width=1080,user-scalable=no">
 
-<!-- ---- the home screen ----
+<!-- ---- the tab ----
      The three waves off the boot screen, the accent one standing.
-     Added to a phone's home screen this opens without the browser
-     around it, which is most of why it is worth doing: no address
-     bar, no toolbar sliding in and out over the dial.
-
      The favicon is inline, so the tab is right even when this file
      is opened on its own with nothing beside it. Apple will not
      take a data URI for a touch icon, so that one is a real PNG:
@@ -26,15 +22,6 @@
      just get a screenshot on the home screen instead of the mark.
      deploy.sh copies the set to the boat alongside the page. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0C0E'/%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M1 11q4-4 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%236C757C' stroke-width='2.2' opacity='.58'/%3E%3Cpath d='M1 16q4-5 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%234A9EFF' stroke-width='3'/%3E%3Cpath d='M1 21q4-4 7.5 0t7.5 0 7.5 0 7.5 0' stroke='%236C757C' stroke-width='2.2' opacity='.58'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Helm">
-<!-- black-translucent puts the page under the status bar rather
-     than beside it, which is what a full-bleed round face wants;
-     theme-color paints the notch area to match. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0B0C0E">
 <title>CONFLUENCE · Helm</title>
 <style>
@@ -594,7 +581,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   transparent 0,#000 var(--fa),#000 calc(100% - var(--fz)),transparent 100%)}
 /* The two full-width rows keep the NARROW column. They sit at the top of
    the circle, where 880 px has its ends out in the black. */
-.senrow, .phone-row, #conn-sec, .sheet > .hint{grid-column:1 / -1;
+.senrow, #conn-sec, .sheet > .hint{grid-column:1 / -1;
   width:600px;justify-self:center}
 .card{border:2px solid var(--hairline);border-radius:24px;
   padding:15px 20px 17px;display:flex;flex-direction:column}
@@ -758,17 +745,6 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 .demo-tog:active{background:var(--chip)}
 /* On, it is a warning and reads like one: these glyphs are lying. */
 .demo-tog.on{opacity:1;color:var(--warn);border-color:var(--warn)}
-/* Phone mode is not lying, so it is not amber. Amber when it cannot do
-   what it says, which is the one state worth noticing. */
-#phone-btn{left:0;right:auto}
-.demo-tog.gps.on{color:var(--accent);border-color:var(--accent)}
-.demo-tog.gps.on.bad{color:var(--warn);border-color:var(--warn)}
-.phone-row{display:none;align-items:center;gap:18px;margin:-2px 0 4px}
-.phone-row.on{display:flex}
-.phone-row .demo-tog{position:static;flex:none}
-.phone-why{flex:1;min-width:0;font-size:19px;font-weight:600;letter-spacing:.06em;
-  color:var(--warn);text-transform:uppercase;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
 
 /* --- connectivity ------------------------------------------------
    A row of radios at the top of the panel. No words on them, because
@@ -2574,11 +2550,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          are lit green by numbers nobody measured - and this is the only
          thing on the panel that says so. A slab and a row of its own put
          that admission somewhere you had to go looking for it. -->
-    <!-- One each side of the glyphs rather than a pair on the right:
-         there is only one pill's worth of slack beside them, and two
-         identical pills touching is an invitation to tap the wrong one.
-         They are mutually exclusive, so they sit apart. -->
-    <button class="demo-tog gps" id="phone-btn" aria-pressed="false">PHONE</button>
     <!-- One control, four states: off, and three speeds. The arrows are
          all three always, so the pill never changes width and so you
          can see there is somewhere further to go; the ones past the
@@ -2587,16 +2558,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
         id="demo-ff" viewBox="0 0 33 12" aria-hidden="true"
         ><path d="M0 0 L9 6 L0 12 Z"/><path d="M12 0 L21 6 L12 12 Z"
         /><path d="M24 0 L33 6 L24 12 Z"/></svg></button>
-    </div>
-    <!-- Shown only while phone mode is on. MOUNT is an assertion, not a
-         preference: tapping it says the phone is fixed to the boat and
-         is level NOW, and that is what makes its compass the boat's
-         heading and its tilt the boat's heel. In a hand or a pocket it
-         is never true, so it is never tapped, and nothing is published.
-         The line beside it carries whatever is stopping either half. -->
-    <div class="phone-row" id="phone-row">
-      <button class="demo-tog gps" id="mount-btn" aria-pressed="false">MOUNT</button>
-      <span class="phone-why" id="phone-why"></span>
     </div>
 
     <!-- Filled in by the app once netd.py answers, and left empty when it
@@ -3111,7 +3072,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
    the kiosk uses when AvNav is slow to come up. */
 const SK_HOST = (location.hostname || 'localhost') + ':3000';
 const CFG={
-  host:SK_HOST, theme:'auto', demo:false, phoneGps:false,
+  host:SK_HOST, theme:'auto', demo:false,
 
   /* Which noise a control makes under a finger. A capacitive panel in a
      cockpit gives nothing back: no travel, no detent, and gloved or wet
@@ -3282,10 +3243,16 @@ function bootReady(){
 
 const put=(p,v)=>S[p]={v,t:Date.now()};
 /* ---- a feed that defers to a real instrument --------------------------
-   Two things write into this store without being instruments: the demo
-   sail, and the phone's own GPS. Both must yield the moment a real
-   reading for that path turns up, or the demo's Sanford fights the boat's
-   fix at 8 Hz and the track recorder draws both.
+   One thing writes into this store without being an instrument: the
+   demo sail. It must yield the moment a real reading for that path turns
+   up, or the demo's Sanford fights the boat's fix at 8 Hz and the track
+   recorder draws both.
+
+   It was two for a while - the other was a phone feeding its own GPS in
+   as the boat's - and the deferral machinery here is shaped by having
+   had two of them. It is worth keeping shaped that way: anything else
+   that ever writes a reading nobody measured goes through this same
+   door.
 
    `get(p)===null` was the test, and it was wrong in a way that hid: the
    moment the feed wrote a path, get() stopped returning null and the
@@ -6077,7 +6044,6 @@ const PREF_DEFS={
   windDemo:   v=>typeof v==='boolean' ? v : null,
   /* Persisted for the same reason: a phone you race with should come
      back up reading its own GPS without being told again. */
-  phoneGps:   v=>typeof v==='boolean' ? v : null,
   /* And this one because it is a fact about the series, not the day. */
   startMode:  v=>START_MODES.indexOf(v)>=0 ? v : null,
   /* The stepper offers four, but a posted course may set any number of
@@ -7805,10 +7771,6 @@ const DEMO_REAL=['environment.wind.angleApparent',
 function demoSet(on, why){
   if(!!CFG.windDemo===!!on) return;
   CFG.windDemo=!!on;
-  /* One feed at a time. Invented wind over a real position would be the
-     worst of both, and the shallow alarm would be firing on a depth
-     nobody measured while you sailed by the other numbers. */
-  if(on) phoneSet(false, 'demo on');
   if(!on){
     /* Drop what it wrote rather than waiting out staleAfter, and drop the
        filter state with it - a filter fed null does not decay, it FREEZES
@@ -7848,7 +7810,7 @@ function demoCycle(){
   if(!CFG.windDemo){ demoSet(true,'tapped'); raceRate(1); }
   else if(RACE_RATE<DEMO_MAX_X) raceRate(RACE_RATE+1);
   else demoSet(false,'tapped');                /* which puts the rate back */
-  drawDemo(); drawPhone();
+  drawDemo();
 }
 
 function windDemoTick(){
@@ -7909,264 +7871,6 @@ function windDemoTick(){
    constant; at 8 Hz the bezel moves the way the boat did. */
 setInterval(windDemoTick, 120);
 $('demo-btn').addEventListener('click',demoCycle);
-
-/* ---- phone mode (CFG.phoneGps) ----------------------------------------
-   The page off a phone with no boat behind it. A phone has exactly one
-   instrument worth having - its GPS - so that is all this feeds, and it
-   feeds it as itself rather than as a simulation: real position, real
-   speed over ground, real course.
-
-   NOTHING ELSE IS WRITTEN. No wind, so the bezel band, AWA, TWS, TWD,
-   the shift and the polar target all sit at dashes. No depth, so the
-   sounder reads nothing and the shallow alarm cannot fire - depthWatch
-   clears the alert outright on a null, which is the behaviour we want
-   and already had. A phone that invented a depth would be worse than a
-   phone with no depth at all.
-
-   What that leaves is a real instrument: speed and course, the
-   countdown and its signals, the start line and its bias, distance and
-   bearing to every mark, rounding, the track, and the finish time on
-   the score card. Which is most of a race.
-
-   It defers to the boat, path by path, the same way the demo does. Walk
-   aboard with this on and the moment Signal K starts publishing a fix,
-   the phone's own is stood down - and taken up again if the boat goes
-   quiet for longer than staleAfter. */
-const PHONE_PATHS=['pos.lat','pos.lon',
-                   'navigation.speedOverGround',
-                   'navigation.courseOverGroundTrue'];
-/* Below this, the bearing between two fixes is mostly the GPS wandering
-   on its own. A drifting boat has no course over the ground worth
-   printing, so none is printed. */
-const PHONE_MIN_MS=0.5;                       /* ~1 knot */
-/* And above this it was not a boat. A phone that slept through a leg,
-   lost its fix under a bridge, or simply jumped, resumes with two fixes
-   far apart and a short clock between them - 190 knots on the face is
-   worse than no speed at all. The POSITION is still good and still
-   used; only the pair is refused. */
-const PHONE_MAX_MS=25;                        /* ~48 knots */
-let phoneWatch=null, phoneWhy='', phoneLast=null;
-
-function phoneFix(f){
-  const c=f&&f.coords; if(!c || !isFinite(c.latitude) || !isFinite(c.longitude)) return;
-  const t=f.timestamp||Date.now();
-  phoneWhy='';
-  const own=p=>feedOwns(p,'gps'), set=(p,v)=>feedPut(p,v,'gps');
-
-  /* Speed and course: the device's own when it has them - those come off
-     a Doppler solution and are better than anything we can work out -
-     and from two fixes and a clock when it does not, which is often.
-     A phone lying flat, or one that has just woken, reports both as
-     null, and a plotter derives them from position anyway. */
-  let sog = (typeof c.speed==='number'   && isFinite(c.speed)   && c.speed>=0)
-            ? c.speed : null;
-  let cog = (typeof c.heading==='number' && isFinite(c.heading))
-            ? c.heading : null;
-  if((sog===null || cog===null) && phoneLast){
-    const dt=(t-phoneLast.t)/1000;
-    if(dt>0.3 && dt<30){
-      const m=seaNm(phoneLast.la,phoneLast.lo,c.latitude,c.longitude)*1852;
-      const v=m/dt;
-      if(v<=PHONE_MAX_MS){
-      if(sog===null) sog=v;
-      if(cog===null && v>=PHONE_MIN_MS){
-        /* Flat earth over a few metres, which is every pair of fixes a
-           second apart. */
-        const y=(c.latitude-phoneLast.la)*111320;
-        const x=(c.longitude-phoneLast.lo)*111320*Math.cos(c.latitude/DEG);
-        cog=(Math.atan2(x,y)*DEG+360)%360;
-      }
-      }
-    }
-  }
-  phoneLast={la:c.latitude, lo:c.longitude, t:t};
-
-  if(own('pos.lat')){
-    set('pos.lat', c.latitude); set('pos.lon', c.longitude);
-    CFG.lat=c.latitude; CFG.lon=c.longitude;     /* golden hour, as the socket does */
-  }
-  if(sog!==null && own('navigation.speedOverGround'))
-    set('navigation.speedOverGround', sog);              /* m/s, as Signal K */
-  if(cog!==null && own('navigation.courseOverGroundTrue'))
-    set('navigation.courseOverGroundTrue', cog/DEG);
-  bootReady();                        /* a fix is a boat, for these purposes */
-  drawPhone();
-}
-
-function phoneFail(e){
-  /* PERMISSION_DENIED is the end of it; a timeout is not, and
-     watchPosition keeps trying, so the line says so and clears itself
-     on the next fix. */
-  phoneWhy = !e ? 'GPS UNAVAILABLE'
-           : e.code===1 ? 'LOCATION REFUSED · ALLOW IT IN THE BROWSER'
-           : e.code===3 ? 'LOOKING FOR A FIX'
-                        : 'GPS UNAVAILABLE';
-  drawPhone();
-}
-
-function phoneStart(){
-  if(phoneWatch!==null) return;
-  if(!navigator.geolocation){ phoneWhy='NO GPS ON THIS DEVICE'; return drawPhone(); }
-  /* A browser hands out a position only in a secure context. Off the
-     boat that means HTTPS - a page opened from a file, or served over
-     plain http from somewhere that is not localhost, is refused before
-     it is even asked, and saying so beats a silent nothing. */
-  if(typeof isSecureContext!=='undefined' && !isSecureContext){
-    phoneWhy='NEEDS HTTPS · OPEN IT OVER A SECURE LINK'; return drawPhone(); }
-  phoneWhy='LOOKING FOR A FIX'; drawPhone();
-  phoneWatch=navigator.geolocation.watchPosition(phoneFix, phoneFail,
-    {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
-}
-
-function phoneStop(){
-  if(mountOn) mountStop();           /* the compass was only ever half of it */
-  if(phoneWatch!==null && navigator.geolocation){
-    navigator.geolocation.clearWatch(phoneWatch); }
-  phoneWatch=null; phoneWhy=''; phoneLast=null;
-  /* Drop what it wrote and the filters fed from it, for the reason
-     demoSet gives: a filter fed null freezes rather than decaying. */
-  PHONE_PATHS.forEach(p=>{ delete S[p]; });
-  ['sog','vmg','hdg'].forEach(k=>{ delete sm[k]; delete smA[k]; });
-  MUS_CELLS.forEach(c=>{ delete sm['r_'+c.k]; delete smA['r_'+c.k]; });
-  bezelCont=null;
-}
-
-function phoneSet(on, why){
-  on=!!on;
-  if(!!CFG.phoneGps===on) return;
-  CFG.phoneGps=on;
-  if(on){ demoSet(false,'phone gps on'); phoneStart(); }
-  else phoneStop();
-  drawPhone(); prefsSave();
-  if(why) console.log('[helm] phone gps '+(on?'on':'off')+':', why);
-}
-
-/* ---- the other two instruments a phone has ----------------------------
-   A compass and an accelerometer, and both are worth having - but only
-   if the phone is FIXED TO THE BOAT. In a hand or a pocket they report
-   the hand and the pocket: a heading that swings as you look around, a
-   heel angle that is how you happen to be holding it. There is no way
-   to tell from the numbers which of the two it is.
-
-   So MOUNT is an assertion rather than a preference. Tapping it says
-   two things - the phone is fixed to the boat, and it is level right
-   now - and the tap is what captures the level. Until it is tapped,
-   nothing here is published at all, on the same rule as the wind and
-   the depth: a phone that invented a heel would be worse than a phone
-   with no heel.
-
-   The compass earns its place before the gun. Under way, course over
-   the ground is the better number and the GPS already has it; drifting
-   about waiting for a sequence, COG is noise and the compass is the
-   only thing that knows which way the boat is pointing - which is what
-   the line bias and the first beat are about.
-
-   Mount it PORTRAIT, TOP FORWARD, screen facing aft. Landscape works:
-   the screen angle is taken off. And keep it away from the engine, a
-   speaker magnet or a steel bulkhead, all of which a magnetometer
-   believes completely. */
-const MOUNT_PATHS=['navigation.headingMagnetic','att.roll','att.pitch'];
-let mountOn=false, mountOff=null, mountAbs=false, mountFn=null, mountWhy='';
-
-function mountEvent(e){
-  if(!mountOn || !CFG.phoneGps) return;
-  /* Android fires both events; the absolute one is the only one whose
-     alpha means north. Once one has been seen, the other is ignored
-     rather than allowed to overwrite it. */
-  const abs = e.type==='deviceorientationabsolute' || e.absolute===true
-              || typeof e.webkitCompassHeading==='number';
-  if(mountAbs && !abs) return;
-  if(abs) mountAbs=true;
-
-  let hdg=null;
-  if(typeof e.webkitCompassHeading==='number' && isFinite(e.webkitCompassHeading))
-    hdg=e.webkitCompassHeading;                  /* iOS: degrees from north */
-  else if(abs && typeof e.alpha==='number' && isFinite(e.alpha))
-    hdg=(360-e.alpha)%360;                       /* alpha counts the other way */
-
-  const b=e.beta, g=e.gamma;
-  if(typeof b!=='number'||typeof g!=='number'||!isFinite(b)||!isFinite(g)) return;
-  /* beta is the top-to-bottom tilt and gamma the side-to-side one, both
-     of the DEVICE - so a phone turned in its bracket swaps them. The
-     screen's own angle says by how much. */
-  const sa=(((screen.orientation||{}).angle||0)+360)%360;
-  let roll=g, pitch=b;
-  if(sa===90)      { roll=-b; pitch= g; }
-  else if(sa===180){ roll=-g; pitch=-b; }
-  else if(sa===270){ roll= b; pitch=-g; }
-  if(hdg!==null) hdg=(hdg+sa)%360;
-
-  /* The first reading after MOUNT is what level means. */
-  if(!mountOff){ mountOff={r:roll,p:pitch}; mountWhy=''; }
-
-  const own=p=>feedOwns(p,'gps'), set=(p,v)=>feedPut(p,v,'gps');
-  /* headingMagnetic because that is what a magnetometer measures and
-     what the panel's own compass node publishes; nothing here knows the
-     local variation. */
-  if(hdg!==null && own('navigation.headingMagnetic'))
-    set('navigation.headingMagnetic', hdg/DEG);
-  /* Signal K's sign: + roll is starboard down, + pitch is bow up. A
-     phone mounted top-forward has its right side to starboard, which is
-     + gamma, and raises its top as the bow comes up, which is + beta. */
-  if(own('att.roll'))  set('att.roll',  (roll -mountOff.r)/DEG);
-  if(own('att.pitch')) set('att.pitch', (pitch-mountOff.p)/DEG);
-  drawPhone();
-}
-
-/* iOS will not give orientation without a permission asked for from a
-   real tap, which is exactly what this is. */
-function mountStart(){
-  const D=window.DeviceOrientationEvent;
-  if(!D){ mountWhy='NO COMPASS ON THIS DEVICE'; return drawPhone(); }
-  const go=()=>{
-    mountOff=null; mountAbs=false; mountWhy='LEVELLING';
-    mountFn=mountEvent; mountOn=true;
-    addEventListener('deviceorientationabsolute', mountFn, true);
-    addEventListener('deviceorientation', mountFn, true);
-    drawPhone();
-  };
-  if(typeof D.requestPermission==='function'){
-    D.requestPermission().then(r=>{
-      if(r==='granted') go();
-      else { mountWhy='MOTION ACCESS REFUSED'; drawPhone(); }
-    }).catch(()=>{ mountWhy='MOTION ACCESS REFUSED'; drawPhone(); });
-    return;
-  }
-  go();
-}
-
-function mountStop(){
-  if(mountFn){
-    removeEventListener('deviceorientationabsolute', mountFn, true);
-    removeEventListener('deviceorientation', mountFn, true);
-  }
-  mountFn=null; mountOn=false; mountOff=null; mountAbs=false; mountWhy='';
-  MOUNT_PATHS.forEach(p=>{ delete S[p]; });
-  ['heel','pitch','hdg'].forEach(k=>{ delete sm[k]; delete smA[k]; });
-  MUS_CELLS.forEach(c=>{ delete sm['r_'+c.k]; delete smA['r_'+c.k]; });
-  bezelCont=null;
-  drawPhone();
-}
-/* Not persisted, and deliberately. Whether the phone is in its bracket
-   is a fact about right now, not a setting - and coming up claiming to
-   be level when it is face down on a bunk is exactly the lie this is
-   built to avoid. */
-$('mount-btn').addEventListener('click',()=>{
-  if(mountOn) mountStop(); else mountStart();
-});
-
-function drawPhone(){
-  const on=!!CFG.phoneGps, why=phoneWhy||(on&&mountWhy)||'';
-  wCls('phone-btn','on',on);
-  wCls('phone-btn','bad',on&&!!phoneWhy);
-  wAttr('phone-btn','aria-pressed', on?'true':'false');
-  wCls('phone-row','on',on);
-  wCls('mount-btn','on',on&&mountOn);
-  wCls('mount-btn','bad',on&&mountOn&&!!mountWhy);
-  wAttr('mount-btn','aria-pressed', (on&&mountOn)?'true':'false');
-  wText('phone-why', on?why:'');
-}
-$('phone-btn').addEventListener('click',()=>phoneSet(!CFG.phoneGps,'tapped'));
 
 /* ---- the sensor readout on the music page --------------------------
    It was one thin row of 32px numbers above the album art, which is
@@ -14114,7 +13818,6 @@ clkPaint();                       /* and the touch sound, for the same reason */
    mode was left on, this is where the watch starts - and where the
    browser asks for location, which is the right moment because you
    asked for it last time. */
-drawPhone(); if(CFG.phoneGps) phoneStart();
 /* A race held from a previous session, for the same reason: HELD is
    read at its declaration, but the card it draws is markup, and this
    is where persisted state gets painted. */

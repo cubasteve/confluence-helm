@@ -13,7 +13,15 @@ await p.addInitScript(()=>localStorage.setItem('marks', JSON.stringify(
   [{id:'u1abc', name:'GREEN BUOY', hdr:'GREEN BU', lat:28.8172, lon:-81.2695}])));
 await p.goto(process.env.HELM_URL||'http://localhost:8080/confluence_helm.html');
 await p.waitForTimeout(1600); await p.evaluate(()=>bootSettle());
-await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); phoneSet(true,'test'); });
+/* A position, so HERE has something to take. It used to come from phone
+   mode, which fed the browser's own GPS in as the boat's; that is gone,
+   so the fix is fed straight into the store the way every other probe
+   does it. */
+await p.evaluate(()=>{ CFG.theme='day'; applyTheme();
+  /* The same fix the context above grants, fed straight in: every
+     assertion below is measured from it. */
+  feedPut('pos.lat', 28.8215, 'test');
+  feedPut('pos.lon', -81.2740, 'test'); });
 await p.evaluate(()=>openCourse()); await p.waitForTimeout(700);
 let pass=0,fail=0; const ok=(c,m,x='')=>{console.log((c?'  PASS  ':'  FAIL  ')+m+(x?'   '+x:''));c?pass++:fail++;};
 const row=id=>p.evaluate(i=>{ const r=document.querySelector('.cv-tile[data-mark="'+i+'"]');
