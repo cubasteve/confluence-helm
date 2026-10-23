@@ -114,6 +114,66 @@ ok(feed.wind!==null && feed.dpt!==null,
    'and the wind and the depth it is simulating', JSON.stringify(feed));
 await p.evaluate(()=>demoSet(false,'smoke'));
 
+console.log('\n=== the hull number sits where it was put ===');
+/* The watermark is two pinned glyphs rather than one centred run,
+   because the 5 is dropped 26 px to read level with the 4: Poppins gives
+   them the same ink ascent, so a wide flat top and a narrow apex come
+   out level in the font and not to the eye.
+
+   The invariant is "the split draws each glyph where the centred run
+   would have". So the probe puts the centred run BACK and asks it,
+   rather than carrying two numbers off a measurement - the pen
+   positions move with the face (the 4's lands at -294 in Poppins and
+   -167 in DejaVu), and a number carried here is the kind of thing that
+   passes on the panel and is wrong everywhere else.
+
+   The reference has to BE this element. The size, the weight and the
+   letter-spacing all come off the #mark selector, so a clone with its
+   id stripped lays out at a 16 px default and agrees with nothing -
+   which is how an earlier version of this probe came to compare 1320 px
+   positions against 479,488.
+
+   getStartPositionOfChar, not getBBox. The bbox x is where the INK
+   starts, which is inside the advance; pinning the pen there moved the 4
+   by 230,000 pixels of a rendered diff, which is how that mistake was
+   found. */
+const wm=await p.evaluate(async ()=>{
+  const t=document.getElementById('mark');
+  const sp=[...t.querySelectorAll('tspan')];
+  const o={n:sp.length, txt:t.textContent,
+           hasX:sp.every(e=>e.hasAttribute('x')),
+           pen:[0,1].map(i=>+t.getStartPositionOfChar(i).x.toFixed(1)),
+           drop:+(t.getStartPositionOfChar(1).y
+                 -t.getStartPositionOfChar(0).y).toFixed(1)};
+  const html=t.innerHTML;
+  t.setAttribute('x','488'); t.setAttribute('text-anchor','middle');
+  t.textContent='45';
+  o.want=[0,1].map(i=>+t.getStartPositionOfChar(i).x.toFixed(1));
+  t.removeAttribute('x'); t.removeAttribute('text-anchor');
+  t.innerHTML=html;
+  o.src=(await (await fetch(location.href)).text())
+          .split('\n').find(l=>l.includes('<text id="mark"'))||'';
+  return o;
+});
+ok(wm.n===2 && wm.txt==='45', 'two glyphs, still reading 45',
+   wm.n+' / '+wm.txt);
+ok(wm.hasX, 'each pinned with its own x, so letter-spacing cannot drift '
+   +'them apart the way it did when they were tspans in a flow');
+ok(Math.abs(wm.pen[0]-wm.want[0])<0.5 && Math.abs(wm.pen[1]-wm.want[1])<0.5,
+   'and each sits exactly where the centred run would have drawn it',
+   wm.pen.join(',')+' vs '+wm.want.join(','));
+ok(wm.drop===26, 'with the 5 dropped 26 px so its flat top reads level '
+   +'with the apex of the 4', wm.drop+' px');
+/* And the file itself holds no pen position. The pair above would still
+   agree on a machine with Poppins if someone wrote the Poppins numbers
+   into the markup, so the thing that makes them portable is checked
+   directly: the markup is the centred run, and markSplit() does the
+   rest. */
+ok(!/tspan/.test(wm.src) && /text-anchor="middle"/.test(wm.src),
+   'with the markup still one centred run, so no pen position is '
+   +'written down where a different face would make it a lie',
+   wm.src.trim());
+
 console.log('\n'+(errs.length?'PAGE ERRORS: '+errs.join(' | '):'no page errors'));
 console.log(pass+' passed, '+fail+' failed');
 await b.close();

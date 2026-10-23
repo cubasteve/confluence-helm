@@ -2221,14 +2221,24 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <circle cx="540" cy="540" r="540" fill="var(--bg)"/>
 
   <!-- Hull number, oversized so the circle crops it - texture, not a
-       label.  x is 484, not 540, for two reasons:
-         1. maths  - negative letter-spacing is applied after the last
-            glyph too, so text-anchor centres on an advance width
-            (font x 0.06)/2 = 44 px short.  That puts x at 496.
-         2. optics - the 5 carries more visual mass than the 4, so the
-            perceived centre sits right of the geometric one.  A
-            further 12 px left settles it.
-       If you change font-size, redo step 1: x = 540 - (size*0.06)/2 - 12 -->
+       label. One centred run here; markSplit() pins the two digits and
+       drops the 5 once there is a face to measure.
+
+       WHY THE 5 DROPS. Poppins gives 4 and 5 the same ink ascent to the
+       pixel - measured, 969.4 at this size - so they are level in the
+       font and not level to the eye: the 5 meets its ceiling with a wide
+       flat bar and the 4 with a narrow apex, and a flat top reads higher
+       than a point at the same height. Fonts usually pay for that with
+       overshoot on round glyphs; this pair does not, so it is paid here.
+       26 is 2.7% of the cap height, the usual size of that correction.
+
+       WHY x IS 488 AND NOT 540. Negative letter-spacing lands after the
+       LAST glyph too, so an anchor centred on the advance width sits
+       (size x 0.06)/2 = 44 px right of where the ink's centre is; and
+       the 5 carries more visual mass than the 4, so the perceived centre
+       is right of the geometric one again, worth a further 12 px. Both
+       corrections survive the split, because the split copies the pen
+       positions this run itself works out. -->
   <text id="mark" x="488" y="672" text-anchor="middle">45</text>
 
   <g id="rose"></g>
@@ -3213,6 +3223,37 @@ function arcPath(r0,r1,d0,d1){
   $('groove-s').setAttribute('d',arcPath(R_LBL+18,R_OUT,CFG.grooveMin,CFG.grooveMax));
   $('groove-p').setAttribute('d',arcPath(R_LBL+18,R_OUT,-CFG.grooveMax,-CFG.grooveMin));
 })();
+
+/* The 5 of the hull number reads high beside the 4 and is dropped to fix
+   it - see the markup for why. It cannot be dropped in the markup,
+   though: two tspans do not accumulate letter-spacing the way two glyphs
+   in one run do, so a split that keeps text-anchor comes out 221 px
+   wider and 17 px left of the run it replaced. Each digit has to be
+   pinned at the pen position the CENTRED run gave it.
+
+   Which is why those two numbers are measured here instead of written
+   down. They move with the face: the 4's pen lands at -294 in Poppins
+   and at -167 in DejaVu, 127 px apart. Either number in the file is
+   right on the panel and wrong in any browser that falls back - and at
+   3% opacity, wrong is a thing you notice a season later.
+
+   getStartPositionOfChar, not getBBox. The bbox x is where the INK
+   begins, which is inside the advance; pinning the pen there moves the
+   glyph by its left side bearing, which at this size is not a rounding
+   error - it was found by rendering both and diffing. */
+const MARK_DY=26;
+function markSplit(){
+  const t=$('mark');
+  if(!t || !t.getStartPositionOfChar || t.querySelector('tspan')) return;
+  let a=0,b=0;
+  try{ a=t.getStartPositionOfChar(0).x; b=t.getStartPositionOfChar(1).x; }
+  catch(e){ return; }
+  if(!(b>a)) return;                   /* nothing laid out - leave it centred */
+  t.removeAttribute('x'); t.removeAttribute('text-anchor');
+  t.innerHTML='<tspan x="'+a.toFixed(2)+'">4</tspan>'
+             +'<tspan x="'+b.toFixed(2)+'" dy="'+MARK_DY+'">5</tspan>';
+}
+markSplit();
 
 /* ---------------- state ---------------- */
 const S={},sm={},smA={};

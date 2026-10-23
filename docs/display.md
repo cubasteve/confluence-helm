@@ -4,6 +4,69 @@ The three pages, the gestures that move between them, and everything that change
 
 [← back to the README](../README.md)
 
+## The hull number
+
+The **45** behind the dial is the hull number, set at 1320 px and 3% ink
+so the circle crops both digits — cropped on purpose. It is texture, not
+a label: nobody reads it, and you would notice its absence. The ink
+follows the theme, .032 by day and .07 at night, because 3% of white on
+black is a brighter thing than 3% of black on white.
+
+Two decisions in it are not obvious.
+
+**The 5 sits 26 px lower than the 4.** Poppins gives the two glyphs the
+same ink ascent to the pixel — measured, 969.4 at this size — so they are
+level in the font and not level to the eye. The 5 meets its ceiling with
+a wide flat bar and the 4 with a narrow apex, and a flat top reads higher
+than a point at the same height. Most faces pay for that with overshoot
+on round glyphs; this pair does not, so it is paid here. 26 px is 2.7% of
+the cap height, which is the usual size of that correction.
+
+**The run is centred on 488, not on 540.** Two corrections, both of them
+leftward:
+
+| | |
+|---|---|
+| `letter-spacing:-.06em` | lands after the LAST glyph too, so an anchor centred on the advance width sits `(1320 × .06)/2` = 44 px right of where the ink's own centre is |
+| the 5 outweighs the 4 | more visual mass on the right, so the perceived centre is right of the geometric one again — a further 12 px |
+
+### Why the split is measured and not written down
+
+Dropping the 5 means splitting one centred run into two `<tspan>`s, and
+two tspans do not accumulate letter-spacing the way two glyphs in one run
+do: a split that kept `text-anchor="middle"` came out **221 px wider and
+17 px left** of the run it replaced. So the anchor is out of it, and each
+digit is pinned at the pen position the centred run gave it.
+
+Those pen positions move with the face. The 4's pen lands at **−294 in
+Poppins and −167 in DejaVu** — 127 px apart, a tenth of the glass. Write
+either number into the markup and the watermark is right on the panel and
+wrong in any browser that has to fall back, which at 3% opacity is the
+kind of wrong you find a season later.
+
+So the markup carries the centred run, and `markSplit()` measures it and
+pins it at boot:
+
+```js
+a=t.getStartPositionOfChar(0).x; b=t.getStartPositionOfChar(1).x;
+t.removeAttribute('x'); t.removeAttribute('text-anchor');
+t.innerHTML='<tspan x="'+a.toFixed(2)+'">4</tspan>'
+           +'<tspan x="'+b.toFixed(2)+'" dy="'+MARK_DY+'">5</tspan>';
+```
+
+`getStartPositionOfChar`, **not** `getBBox`. The bbox `x` is where the
+ink begins, which is inside the advance; pinning the pen there moves the
+glyph by its left side bearing, and the rendered diff of that mistake
+came to 230,000 px.
+
+The probe in `tests/smoke.mjs` puts the centred run back, asks it where
+it draws and compares — so it holds on whatever face is installed — then
+checks that the markup itself still has no pen position in it. The first
+version of that probe measured a **clone** with the `id` stripped, which
+loses `#mark`'s font-size and lays out at a 16 px default: it compared
+1320 px positions against 479,488 and could not have agreed with
+anything.
+
 ## The sensor row
 
 Four glyphs - GPS, depth, wind, heading - green when that source is
