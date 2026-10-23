@@ -2224,13 +2224,19 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        label. One centred run here; markSplit() pins the two digits and
        drops the 5 once there is a face to measure.
 
-       WHY THE 5 DROPS. Poppins gives 4 and 5 the same ink ascent to the
-       pixel - measured, 969.4 at this size - so they are level in the
-       font and not level to the eye: the 5 meets its ceiling with a wide
-       flat bar and the 4 with a narrow apex, and a flat top reads higher
-       than a point at the same height. Fonts usually pay for that with
-       overshoot on round glyphs; this pair does not, so it is paid here.
-       26 is 2.7% of the cap height, the usual size of that correction.
+       WHY THE 5 DROPS. In Poppins the 5's top bar is drawn 14 px higher
+       than the flat top of the 4's stem at this size - 1.06% of the em,
+       and the same 14 px at every weight the panel installs, so it is
+       the face and not a synthetic bold. Both tops are flat, so there is
+       nothing optical to correct for: they simply are not level, and at
+       1320 px with the circle cropping everything above them, those
+       14 px are the first thing you see. The 5 comes down 14 and they
+       line up.
+
+       Do not take that number from measureText. It reports an
+       actualBoundingBoxAscent of 969.4 for BOTH digits, which is how
+       this was first set to 26 and overshot by 12. The rendered pixels
+       disagree with it; they are the ones on the glass.
 
        WHY x IS 488 AND NOT 540. Negative letter-spacing lands after the
        LAST glyph too, so an anchor centred on the advance width sits
@@ -3224,8 +3230,8 @@ function arcPath(r0,r1,d0,d1){
   $('groove-p').setAttribute('d',arcPath(R_LBL+18,R_OUT,-CFG.grooveMax,-CFG.grooveMin));
 })();
 
-/* The 5 of the hull number reads high beside the 4 and is dropped to fix
-   it - see the markup for why. It cannot be dropped in the markup,
+/* The 5 of the hull number sits 14 px high beside the 4 and is dropped
+   to fix it - see the markup for why. It cannot be dropped in the markup,
    though: two tspans do not accumulate letter-spacing the way two glyphs
    in one run do, so a split that keeps text-anchor comes out 221 px
    wider and 17 px left of the run it replaced. Each digit has to be
@@ -3241,7 +3247,7 @@ function arcPath(r0,r1,d0,d1){
    begins, which is inside the advance; pinning the pen there moves the
    glyph by its left side bearing, which at this size is not a rounding
    error - it was found by rendering both and diffing. */
-const MARK_DY=26;
+const MARK_DY=14;
 function markSplit(){
   const t=$('mark');
   if(!t || !t.getStartPositionOfChar || t.querySelector('tspan')) return;

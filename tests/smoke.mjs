@@ -116,9 +116,9 @@ await p.evaluate(()=>demoSet(false,'smoke'));
 
 console.log('\n=== the hull number sits where it was put ===');
 /* The watermark is two pinned glyphs rather than one centred run,
-   because the 5 is dropped 26 px to read level with the 4: Poppins gives
-   them the same ink ascent, so a wide flat top and a narrow apex come
-   out level in the font and not to the eye.
+   because the 5 is dropped 14 px to read level with the 4: Poppins draws
+   its top bar that much higher than the flat top of the 4's stem, at
+   every weight the panel installs.
 
    The invariant is "the split draws each glyph where the centred run
    would have". So the probe puts the centred run BACK and asks it,
@@ -162,8 +162,9 @@ ok(wm.hasX, 'each pinned with its own x, so letter-spacing cannot drift '
 ok(Math.abs(wm.pen[0]-wm.want[0])<0.5 && Math.abs(wm.pen[1]-wm.want[1])<0.5,
    'and each sits exactly where the centred run would have drawn it',
    wm.pen.join(',')+' vs '+wm.want.join(','));
-ok(wm.drop===26, 'with the 5 dropped 26 px so its flat top reads level '
-   +'with the apex of the 4', wm.drop+' px');
+ok(wm.drop===14, 'with the 5 dropped 14 px, which is measured off the '
+   +'rendered glass and not off measureText - that reports the same ink '
+   +'ascent for both digits and is wrong by 14', wm.drop+' px');
 /* And the file itself holds no pen position. The pair above would still
    agree on a machine with Poppins if someone wrote the Poppins numbers
    into the markup, so the thing that makes them portable is checked

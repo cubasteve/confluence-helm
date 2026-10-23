@@ -14,13 +14,26 @@ black is a brighter thing than 3% of black on white.
 
 Two decisions in it are not obvious.
 
-**The 5 sits 26 px lower than the 4.** Poppins gives the two glyphs the
-same ink ascent to the pixel — measured, 969.4 at this size — so they are
-level in the font and not level to the eye. The 5 meets its ceiling with
-a wide flat bar and the 4 with a narrow apex, and a flat top reads higher
-than a point at the same height. Most faces pay for that with overshoot
-on round glyphs; this pair does not, so it is paid here. 26 px is 2.7% of
-the cap height, which is the usual size of that correction.
+**The 5 sits 14 px lower than the 4.** In Poppins the 5's top bar is
+drawn 14 px above the flat top of the 4's stem at this size — 1.06% of
+the em, and the same 14 px at weight 500, 600 and 700, so it is the face
+itself and not a synthetic bold. Both tops are flat, so there is nothing
+optical about it; they simply are not level. With the circle cropping
+everything above them, those 14 px are the first thing the eye lands on,
+so the 5 comes down 14 and the two tops line up exactly:
+
+| drop | top of the 4 | top of the 5 | |
+|---|---|---|---|
+| 0 | 88 | 74 | the 5 stands 14 px proud |
+| 10 | 88 | 84 | |
+| **14** | **88** | **88** | level |
+| 18 | 88 | 92 | |
+| 26 | 88 | 100 | 12 px past it |
+
+Measured off the rendered glass. **Do not take the number from
+`measureText`** — it reports an `actualBoundingBoxAscent` of 969.4 for
+both digits, which is flatly contradicted by the pixels, and is how this
+was first set to 26 and overshot.
 
 **The run is centred on 488, not on 540.** Two corrections, both of them
 leftward:
