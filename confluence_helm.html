@@ -3193,6 +3193,16 @@ const CFG={
   /* smoothing time constant in ms. Longer = calmer but laggier. Must stay
      above the SignalK feed period (250 ms) or the steps show through. */
   smoothTau:420,
+  /* GPS conditioning - see GPS below. gpsTau is the time constant on
+     speed and course over ground, in seconds: long enough to take out
+     the one-second flicker of a puck that is bouncing about on a heeled
+     boat, short enough that a tack shows inside about five seconds.
+     Course is held below gpsCogMin (m/s, ~0.5 kn), where the receiver's
+     own course is noise. gpsPosAlpha is how far each fix pulls the
+     position (1 = raw), gpsGate the metres a fix may land off where the
+     boat should be before it is treated as a spike, and gpsMaxSog (m/s,
+     ~12 kn) a speed this boat does not do. */
+  gpsTau:3, gpsCogMin:0.25, gpsPosAlpha:0.4, gpsGate:15, gpsMaxSog:6.2,
   lat:28.61, lon:-81.27              // fallback until GPS gives a fix
 };
 const MS_TO_KT=1.94384, M_TO_FT=3.28084, DEG=180/Math.PI;
@@ -3381,6 +3391,84 @@ const smoothedAngle=k=>{
   return Math.atan2(s.y,s.x)*DEG;
 };
 
+/* ---------------- GPS conditioning ----------------------------------
+   The first sail with the puck aboard (6 Nov) logged a clean track while
+   motoring and a noisy one from the moment the boat heeled: the same
+   2.3 kn, but position scatter went from 0.16 m to 1 m, and SOG flickered
+   by up to 1.8 kn and COG by 20 degrees from one second to the next. The
+   dial showed that nearly raw, because smoothTau is tuned for the vane's
+   250 ms beat and not for a 1 Hz receiver.
+
+   So the GPS paths are conditioned here, on the way IN, and everything
+   downstream - the dial, the line, the marks, the recorder - reads the
+   conditioned values through get() like any other reading. Raw values
+   stay available as raw.sog, raw.cog, raw.lat and raw.lon.
+
+   Speed and course are filtered as a VELOCITY, east and north, not as two
+   numbers: averaging a course by itself goes wrong at north and gives a
+   wild course the same weight at 0.2 kn as a good one at 5. Position is
+   predicted forward on that velocity and then pulled part way to each
+   fix, so a boat sailing a straight line is not dragged behind it.
+
+   The 'fixed' subscription resends the last value every 250 ms. A resend
+   is not a new fix, and treating it as one is what made the recorder
+   log the same fix twice and then hop double the distance. A sample is
+   new when its Signal K timestamp is (or, with no timestamp, its value). */
+const GPS={seen:{}, t:0, vx:null, vy:null, cog:null,
+           rcog:null, rcogT:0, lat0:null, lon0:null, x:null, y:null,
+           fixT:0, seq:0, rej:0};
+function gpsFresh(path, ts, val){
+  const was=GPS.seen[path], now=Date.now();
+  /* With a timestamp the test is exact. Without one, a changed value is
+     new, and so is the same value a second later - a boat sitting at
+     0.0 kn at the dock must not go stale for want of moving. */
+  const fresh = ts ? (!was || was.k!==ts)
+                   : (!was || was.k!==JSON.stringify(val) || now-was.at>=900);
+  if(fresh) GPS.seen[path]={k: ts || JSON.stringify(val), at: now};
+  return fresh;
+}
+const gpsMs=ts=>{ const m=ts?Date.parse(ts):NaN; return isFinite(m)?m:Date.now(); };
+function gpsVelocity(sog, tms){
+  if(!(sog>=0) || sog>CFG.gpsMaxSog) return;        /* a speed this boat does not do */
+  put('raw.sog', sog);
+  const c = (GPS.rcog!==null && Math.abs(tms-GPS.rcogT)<2000) ? GPS.rcog
+          : (GPS.cog!==null ? GPS.cog : 0);
+  const vx=sog*Math.sin(c), vy=sog*Math.cos(c);
+  const dt=GPS.t ? (tms-GPS.t)/1000 : 0;
+  if(GPS.vx===null || !(dt>0) || dt>10){ GPS.vx=vx; GPS.vy=vy; }
+  else { const a=1-Math.exp(-Math.min(dt,5)/CFG.gpsTau);
+         GPS.vx+=(vx-GPS.vx)*a; GPS.vy+=(vy-GPS.vy)*a; }
+  GPS.t=tms;
+  const v=Math.hypot(GPS.vx,GPS.vy);
+  if(v>=CFG.gpsCogMin || GPS.cog===null)
+    GPS.cog=(Math.atan2(GPS.vx,GPS.vy)+2*Math.PI)%(2*Math.PI);
+  put('navigation.speedOverGround', v);
+  put('navigation.courseOverGroundTrue', GPS.cog);
+}
+function gpsPosition(lat, lon, tms){
+  put('raw.lat', lat); put('raw.lon', lon);
+  if(GPS.lat0===null){ GPS.lat0=lat; GPS.lon0=lon; }
+  const k=111320, ck=Math.cos(GPS.lat0*Math.PI/180);
+  const zx=(lon-GPS.lon0)*k*ck, zy=(lat-GPS.lat0)*k;
+  const dt=(tms-GPS.fixT)/1000;
+  if(GPS.x===null || !(dt>0) || dt>10){              /* first fix, or back after a gap */
+    GPS.x=zx; GPS.y=zy; GPS.rej=0;
+  } else {
+    const vx=GPS.vx||0, vy=GPS.vy||0;
+    const px=GPS.x+vx*dt, py=GPS.y+vy*dt;            /* where the boat should be */
+    const rx=zx-px, ry=zy-py, r=Math.hypot(rx,ry);
+    const gate=Math.max(CFG.gpsGate, 3*Math.hypot(vx,vy)*dt);
+    if(r>gate && GPS.rej<3){ GPS.rej++; return; }    /* a spike: hold, do not follow */
+    if(r>gate){ GPS.x=zx; GPS.y=zy; }                /* three in a row: it is real */
+    else { GPS.x=px+CFG.gpsPosAlpha*rx; GPS.y=py+CFG.gpsPosAlpha*ry; }
+    GPS.rej=0;
+  }
+  GPS.fixT=tms; GPS.seq++;
+  const la=GPS.lat0+GPS.y/k, lo=GPS.lon0+GPS.x/(k*ck);
+  put('pos.lat',la); put('pos.lon',lo);
+  CFG.lat=la; CFG.lon=lo;                            // GPS drives sunset
+}
+
 /* ---------------- Signal K ---------------- */
 const PATHS=['navigation.speedOverGround','navigation.speedThroughWater',
  'navigation.position','navigation.headingMagnetic','navigation.courseOverGroundTrue',
@@ -3401,7 +3489,23 @@ function skMessage(data){
   let m; try{m=JSON.parse(data)}catch(x){return}
   if(m.requestId && puts[m.requestId]){          // answer to one of our PUTs
     puts[m.requestId](m); delete puts[m.requestId]; }
-  (m.updates||[]).forEach(u=>(u.values||[]).forEach(v=>{
+  (m.updates||[]).forEach(u=>{ let sogNew=null; const tms=gpsMs(u.timestamp);
+   (u.values||[]).forEach(v=>{
+    /* GPS paths go through the conditioner above, and only when they
+       are a new sample rather than the 250 ms resend. */
+    if(v.path==='navigation.courseOverGroundTrue' && typeof v.value==='number'){
+      if(CFG.windDemo && DEMO_REAL.indexOf(v.path)>=0) demoSet(false, v.path);
+      if(gpsFresh(v.path,u.timestamp,v.value)){
+        GPS.rcog=v.value; GPS.rcogT=tms; put('raw.cog', v.value); }
+      return; }
+    if(v.path==='navigation.speedOverGround' && typeof v.value==='number'){
+      if(CFG.windDemo && DEMO_REAL.indexOf(v.path)>=0) demoSet(false, v.path);
+      if(gpsFresh(v.path,u.timestamp,v.value)) sogNew=v.value;
+      return; }
+    if(v.path==='navigation.position'&&v.value&&v.value.latitude!==undefined){
+      if(gpsFresh(v.path,u.timestamp,v.value))
+        gpsPosition(v.value.latitude, v.value.longitude, tms);
+      return; }
     /* A real instrument has turned up, so the made-up one stands down.
        This is the half of the switch that cannot be forgotten: the demo
        feed writes into the same store the sensors do, and left on it
@@ -3410,13 +3514,13 @@ function skMessage(data){
     if(CFG.windDemo && typeof v.value==='number' && DEMO_REAL.indexOf(v.path)>=0)
       demoSet(false, v.path);
     if(typeof v.value==='number'||typeof v.value==='boolean')put(v.path,v.value);
-    else if(v.path==='navigation.position'&&v.value&&v.value.latitude!==undefined){
-      put('pos.lat',v.value.latitude); put('pos.lon',v.value.longitude);
-      CFG.lat=v.value.latitude;CFG.lon=v.value.longitude;}     // GPS drives sunset
     else if(v.path==='navigation.attitude'&&v.value){          // BNO080, 9-axis
       if(typeof v.value.roll ==='number')put('att.roll', v.value.roll);
       if(typeof v.value.pitch==='number')put('att.pitch',v.value.pitch);}
-  }));
+   });
+   /* speed after the loop, so a course in the same update is used */
+   if(sogNew!==null) gpsVelocity(sogNew, tms);
+  });
 }
 
 function connect(){
@@ -4576,15 +4680,26 @@ const serverTrack=()=>get('confluence.track.recording')!==null;
    cost you the race.
    ================================================================== */
 let TRK = JSON.parse(localStorage.getItem('racetrack')||'[]');
-let trkLast = 0;
+let trkLast = 0, trkSeq = -1;
 
 let localArmed=false;              // manual override for the record button
 function trackSample(){
   if(serverTrack()) return;          // the plugin owns recording
   const rec = localRec();          /* the one definition - see localRec */
   if(!rec) return;
-  const now=Date.now();
-  if(now-trkLast < 1000) return;               // 1 Hz
+  let now=Date.now();
+  /* A fix from Signal K is logged once, when it is new, against its own
+     time. Sampling the store on our own 1 Hz clock beat against the
+     receiver's 1 Hz: now and then it caught the same fix twice and then
+     skipped one, and the track hopped double the distance. 900 ms, not
+     1000, so a fix that lands a few ms early is not thrown away. The
+     demo feed carries a src stamp and keeps the plain clock. */
+  const pe=S['pos.lat'];
+  if(pe && !pe.src){
+    if(GPS.seq===trkSeq) return;
+    if(GPS.fixT-trkLast < 900) return;
+    trkSeq=GPS.seq; now=GPS.fixT;
+  } else if(now-trkLast < 1000) return;        // 1 Hz
   const la=get('pos.lat'), lo=get('pos.lon');
   if(la===null||lo===null) return;
   trkLast=now;

@@ -36,6 +36,39 @@ per-frame alpha. A fixed alpha at 60 fps converged in ~70 ms against a
 250 ms feed, so every reading snapped and then sat still — four visible
 steps a second. Tau must stay above the feed period.
 
+### GPS conditioning
+
+The GPS paths are cleaned up **on the way in**, in `skMessage`, before
+anything reads them, so the dial, the line, the marks and the recorder
+all see the same fix. The first sail with the puck aboard showed why:
+the track was clean while motoring, and from the moment the boat heeled
+SOG flickered by up to 1.8 kn and COG by 20° from one second to the
+next. `smoothTau` is tuned for a 250 ms vane, not a 1 Hz receiver.
+
+- **A resend is not a fix.** The `fixed` subscription repeats the last
+  value every 250 ms. A sample counts only when its Signal K timestamp is
+  new (or, with no timestamp, its value, or a second has passed).
+- **Speed and course are one velocity.** East and north are each filtered
+  with `CFG.gpsTau` (3 s), so a course near north averages properly and a
+  wild course at 0.2 kn carries almost no weight. Below `gpsCogMin`
+  (~0.5 kn) the course is held.
+- **Position is predicted, then nudged.** Each fix pulls the position
+  `gpsPosAlpha` (0.4) of the way from where the velocity says the boat
+  should be, so a straight leg is not dragged behind. A fix more than
+  `gpsGate` (15 m, or three seconds' travel) off is held as a spike;
+  three in a row are believed.
+- **Raw is kept** as `raw.sog`, `raw.cog`, `raw.lat`, `raw.lon`.
+- **The recorder logs each fix once, on the fix's own time.** It used to
+  sample the store on its own 1 Hz clock, which beat against the
+  receiver's: now and then it caught one fix twice, then skipped one, and
+  the track hopped double the distance.
+
+Replayed through this, the 6 Nov track's heeled hour went from a 1.77 kn
+to a 0.46 kn second-to-second SOG change (95th percentile), and from 25°
+to 11° of COG. The rest of that noise is the antenna: under the deck
+beside the chainplates, it loses sky as the boat heels. `tests/gpsfilter`
+holds the filter to account on a synthetic sail.
+
 ## Charts
 
 AvNav serves NOAA ENC via its `system-mapproxy` plugin, seeded for offline
