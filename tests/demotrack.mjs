@@ -3,8 +3,7 @@
    first sail with this helm, 2026-11-06 from 17:05, in that evening's
    wind from Open-Meteo. */
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
-const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME
-  ||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME});
 const p=await b.newPage({viewport:{width:1080,height:1080}});
 const errs=[]; p.on('pageerror',e=>errs.push(String(e)));
 await p.route('**/signalk/**',r=>r.abort());

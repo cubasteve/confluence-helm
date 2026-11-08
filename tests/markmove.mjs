@@ -1,7 +1,7 @@
 /* Correcting a club mark from the boat, and putting the book back. */
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const OUT=process.env.HELM_SHOTS||'/tmp/';
-const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME});
 const ctx=await b.newContext({viewport:{width:1080,height:1080},
   geolocation:{latitude:28.8215,longitude:-81.2740,accuracy:4}, permissions:['geolocation']});
 await ctx.grantPermissions(['geolocation'],{origin:new URL(process.env.HELM_URL||'http://localhost:8080/').origin});

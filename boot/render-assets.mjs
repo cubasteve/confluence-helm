@@ -12,7 +12,7 @@
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const { chromium } = pw;
 const OUT='/home/user/confluence-helm/boot/theme';
-const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b=await chromium.launch({executablePath:process.env.HELM_CHROME});
 
 /* The dusk palette, verbatim from confluence_helm.html. Plymouth cannot
    know what the app will resolve to, and of the three a dark splash is

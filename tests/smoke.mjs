@@ -3,8 +3,7 @@
    per-feature probes - a net for the day one of them is missing. */
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const URL=process.env.HELM_URL||'http://localhost:8080/confluence_helm.html';
-const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME
-  ||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME});
 const ctx=await b.newContext({viewport:{width:1080,height:1080},
   geolocation:{latitude:28.8172,longitude:-81.2695,accuracy:5}, permissions:['geolocation']});
 const p=await ctx.newPage();

@@ -3,8 +3,15 @@
    to make a gesture the judge believes. */
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 
-export const CHROME=process.env.HELM_CHROME
-  ||'/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+/* No path, on purpose. Playwright finds its own browser under
+   PLAYWRIGHT_BROWSERS_PATH, and that is the only thing here that
+   survives the container being rebuilt: the install carries its version
+   in the directory name, and between two sessions chromium-1194 became
+   chromium-1243 and chrome-linux became chrome-linux64. A path written
+   down is a path that works until the image moves, and then every probe
+   dies at launch with nothing to say about the app. HELM_CHROME is kept
+   for a machine that keeps its browser somewhere of its own. */
+export const CHROME=process.env.HELM_CHROME;
 /* Not `URL` - that shadows the global one these routes parse with. */
 export const APP=process.env.HELM_URL
   ||'http://localhost:8080/confluence_helm.html';
