@@ -7897,14 +7897,13 @@ function paintBezel(){
 
    What the file has is position, time and GPS course. Everything else a
    boat publishes is reconstructed so that it AGREES with the track:
-   - true wind is what was reported from the boat: north-north-east at
-     8 mph gusting 15, so 7.0 kt from 022 gusting 13.0, steady all
-     evening. It agrees with the track, which is the test that matters:
-     resolve every course she held against 022 and the angles pile up at
-     40 degrees off the wind, at 100, and at 160 to 170 - close-hauled,
-     reaching, running. Three modes where a boat has three. An earlier
-     pass here guessed north-west off the same histogram and was wrong;
-     it had read the reaching legs as beats;
+   - true wind is Open-Meteo's 15-minute model for the lake that evening
+     (grid point 28.80, -81.27): light, 2 to 4 kt from the west-north-west
+     with gusts to 8, a lull to under a knot at 18:00, and backing from
+     316 to 290 through the sail. A model, not a masthead - but it is the
+     breeze that was forecast over the water she sailed, which is what
+     the old reported-from-the-boat figure for a different evening was
+     not;
    - apparent wind is the vector difference of that and the boat's own
      velocity, so it flips sides at each tack on the right bearing;
    - heading is the GPS course plus the local declination (6.6 W), so
@@ -7926,15 +7925,18 @@ const DEMO_MARINA={lat:28.81525, lon:-81.2663};
    would be a different race, not a faster one. */
 const DEMO_SPEED=1;
 const DEMO_DECL=6.6;                 /* magnetic declination at Sanford, 2026, west */
-/* As sailed, reported from the boat: north-north-east at 8 mph gusting
-   15, which is 7.0 kt gusting 13.0. Steady - one breeze, all evening -
-   so the table is two identical ends and the oscillation below is what
-   makes it a breeze rather than a number. The ends bracket the race
-   rather than sit on it: the interpolation wants something either side
-   of every minute it is asked for.
-   [minutes after 18:00, kt, from deg, gust kt] */
-const DEMO_WIND=[[0, 7.0, 22, 13.0], [120, 7.0, 22, 13.0]];
-const DEMO_T0_MIN=23.0833;            /* the race starts at 18:23:05 local */
+/* That evening's wind, from Open-Meteo's 15-minute model for the lake
+   (api.open-meteo.com, minutely_15, knots, local time). The rows bracket
+   the sail rather than sit on it: the interpolation wants something
+   either side of every minute it is asked for. 16:45 came back as 021;
+   it is written 381 so the step to 17:00's 297 is the short way round,
+   not a sweep through south. The oscillation in demoWind() is laid over
+   this, so it is a breeze rather than eight numbers.
+   [minutes after 17:00, kt, from deg, gust kt] */
+const DEMO_WIND=[[-15, 1.0, 381, 5.8], [  0, 2.0, 297, 7.0], [ 15, 2.5, 303, 7.4],
+                 [ 30, 3.5, 307, 7.8], [ 45, 4.3, 316, 8.6], [ 60, 0.8, 294, 7.6],
+                 [ 75, 2.2, 290, 8.0], [ 90, 2.7, 276, 8.0]];
+const DEMO_T0_MIN=5.3333;             /* she leaves at 17:05:20 local */
 const demo=()=>demoSet(true);         /* what CFG.demo used to call by name */
 
 function demoTrack(t){               /* seconds into the sail -> a point */

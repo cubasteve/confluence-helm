@@ -29,7 +29,7 @@ probes count on.
 | `marks` | a mark of your own: what the form takes, what it refuses, HERE |
 | `markmove` | a club mark corrected from the boat, and the way back to the book |
 | `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
-| `demotrack` | the demo sails last season's race, at the wind that was blowing |
+| `demotrack` | the demo sails the boat's own 6 Nov sail, in that evening's Open-Meteo wind |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
 | `gpsfilter` | a noisy receiver reaching the dial calm: resends ignored, one logged point per fix on its own time, the flicker gone, a tack still showing, no lag on a leg, a spike held, and the dial's averaging window from the panel |
 | `score` | the card, what it posts, and the fallback when nothing answers |
