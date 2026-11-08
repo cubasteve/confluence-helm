@@ -92,6 +92,38 @@ by hand, would become `Race-one.gpx` and could never be deleted at all.
 That was not a theory: the first version did exactly that and its own
 test caught it refusing a file sitting right there.
 
+### A race of your own as the demo
+
+Every row in the library has a **star**. Tap it and that race becomes
+what the DEMO pill plays instead of the built-in one; the star fills, and
+the line at the top of the list says which sail the demo is. Tap the
+filled star again and the built-in race comes back. One at a time.
+
+It works on both lists. A race **saved here** is already points; a file
+**on the boat** is fetched from the gpx folder and read. Either way it
+goes through the same treatment the built-in race had (`demoEncode`):
+
+- resampled onto an 8-second grid and delta-encoded in hundred-thousandths
+  of a degree, so `demoTrack()` reads it exactly as it reads the built-in;
+- course off a three-step window, held under a knot and clamped to 60°
+  a step, so a raw 1 Hz track's GPS wander does not come back as a
+  spinning bezel;
+- the time tied up at either end trimmed, and only that: the cut is at
+  the last fix within 6 m of the berth, so a track that starts or ends
+  under way loses nothing.
+
+The encoding is what is kept, in `localStorage` (`demoPick`), not the
+race: about 5 kB for 70 minutes, and no fetch at boot. The wind is still
+the built-in breeze - a GPX has none in it - so a starred race sails in
+north-north-east at 7 kt whatever was blowing that day.
+
+### The rows are half the height
+
+A race was a 112 px row with three 86 px circles, so four filled the
+list. It is 72 px now, with 58 px buttons - still a wet thumb's target -
+the name and the figures on two smaller lines, and a long name ending in
+an ellipsis rather than pushing the buttons off. About twice as many fit.
+
 ### Two-word names break at the space
 
 A dock label breaks where the name has a space, not where 150px runs

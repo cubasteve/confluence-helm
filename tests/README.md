@@ -30,6 +30,7 @@ probes count on.
 | `markmove` | a club mark corrected from the boat, and the way back to the book |
 | `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
 | `demotrack` | the demo sails last season's race, at the wind that was blowing |
+| `demopick` | a race of your own as the demo: the star, the dock trimmed, what it plays, that it survives a reload, a boat file as well as a saved race, and back to the built-in |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
 | `score` | the card, what it posts, and the fallback when nothing answers |
 | `held` | the race set aside between races, and the armed DISCARD |

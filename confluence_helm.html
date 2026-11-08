@@ -605,7 +605,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Armed, the bin stops being round and says so. SURE? does not fit in
    86px of circle, and a control that changes shape when it is about to
    do something that does not come back is doing its job. */
-#lib-list .bin.arm{width:150px;border-radius:43px;font-size:21px;
+#lib-list .bin.arm{width:104px;border-radius:29px;font-size:18px;
   font-weight:600;letter-spacing:.1em;
   color:var(--alarm);border-color:var(--alarm)}
 /* .numv is defined further down, next to .steprow that uses it. A second
@@ -1518,16 +1518,27 @@ body.night #cp-svg .wash{opacity:.55}
 .cbtn.on{border-color:var(--accent);color:var(--accent)}
 .cbtn:active{background:var(--chip)}
 .lib-list{width:600px;max-height:600px;overflow-y:auto;overscroll-behavior:contain}
-.lib-row{display:flex;align-items:center;gap:16px;height:112px;
+/* Compact: a race was 112 px and three 86 px circles, so four of them
+   filled the list. 72 px with 58 px buttons still takes a wet thumb,
+   and twice as many fit. Name and figures stay on two lines, smaller,
+   and a long name ends in an ellipsis rather than pushing the buttons. */
+.lib-row{display:flex;align-items:center;gap:10px;height:72px;
   border-bottom:2px solid var(--hairline)}
 .lib-row:active{background:var(--chip)}
 .lib-main{flex:1;text-align:left;min-width:0}
-.lib-name{font-size:30px;font-weight:600;color:var(--ink);letter-spacing:.04em}
-.lib-sub{font-size:22px;font-weight:500;color:var(--label);letter-spacing:.08em;
-  margin-top:6px}
+.lib-name{font-size:24px;font-weight:600;color:var(--ink);letter-spacing:.03em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-sub{font-size:17px;font-weight:500;color:var(--label);letter-spacing:.06em;
+  margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#lib-list .mini{width:58px;height:58px;font-size:27px;flex:none}
+#lib-list .star{color:var(--label)}
+#lib-list .star.on{color:var(--accent);border-color:var(--accent)}
+.lib-demo{font-size:17px;font-weight:600;letter-spacing:.12em;color:var(--label);
+  text-align:left;padding:8px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-demo b{color:var(--accent);font-weight:700}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
-.lib-head{font-size:20px;font-weight:600;letter-spacing:.18em;color:var(--label);
-  text-transform:uppercase;padding:18px 0 8px}
+.lib-head{font-size:18px;font-weight:600;letter-spacing:.18em;color:var(--label);
+  text-transform:uppercase;padding:12px 0 4px}
 a.lib-row{text-decoration:none;color:inherit}
 
 /* --- the QR sheet ---
@@ -2876,7 +2887,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div id="t-lib">
     <div class="t-title a-h1">Library</div>
     <div class="lib-list noscroll" id="lib-list"></div>
-    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
+    <div class="t-hint" id="lib-hint">TAP TO LOAD · ★ DEMO · ⤓ SHARE · ✕ DELETE</div>
   </div>
 
   <!-- Outside the library on purpose: publishing a track raises this
@@ -6039,6 +6050,8 @@ $('lib-list').addEventListener('click',e=>{
   e.stopPropagation();
   /* Asked before the row itself, so the bin does not also open the QR
      code for the file it is deleting. */
+  const st=e.target.closest('[data-star]');
+  if(st){ e.preventDefault(); return void libStar(st); }
   const rm=e.target.closest('[data-rm]');
   if(rm) return void libRemove(rm.dataset.rm, rm);
   const link=e.target.closest('.lib-link');
@@ -7765,8 +7778,104 @@ const DEMO_WIND=[[0, 7.0, 22, 13.0], [120, 7.0, 22, 13.0]];
 const DEMO_T0_MIN=23.0833;            /* the race starts at 18:23:05 local */
 const demo=()=>demoSet(true);         /* what CFG.demo used to call by name */
 
+/* ---- a race of your own as the demo -----------------------------------
+   Any race in the library can be starred to be the demo instead of the
+   one built in above. It goes through the same treatment that one did -
+   resampled onto an 8-second grid, delta-encoded in hundred-thousandths
+   of a degree, course off a three-step window that holds under a knot
+   and is clamped to 60 degrees a step - so demoTrack() reads it exactly
+   as it reads the built-in sail, and a raw 1 Hz track's GPS wander does
+   not come back as a bezel that spins.
+
+   The encoding is kept, not the race: a starred track off the boat's
+   folder needs no fetch at boot, and 70 minutes is about 5 kB. Dockside
+   minutes at either end are trimmed - the demo starts where she moved.
+   The wind stays the built-in breeze; a GPX has no wind in it. */
+const DEMO_KEY='demoPick';
+let DEMO_PICK=null;                   /* {key, title, enc} or null for the built-in */
+const demoOk=e=>!!(e && isFinite(e.lat0) && isFinite(e.lon0) && e.step>0
+  && Array.isArray(e.dlat) && e.dlat.length>=8
+  && e.dlon && e.dlon.length===e.dlat.length && e.dcrs && e.dcrs.length===e.dlat.length);
+try{ const v=JSON.parse(localStorage.getItem(DEMO_KEY)||'null');
+     if(v && demoOk(v.enc)) DEMO_PICK=v; }catch(e){}
+const demoCur=()=>DEMO_PICK ? DEMO_PICK.enc : DEMO_TRACK;
+const demoLen=()=>{ const D=demoCur(); return D.dlat.length*D.step; };
+
+function demoEncode(pts){
+  pts=(pts||[]).filter(q=>isFinite(q.t)&&isFinite(q.la)&&isFinite(q.lo))
+               .sort((a,b)=>a.t-b.t);
+  if(pts.length<10) return null;
+  const M=111320, ck=Math.cos(pts[0].la/DEG);
+  const far=(a,b)=>Math.hypot((b.la-a.la)*M,(b.lo-a.lo)*M*ck);
+  /* Trim the dock, and only the dock. Find the first fix 20 m from
+     where she sat, then step back to the moment she left - the last fix
+     still within 6 m of the berth, which is GPS wander and no more. The
+     same from the other end. A track that starts or ends under way
+     loses nothing. */
+  const N=pts.length; let i0=0, i1=N-1;
+  while(i0<N-1 && far(pts[0],pts[i0])<20) i0++;
+  while(i0>0 && far(pts[0],pts[i0-1])>=6) i0--;
+  while(i1>0 && far(pts[N-1],pts[i1])<20) i1--;
+  while(i1<N-1 && far(pts[N-1],pts[i1+1])>=6) i1++;
+  if(i1<=i0) return null;
+  pts=pts.slice(Math.max(0,i0-1), Math.min(N,i1+2));
+  const step=8, t0=pts[0].t, t1=pts[pts.length-1].t;
+  if(t1-t0 < 120000) return null;     /* under two minutes is not a sail */
+  const G=[]; let j=0;
+  for(let t=t0; t<t1+step*1000; t+=step*1000){
+    while(j<pts.length-2 && pts[j+1].t<t) j++;
+    const tt=Math.min(t,t1);           /* the last step lands on the last fix */
+    const a=pts[j], b=pts[j+1], f=b.t>a.t ? Math.max(0,Math.min(1,(tt-a.t)/(b.t-a.t))) : 0;
+    G.push({la:Math.round((a.la+(b.la-a.la)*f)*1e5), lo:Math.round((a.lo+(b.lo-a.lo)*f)*1e5)});
+  }
+  const n=G.length; if(n<9) return null;
+  /* course at each grid point over a three-step window; held when the
+     window covers under a knot, and no more than 60 degrees a step */
+  const brg=(a,b)=>((Math.atan2((b.lo-a.lo)*ck,(b.la-a.la))*DEG)+360)%360;
+  const dist=(a,b)=>Math.hypot((b.la-a.la)*1.1132,(b.lo-a.lo)*1.1132*ck);
+  const C=[]; let prev=null;
+  for(let k=0;k<n;k++){
+    const a=G[Math.max(0,k-1)], b=G[Math.min(n-1,k+2)];
+    let c=prev;
+    if(dist(a,b) >= 0.514*step*3 || prev===null) c=brg(a,b);
+    if(prev!==null){ const d=wrap180(c-prev); c=(prev+Math.max(-60,Math.min(60,d))+360)%360; }
+    C.push(c); prev=c;
+  }
+  const enc={lat0:G[0].la/1e5, lon0:G[0].lo/1e5, crs0:Math.round(C[0]), step,
+             dlat:[], dlon:[], dcrs:[]};
+  let cr=enc.crs0;
+  for(let k=0;k<n-1;k++){
+    enc.dlat.push(G[k+1].la-G[k].la); enc.dlon.push(G[k+1].lo-G[k].lo);
+    const d=Math.round(wrap180(C[k+1]-cr)); enc.dcrs.push(d); cr=(cr+d+360)%360;
+  }
+  return enc;
+}
+/* Star a race (or un-star the one that is the demo, which puts the
+   built-in sail back). The demo restarts at the beginning of it. */
+function demoPick(key, title, pts){
+  if(DEMO_PICK && DEMO_PICK.key===key){ DEMO_PICK=null; }
+  else {
+    const enc=demoEncode(pts);
+    if(!enc){ flashTrk('too short for a demo'); return false; }
+    DEMO_PICK={key, title, enc};
+  }
+  try{ DEMO_PICK ? localStorage.setItem(DEMO_KEY, JSON.stringify(DEMO_PICK))
+                 : localStorage.removeItem(DEMO_KEY); }catch(e){}
+  demoT=0;
+  return true;
+}
+/* A file off the boat is GPX text; this is all of it the demo needs. */
+function gpxPoints(txt){
+  const out=[], re=/<trkpt\b[^>]*?lat="([-\d.]+)"[^>]*?lon="([-\d.]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+  let m; while((m=re.exec(txt))){
+    const tm=/<time>([^<]+)<\/time>/.exec(m[3]);
+    out.push({la:+m[1], lo:+m[2], t:tm?Date.parse(tm[1]):NaN});
+  }
+  return out;
+}
+
 function demoTrack(t){               /* seconds into the sail -> a point */
-  const D=DEMO_TRACK, n=D.dlat.length+1;
+  const D=demoCur(), n=D.dlat.length+1;
   const f=t/D.step, k=Math.min(n-2, Math.floor(f)), r=Math.min(1, f-k);
   /* Walked from the start each call rather than kept as running sums,
      which is 552 adds at 8 Hz - nothing - and means the loop cannot
@@ -7874,7 +7983,7 @@ function demoCycle(){
 function windDemoTick(){
   if(!CFG.windDemo) return;
   bootReady();                        /* demo mode is a boat, for these purposes */
-  demoT=(demoT+0.12*DEMO_SPEED*RACE_RATE)%(DEMO_TRACK.dlat.length*DEMO_TRACK.step);
+  demoT=(demoT+0.12*DEMO_SPEED*RACE_RATE)%demoLen();
   const P=demoTrack(demoT), W=demoWind(demoT);
   /* The GPS group defers to a real fix, path by path: a boat with a GPS
      and no vane keeps its own position and course and gets only the wind
@@ -11485,6 +11594,24 @@ $('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0,side:[]}
 /* The sheet's own DONE is gone: the cross at the foot closes it, and
    the app on the next tap. See the #app-close listener. */
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
+/* The star: filled on the race the demo plays, hollow on the rest. */
+const starBtn=(key,title)=>{ const on=!!(DEMO_PICK && DEMO_PICK.key===key);
+  return `<button class="mini star${on?' on':''}" data-star="${esc(key)}"`
+    +` data-stitle="${esc(title)}" aria-pressed="${on}"`
+    +` aria-label="${on?'The demo - tap for the built-in':'Make this the demo'}">${on?'★':'☆'}</button>`; };
+/* Star a row: a race saved here is already points; a file off the boat
+   is fetched and read. Either way the demo restarts on it. */
+function libStar(btn){
+  const key=btn.dataset.star, title=btn.dataset.stitle;
+  btn.textContent='…';
+  const done=pts=>{ demoPick(key, title, pts); renderLib(); };
+  if(DEMO_PICK && DEMO_PICK.key===key) return done(null);
+  if(key.indexOf('db:')===0)
+    return void dbGet(key.slice(3)).then(r=>done(r?r.pts:null)).catch(()=>renderLib());
+  fetchT('gpx/'+encodeURIComponent(key.slice(5)), 15000)
+    .then(r=>r.ok?r.text():'').then(txt=>done(gpxPoints(txt)))
+    .catch(()=>{ flashTrk('could not read that file'); renderLib(); });
+}
 /* Two lists, and the difference matters.
 
    SAVED HERE is IndexedDB: per origin and per device, so what the kiosk
@@ -11523,6 +11650,7 @@ function renderLib(){
           +`${d.toLocaleDateString()} ${String(d.getHours()).padStart(2,'0')}:`
           +`${String(d.getMinutes()).padStart(2,'0')}</div>
            </div>
+           ${starBtn('file:'+f.name, nice)}
            <span class="mini">⤓</span>
            <button class="mini bin" data-rm="${esc(f.name)}">✕</button></div>`;
       }).join('');
@@ -11538,11 +11666,16 @@ function renderLib(){
              <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
           +` · MAX ${r.max.toFixed(1)} KT</div>
            </div>
+           ${starBtn('db:'+r.id, r.name)}
            <button class="mini" data-exp="${r.id}">⤓</button>
            <button class="mini" data-del="${r.id}">✕</button>
          </div>`).join('');
     }
-    box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
+    /* Which sail the demo plays, said once at the top so the built-in one
+       is not a mystery when nothing is starred. */
+    const demoLine=`<div class="lib-demo">DEMO · <b>${DEMO_PICK ? esc(DEMO_PICK.title)
+      : 'BUILT-IN RACE'}</b></div>`;
+    box.innerHTML = o ? demoLine+o : '<div class="lib-empty">NO SAVED RACES</div>';
     scrollFit(box); drumPaint(box); rimDraw(box);
   });
 }
