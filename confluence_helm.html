@@ -2628,6 +2628,22 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          a sounder. An empty bordered box on a boat with no sounder
          would be worse than the gap, which is why the old card hid
          itself; half a box has no such problem. -->
+    <!-- How long the dial averages speed and course over. A watch app
+         reads 30 s because a wrist swings; a puck on the boat can show
+         more of what a trim or a gust did. Only the dial: the start line
+         and VMG keep their own short filter. -->
+    <div class="card" id="gps-slab">
+    <div class="slab">GPS averaging</div>
+    <div class="sndrow">
+      <span class="sndlbl">Speed</span>
+      <button class="mini wide" id="avg-sog"></button>
+    </div>
+    <div class="sndrow">
+      <span class="sndlbl">Course</span>
+      <button class="mini wide" id="avg-cog"></button>
+    </div>
+    </div>
+
     <div class="card" id="snd-slab">
     <div class="slab">Sound</div>
     <!-- The horn's whole job is the question you cannot answer from the
@@ -3203,6 +3219,11 @@ const CFG={
      boat should be before it is treated as a spike, and gpsMaxSog (m/s,
      ~12 kn) a speed this boat does not do. */
   gpsTau:3, gpsCogMin:0.25, gpsPosAlpha:0.4, gpsGate:15, gpsMaxSog:6.2,
+  /* What the dial SHOWS, averaged over this many seconds - chosen from
+     the panel (GPS card). The calculations - VMG, target speed, the
+     start line, the recorder - stay on gpsTau, so a 30 s display cannot
+     put the boat late at the gun. */
+  sogAvg:3, cogAvg:3,
   lat:28.61, lon:-81.27              // fallback until GPS gives a fix
 };
 const MS_TO_KT=1.94384, M_TO_FT=3.28084, DEG=180/Math.PI;
@@ -3416,7 +3437,7 @@ const smoothedAngle=k=>{
    new when its Signal K timestamp is (or, with no timestamp, its value). */
 const GPS={seen:{}, t:0, vx:null, vy:null, cog:null,
            rcog:null, rcogT:0, lat0:null, lon0:null, x:null, y:null,
-           fixT:0, seq:0, rej:0};
+           fixT:0, seq:0, rej:0, hist:[], dcog:null};
 function gpsFresh(path, ts, val){
   const was=GPS.seen[path], now=Date.now();
   /* With a timestamp the test is exact. Without one, a changed value is
@@ -3444,7 +3465,32 @@ function gpsVelocity(sog, tms){
     GPS.cog=(Math.atan2(GPS.vx,GPS.vy)+2*Math.PI)%(2*Math.PI);
   put('navigation.speedOverGround', v);
   put('navigation.courseOverGroundTrue', GPS.cog);
+  GPS.hist.push({t:tms, s:sog, vx, vy});
+  while(GPS.hist.length && tms-GPS.hist[0].t>31000) GPS.hist.shift();
+  gpsDisplay();
 }
+/* The dial's own speed and course: a plain average over the last
+   CFG.sogAvg / CFG.cogAvg seconds, the way a watch app does it. Speed is
+   the mean of the speeds - through a tack the mean velocity would read
+   slow. Course is the mean velocity's direction, and is held while the
+   boat is barely moving. */
+const SOG_AVGS=[1,2,3,5,10,30], COG_AVGS=[1,2,3,5,10];
+function gpsDisplay(){
+  const H=GPS.hist; if(!H.length) return;
+  const t1=H[H.length-1].t;
+  const win=w=>H.filter(h=>t1-h.t < w*1000-200);
+  const S1=win(CFG.sogAvg);
+  put('disp.sog', S1.reduce((a,h)=>a+h.s,0)/S1.length);
+  const C1=win(CFG.cogAvg);
+  const vx=C1.reduce((a,h)=>a+h.vx,0)/C1.length, vy=C1.reduce((a,h)=>a+h.vy,0)/C1.length;
+  const sp=C1.reduce((a,h)=>a+h.s,0)/C1.length;
+  if(sp>=CFG.gpsCogMin || GPS.dcog===null)
+    GPS.dcog=(Math.atan2(vx,vy)+2*Math.PI)%(2*Math.PI);
+  put('disp.cog', GPS.dcog);
+}
+/* Read by the dial: the averaged value from the receiver, or - with no
+   receiver, as in the demo - whatever is in the navigation path. */
+const dispGet=(d,p)=>{ const x=get(d); return x!==null ? x : get(p); };
 function gpsPosition(lat, lon, tms){
   put('raw.lat', lat); put('raw.lon', lon);
   if(GPS.lat0===null){ GPS.lat0=lat; GPS.lon0=lon; }
@@ -6227,7 +6273,10 @@ const PREF_DEFS={
   /* Whether to hold a Bluetooth speaker awake through a start. */
   keepAwake:  v=>typeof v==='boolean' ? v : null,
   /* Which noise the glass makes under a finger, or none. */
-  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null
+  click:      v=>CLICK_KEYS.indexOf(v)>=0 ? v : null,
+  /* How many seconds the dial averages speed and course over. */
+  sogAvg:     v=>SOG_AVGS.indexOf(v)>=0 ? v : null,
+  cogAvg:     v=>COG_AVGS.indexOf(v)>=0 ? v : null
 };
 function prefsLoad(){
   let raw={};
@@ -6888,6 +6937,14 @@ $('clk-voice').addEventListener('click',()=>{
   CFG.click=CLICK_KEYS[(i+1)%CLICK_KEYS.length];
   clkPaint(); prefsSave(); clickPlay();
 });
+
+/* The two averaging buttons: round the list and back, and the dial
+   changes at once - the history is already there to average. */
+const avgPaint=()=>{ wText('avg-sog', CFG.sogAvg+' SEC'); wText('avg-cog', CFG.cogAvg+' SEC'); };
+const avgStep=(k,L)=>{ CFG[k]=L[(L.indexOf(CFG[k])+1)%L.length];
+  avgPaint(); prefsSave(); gpsDisplay(); };
+$('avg-sog').addEventListener('click',()=>avgStep('sogAvg',SOG_AVGS));
+$('avg-cog').addEventListener('click',()=>avgStep('cogAvg',COG_AVGS));
 
 $('snd-who').addEventListener('click',async ()=>{
   if(SND.outs.length<2 || SND.pinned) return;
@@ -8093,8 +8150,10 @@ const degOf=p=>{ const x=get(p);
 /* Read once and used twice - by the number and by the compass point
    under it - so the two can never disagree about which way the boat is
    pointing. */
+const dispDeg=()=>{ const x=dispGet('disp.cog','navigation.courseOverGroundTrue');
+  return x===null?null:((x*DEG)%360+360)%360; };
 const hdgDeg=()=>{ let d=degOf('navigation.headingMagnetic');
-  if(d===null) d=degOf('navigation.courseOverGroundTrue');
+  if(d===null) d=dispDeg();
   return d; };
 const CARD=['N','NE','E','SE','S','SW','W','NW'];
 /* %360 AFTER the rounding as well as before it: 359.6 rounds up to 360,
@@ -8116,15 +8175,15 @@ const MUS_CELLS=[
      speed a boat has, and now that every other cell carries a header an
      empty one reads as a gap rather than as a decision. */
   {k:'sog', sen:'gps', name:'BOAT SPEED', hdr:'SOG', u:'KT',
-   v:()=>{const x=get('navigation.speedOverGround');
+   v:()=>{const x=dispGet('disp.sog','navigation.speedOverGround');
           return x===null?null:readNum('sog',x*MS_TO_KT).toFixed(1);}},
   /* Where the boat is GOING, which is not where it is pointing - the
      difference is the tide and the leeway, and on a windward leg it is
      the whole story. True, not magnetic: that is what the GPS puts on
      the wire, and relabelling it would be a lie. */
   {k:'cog', sen:'gps', name:'COURSE', hdr:'COG',
-   u:()=>point(degOf('navigation.courseOverGroundTrue')),
-   v:()=>bearing(degOf('navigation.courseOverGroundTrue'))},
+   u:()=>point(dispDeg()),
+   v:()=>bearing(dispDeg())},
 
   /* ---- DEPTH -------------------------------------------------------- */
   {k:'dpt', sen:'dpt', name:'DEPTH', u:()=>metric()?'M':'FT',
@@ -11739,7 +11798,7 @@ function ssTick(){
     const page=Math.floor(Date.now()/8000)%4;
     if(page!==ssCycle){ ssCycle=page; }
     let lbl,val,unit;
-    const sog=get('navigation.speedOverGround');
+    const sog=dispGet('disp.sog','navigation.speedOverGround');
     let d=get('environment.depth.belowKeel'); if(d===null)d=get('environment.depth.belowTransducer');
     const aws=get('environment.wind.speedApparent');
     const awa=get('environment.wind.angleApparent');
@@ -13987,6 +14046,7 @@ prefsLoad(); applyDim(CFG.dim,false); layoutPages();
    toggle. */
 drawDemo();
 clkPaint();                       /* and the touch sound, for the same reason */
+avgPaint();                       /* and the GPS averaging */
 /* Same reason as drawDemo: CFG is only right after prefsLoad. If phone
    mode was left on, this is where the watch starts - and where the
    browser asks for location, which is the right moment because you

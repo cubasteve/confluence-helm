@@ -58,6 +58,16 @@ next. `smoothTau` is tuned for a 250 ms vane, not a 1 Hz receiver.
   `gpsGate` (15 m, or three seconds' travel) off is held as a spike;
   three in a row are believed.
 - **Raw is kept** as `raw.sog`, `raw.cog`, `raw.lat`, `raw.lon`.
+- **What the dial shows is averaged separately**, over a window you pick
+  in the panel's **GPS averaging** card: speed 1, 2, 3, 5, 10 or 30 s,
+  course 1, 2, 3, 5 or 10 s (`CFG.sogAvg` / `CFG.cogAvg`, saved with the
+  other preferences). Speed is the mean of the speeds, so a tack inside
+  the window does not read slow; course is the mean velocity's direction,
+  held below `gpsCogMin`. These land in `disp.sog` / `disp.cog`, which only
+  the SOG and COG readings, the heading fallback and the screensaver read.
+  VMG, target speed, the start line and the recorder stay on the 3 s
+  `navigation.*` values, so a 30 s display cannot put the boat late at
+  the gun.
 - **The recorder logs each fix once, on the fix's own time.** It used to
   sample the store on its own 1 Hz clock, which beat against the
   receiver's: now and then it caught one fix twice, then skipped one, and

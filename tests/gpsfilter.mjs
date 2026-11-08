@@ -105,4 +105,39 @@ t.ok(Math.abs(bias)<0.6, 'no lag on a straight leg (mean along-track error)', bi
 const sp=Math.hypot(res[SPIKE].x-truth[SPIKE].x, res[SPIKE].y-truth[SPIKE].y);
 t.ok(sp<3, 'the 40 m spike moved the boat less than 3 m', sp.toFixed(1)+' m');
 
+t.head('the dial\'s averaging, chosen from the panel');
+/* Feed a steady 2 kn then a steady 4 kn: a 30 s average must sit at the
+   mean of what it has seen, a 1 s one at the last fix, and neither may
+   move what the calculations read. */
+const avg=await p.evaluate(()=>{
+  const base=Date.parse('2026-11-07T15:00:00Z'), kn=1/1.94384, r={};
+  const feed=(i,sog)=>skMessage(JSON.stringify({updates:[{timestamp:new Date(base+i*1000).toISOString(),
+    values:[{path:'navigation.speedOverGround',value:sog},{path:'navigation.courseOverGroundTrue',value:Math.PI/2}]}]}));
+  for(let i=0;i<20;i++) feed(i,2*kn);
+  for(let i=20;i<30;i++) feed(i,4*kn);
+  const k=()=>get('disp.sog')*1.94384;
+  CFG.sogAvg=30; gpsDisplay(); r.s30=k();
+  CFG.sogAvg=1;  gpsDisplay(); r.s1=k();
+  r.nav=get('navigation.speedOverGround')*1.94384;
+  CFG.sogAvg=30; gpsDisplay(); r.nav30=get('navigation.speedOverGround')*1.94384;
+  r.cog=bearing(dispDeg());
+  /* the button: 3 steps on to 5, and it is saved */
+  CFG.sogAvg=3; avgPaint(); document.getElementById('avg-sog').click();
+  r.btn=document.getElementById('avg-sog').textContent; r.saved=JSON.parse(localStorage.getItem(PREFS_KEY)).sogAvg;
+  r.coglist=COG_AVGS.join(',');
+  return r; });
+t.ok(Math.abs(avg.s30-(20*2+10*4)/30)<0.05, '30 s reads the mean of the last thirty fixes', avg.s30.toFixed(2)+' kn');
+t.ok(Math.abs(avg.s1-4)<0.05, '1 s reads the last fix', avg.s1.toFixed(2)+' kn');
+t.ok(Math.abs(avg.nav-avg.nav30)<1e-9, 'and the setting does not move what VMG and the line read', avg.nav.toFixed(2)+' kn');
+/* the number on the glass eases to a new value over a few frames */
+await p.evaluate(()=>{ CFG.sogAvg=30; gpsDisplay(); }); await p.waitForTimeout(2500);
+/* readNum eases a step per call - once per millisecond - and a cell not
+   on the dial is not being called, so call it the way the frames would */
+const cell=await p.evaluate(async ()=>{ let v;
+  for(let i=0;i<120;i++){ tickSmoothing(); v=musCell('sog').v(); await new Promise(r=>setTimeout(r,20)); }
+  return v; });
+t.ok(cell==='2.7', 'the SOG reading on the dial shows the averaged speed', cell);
+t.ok(avg.cog==='090°', 'COG reads the averaged course', avg.cog);
+t.ok(avg.btn==='5 SEC' && avg.saved===5, 'the panel button steps 3 to 5 and remembers it', avg.btn+' / '+avg.saved);
+
 await t.done(b);

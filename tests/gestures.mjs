@@ -685,9 +685,9 @@ t.ok(await p.evaluate(()=>{
      await p.evaluate(()=>[...$('p-sheet').querySelectorAll('.card')]
        .filter(k=>k.offsetHeight)
        .map(k=>Math.round(k.getBoundingClientRect().height)).join()));
-t.ok(S.cards===3, 'three cards - display, the shallow alarm, and sound, '
-     +'which is the horn and the glass in one box. The start is not among '
-     +'them: it moved to the course sheet with the rest of the start',
+t.ok(S.cards===4, 'four cards - display, the shallow alarm, GPS averaging, '
+     +'and sound, which is the horn and the glass in one box. The start is '
+     +'not among them: it moved to the course sheet with the rest of the start',
      String(S.cards));
 t.ok(S.room===0, 'and all of it inside the glass at once', S.h+' px tall');
 t.ok(!S.over, 'so nothing is faded off an edge');
