@@ -12,6 +12,21 @@ sitting in the repo beside the thing they test.
 answers there, so a probe never quietly tests a stale deployed copy.
 Screenshots land in a temp directory it prints at the end.
 
+**It also runs in Poppins**, which is the face the panel runs —
+`boot/install-boot-chain.sh` puts weights 300, 500 and 600 on the Pi.
+`run.sh` points fontconfig at `boot/fonts/` for the length of the run
+rather than installing anything, so nothing is left on the machine
+afterwards and the system faces are still found.
+
+This matters more than it sounds. Every layout assertion here is a
+measurement, and a measurement taken in whatever face the machine
+happened to have is a measurement of the wrong thing. The probes spent a
+long season agreeing with a laptop and disagreeing with the boat: two
+cards in the control panel came out 11 px short, and on the track page
+the chart's rim sat 10 px off the numbers under it — all of it green,
+none of it true. Run them in the panel's face or they are not telling
+you about the panel.
+
 ## The page
 
 Playwright against Chromium, driving `confluence_helm.html` itself.

@@ -249,13 +249,32 @@ filename depend on a line of text existing on the glass.
 The oval then grew downward into what was left: 520 tall against the
 circle's 456, running y=110 to 630.
 
-That is most of the band there is. The pill ends at 84 and the stats row
-starts at 661, so 520 of those 577 px are oval — 26 px of air above and 31
+That is most of the band there is. The pill ends at 86 and the stats row
+starts at 659, so 520 of those 573 px are oval — 24 px of air above and 29
 below. It is not centred in the band, sitting 10 px high of centre,
 because the ask was to lift it and *then* to deepen it, and splitting the
 remainder evenly would have handed back part of the lift. There is a probe
 on the ratio, because "most of the band" is the sort of claim that is only
 true until someone adds a row.
+
+**Both of those numbers are a face talking.** The oval is fixed — it is
+SVG user units — but the pill above it and the stats below are text, and
+text is as tall as the font makes it. Measured in Poppins, which is what
+the panel runs, the two had been leaving **19 px** and **10 px**, not 24
+and 29: the probes were run in whatever face the test machine had, agreed
+with that, and never said a word about the boat. The stats block is the
+worse of the two because it is anchored from the *bottom*, so every extra
+pixel of line box grows upward, straight into the chart's clearance.
+
+Neither was fixed by moving anything or by taking the oval back. Both
+elements had simply been left on Poppins' `normal` line-height, which is
+about 1.5 — the one thing this page's own notes say not to do — and
+neither holds arbitrary text: a reading, a unit caption, an uppercase app
+name. Given the tight line box every other numeric tile here already
+takes, the 44 px number stops asking for a 65 px line and the clearances
+come back on their own. `tests/run.sh` now runs the whole suite in
+Poppins so the next one of these is caught by a probe rather than by
+looking at the panel.
 
 One probe had to follow it. `gestures` reads "the app's heading" as the
 first `.a-h1` inside `#app-run`, and with the map's own heading gone that

@@ -310,10 +310,15 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    IS the panel it was the same colour as what it sat on - a name
    floating in the middle of nothing. One step off the panel shows the
    shape in all four. */
+/* line-height, same reason as .t-stats: at `normal` Poppins made this
+   pill 47 px tall and left 19 px between it and the top of the track
+   chart. It is uppercase, so there is nothing below the baseline to
+   protect. */
 #app-name{position:absolute;top:44px;left:50%;transform:translateX(-50%);
   max-width:560px;padding:8px 22px;border-radius:24px;
   background:var(--chip);color:var(--label);
   font-size:21px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  line-height:1.25;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   opacity:.92;pointer-events:none}
 /* A cross, not the word. CLOSE was 190 px of type at the foot of the
@@ -1562,8 +1567,18 @@ a.lib-row{text-decoration:none;color:inherit}
 /* Clear of the app's close button, which now stands where this used to
    have the foot of the glass to itself. */
 #lib-hint{bottom:176px;font-size:19px;letter-spacing:.12em}
-.t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink)}
-.t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;color:var(--label)}
+/* line-height set, not left at `normal`. Poppins' normal is about 1.5,
+   so a 44 px number asks for a 65 px line box and the pair came to 92 px
+   - ten more than the face a laptop falls back to, and this block is
+   anchored from the BOTTOM, so the extra went upward into the chart's
+   clearance. On the panel the oval's rim ended up 10 px off these
+   numbers; the chart has run into them once already. Neither line holds
+   arbitrary text - a reading and an uppercase caption - so they take the
+   tight line box every other numeric tile on the page takes. */
+.t-stats b{display:block;font-size:44px;font-weight:600;color:var(--ink);
+  line-height:1.1}
+.t-stats span{font-size:18px;font-weight:600;letter-spacing:.16em;
+  color:var(--label);line-height:1.25}
 /* 150 from the foot, not 104: the app host's close button tops out 115
    from the foot, and at 104 the hint's descenders sat on it. Both sheets
    share this, so both lift. It is a cross on a 76 px disc now rather

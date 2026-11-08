@@ -16,6 +16,22 @@ PORT="${HELM_PORT:-8080}"
 export HELM_URL="${HELM_URL:-http://localhost:$PORT/confluence_helm.html}"
 export HELM_SHOTS="${HELM_SHOTS:-$(mktemp -d)/}"
 
+# The panel runs Poppins - boot/install-boot-chain.sh puts these three
+# weights on the Pi - and a probe that measures a layout in whatever face
+# the machine happens to have is measuring the wrong thing. This went
+# unnoticed for a long time because the failures are quiet: a box 11 px
+# short, two ovals 10 px apart, numbers that are wrong only on the boat.
+#
+# So point fontconfig at the repo's own copies for the length of the run.
+# Not install them: a probe should not leave fonts on the machine that
+# ran it, and a workstation's own font list is not ours to edit. The
+# system faces are still found - this adds a directory, it does not
+# replace the search path.
+FONTS=$(mktemp -d)
+mkdir -p "$FONTS/fonts"
+cp boot/fonts/Poppins-*.ttf "$FONTS/fonts/" 2>/dev/null
+export XDG_DATA_HOME="$FONTS" XDG_CACHE_HOME="$FONTS/cache"
+
 # Serve the repo ourselves unless something already answers, so a probe
 # never quietly tests a stale deployed copy instead of the working tree.
 OWN=0
@@ -24,7 +40,7 @@ if ! curl -sf -o /dev/null --max-time 2 "$HELM_URL"; then
   OWN=$!
   sleep 1
 fi
-trap '[ "$OWN" != 0 ] && kill "$OWN" 2>/dev/null' EXIT
+trap '[ "$OWN" != 0 ] && kill "$OWN" 2>/dev/null; rm -rf "$FONTS"' EXIT
 
 rc=0
 for f in tests/${1:-*}.mjs; do

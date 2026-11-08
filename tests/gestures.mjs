@@ -673,18 +673,28 @@ const sh=()=>p.evaluate(()=>{ const e=$('p-sheet'), r=e.getBoundingClientRect();
           cards:[...e.querySelectorAll('.card')].filter(k=>k.offsetHeight).length,
           outside:[...new Set(out)]}; });
 let S=await sh();
-/* and the merged one is the same size as the others, which is the only
-   reason it is not out past the rim: it sits in the lower left where
-   the glass is running out, and at 256 tall its bottom corner was three
-   pixels off it. */
-t.ok(await p.evaluate(()=>{
-       const h=[...$('p-sheet').querySelectorAll('.card')].filter(k=>k.offsetHeight)
-         .map(k=>Math.round(k.getBoundingClientRect().height));
-       return Math.max(...h)-Math.min(...h) <= 4; }),
-     'every card the same height, the sound box included',
-     await p.evaluate(()=>[...$('p-sheet').querySelectorAll('.card')]
-       .filter(k=>k.offsetHeight)
-       .map(k=>Math.round(k.getBoundingClientRect().height)).join()));
+/* This was "every card the same height", which was a stand-in for the
+   line below: the lower cards sit where the glass is running out, and
+   the sound box at 256 tall had a bottom corner three pixels off the
+   rim. Equal heights stopped being an invariant when the panel went to
+   two rows of two. Rows differ by what is in them - in Poppins the
+   lower row comes out 11 px shorter than the upper, with nothing wrong
+   anywhere - and the old assertion failed on the face the panel
+   actually runs while every corner sat 27 px clear.
+
+   So measure what was being protected. A row that grows fails this
+   about 12 px before any of it reaches the black, which is the point of
+   a margin: the probe is meant to go off while there is still room to
+   fix it. */
+const corner=await p.evaluate(()=>{
+  const sg=$('stage').getBoundingClientRect();
+  return Math.round(Math.max(...[...$('p-sheet').querySelectorAll('.card')]
+    .filter(k=>k.offsetHeight).flatMap(k=>{ const q=k.getBoundingClientRect();
+      return [[q.left,q.top],[q.right,q.top],[q.left,q.bottom],[q.right,q.bottom]]
+        .map(([x,y])=>Math.hypot(x-sg.left-540,y-sg.top-540)); }))); });
+t.ok(corner<=522, 'and no card corner comes near the rim, which is what '
+     +'kept the sound box honest when it was the odd one out',
+     corner+' of 534');
 t.ok(S.cards===4, 'four cards - display, the shallow alarm, GPS averaging, '
      +'and sound, which is the horn and the glass in one box. The start is '
      +'not among them: it moved to the course sheet with the rest of the start',

@@ -664,10 +664,10 @@ second app arrives.
 ### Two cards across
 
 The panel is a **grid**, not a column. Everything it has is on the glass
-at once: DISPLAY and SHALLOW ALARM on one row, SOUNDER under them, with
-the sensor glyphs and the radios full-width above. A START card sat
-beside the sounder until the start time arrived; it is on the course
-sheet now, with the rest of the start.
+at once: DISPLAY and SHALLOW ALARM on one row, GPS AVERAGING and SOUNDER
+on the next, with the sensor glyphs and the radios full-width above. A
+START card sat beside the sounder until the start time arrived; it is on
+the course sheet now, with the rest of the start.
 
 It was a single 600 px column of sections, and it outgrew the circle.
 600 px wide on a radius of 540 is only lit between y=91 and y=989 —
@@ -686,6 +686,17 @@ read as padding rather than density. The payoff is that the brightness
 slider lands on the same centreline as the depth steppers beside it,
 which is what makes a row of two read as one row rather than two things
 that happen to be adjacent.
+
+A *row* is one height. The **rows** are not, and were never meant to be.
+There was a probe asserting that every card on the sheet matched within
+4 px, which was true while there were three of them and the odd one out
+was the sound box sitting in the lower left where the glass runs out. It
+is not an invariant: with two rows of two, each row is as tall as what is
+in it, and in Poppins the lower row comes out 11 px shorter than the
+upper with nothing wrong anywhere. The probe now measures the thing that
+assertion was standing in for — how close the worst corner of any card
+comes to the rim, which is 507 of 534 — so a row that grows is caught
+about 12 px before any of it reaches the black.
 
 The sensor row and the radios keep the **narrow** 600 px column. They
 sit at the top of the circle, where 880 px has its ends out in the
