@@ -43,8 +43,9 @@ forecast, and an optional wind-particle layer, all inside a fixed memory
 budget. It needs the network, so there is no screenshot of it here.
 
 Pulled **down** from the top over any of it is the **control panel** —
-WiFi, Bluetooth, brightness, power, the depth alarm, and the sensor row
-that says which instruments are actually feeding.
+WiFi, Bluetooth, brightness, power, the depth alarm, how long the dial
+averages GPS speed and course, and the sensor row that says which
+instruments are actually feeding.
 
 ![The control panel](docs/img/panel.png)
 
