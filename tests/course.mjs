@@ -781,13 +781,23 @@ t.ok(/ABOUT [\d.]+ NM SAILED/.test(V.foot),
      'and the foot is the club\'s sentence: about so far, sailed', V.foot);
 t.ok(/BEAT|RUN|REACHING/.test(V.foot),
      'with what kind of legs they are', V.foot);
-const kinds=await p.evaluate(()=>{
-  const w=windNow();
-  const info=prevInfo().info;
-  return {kinds:info.kinds, nm:info.nm, twd:Math.round(w.twd)}; });
+/* Worked out in a wind the probe sets, not the demo's: the demo sails
+   whatever blew on the evening it was recorded, and on 6 Nov that was a
+   westerly that makes every leg of a course laid up and down this lake a
+   reach. Held still for the sum and handed back after. */
+const inWind=deg=>p.evaluate(d=>{
+  const was=CFG.windDemo; CFG.windDemo=false;
+  put('environment.wind.directionTrue', d/DEG); put('environment.wind.speedTrue', 8/MS_TO_KT);
+  const w=windNow(), info=prevInfo().info;
+  CFG.windDemo=was;
+  return {kinds:info.kinds, nm:info.nm, twd:Math.round(w.twd)}; }, deg);
+const kinds=await inWind(22);
 t.ok(kinds.nm>0 && (kinds.kinds.beat||kinds.kinds.run),
-     'a course round this lake in this breeze is not all reaching',
+     'in a north-north-easter a course up and down this lake beats and runs',
      JSON.stringify(kinds));
+const across=await inWind(300);
+t.ok(across.nm>0 && !across.kinds.beat && !across.kinds.run,
+     'and in a westerly the same course is all reaching', JSON.stringify(across));
 
 t.head('and it stays on the water');
 /* The club carries Lake Monroe's shoreline for one job: a drawn route
