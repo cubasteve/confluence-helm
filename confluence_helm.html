@@ -1531,11 +1531,6 @@ body.night #cp-svg .wash{opacity:.55}
 .lib-sub{font-size:17px;font-weight:500;color:var(--label);letter-spacing:.06em;
   margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #lib-list .mini{width:58px;height:58px;font-size:27px;flex:none}
-#lib-list .star{color:var(--label)}
-#lib-list .star.on{color:var(--accent);border-color:var(--accent)}
-.lib-demo{font-size:17px;font-weight:600;letter-spacing:.12em;color:var(--label);
-  text-align:left;padding:8px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lib-demo b{color:var(--accent);font-weight:700}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
 .lib-head{font-size:18px;font-weight:600;letter-spacing:.18em;color:var(--label);
   text-transform:uppercase;padding:12px 0 4px}
@@ -2887,7 +2882,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div id="t-lib">
     <div class="t-title a-h1">Library</div>
     <div class="lib-list noscroll" id="lib-list"></div>
-    <div class="t-hint" id="lib-hint">TAP TO LOAD · ★ DEMO · ⤓ SHARE · ✕ DELETE</div>
+    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
   </div>
 
   <!-- Outside the library on purpose: publishing a track raises this
@@ -6050,8 +6045,6 @@ $('lib-list').addEventListener('click',e=>{
   e.stopPropagation();
   /* Asked before the row itself, so the bin does not also open the QR
      code for the file it is deleting. */
-  const st=e.target.closest('[data-star]');
-  if(st){ e.preventDefault(); return void libStar(st); }
   const rm=e.target.closest('[data-rm]');
   if(rm) return void libRemove(rm.dataset.rm, rm);
   const link=e.target.closest('.lib-link');
@@ -7702,16 +7695,13 @@ function paintBezel(){
 /* ---- the demo is a real sail ------------------------------------------
    This is what the DEMO pill on the control panel plays, and what a boat
    with no instruments shows by default.
-   A RACE out of Lake Monroe Marina, Sanford, on the evening of
-   2026-09-23: from the gun at 18:23 to the finish, 74 minutes and 5.65
-   nm, recorded by Waterspeed at about a point a second. The 42 minutes
-   before that - the sail out and whatever was happening before the
-   start, 3.4 nm of it - are cut: this plays the race and not the
-   evening. It beats up the lake on the 300s and 350s and runs back
-   down through the 120s, so the course histogram is two opposing
-   bands - which is what makes it worth playing: the bezel holds a
-   bearing down a leg and swings at a tack, the apparent wind changes
-   sides when it should, and the mark stays where it is.
+   Confluence's own first sail with this helm aboard: out of Lake Monroe
+   Marina, Sanford, at 17:05 on 2026-11-06, 70 minutes and 2.7 nm,
+   recorded by the helm itself at a fix a second. It runs up the lake on
+   350 to 010 and back down on 170 to 200, so the course histogram is two
+   opposing bands - the bezel holds a bearing down a leg and swings at a
+   turn, and the apparent wind changes sides when it should. It replaced
+   the club race of 2026-09-23, which was a Waterspeed recording.
    Before any real track there were two made-up feeds. The panel's demo
    swept the apparent wind through 280 degrees on a sine - the mark went
    right round the bezel every seventy seconds - and wandered the
@@ -7721,12 +7711,9 @@ function paintBezel(){
 
    Resampled onto an 8-second grid and delta-encoded - lat and lon in
    hundred-thousandths of a degree (1.1 m), course in whole degrees
-   wrapped to the short way round - so 554 points are 4.7 KB inside the
-   one file rather than a second file to fetch. The whole 870-point
-   encoding replayed at 9.02 nm against the raw fixes' 9.07, never more
-   than 3 m from one; the trim is a slice of those same deltas, so what
-   is left is as close to the fixes as it was. The GPX itself is not in
-   the repo: it carries a heart-rate trace.
+   wrapped to the short way round - so 530 points are 5.8 KB inside the
+   one file rather than a second file to fetch. The GPX itself is not in
+   the repo.
 
    Course comes off a THREE-STEP window rather than each 8-second leg on
    its own. One leg is 20 m at racing speed and 1 m while drifting, and
@@ -7753,10 +7740,10 @@ function paintBezel(){
    - heel follows apparent wind, depth follows distance from the marina
      (the channel is thin, the lake is not), pitch is noise. Those three
      are invented and say so. */
-const DEMO_TRACK={lat0:28.81666,lon0:-81.25975,crs0:350,step:8,
- dlat:[12,12,11,10,12,12,11,11,13,12,13,12,12,11,8,10,16,12,13,4,5,6,7,7,5,7,5,4,4,0,6,6,9,6,4,7,5,7,8,7,5,6,5,10,10,10,8,7,9,8,9,11,9,9,8,7,8,11,13,10,9,10,11,13,11,9,12,10,9,11,10,12,12,11,10,11,11,8,10,11,9,9,10,10,12,9,9,10,9,11,9,8,8,10,11,12,13,9,3,4,13,8,2,5,2,5,2,3,5,2,4,6,6,5,5,4,3,4,3,4,4,4,5,5,4,6,5,5,5,5,3,2,3,6,2,4,4,3,3,2,3,4,2,2,3,2,5,4,4,3,4,4,4,5,5,1,2,2,-1,0,0,1,2,3,1,2,3,2,1,2,4,4,6,2,3,2,2,2,1,2,0,0,0,0,1,4,4,6,4,4,3,1,2,3,2,2,-1,0,1,-2,4,1,2,3,2,3,0,-1,1,2,2,1,0,1,1,2,3,3,2,0,1,3,3,4,3,3,4,4,5,6,7,5,5,4,5,8,5,6,5,5,5,11,15,17,13,12,10,7,9,8,9,8,11,8,9,10,11,9,9,10,9,8,12,12,12,11,13,11,10,11,14,14,13,15,16,16,14,11,6,8,11,9,7,9,8,8,11,7,4,3,5,3,0,-5,-10,-13,-17,-19,-16,-19,-20,-20,-18,-19,-18,-17,-19,-20,-21,-20,-19,-18,-20,-18,-18,-18,-19,-18,-18,-18,-17,-19,-19,-18,-18,-16,-16,-18,-18,-19,-19,-19,-20,-21,-20,-22,-20,-21,-19,-18,-18,-18,-18,-17,-17,-17,-17,-16,-16,-17,-17,-19,-19,-20,-18,-20,-18,-18,-19,-19,-20,-21,-18,-20,-22,-22,-18,-15,-17,-16,-17,-17,-18,-22,-18,-19,-19,-18,-20,-22,-21,-20,-18,-18,-18,-16,-13,-9,-3,-2,0,3,3,0,1,-1,-1,-2,-5,-5,-8,-7,-2,-2,0,-2,-2,-1,-5,-5,-5,-8,-7,-9,-9,-6,1,4,6,5,7,6,5,4,5,3,1,0,4,3,3,3,4,2,4,-2,-2,-11,-9,0,2,4,4,3,2,1,4,2,1,2,4,4,5,3,4,5,4,3,3,3,3,5,1,3,1,1,1,2,0,2,4,2,2,3,5,4,3,0,-6,-14,-16,-17,-13,-15,-16,-15,-17,-16,-17,-16,-15,-16,-15,-15,-14,-15,-13,-12,-9,3,3,-2,-3,-2,-3,-2,-2,-2,-2,-2,-3,-2,-1,-2,-3,-4,-2,-5,0,-1,-1,-2,1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,4,1,0,0,0,0,0,1,-2,-1,0,0,0,-1,0,0,0],
- dlon:[-20,-20,-22,-21,-21,-22,-21,-19,-21,-19,-18,-19,-21,-24,-26,-21,-18,-19,-20,-25,-23,-21,-23,-23,-24,-23,-23,-24,-24,-24,-23,-24,-22,-24,-22,-22,-21,-20,-24,-24,-23,-22,-22,-23,-23,-25,-24,-22,-22,-23,-22,-22,-24,-24,-23,-24,-24,-23,-22,-23,-23,-22,-22,-21,-25,-24,-22,-23,-24,-23,-24,-22,-21,-22,-22,-25,-24,-25,-23,-22,-23,-23,-20,-21,-22,-23,-22,-20,-22,-21,-21,-20,-18,-14,-15,-18,-17,-21,-24,-21,-15,4,18,15,20,22,26,20,21,22,20,21,19,23,23,22,23,19,22,21,21,21,21,22,21,22,24,21,22,22,22,23,19,19,23,21,21,22,20,21,18,19,17,21,23,22,21,21,22,22,21,22,23,22,22,22,22,25,22,22,20,21,22,22,22,22,22,21,22,22,21,18,17,21,22,22,21,22,23,22,23,22,22,23,23,21,23,21,21,22,23,23,23,23,24,24,24,24,22,24,23,24,24,23,24,22,25,24,23,22,23,24,23,25,22,23,23,21,24,24,22,22,23,22,23,21,21,21,21,21,20,19,17,17,18,14,15,15,15,13,12,-3,-2,-13,-19,-20,-21,-20,-19,-22,-22,-25,-24,-24,-22,-23,-20,-21,-22,-22,-23,-23,-24,-22,-25,-25,-24,-26,-24,-23,-22,-22,-21,-18,-18,-19,-20,-25,-26,-26,-25,-25,-24,-26,-25,-26,-23,-26,-27,-25,-27,-26,-24,-21,-17,-7,1,-4,-4,-2,-1,-1,0,1,-3,-1,5,5,1,1,-1,-1,1,-3,-1,-1,-1,-1,2,1,-1,0,0,-1,-1,-1,1,2,2,2,1,0,-1,2,-1,0,-1,-1,-4,0,-1,0,0,0,1,0,3,1,0,2,1,1,3,3,5,4,5,5,6,5,1,1,0,0,2,2,1,1,1,0,0,2,3,2,2,6,3,2,2,3,0,0,-3,3,9,16,16,15,14,14,15,9,4,-1,-1,-5,-7,-5,-6,-4,1,9,12,12,10,9,10,13,14,11,9,7,6,6,10,13,13,12,10,7,9,10,8,10,12,11,11,10,12,11,12,10,10,11,12,12,12,4,-13,-20,-18,-18,-20,-18,-23,-21,-20,-21,-19,-19,-18,-20,-18,-19,-18,-18,-19,-18,-20,-19,-19,-19,-19,-19,-20,-20,-18,-19,-20,-20,-19,-19,-20,-19,-18,-19,-18,-20,-20,-13,-10,-6,-13,-9,-10,-10,-8,-6,-4,-4,-4,-1,0,0,0,-1,-5,-8,6,12,11,12,9,8,7,7,7,7,7,8,7,6,5,7,6,4,3,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,-1,-1,0,1,0,0,1,0,0,0,-1,0,0,0,1,0,0,0,0],
- dcrs:[-3,-2,0,1,1,0,1,2,2,0,-1,-4,-5,-1,6,6,3,-12,-7,-6,3,2,-2,0,-2,-1,-3,-5,2,2,8,0,-1,-2,0,3,0,1,-2,-1,-1,4,3,3,-2,-2,0,0,2,2,0,-1,-3,-2,-1,2,5,2,-1,-2,1,4,0,-2,-1,0,0,-1,0,3,1,1,-1,-2,-1,-2,0,1,1,-1,0,2,3,-2,-1,-1,0,2,-1,0,-1,4,5,4,1,-5,-10,-9,5,21,60,50,14,-3,5,-1,0,-1,-1,-1,-5,0,1,2,2,0,1,-1,0,-1,-1,-1,0,-1,0,-1,1,0,2,3,2,-4,0,-1,2,-1,1,2,-1,-1,-1,2,2,1,-3,-1,-2,2,0,0,-1,-1,-1,3,3,3,2,2,2,-2,-2,-3,0,0,0,-1,1,1,-2,-4,-5,2,2,5,0,1,1,0,2,1,2,0,-1,-4,-4,-5,0,0,3,3,2,0,-1,0,4,2,1,1,-4,0,-4,1,-1,-1,3,3,2,-2,-3,0,2,1,0,-2,-2,-2,0,3,2,-1,-3,-3,0,0,0,-1,-2,-2,-3,-1,0,2,0,-5,-2,-3,4,-1,0,-24,-31,-31,-13,-14,-9,-5,-2,-2,1,-3,2,-1,2,0,4,0,0,-2,-1,-1,1,3,2,-1,0,-1,0,-1,3,4,2,2,3,3,-2,-6,-10,-6,0,2,0,-2,-1,0,2,-1,-3,-7,-2,-1,-2,-9,-14,-20,-28,-17,-3,2,-3,-3,-2,-2,2,1,-4,-7,-1,3,5,2,0,2,0,2,-2,0,-3,-2,0,2,1,0,1,1,-2,-3,-3,-1,1,2,3,-1,1,-1,2,0,3,-1,0,-4,0,-1,-1,0,-3,0,0,1,0,-1,-1,-1,-4,-1,-2,0,-2,0,4,4,4,1,-1,-1,-1,0,1,1,1,-1,-3,-1,0,-2,-1,0,4,0,2,2,5,-3,-8,-17,-12,-10,-10,-12,-13,-9,-12,-16,0,0,-60,-10,-12,-16,-24,-38,-34,-21,-13,1,1,1,4,4,8,11,9,9,-3,-9,-19,-22,-21,-11,-8,0,1,6,3,6,6,9,-2,-4,-4,1,-2,1,-1,12,7,31,52,59,29,16,5,1,-3,-3,1,0,0,-2,3,3,4,-1,0,0,1,-1,-3,-1,0,2,-2,0,-5,0,-2,1,-1,1,2,2,0,-1,3,2,0,-6,-11,-20,-20,-18,1,0,4,-4,-2,-3,-6,-3,-2,-3,-4,-4,-1,1,6,10,-7,-36,-57,-14,12,11,5,-1,1,-3,0,-1,3,1,0,-3,3,10,7,23,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]};
+const DEMO_TRACK={lat0:28.81831,lon0:-81.26199,crs0:187,step:8,
+ dlat:[-10,-10,-6,-1,4,7,8,9,9,9,9,9,10,10,9,9,10,9,9,10,9,9,8,9,9,8,8,8,8,8,7,7,6,7,7,8,8,8,8,8,8,8,7,8,7,6,5,8,8,8,9,8,8,9,9,9,9,9,9,9,10,9,9,8,8,8,8,8,7,7,7,7,6,6,6,7,6,6,6,7,8,6,6,6,7,7,7,8,8,8,7,8,7,7,7,5,7,7,7,7,7,8,6,7,8,8,9,8,9,8,8,8,8,8,8,6,7,7,6,7,7,8,8,8,9,7,8,8,8,7,7,9,8,9,9,10,11,10,10,11,10,11,10,10,10,11,10,11,11,11,9,10,10,10,9,9,8,9,8,15,10,12,10,10,6,2,10,9,3,7,10,10,11,10,4,4,6,7,3,3,4,5,1,13,10,2,1,7,6,2,10,1,5,-1,1,9,6,2,2,0,12,4,0,2,4,3,6,-2,8,3,6,9,5,11,5,0,7,5,-2,8,8,13,8,11,11,3,12,-5,5,9,15,11,9,6,12,8,6,11,7,7,8,4,4,4,6,1,6,7,10,10,11,1,-2,-6,-4,-5,-4,0,-1,-2,-13,-9,4,6,-4,-4,-3,-6,-3,-5,-6,-5,-4,1,-7,0,-1,4,-2,-3,-11,-11,4,2,3,-6,-2,-12,-8,-10,-8,-7,1,-11,-11,3,-5,-1,-2,-2,10,3,4,-3,-2,-5,-5,0,-8,-3,-7,-2,-1,6,5,5,3,5,3,4,5,5,3,4,1,5,4,4,3,-1,1,0,3,0,7,10,5,0,-3,-6,-3,-5,-2,-5,-4,-3,-8,-9,-4,-2,0,-3,0,-7,-7,-2,-5,-9,-10,-13,-15,-10,-8,-7,-11,-4,-5,-7,-11,-5,-8,-11,-8,-10,-5,-13,-14,-15,-16,-13,-10,-11,-14,-10,-14,-17,-13,-13,-13,-14,-11,-9,-11,-8,-7,-6,-15,-8,-9,-6,-3,-7,-8,-8,-9,-11,-5,-3,-6,-11,-8,-4,-9,-7,-11,-13,-11,-17,-12,-9,-9,-10,-14,-10,-11,-13,-9,-13,-11,-11,-11,-8,-6,-5,-15,-15,-12,-12,-12,-8,-10,-12,-9,-12,-13,-8,-7,-7,-11,-12,-9,-14,-13,-18,-20,-6,-9,-10,-14,-14,-14,-9,-8,-13,-11,-9,-9,-8,-10,-12,-18,-11,-13,-12,-15,-15,-11,-11,-6,-12,-11,-9,-16,-19,-13,-10,-5,-9,-10,-8,-9,-12,-10,-10,-8,-14,-14,-7,-8,-4,-6,-8,-9,-12,-6,-9,-6,-6,-8,-11,-8,-8,-11,-12,-5,3,2,4,1,1,4,3,0,-3,-5,8,4,-3,-4],
+ dlon:[0,-3,-7,-6,-4,0,-1,-1,-1,0,0,0,2,2,3,2,4,2,3,4,6,4,3,0,-1,0,-1,0,-1,-3,-2,-3,-3,-3,-2,-1,-2,-4,-3,-3,-2,-3,-3,-3,-3,-4,-5,-3,-2,-2,-1,-2,-1,1,0,2,1,2,2,2,2,2,2,2,1,3,2,1,2,1,2,1,2,2,1,2,2,2,3,2,1,-1,0,1,3,4,5,4,3,2,1,0,1,1,2,1,3,2,3,3,3,2,1,1,2,3,2,3,2,2,3,3,4,5,6,8,7,8,6,7,5,5,4,3,3,2,0,1,0,-2,-1,0,1,3,2,3,2,4,3,4,3,4,3,3,4,3,3,4,3,1,0,1,1,0,0,-2,-2,-3,2,1,-2,-3,-2,2,4,-3,-2,-5,-5,-2,4,1,5,6,5,5,2,4,7,4,4,0,2,6,1,0,-2,6,8,6,3,6,2,-1,-3,4,3,-1,-1,1,10,12,2,4,6,3,5,7,3,2,6,1,4,4,-4,-14,-3,-7,-5,-4,-4,0,-4,1,0,-6,-2,-2,0,1,-4,-3,-1,4,2,-4,-3,-2,-3,-5,-4,-4,1,-2,1,0,-1,-2,-4,1,-4,-8,-12,-13,-5,-2,-6,-8,-4,-5,-8,-9,-5,-2,-2,-4,-3,-5,-5,-7,-5,-5,-3,1,-6,-4,-1,2,-3,-3,-7,-8,0,-6,-1,-5,-3,-7,-3,-6,-3,-6,-4,-6,-3,-10,-4,-5,-7,-6,-2,-5,1,1,-2,-1,-5,-10,-10,-3,-5,-8,-4,-4,-5,-4,-2,-4,-3,-5,-4,-5,-5,-5,-4,-2,-2,-1,-3,-2,-6,-3,-4,-6,-6,-4,-6,-3,-6,-7,-2,-2,-7,-7,-11,-6,-1,-6,-4,-6,-3,-8,-5,-6,0,0,0,-1,-3,0,-4,-5,-8,-5,-5,-2,-7,-4,-4,-5,-6,-5,3,4,-1,0,-2,1,-4,-2,0,1,1,5,4,3,4,2,3,7,7,1,6,4,9,9,7,7,8,6,3,5,8,5,8,9,8,3,6,4,-2,2,4,3,3,3,2,1,0,1,0,-1,1,0,2,2,-2,-1,-1,1,-3,-2,-2,-3,2,-1,7,1,1,2,0,0,-2,1,2,1,-3,-5,0,0,0,3,-3,-3,0,-1,4,0,-3,-2,-5,-5,-3,-6,-5,-3,-4,-3,-4,-2,0,0,-1,1,-3,0,-2,-6,4,-2,0,1,-3,-7,-2,1,0,-2,-6,-2,-4,-4,-4,1,-3,-4,-4,-5,-6,-7,0,-1,-1,-4,-4,-5,-4,1,1,-4,1,-1,-2,1,-8,-9,-7,-4,2,1,-6,-8,-5,0,0,1,0,3,-11],
+ dcrs:[12,21,39,60,28,9,-2,2,2,2,4,3,5,0,4,-2,2,0,6,2,0,-11,-9,-6,-2,2,-2,-4,-5,-5,-1,-3,3,6,2,-3,-4,-2,4,0,-1,-2,-1,-3,-7,1,6,9,4,0,2,4,4,6,0,3,0,2,0,0,0,0,-1,2,0,0,-1,-2,3,-3,3,1,1,-1,0,2,4,-1,-4,-9,-5,0,10,9,8,0,-2,-7,-5,-6,-2,0,4,1,5,0,3,0,3,-3,-4,-5,0,4,1,2,-3,1,0,2,4,4,5,8,4,4,-2,0,-5,-4,-6,-4,-5,-3,-6,-3,-5,-4,-5,0,7,8,3,3,-2,2,0,3,-1,1,-1,0,0,0,0,-1,0,-3,-6,-3,0,0,-1,-6,-4,-5,7,6,2,-7,-6,6,13,0,-11,-20,-3,-3,22,13,10,3,10,9,-1,-7,5,10,8,-23,-2,-8,-2,-4,-18,0,41,12,-9,5,-14,0,0,0,-19,5,0,0,15,20,1,16,-9,-8,-9,19,-14,1,-19,-6,2,-8,-9,-46,-20,-3,7,1,13,25,0,9,0,-5,-5,-26,25,0,11,-4,-2,11,9,-5,-14,-8,2,-3,-7,-5,10,1,20,0,0,-11,-4,6,-2,-13,-41,-39,-11,-16,-8,16,15,7,-36,-4,8,47,0,0,-58,3,5,3,0,-4,-6,0,-2,0,15,0,0,0,-15,-3,4,32,0,0,0,-35,-6,-2,-3,6,11,1,-12,13,8,31,-20,12,43,19,29,0,0,0,-60,-49,5,2,-20,8,7,46,29,14,-2,3,-2,-5,0,0,-2,-5,-9,13,9,16,-7,0,0,0,-45,-4,21,14,7,-4,-44,-42,-9,-13,9,5,14,-3,-14,-16,-5,18,19,9,7,-19,-24,-17,-18,3,5,-2,3,3,12,8,-1,-5,6,3,-5,-4,3,1,-15,-18,-10,8,10,-4,5,0,2,-7,-4,-7,-3,-1,2,2,-1,-4,-6,0,-1,3,-14,-10,5,3,4,-8,-1,3,-1,4,-2,1,-6,-2,-4,17,14,7,0,-13,4,4,3,4,3,1,1,2,0,0,-4,-2,3,4,5,-5,4,2,7,4,-12,-3,-12,0,-3,6,1,2,6,-1,-3,-5,6,16,0,-8,-8,-4,4,3,3,-1,-9,-2,4,9,5,4,4,2,-1,-1,0,-1,1,-5,-8,-5,-1,-1,4,-2,4,5,-4,0,-10,5,1,7,2,-3,-7,0,14,2,3,-4,2,-8,0,-2,6,3,6,16,-8,-11,-17,6,6,7,5,-10,-13,-1,0,3,-3,-1,13,29,45,27,0,0,0,8,-12,-23,0,0,0,0,0,0,0]};
 /* Where the shallow water is, which is a fact about the lake and not
    about this track. It was DEMO_TRACK.lat0 until the sail was
    trimmed to the race: the first fix happened to be the marina, and
@@ -7778,104 +7765,8 @@ const DEMO_WIND=[[0, 7.0, 22, 13.0], [120, 7.0, 22, 13.0]];
 const DEMO_T0_MIN=23.0833;            /* the race starts at 18:23:05 local */
 const demo=()=>demoSet(true);         /* what CFG.demo used to call by name */
 
-/* ---- a race of your own as the demo -----------------------------------
-   Any race in the library can be starred to be the demo instead of the
-   one built in above. It goes through the same treatment that one did -
-   resampled onto an 8-second grid, delta-encoded in hundred-thousandths
-   of a degree, course off a three-step window that holds under a knot
-   and is clamped to 60 degrees a step - so demoTrack() reads it exactly
-   as it reads the built-in sail, and a raw 1 Hz track's GPS wander does
-   not come back as a bezel that spins.
-
-   The encoding is kept, not the race: a starred track off the boat's
-   folder needs no fetch at boot, and 70 minutes is about 5 kB. Dockside
-   minutes at either end are trimmed - the demo starts where she moved.
-   The wind stays the built-in breeze; a GPX has no wind in it. */
-const DEMO_KEY='demoPick';
-let DEMO_PICK=null;                   /* {key, title, enc} or null for the built-in */
-const demoOk=e=>!!(e && isFinite(e.lat0) && isFinite(e.lon0) && e.step>0
-  && Array.isArray(e.dlat) && e.dlat.length>=8
-  && e.dlon && e.dlon.length===e.dlat.length && e.dcrs && e.dcrs.length===e.dlat.length);
-try{ const v=JSON.parse(localStorage.getItem(DEMO_KEY)||'null');
-     if(v && demoOk(v.enc)) DEMO_PICK=v; }catch(e){}
-const demoCur=()=>DEMO_PICK ? DEMO_PICK.enc : DEMO_TRACK;
-const demoLen=()=>{ const D=demoCur(); return D.dlat.length*D.step; };
-
-function demoEncode(pts){
-  pts=(pts||[]).filter(q=>isFinite(q.t)&&isFinite(q.la)&&isFinite(q.lo))
-               .sort((a,b)=>a.t-b.t);
-  if(pts.length<10) return null;
-  const M=111320, ck=Math.cos(pts[0].la/DEG);
-  const far=(a,b)=>Math.hypot((b.la-a.la)*M,(b.lo-a.lo)*M*ck);
-  /* Trim the dock, and only the dock. Find the first fix 20 m from
-     where she sat, then step back to the moment she left - the last fix
-     still within 6 m of the berth, which is GPS wander and no more. The
-     same from the other end. A track that starts or ends under way
-     loses nothing. */
-  const N=pts.length; let i0=0, i1=N-1;
-  while(i0<N-1 && far(pts[0],pts[i0])<20) i0++;
-  while(i0>0 && far(pts[0],pts[i0-1])>=6) i0--;
-  while(i1>0 && far(pts[N-1],pts[i1])<20) i1--;
-  while(i1<N-1 && far(pts[N-1],pts[i1+1])>=6) i1++;
-  if(i1<=i0) return null;
-  pts=pts.slice(Math.max(0,i0-1), Math.min(N,i1+2));
-  const step=8, t0=pts[0].t, t1=pts[pts.length-1].t;
-  if(t1-t0 < 120000) return null;     /* under two minutes is not a sail */
-  const G=[]; let j=0;
-  for(let t=t0; t<t1+step*1000; t+=step*1000){
-    while(j<pts.length-2 && pts[j+1].t<t) j++;
-    const tt=Math.min(t,t1);           /* the last step lands on the last fix */
-    const a=pts[j], b=pts[j+1], f=b.t>a.t ? Math.max(0,Math.min(1,(tt-a.t)/(b.t-a.t))) : 0;
-    G.push({la:Math.round((a.la+(b.la-a.la)*f)*1e5), lo:Math.round((a.lo+(b.lo-a.lo)*f)*1e5)});
-  }
-  const n=G.length; if(n<9) return null;
-  /* course at each grid point over a three-step window; held when the
-     window covers under a knot, and no more than 60 degrees a step */
-  const brg=(a,b)=>((Math.atan2((b.lo-a.lo)*ck,(b.la-a.la))*DEG)+360)%360;
-  const dist=(a,b)=>Math.hypot((b.la-a.la)*1.1132,(b.lo-a.lo)*1.1132*ck);
-  const C=[]; let prev=null;
-  for(let k=0;k<n;k++){
-    const a=G[Math.max(0,k-1)], b=G[Math.min(n-1,k+2)];
-    let c=prev;
-    if(dist(a,b) >= 0.514*step*3 || prev===null) c=brg(a,b);
-    if(prev!==null){ const d=wrap180(c-prev); c=(prev+Math.max(-60,Math.min(60,d))+360)%360; }
-    C.push(c); prev=c;
-  }
-  const enc={lat0:G[0].la/1e5, lon0:G[0].lo/1e5, crs0:Math.round(C[0]), step,
-             dlat:[], dlon:[], dcrs:[]};
-  let cr=enc.crs0;
-  for(let k=0;k<n-1;k++){
-    enc.dlat.push(G[k+1].la-G[k].la); enc.dlon.push(G[k+1].lo-G[k].lo);
-    const d=Math.round(wrap180(C[k+1]-cr)); enc.dcrs.push(d); cr=(cr+d+360)%360;
-  }
-  return enc;
-}
-/* Star a race (or un-star the one that is the demo, which puts the
-   built-in sail back). The demo restarts at the beginning of it. */
-function demoPick(key, title, pts){
-  if(DEMO_PICK && DEMO_PICK.key===key){ DEMO_PICK=null; }
-  else {
-    const enc=demoEncode(pts);
-    if(!enc){ flashTrk('too short for a demo'); return false; }
-    DEMO_PICK={key, title, enc};
-  }
-  try{ DEMO_PICK ? localStorage.setItem(DEMO_KEY, JSON.stringify(DEMO_PICK))
-                 : localStorage.removeItem(DEMO_KEY); }catch(e){}
-  demoT=0;
-  return true;
-}
-/* A file off the boat is GPX text; this is all of it the demo needs. */
-function gpxPoints(txt){
-  const out=[], re=/<trkpt\b[^>]*?lat="([-\d.]+)"[^>]*?lon="([-\d.]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
-  let m; while((m=re.exec(txt))){
-    const tm=/<time>([^<]+)<\/time>/.exec(m[3]);
-    out.push({la:+m[1], lo:+m[2], t:tm?Date.parse(tm[1]):NaN});
-  }
-  return out;
-}
-
 function demoTrack(t){               /* seconds into the sail -> a point */
-  const D=demoCur(), n=D.dlat.length+1;
+  const D=DEMO_TRACK, n=D.dlat.length+1;
   const f=t/D.step, k=Math.min(n-2, Math.floor(f)), r=Math.min(1, f-k);
   /* Walked from the start each call rather than kept as running sums,
      which is 552 adds at 8 Hz - nothing - and means the loop cannot
@@ -7983,7 +7874,7 @@ function demoCycle(){
 function windDemoTick(){
   if(!CFG.windDemo) return;
   bootReady();                        /* demo mode is a boat, for these purposes */
-  demoT=(demoT+0.12*DEMO_SPEED*RACE_RATE)%demoLen();
+  demoT=(demoT+0.12*DEMO_SPEED*RACE_RATE)%(DEMO_TRACK.dlat.length*DEMO_TRACK.step);
   const P=demoTrack(demoT), W=demoWind(demoT);
   /* The GPS group defers to a real fix, path by path: a boat with a GPS
      and no vane keeps its own position and course and gets only the wind
@@ -11594,24 +11485,6 @@ $('course-clr') .addEventListener('click',()=>{ COURSE={marks:[],next:0,side:[]}
 /* The sheet's own DONE is gone: the cross at the foot closes it, and
    the app on the next tap. See the #app-close listener. */
 function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
-/* The star: filled on the race the demo plays, hollow on the rest. */
-const starBtn=(key,title)=>{ const on=!!(DEMO_PICK && DEMO_PICK.key===key);
-  return `<button class="mini star${on?' on':''}" data-star="${esc(key)}"`
-    +` data-stitle="${esc(title)}" aria-pressed="${on}"`
-    +` aria-label="${on?'The demo - tap for the built-in':'Make this the demo'}">${on?'★':'☆'}</button>`; };
-/* Star a row: a race saved here is already points; a file off the boat
-   is fetched and read. Either way the demo restarts on it. */
-function libStar(btn){
-  const key=btn.dataset.star, title=btn.dataset.stitle;
-  btn.textContent='…';
-  const done=pts=>{ demoPick(key, title, pts); renderLib(); };
-  if(DEMO_PICK && DEMO_PICK.key===key) return done(null);
-  if(key.indexOf('db:')===0)
-    return void dbGet(key.slice(3)).then(r=>done(r?r.pts:null)).catch(()=>renderLib());
-  fetchT('gpx/'+encodeURIComponent(key.slice(5)), 15000)
-    .then(r=>r.ok?r.text():'').then(txt=>done(gpxPoints(txt)))
-    .catch(()=>{ flashTrk('could not read that file'); renderLib(); });
-}
 /* Two lists, and the difference matters.
 
    SAVED HERE is IndexedDB: per origin and per device, so what the kiosk
@@ -11650,7 +11523,6 @@ function renderLib(){
           +`${d.toLocaleDateString()} ${String(d.getHours()).padStart(2,'0')}:`
           +`${String(d.getMinutes()).padStart(2,'0')}</div>
            </div>
-           ${starBtn('file:'+f.name, nice)}
            <span class="mini">⤓</span>
            <button class="mini bin" data-rm="${esc(f.name)}">✕</button></div>`;
       }).join('');
@@ -11666,16 +11538,11 @@ function renderLib(){
              <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
           +` · MAX ${r.max.toFixed(1)} KT</div>
            </div>
-           ${starBtn('db:'+r.id, r.name)}
            <button class="mini" data-exp="${r.id}">⤓</button>
            <button class="mini" data-del="${r.id}">✕</button>
          </div>`).join('');
     }
-    /* Which sail the demo plays, said once at the top so the built-in one
-       is not a mystery when nothing is starred. */
-    const demoLine=`<div class="lib-demo">DEMO · <b>${DEMO_PICK ? esc(DEMO_PICK.title)
-      : 'BUILT-IN RACE'}</b></div>`;
-    box.innerHTML = o ? demoLine+o : '<div class="lib-empty">NO SAVED RACES</div>';
+    box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
     scrollFit(box); drumPaint(box); rimDraw(box);
   });
 }
