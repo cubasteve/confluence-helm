@@ -76,6 +76,38 @@ An adapter is detected as a hotspot when its profile says
 `802-11-wireless.mode: ap` **or** `ipv4.method: shared`. Images differ on
 which they set, so either counts.
 
+### The hotspot comes up by itself
+
+The boat's own network is on the **onboard** radio, and it has to be up
+before anything else aboard can do anything — including reaching the
+panel to turn it on. It was not coming up on its own, and the reason was
+two settings that had simply never been set.
+
+| | |
+|---|---|
+| `connection.autoconnect` | what NetworkManager reads at boot. A profile made with `nmcli device wifi hotspot` does not have it, and nor does one that has been through a `device disconnect`. Without it the hotspot came up only when somebody tapped it up on the panel — which is reached over the hotspot. |
+| `802-11-wireless.mac-address` | **which radio** it comes up on. Left open, NM is free to take the dongle, whose whole job is the opposite one: reaching out to a marina. Pinned by MAC and not by `wlan0`, because those swap between boots — the same reason the tile order is keyed off the bus. |
+
+`hotspot_pin()` sets both at netd startup and says what it did on the
+`[netd] hotspot:` line. It is deliberately narrow: it never creates a
+hotspot and never decides which profile is one. It acts only on a profile
+`con_is_ap()` already recognises, refuses outright if there is more than
+one, and will not move a pin somebody else has set — it says so and
+leaves it.
+
+### An adapter NetworkManager has not adopted is still an adapter
+
+A USB dongle that enumerates *after* NetworkManager has started is left
+`unmanaged`, which is most boots. Those used to be filtered out of the
+device list, so the panel showed nothing at all — and "the radio doesn't
+show up" was the whole of what there was to go on, for a dongle that was
+plugged in, enumerated, and one command away from working.
+
+They are on the list now, reading as down. The switch's first act is
+`device set <dev> managed yes`, so turning it on is what adopts it. The
+command that fixes it was always the one behind the switch you could not
+see.
+
 ### The switch turns the radio on; it does not join anything
 
 The per-adapter switch is `device disconnect` / `device connect` rather

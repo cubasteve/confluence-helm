@@ -297,12 +297,22 @@ def wifi_devices():
 
     devs = []
     for d in raw:
-        if d['type'] != 'wifi' or 'unmanaged' in d['state']:
+        if d['type'] != 'wifi':
             continue
-        ap = con_is_ap(d['con']) if d['con'] else False
+        # An unmanaged adapter used to be dropped here, which is why a
+        # dongle sometimes "did not show up at all": it was plugged in and
+        # enumerated, NetworkManager had simply not taken it on - which is
+        # what happens to one that appears after NM has started. Hiding it
+        # left nothing on the panel to tap, and the one command that adopts
+        # it is the one behind the switch you could not see. Show it, down,
+        # and let the switch take it over.
+        unmanaged = 'unmanaged' in d['state']
+        ap = con_is_ap(d['con']) if d['con'] and not unmanaged else False
         row = {'dev': d['dev'], 'bus': dev_bus(d['dev']),
-               'up': '(connected)' in d['state'],
-               'ssid': d['con'], 'ap': ap, 'ip': d['ip'], 'signal': 0,
+               'up': '(connected)' in d['state'] and not unmanaged,
+               'managed': not unmanaged,
+               'ssid': '' if unmanaged else d['con'], 'ap': ap,
+               'ip': '' if unmanaged else d['ip'], 'signal': 0,
                'state': d['state'].split('(')[-1].rstrip(')')}
         # Signal is meaningless for an adapter that is itself the AP, and
         # costs a scan to ask for, so only clients get asked.
@@ -313,6 +323,80 @@ def wifi_devices():
     # carry no words to tell them apart.
     devs.sort(key=lambda r: (r['bus'] == 'usb', r['dev']))
     return devs
+
+
+def dev_mac(dev):
+    """An adapter's MAC, which is the only name it keeps.
+
+    wlan0 and wlan1 can swap between boots - the panel's own tile order
+    is keyed off the bus for exactly that reason - so anything that has
+    to mean THIS radio tomorrow has to say it this way."""
+    try:
+        with open('%s/class/net/%s/address' % (SYSFS, dev)) as f:
+            return f.read().strip().upper()
+    except OSError:
+        return ''
+
+
+def hotspot_pin():
+    """Make the boat's own hotspot come up by itself, on the onboard radio.
+
+    Two settings, and neither is clever - they were simply never set.
+
+    `connection.autoconnect` is what NetworkManager reads at boot, and a
+    profile made with `nmcli device wifi hotspot` does not have it. Nor
+    does one that has been through a `device disconnect`. So the hotspot
+    everything aboard is joined to came up only when somebody tapped it
+    up on the panel, which is a poor arrangement on a boat where the
+    panel is reached over the hotspot.
+
+    `802-11-wireless.mac-address` is which radio it comes up ON. Left
+    open, NM is free to take the dongle - whose whole job is the opposite
+    one, reaching out to a marina. Pinned by MAC and not by wlan0,
+    because those swap.
+
+    Deliberately narrow. It never creates a hotspot and never decides
+    which profile is one: it acts only on a profile con_is_ap() already
+    recognises, refuses if there is more than one, and will not move a
+    pin that somebody has already set. Returns what it did, for the
+    startup line.
+    """
+    onboard = [d for d in wifi_devices() if d['bus'] == 'onboard']
+    if not onboard:
+        return 'no onboard radio'
+    mac = dev_mac(onboard[0]['dev'])
+    aps = [(n, u) for n, u in wifi_conns() if con_is_ap(u)]
+    if not aps:
+        return 'no hotspot profile'
+    if len(aps) > 1:
+        return 'more than one hotspot profile - left alone'
+    name, uuid = aps[0]
+    rc, out, _ = run(['nmcli', '-t', '-f',
+                      'connection.autoconnect,802-11-wireless.mac-address',
+                      'connection', 'show', uuid], 8)
+    auto, pinned = '', ''
+    for line in out.splitlines():
+        f = terse(line)
+        if len(f) >= 2:
+            if f[0] == 'connection.autoconnect':
+                auto = f[1]
+            elif f[0] == '802-11-wireless.mac-address':
+                pinned = '' if f[1] in ('', '--') else f[1].upper()
+    argv = []
+    if auto != 'yes':
+        argv += ['connection.autoconnect', 'yes',
+                 'connection.autoconnect-priority', '100']
+    if not pinned and mac:
+        argv += ['802-11-wireless.mac-address', mac]
+    if not argv:
+        return '%s already comes up on its own' % name
+    rc, _, err = run(['nmcli', 'connection', 'modify', 'uuid', uuid] + argv, 15)
+    if rc:
+        return 'could not set up %s: %s' % (name, err[:80])
+    if pinned and pinned != mac:
+        return ('%s now autoconnects, but it is pinned to %s and the onboard '
+                'radio is %s - left as found' % (name, pinned, mac))
+    return '%s comes up on its own now, on %s' % (name, mac or onboard[0]['dev'])
 
 
 def wifi_status():
@@ -2363,6 +2447,8 @@ if __name__ == '__main__':
           % ('yes' if cap['nm'] else 'NO', 'yes' if cap['bt'] else 'NO'), flush=True)
     if not (cap['nm'] or cap['bt']):
         print('[netd] neither stack is usable - the panel will hide its tiles', flush=True)
+    if cap['nm']:
+        print('[netd] hotspot: %s' % hotspot_pin(), flush=True)
     print('[netd] browser control: %s' % (CHROME or 'NO - chromium not found'), flush=True)
     _b = backlight_status()
     print('[netd] backlight: %s' % ('%s at %d%%' % (_b.get('dev'), _b.get('pct', 0))
