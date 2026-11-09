@@ -1536,6 +1536,13 @@ body.night #cp-svg .wash{opacity:.55}
 .lib-sub{font-size:17px;font-weight:500;color:var(--label);letter-spacing:.06em;
   margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #lib-list .mini{width:58px;height:58px;font-size:27px;flex:none}
+/* The bin is wider than it is tall, and only on a boat row, because a
+   boat row IS the link: every pixel the bin does not cover opens a QR
+   code, with no dead ground between them. Halving the row took the bin
+   from 81 px of width to 55, and all 26 of those pixels became "share
+   this file" - a third easier to miss a delete into something that is
+   not one. The height follows the row; the width does not have to. */
+#lib-list .lib-link .bin{width:80px}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
 .lib-head{font-size:18px;font-weight:600;letter-spacing:.18em;color:var(--label);
   text-transform:uppercase;padding:12px 0 4px}
@@ -2913,7 +2920,10 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div id="t-lib">
     <div class="t-title a-h1">Library</div>
     <div class="lib-list noscroll" id="lib-list"></div>
-    <div class="t-hint" id="lib-hint">TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE</div>
+    <!-- What a tap does is on each section's heading now, because the
+         two sections do opposite things. This says what the buttons do,
+         which is the same in both. -->
+    <div class="t-hint" id="lib-hint">⤓ SHARE · ✕ DELETE</div>
   </div>
 
   <!-- Outside the library on purpose: publishing a track raises this
@@ -11697,8 +11707,16 @@ function renderLib(){
       .then(r=>r.ok?r.json():[]).catch(()=>[])
   ]).then(([rows,files])=>{
     let o='';
+    /* The heading carries the VERB, because the two sections do opposite
+       things to an identical-looking row and one hint at the foot of the
+       page cannot speak for both. A file on the boat is named
+       Confluence-2026-09-23-1740 and a race saved here is named for its
+       date too; tapping the first raises a QR code for a phone to shoot,
+       tapping the second loads the race onto the chart. Under a single
+       line reading TAP A RACE TO LOAD, the first of those is simply a
+       lie. */
     if(files&&files.length){
-      o+='<div class="lib-head">On the boat</div>';
+      o+='<div class="lib-head">On the boat · tap for a QR</div>';
       o+=files.map(f=>{
         const d=new Date((f.at||0)*1000);
         const nice=esc(f.name.replace(/\.gpx$/,''));
@@ -11718,10 +11736,18 @@ function renderLib(){
            <button class="mini bin" data-rm="${esc(f.name)}">✕</button></div>`;
       }).join('');
     }
+    /* This heading goes down whether or not there is anything under it.
+       It used to be emitted only when there WAS, so a boat with files in
+       its gpx folder and nothing saved on the panel got a library that
+       was all QR rows, with no heading to say the saved ones were a
+       separate thing and no line to say there were none - under a hint
+       that promised a tap would load a race. Every tap on that screen
+       gave a QR code, and the screen never said why. */
+    o+='<div class="lib-head">Saved here · tap to load</div>';
     if(rows===null) o+='<div class="lib-empty">LIBRARY UNAVAILABLE</div>';
-    else if(rows.length){
+    else if(!rows.length) o+='<div class="lib-empty">NO SAVED RACES</div>';
+    else {
       rows.sort((a,b)=>b.t-a.t);
-      o+='<div class="lib-head">Saved here</div>';
       o+=rows.map(r=>
         `<div class="lib-row" data-id="${r.id}">
            <div class="lib-main">
@@ -11733,7 +11759,7 @@ function renderLib(){
            <button class="mini" data-del="${r.id}">✕</button>
          </div>`).join('');
     }
-    box.innerHTML = o || '<div class="lib-empty">NO SAVED RACES</div>';
+    box.innerHTML = o;          /* never empty now - the heading is always in it */
     scrollFit(box); drumPaint(box); rimDraw(box);
   });
 }

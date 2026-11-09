@@ -92,12 +92,57 @@ by hand, would become `Race-one.gpx` and could never be deleted at all.
 That was not a theory: the first version did exactly that and its own
 test caught it refusing a file sitting right there.
 
+### The heading carries the verb
+
+Both sections are rows of dated race names — a boat file is
+`Confluence-2026-09-23-1740` and a race saved here is named for its date
+too — and they look identical. A tap does opposite things to them: a QR
+code for a phone to shoot, or the race onto the chart. For a long time
+one line at the foot of the page spoke for both:
+
+> `TAP A RACE TO LOAD · ⤓ SHARE · ✕ DELETE`
+
+Which was a lie about half the list, and about **all** of it in the one
+state that matters: a boat whose `gpx` folder has files and whose panel
+has saved nothing got a library that was *entirely* boat rows. The
+`Saved here` heading was emitted only when there was something under it,
+and the `NO SAVED RACES` line only when the whole list was empty, which
+that is not. So every row on screen gave a QR code, under a hint saying
+a tap would load a race, with nothing anywhere to say the saved ones
+were a separate thing or that there were none.
+
+Both headings go down now whether or not there is anything under them,
+and each says what a tap does to the rows beneath it:
+
+| | |
+|---|---|
+| `ON THE BOAT · TAP FOR A QR` | the `gpx` folder AvNav serves |
+| `SAVED HERE · TAP TO LOAD` | IndexedDB, this device, and `NO SAVED RACES` when it is empty |
+
+The foot of the page is down to `⤓ SHARE · ✕ DELETE`, which is the one
+thing that *is* the same in both.
+
 ### The rows are half the height
 
 A race was a 112 px row with three 86 px circles, so four filled the
 list. It is 72 px now, with 58 px buttons - still a wet thumb's target -
 the name and the figures on two smaller lines, and a long name ending in
 an ellipsis rather than pushing the buttons off. About twice as many fit.
+
+
+**The bin had to get wider when the row got shorter.** A boat row *is*
+the link, so every pixel the bin does not cover opens a QR code, with no
+dead ground between them. Halving the row took the bin from 81 px of
+width to 55, and all 26 of those became "share this file" — about a
+third easier to miss a delete into something that is not one. The height
+follows the row; the width does not have to, so `#lib-list .lib-link
+.bin` is 80 px wide and the margin of error is back.
+
+Measured on the glass it is shorter than its 58 px of layout — about
+53 — and should be: the library is a drum, so `drumPaint` tilts every
+row about the X axis and the projection loses what a `rotateX` costs,
+while leaving the width alone. That is the number a thumb actually
+meets, and the argument for the width being where the room came from.
 
 ### Two-word names break at the space
 

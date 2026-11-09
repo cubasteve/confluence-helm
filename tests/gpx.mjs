@@ -116,8 +116,20 @@ const lib=await p.evaluate(()=>({
                    sub:r.querySelector('.lib-sub').textContent})),
   here:[...document.querySelectorAll('#lib-list .lib-row[data-id]')]
          .map(r=>r.querySelector('.lib-name').textContent)}));
-t.ok(lib.heads.join('|')==='On the boat|Saved here',
-     'the boat first, then this device', lib.heads.join('|'));
+/* The heading carries the verb. Two sections of identically-shaped
+   rows, named alike - a boat file is Confluence-2026-09-23-1740 and a
+   saved race is named for its date too - and a tap does opposite things
+   to them: a QR code for a phone to shoot, or the race onto the chart.
+   One hint at the foot of the page said TAP A RACE TO LOAD and spoke
+   for both, which made it a lie about half the list. */
+t.ok(lib.heads.join('|')==='On the boat · tap for a QR|Saved here · tap to load',
+     'each heading says what a tap does to the rows under it',
+     lib.heads.join('|'));
+t.ok(lib.heads.every(h=>/tap/i.test(h)), 'neither of them leaves it unsaid');
+t.ok(!/TAP A RACE TO LOAD/i.test(
+       await p.evaluate(()=>$('lib-hint').textContent)),
+     'and the foot of the page no longer promises it for the whole list',
+     await p.evaluate(()=>$('lib-hint').textContent));
 t.ok(lib.boat.length===2, "both of the boat's files", String(lib.boat.length));
 t.ok(lib.boat[0].href==='gpx/Confluence-2026-09-23-1740.gpx',
      'each a link a phone can just tap', lib.boat[0].href);
@@ -144,6 +156,11 @@ t.ok(!!del && del.body.name==='Confluence-2026-09-23-1740.gpx',
 
 t.head('loading a saved race shows it without touching the live track');
 await p.click('#lib-list .lib-row[data-id]'); await p.waitForTimeout(800);
+/* The inverse was never asserted, which is how a library where every
+   tap raised a QR code shipped green. Checking that the race loaded
+   does not check that the QR sheet stayed down. */
+t.ok(!await p.evaluate(()=>$('qr-sheet').classList.contains('on')),
+     'and no QR code comes up - that is what the OTHER section does');
 t.ok(await p.evaluate(()=>VIEWTRK&&VIEWTRK.length===90), 'the saved one is what is drawn');
 t.ok(await p.evaluate(()=>TRK.length===90), 'and the live track is untouched');
 t.ok(!await p.evaluate(()=>$('t-lib').classList.contains('on')), 'the library closes behind it');
@@ -157,6 +174,60 @@ t.ok(!await p.evaluate(()=>!!document.getElementById('t-title')),
 await p.click('#trk-clr'); await p.waitForTimeout(500);
 t.ok(await p.evaluate(()=>VIEWTRK===null && TRK.length===90),
      'CLEAR on a loaded race just puts it back down again');
+
+t.head('a library with nothing saved in it says so');
+/* The shape the bug came in. A boat whose gpx folder has files and whose
+   panel has saved nothing used to get a library that was ALL boat rows:
+   no second heading, no line saying there were none, and a hint
+   promising a tap would load a race. Every tap on that screen gave a QR
+   code and nothing on it said why. The old fallback only fired when the
+   whole list was empty, which this is not. */
+await p.click('#trk-lib'); await p.waitForTimeout(600);
+await p.evaluate(async ()=>{ for(const r of await dbAll()) await dbDel(r.id);
+                             renderLib(); });
+await p.waitForTimeout(900);
+const bare=await p.evaluate(()=>({
+  heads:[...document.querySelectorAll('#lib-list .lib-head')].map(h=>h.textContent),
+  empty:[...document.querySelectorAll('#lib-list .lib-empty')].map(e=>e.textContent),
+  boat:document.querySelectorAll('#lib-list .lib-link').length,
+  saved:document.querySelectorAll('#lib-list .lib-row[data-id]').length}));
+t.ok(bare.boat===2 && bare.saved===0, 'the boat still has its files, this device none',
+     bare.boat+' boat / '+bare.saved+' saved');
+t.ok(bare.heads.length===2, 'both headings are still down',
+     bare.heads.join('|'));
+await p.locator('#stage').screenshot({path:(process.env.HELM_SHOTS||'/tmp/')+'lib-empty.png'});
+t.ok(bare.empty.join()==='NO SAVED RACES',
+     'and the empty one says so, under its own heading, rather than '
+     +'leaving the boat\'s files to look like the whole library',
+     JSON.stringify(bare.empty));
+
+t.head('the bin on a boat row keeps room to be missed');
+/* A boat row IS the link, so every pixel the bin does not cover opens a
+   QR code with no dead ground between them. Halving the row took the bin
+   from 81 px wide to 55, and all 26 of those became "share this file" -
+   a third easier to miss a delete into something that is not one. The
+   height follows the row; the width does not have to. */
+const bin=await p.evaluate(()=>{
+  const b=document.querySelector('#lib-list .lib-link .bin');
+  const r=document.querySelector('#lib-list .lib-link');
+  const q=b.getBoundingClientRect(), w=r.getBoundingClientRect();
+  return {w:Math.round(q.width), lay:b.offsetHeight, drawn:Math.round(q.height),
+          inside:q.right<=w.right+1 && q.left>=w.left};
+});
+t.ok(bin.w>=76, 'wide enough that a thumb aimed at it lands on it',
+     bin.w+' px wide');
+t.ok(bin.lay===58, 'and as tall as the row allows',
+     bin.lay+' px of layout');
+/* Measured on the glass it is shorter than that, and should be: the
+   library is a drum, so drumPaint tilts every row about the X axis and
+   the projection loses the height a rotateX costs - about cos 25deg of
+   it - while leaving the width alone. That is the number a thumb
+   actually meets, which is the argument for the width being the thing
+   that was given back. */
+t.ok(bin.drawn<bin.lay && bin.drawn>=48,
+     'standing shorter once the drum has tilted it, which is why the '
+     +'width is where the room came from', bin.drawn+' px drawn');
+t.ok(bin.inside, 'without pushing out of the row');
 
 t.head('the chart is a sideways circle, and a wider one than the round was');
 /* A round 456 threw away the widest part of round glass: at the height of
