@@ -399,11 +399,45 @@ def hotspot_pin():
     return '%s comes up on its own now, on %s' % (name, mac or onboard[0]['dev'])
 
 
+def kernel_wifi():
+    """The wifi adapters the KERNEL has.
+
+    Not the same list as the one NetworkManager will talk about, and the
+    difference is the whole point. An adapter NM has not adopted still
+    appears in `device show` as unmanaged, and the panel lists those. One
+    the kernel does not have appears nowhere, and no amount of nmcli will
+    conjure it - that is a cable, a power budget or a driver, and it is
+    not a thing the panel can fix.
+
+    Those two look identical from the helm: the row is missing either
+    way. So ask the kernel directly and let the difference be reportable.
+    A netdev is wifi if it has a phy80211 link or a wireless directory;
+    cfg80211 drivers give the first, a few older ones only the second."""
+    base = '%s/class/net' % SYSFS
+    out = []
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return out
+    for n in names:
+        d = os.path.join(base, n)
+        if os.path.exists(os.path.join(d, 'phy80211')) \
+           or os.path.isdir(os.path.join(d, 'wireless')):
+            out.append(n)
+    return out
+
+
 def wifi_status():
     if not capabilities()['nm']:
         return {'available': False}
     devs = wifi_devices()
-    return {'available': bool(devs), 'radio': wifi_powered(), 'devices': devs}
+    seen = {d['dev'] for d in devs}
+    # Adapters the kernel has and NetworkManager is not reporting. Normally
+    # empty. When it is not, "the radio did not show up" has an answer that
+    # is not a shrug: the hardware is there and the stack above it is what
+    # lost it.
+    return {'available': bool(devs), 'radio': wifi_powered(), 'devices': devs,
+            'unseen': [n for n in kernel_wifi() if n not in seen]}
 
 
 def find_dev(dev):
@@ -2448,6 +2482,12 @@ if __name__ == '__main__':
     if not (cap['nm'] or cap['bt']):
         print('[netd] neither stack is usable - the panel will hide its tiles', flush=True)
     if cap['nm']:
+        _k, _n = kernel_wifi(), [d['dev'] for d in wifi_devices()]
+        _lost = [x for x in _k if x not in _n]
+        print('[netd] wifi adapters: kernel has %s, NetworkManager reports %s%s'
+              % (', '.join(_k) or 'none', ', '.join(_n) or 'none',
+                 '   NOT REPORTED: ' + ', '.join(_lost) if _lost else ''),
+              flush=True)
         print('[netd] hotspot: %s' % hotspot_pin(), flush=True)
     print('[netd] browser control: %s' % (CHROME or 'NO - chromium not found'), flush=True)
     _b = backlight_status()

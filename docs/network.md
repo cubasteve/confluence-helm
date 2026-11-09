@@ -95,6 +95,36 @@ hotspot and never decides which profile is one. It acts only on a profile
 one, and will not move a pin somebody else has set — it says so and
 leaves it.
 
+### Three ways a radio goes missing, and telling them apart
+
+"The radio didn't show up" looks the same from the helm whichever of
+these it is, and they have nothing in common but the symptom:
+
+| what is true | what fixes it |
+|---|---|
+| the kernel doesn't have it | a cable, a power budget, a driver — nothing above this line can help |
+| the kernel has it, NM doesn't report it | the stack above the hardware |
+| NM has it, unmanaged | one command, and the panel's switch **is** that command |
+
+`kernel_wifi()` reads `/sys/class/net` directly — a netdev is wifi if it
+has a `phy80211` link or a `wireless` directory — and `wifi_status()`
+returns the difference as **`unseen`**: adapters the kernel has that NM
+is not reporting. Normally empty. When it isn't, the missing row has an
+answer instead of a shrug. netd also prints both lists at startup:
+
+```
+[netd] wifi adapters: kernel has wlan0, wlan1, NetworkManager reports wlan0   NOT REPORTED: wlan1
+```
+
+**`wifi-report.sh`** puts all three rows of that table on one screen,
+plus the USB lines from this boot, NetworkManager's last ten minutes and
+the power-saving state of each adapter. Read-only, changes nothing, and
+meant to be run over SSH from a phone on the hotspot:
+
+```
+bash ~/helm/wifi-report.sh
+```
+
 ### An adapter NetworkManager has not adopted is still an adapter
 
 A USB dongle that enumerates *after* NetworkManager has started is left

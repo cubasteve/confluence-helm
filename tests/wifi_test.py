@@ -121,8 +121,11 @@ def rig(profiles, mangle=False, connectable=False, devices=None):
     LOG = os.path.join(d, 'calls')
     open(LOG, 'w').close()
     spec = os.path.join(d, 'spec.json')
+    # A device marked `hidden` exists in /sys but nmcli never mentions it -
+    # which is what a dongle the kernel has and NM has lost looks like.
     with open(spec, 'w') as f:
-        json.dump({'profiles': profiles, 'devices': devices,
+        json.dump({'profiles': profiles,
+                   'devices': [x for x in devices if not x.get('hidden')],
                    'mangle': mangle, 'connectable': connectable,
                    'no_target': NM_NO_TARGET}, f)
     nm = os.path.join(d, 'nmcli')
@@ -136,6 +139,9 @@ def rig(profiles, mangle=False, connectable=False, devices=None):
         os.makedirs(n)
         with open(os.path.join(n, 'address'), 'w') as f:
             f.write(dv['mac'] + '\n')
+        # What makes a netdev wifi to the kernel, and so to kernel_wifi().
+        if dv.get('phy', True):
+            os.makedirs(os.path.join(n, 'wireless'))
         bus = os.path.join(d, 'sys', 'bus',
                            'usb' if dv['bus'] == 'usb' else 'sdio', dv['dev'])
         os.makedirs(bus)
@@ -393,6 +399,44 @@ class Hotspot(unittest.TestCase):
         self.assertEqual(len(mods()), 1, mods())
         self.assertIn('ap-uuid-0001', mods()[0])
         self.assertNotIn(UU, mods()[0])
+
+
+class Kernel(unittest.TestCase):
+    """Telling "not plugged in" from "plugged in and lost".
+
+    From the helm those are the same thing: the row is missing. One is a
+    cable or a power budget, the other is the stack above it, and nothing
+    on the panel said which."""
+
+    LOST = {'dev': 'wlan1', 'bus': 'usb', 'mac': MAC_USB,
+            'state': '30 (disconnected)', 'con': '', 'hidden': True}
+
+    def test_nothing_missing_is_the_normal_case(self):
+        with rig([], devices=[dict(ONBOARD)]) as netd:
+            self.assertEqual(netd.wifi_status()['unseen'], [])
+
+    def test_an_adapter_nm_never_mentions_is_named(self):
+        with rig([], devices=[dict(ONBOARD), dict(self.LOST)]) as netd:
+            st = netd.wifi_status()
+        self.assertEqual([d['dev'] for d in st['devices']], ['wlan0'])
+        self.assertEqual(st['unseen'], ['wlan1'])
+
+    def test_an_unmanaged_one_is_not_called_missing(self):
+        """It is on the list, reading as down. That is a different
+        problem with a different answer, and conflating them would undo
+        the point of this."""
+        un = dict(self.LOST, hidden=False, state='10 (unmanaged)')
+        with rig([], devices=[dict(ONBOARD), un]) as netd:
+            st = netd.wifi_status()
+        self.assertEqual(st['unseen'], [])
+        self.assertEqual([d['dev'] for d in st['devices']], ['wlan0', 'wlan1'])
+
+    def test_a_netdev_that_is_not_wifi_is_not_counted(self):
+        eth = {'dev': 'eth0', 'bus': 'onboard', 'mac': 'AA:BB:CC:00:00:09',
+               'state': '100 (connected)', 'con': '', 'hidden': True,
+               'phy': False}
+        with rig([], devices=[dict(ONBOARD), eth]) as netd:
+            self.assertEqual(netd.wifi_status()['unseen'], [])
 
 
 if __name__ == '__main__':
