@@ -25,13 +25,19 @@ UU = '11111111-2222-3333-4444-555555555555'
 LOG = None
 
 
+NM_NO_TARGET = ('Error: Failed to add/activate new connection: '
+                '802-11-wireless setting is required if no AP path was given.')
+
+
 @contextlib.contextmanager
-def rig(profiles, mangle=False):
+def rig(profiles, mangle=False, connectable=False):
     """netd with a pretend nmcli on the PATH.
 
     `profiles` is [(name, uuid)]. With mangle, the fake prints names the
     way nmcli does under a locale it cannot spell them in - which is the
-    bug, reproduced rather than described."""
+    bug, reproduced rather than described. Without `connectable`,
+    `device connect` fails the way NetworkManager really does when there
+    is nothing saved and in range to activate."""
     global LOG
     d = tempfile.mkdtemp(prefix='helm-wifi-test-')
     LOG = os.path.join(d, 'calls')
@@ -56,6 +62,18 @@ def rig(profiles, mangle=False):
         '  *"connection delete id "*)\n'
         '    echo "Error: unknown connection" >&2; exit 10;;\n'
         '  *"-f STATE general"*) echo "connected"; exit 0;;\n'
+        '  *"-f WIFI radio"*) echo "enabled"; exit 0;;\n'
+        '  *"device show"*)\n'
+        '    printf "GENERAL.DEVICE:wlan0\\n"\n'
+        '    printf "GENERAL.TYPE:wifi\\n"\n'
+        '    printf "GENERAL.STATE:30 (disconnected)\\n"\n'
+        '    printf "GENERAL.CONNECTION:--\\n"\n'
+        '    exit 0;;\n'
+        '  *"device set "*) exit 0;;\n'
+        '  *"device connect "*)\n'
+        + ('    exit 0;;\n' if connectable else
+           '    echo "' + NM_NO_TARGET + '" >&2; exit 4;;\n') +
+        '  *"device disconnect "*) exit 0;;\n'
         'esac\n'
         'exit 0\n')
     p = os.path.join(d, 'nmcli')
@@ -158,6 +176,55 @@ class Forget(unittest.TestCase):
         self.assertFalse(r['ok'])
         self.assertEqual(r['error'], 'NOT SAVED')
         self.assertEqual(deletes(), [])
+
+
+class Radio(unittest.TestCase):
+    """The switch on the wifi row, which was not switching the radio on.
+
+    `nmcli device connect` asks NetworkManager to ACTIVATE something on
+    an adapter. With nothing saved and in range there is nothing to pick,
+    and it fails - so tapping ON reported failure and the adapter looked
+    dead when it was only idle. Worse, `device disconnect` leaves the
+    device with autoconnect off and nothing lifts that on its own, so an
+    adapter dropped once stayed down."""
+
+    def test_on_does_not_fail_when_there_is_nothing_to_join(self):
+        with rig([]) as netd:
+            r = netd.wifi_power('wlan0', True)
+        self.assertTrue(r['ok'], r)
+        self.assertEqual(r['error'], '')
+
+    def test_on_hands_the_device_back_to_autoconnect(self):
+        """The half that was missing, and the half that actually turns it
+        back on. It has to happen before the connect is attempted."""
+        with rig([]) as netd:
+            netd.wifi_power('wlan0', True)
+        argvs = [c[1] for c in calls()]
+        sets = [i for i, a in enumerate(argvs) if 'device set wlan0' in a]
+        cons = [i for i, a in enumerate(argvs) if 'device connect wlan0' in a]
+        self.assertTrue(sets, argvs)
+        self.assertIn('autoconnect yes', argvs[sets[0]])
+        self.assertIn('managed yes', argvs[sets[0]])
+        self.assertTrue(cons and sets[0] < cons[0], argvs)
+
+    def test_a_real_failure_still_reports(self):
+        """Not a blanket ok: only NM's "you did not say what to join" is
+        forgiven."""
+        with rig([]) as netd:
+            self.assertFalse(netd.no_target('Error: device is strictly unmanaged'))
+            self.assertTrue(netd.no_target(NM_NO_TARGET))
+
+    def test_off_is_still_a_disconnect(self):
+        with rig([]) as netd:
+            r = netd.wifi_power('wlan0', False)
+        self.assertTrue(r['ok'], r)
+        self.assertTrue(any('device disconnect wlan0' in c[1] for c in calls()))
+
+    def test_the_sentence_never_reaches_a_tile(self):
+        """Seventy characters of NetworkManager internals on a tile two
+        words wide is how this looked from the helm."""
+        with rig([]) as netd:
+            self.assertEqual(netd.wifi_error(NM_NO_TARGET), 'NOTHING TO JOIN')
 
 
 if __name__ == '__main__':

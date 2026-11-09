@@ -432,7 +432,25 @@ def wifi_error(err):
         return 'NOT PERMITTED'
     if 'no network with ssid' in e:
         return 'OUT OF RANGE'
+    if no_target(e):
+        return 'NOTHING TO JOIN'
     return (err or 'FAILED')[:120]
+
+
+def no_target(err):
+    """NetworkManager saying "you did not tell me what to join".
+
+    `device connect` asks it to ACTIVATE something on an adapter, not to
+    switch the adapter on, and with nothing saved and in range it has
+    nothing to pick. What comes back is
+
+        Failed to add/activate new connection: 802-11-wireless setting
+        is required if no AP path was given
+
+    which is seventy characters of NetworkManager internals arriving on a
+    tile that is two words wide, in answer to someone tapping a switch."""
+    e = (err or '').lower()
+    return 'ap path' in e or 'wireless setting is required' in e
 
 
 def wifi_connect(dev, ssid, psk):
@@ -468,10 +486,9 @@ def wifi_connect(dev, ssid, psk):
 def wifi_power(dev, on):
     """Per-adapter, so one radio can be off while the other stays up.
 
-    This is `device disconnect` / `device connect`, not rfkill: rfkill is
-    global on this hardware, so turning one adapter off that way would
-    take the other down with it - and on a boat that other one is often
-    the hotspot everything else is talking over."""
+    Not rfkill: rfkill is global on this hardware, so turning one adapter
+    off that way would take the other down with it - and on a boat that
+    other one is often the hotspot everything else is talking over."""
     d = find_dev(dev)
     if not d:
         return {'ok': False, 'error': 'NO WIFI ADAPTER'}
@@ -481,7 +498,25 @@ def wifi_power(dev, on):
             # come up underneath that, and the error would not say so.
             if not wifi_powered():
                 run(['nmcli', 'radio', 'wifi', 'on'], 20)
+            # Hand the adapter back to NetworkManager. This is the half
+            # that actually turns the radio on, and it was missing.
+            # `device disconnect` does not only drop the link - it tells NM
+            # to stop autoconnecting on that device, and nothing lifts that
+            # on its own. So an adapter switched off here, or dropped by a
+            # hotspot going away, stayed switched off no matter what the
+            # list underneath offered.
+            run(['nmcli', 'device', 'set', d['dev'], 'managed', 'yes',
+                 'autoconnect', 'yes'], 20)
+            # Then try to put it back on whatever it was on. A convenience,
+            # NOT the switch: `device connect` asks NM to activate
+            # something, and with nothing saved and in range it fails -
+            # see no_target(). The radio is on either way, and the list
+            # below the switch is where you pick a network. Reporting that
+            # as the switch failing is how both adapters came to look dead
+            # when they were only idle.
             rc, out, err = run(['nmcli', '-w', '30', 'device', 'connect', d['dev']], 45)
+            if rc and no_target(err or out):
+                rc, out, err = 0, '', ''
         else:
             rc, out, err = run(['nmcli', 'device', 'disconnect', d['dev']], 30)
     return {'ok': rc == 0, 'error': wifi_error(err or out)}

@@ -76,6 +76,38 @@ An adapter is detected as a hotspot when its profile says
 `802-11-wireless.mode: ap` **or** `ipv4.method: shared`. Images differ on
 which they set, so either counts.
 
+### The switch turns the radio on; it does not join anything
+
+The per-adapter switch is `device disconnect` / `device connect` rather
+than rfkill, because rfkill is global on this hardware — one adapter off
+that way takes the other down with it, and on a boat the other one is
+often the hotspot everything else is talking over.
+
+That pairing was wrong in both directions.
+
+**`device connect` is not "on".** It asks NetworkManager to *activate*
+something on the adapter. With nothing saved and in range it has nothing
+to pick, and answers:
+
+```
+Error: Failed to add/activate new connection: 802-11-wireless setting
+is required if no AP path was given.
+```
+
+Seventy characters of NetworkManager internals landing on a tile two
+words wide, in answer to someone tapping a switch — and the switch
+reported failure, so an adapter that was merely idle looked dead. That
+sentence is `NOTHING TO JOIN` now, and the switch no longer treats it as
+a failure at all: the radio is on either way, and the list underneath is
+where you pick a network.
+
+**`device disconnect` is more than "off".** It also tells NM to stop
+autoconnecting on that device, and nothing lifts that on its own. So an
+adapter switched off here — or dropped when a hotspot went away — stayed
+down, whatever the list underneath was offering. Turning it on now does
+`device set <dev> managed yes autoconnect yes` **first**; that is the half
+that actually switches the radio back on, and it was missing.
+
 ### A name is not a handle
 
 `nmcli` writes its output in the locale's charset and substitutes `?` for
