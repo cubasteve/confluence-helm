@@ -76,6 +76,39 @@ An adapter is detected as a hotspot when its profile says
 `802-11-wireless.mode: ap` **or** `ipv4.method: shared`. Images differ on
 which they set, so either counts.
 
+### A name is not a handle
+
+`nmcli` writes its output in the locale's charset and substitutes `?` for
+anything it cannot spell. A Pi that comes up without a locale — which is
+the normal case under a bare autostart session — is therefore handed
+ASCII, and an iPhone hotspot comes back wrong: iOS names them with a
+**curly apostrophe**, so `Steven’s iPhone` reaches the panel as
+`Steven?s iPhone`.
+
+That is not only a smudge on a label. The panel sends the name it was
+given straight back, so the row it is showing you is one NetworkManager
+has never heard of. Joining it fails. Tapping its ✕ fails with
+`Error: unknown connection 'Steven?s iPhone'`, and there is nothing on the
+glass that can ever delete it, because the real character was gone before
+netd saw it.
+
+Two things close that off:
+
+- **`run()` forces `LC_ALL=C.UTF-8` on every child.** The charset is the
+  actual fix. The language is a second gain that was always a latent bug:
+  `wifi_error()` reads nmcli's failures in English, and on a Pi set to
+  anything else none of them would have matched.
+- **Anything that acts on a connection goes by `uuid`.** `wifi_uuid()`
+  resolves a name once, and `connection up` and `connection delete` take
+  the uuid. Names are for reading.
+
+A panel already carrying a mangled row still has to be able to lose it, so
+`wifi_uuid()` falls back to treating `?` as any single character — and only
+when that picks out exactly one profile. Two hotspots differing at that one
+position is a coin toss, and deleting the wrong one is worse than refusing.
+nmcli substitutes one `?` per character, so the wildcard matches a character
+that was *replaced*, never one that is missing.
+
 ### Three decisions worth knowing
 
 **Loopback.** `netd.py` binds `127.0.0.1`, so only Chromium on the Pi can

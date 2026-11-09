@@ -66,11 +66,30 @@ def run(argv, timeout=30, env=None):
     needs it: xrandr has to be told which X display to talk to, and this
     process may well have been started by cage - where there was none."""
     try:
-        e = None
+        e = dict(os.environ)
+        # The C locale, in UTF-8, always. Two separate things ride on it.
+        #
+        # The charset. nmcli writes its output in the locale's charset and
+        # puts '?' in place of anything it cannot spell. A Pi that came up
+        # without a locale is handed ASCII, so an iPhone hotspot - iOS names
+        # them with a curly apostrophe, "Steven’s iPhone" - reaches the
+        # panel as "Steven?s iPhone". The name on the glass is then one
+        # NetworkManager has never heard of, and joining it or forgetting it
+        # fails with nothing on screen that explains why.
+        #
+        # The language. wifi_error() reads nmcli's failures in English. On a
+        # Pi set to anything else none of them would match and every failure
+        # would come back as a raw string, which is the same bug in a hat.
+        e['LC_ALL'] = 'C.UTF-8'
         if env:
-            e = dict(os.environ)
             e.update(env)
+        # Decode explicitly rather than by whatever the locale happens to be,
+        # and never raise: an SSID is arbitrary bytes, and a panel that dies
+        # mid-scan because a neighbour's router has a bad one is worse than a
+        # row with a smudge in its name. Names are for reading; anything that
+        # acts on a connection goes by uuid.
         p = subprocess.run(argv, capture_output=True, text=True,
+                           encoding='utf-8', errors='replace',
                            timeout=timeout, env=e)
         return p.returncode, p.stdout.strip(), p.stderr.strip()
     except FileNotFoundError:
@@ -313,14 +332,43 @@ def find_dev(dev):
     return devs[0] if devs else None
 
 
-def saved_wifi():
-    rc, out, _ = run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'], 8)
-    names = set()
+def wifi_conns():
+    """Every saved wifi profile, as (name, uuid)."""
+    rc, out, _ = run(['nmcli', '-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'], 8)
+    conns = []
     for line in out.splitlines():
         f = terse(line)
-        if len(f) >= 2 and f[1] == '802-11-wireless':
-            names.add(f[0])
-    return names
+        if len(f) >= 3 and f[2] == '802-11-wireless':
+            conns.append((f[0], f[1]))
+    return conns
+
+
+def saved_wifi():
+    return {n for n, _ in wifi_conns()}
+
+
+def wifi_uuid(ssid):
+    """The uuid of the profile the panel means by this name, or ''.
+
+    A name is not a handle. run() forces a UTF-8 locale now, so nothing
+    new arrives with '?' where its apostrophe should be - but a panel
+    that has been up for a season already has one of those on the glass,
+    and tapping X on it has to work. Nothing else can get rid of it from
+    the boat.
+
+    So: an exact match, and failing that, '?' standing for any single
+    character. Only if that picks out exactly one profile. Two hotspots
+    differing by one character is a coin toss, and deleting the wrong one
+    is worse than saying no.
+    """
+    conns = wifi_conns()
+    hit = [u for n, u in conns if n == ssid]
+    if not hit and '?' in ssid:
+        pat = re.compile('(?s)^'
+                         + '.'.join(re.escape(x) for x in ssid.split('?'))
+                         + '$')
+        hit = [u for n, u in conns if pat.match(n)]
+    return hit[0] if len(hit) == 1 else ''
 
 
 def wifi_list(dev, rescan=False):
@@ -395,8 +443,9 @@ def wifi_connect(dev, ssid, psk):
         # A saved profile carries its own key, and re-supplying one we were
         # never given would overwrite it with nothing. So a saved network
         # with no password typed is a plain `connection up`.
-        if not psk and ssid in saved_wifi():
-            rc, out, err = run(['nmcli', '-w', '35', 'connection', 'up', 'id', ssid,
+        known = wifi_uuid(ssid) if not psk else ''
+        if known:
+            rc, out, err = run(['nmcli', '-w', '35', 'connection', 'up', 'uuid', known,
                                 'ifname', d['dev']], 45)
         else:
             argv = ['nmcli', '-w', '35', 'device', 'wifi', 'connect', ssid,
@@ -408,7 +457,9 @@ def wifi_connect(dev, ssid, psk):
             # A rejected key leaves a broken profile behind that would then
             # be offered as "saved" and fail for ever. Bin it.
             if psk:
-                run(['nmcli', 'connection', 'delete', 'id', ssid], 10)
+                u = wifi_uuid(ssid)
+                if u:
+                    run(['nmcli', 'connection', 'delete', 'uuid', u], 10)
             return {'ok': False, 'error': wifi_error(err or out)}
     _apmemo.clear()                       # this adapter's role may have changed
     return {'ok': True}
@@ -2175,7 +2226,10 @@ def route(path, body):
         return wifi_power(str(body.get('dev', '')), False)
     if path == '/wifi/forget':
         with _lock:
-            rc, _, err = run(['nmcli', 'connection', 'delete', 'id', str(body.get('ssid', ''))[:64]], 20)
+            u = wifi_uuid(str(body.get('ssid', ''))[:64])
+            if not u:
+                return {'ok': False, 'error': 'NOT SAVED'}
+            rc, _, err = run(['nmcli', 'connection', 'delete', 'uuid', u], 20)
         return {'ok': rc == 0, 'error': wifi_error(err)}
 
     if path == '/bt/list':
