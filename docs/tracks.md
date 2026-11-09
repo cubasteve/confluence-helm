@@ -92,9 +92,84 @@ by hand, would become `Race-one.gpx` and could never be deleted at all.
 That was not a theory: the first version did exactly that and its own
 test caught it refusing a file sitting right there.
 
-### The heading carries the verb
+### One list
 
-Both sections are rows of dated race names — a boat file is
+The library was two lists, **On the boat** and **Saved here**, and the
+reason was a missing function: the app could *write* GPX and never read
+it. So a file in the boat's `gpx` folder — the copy every device aboard
+can see, the copy that survives this browser being cleared — was the one
+copy that could not be put back on the chart. It could only be handed to
+a phone.
+
+That made two sections of identically-shaped, identically-dated rows
+where a tap did opposite things, which is exactly how it was reported:
+*"I press a previous race and it just pulls up a QR code."*
+
+`readGPX()` removes the reason, so the split goes too. A race is a race;
+where it is stored is something to say **about** it, not a category to
+file it under.
+
+| the row says | what it means |
+|---|---|
+| `HERE` | saved on this panel, in IndexedDB |
+| `BOAT` | a file in the `gpx` folder AvNav serves |
+| `HERE+BOAT` | one race, both copies |
+
+**The two copies find each other by the minute the race started.** The
+name the app gives a published race carries it —
+`Confluence-2026-09-23-1740` — and so does the record saved here, which
+is keyed off the first fix. A file dropped into the folder by hand has no
+such stamp, so it is simply its own row, keyed by its filename where it
+cannot collide with anything.
+
+**A row only knows its figures if a copy is here.** A boat-only row shows
+its size and date instead, because reading every file in the folder to
+fill in a list nobody has asked to open yet is a scan of the whole folder
+on every render. Tap it and the chart says the rest.
+
+Each row does three things, and all three mean one thing now:
+
+- **tap** → load, from IndexedDB if a copy is here, otherwise read it back
+  off the boat
+- **⤓** → share: a QR if it is already on the boat, otherwise send it
+  there first (`publishGPX` already ends in the same code)
+- **✕** → delete, **two taps, every row**. It used to be two for a file on
+  the boat and *one* for a race saved here, which was backwards: the
+  boat's copy can be sent again off the panel, and this one usually
+  cannot be got back at all. The row stands for the race, so the bin
+  takes every copy of it — which is what `HERE+BOAT` is there to tell you
+  before you press it.
+
+### Reading a GPX back
+
+`readGPX()` is `buildGPX()` backwards, and two things in it are worth
+knowing.
+
+**Namespaces.** GPX's elements live in the topografix namespace and
+nobody writes the prefix, so a prefixed selector matches nothing at all.
+A type selector with *no* namespace matches any namespace, which is why
+`querySelectorAll('trkpt')` is right here and
+`getElementsByTagName('gpxtpx:speed')` is not. Inside a `trkpt` the
+extensions are read by `localName`, so `gpxtpx:speed`, `gpxx:speed` and a
+bare `speed` all land in the same place.
+
+**Speed and course are worked out when they are not written down.** The
+app always writes both; a track from somewhere else carries a position
+and a time and nothing more. They come from consecutive fixes —
+111 m in 30 s is 3.7 m/s — so a hand-dropped file loads like any other.
+
+**Times are required**, and a fix without one is dropped. Everything
+downstream of a track here is time-based — the elapsed on the row, the
+speed colouring, the bezel — so a fix with no time has nothing to give
+any of them, and inventing one would put a made-up duration on the glass
+beside real ones. A file of bare waypoints is a route, and routes are the
+course sheet's business.
+
+### The heading carried the verb (now history)
+
+*Superseded by the merge above, and kept because it is the half-step that
+showed the split itself was the problem.* Both sections were rows of
+dated race names — a boat file is
 `Confluence-2026-09-23-1740` and a race saved here is named for its date
 too — and they look identical. A tap does opposite things to them: a QR
 code for a phone to shoot, or the race onto the chart. For a long time

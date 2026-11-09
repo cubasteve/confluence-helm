@@ -1536,17 +1536,11 @@ body.night #cp-svg .wash{opacity:.55}
 .lib-sub{font-size:17px;font-weight:500;color:var(--label);letter-spacing:.06em;
   margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #lib-list .mini{width:58px;height:58px;font-size:27px;flex:none}
-/* The bin is wider than it is tall, and only on a boat row, because a
-   boat row IS the link: every pixel the bin does not cover opens a QR
-   code, with no dead ground between them. Halving the row took the bin
-   from 81 px of width to 55, and all 26 of those pixels became "share
-   this file" - a third easier to miss a delete into something that is
-   not one. The height follows the row; the width does not have to. */
-#lib-list .lib-link .bin{width:80px}
+/* Where this race's copies are, at the head of its own line. It was two
+   section headings; one list needs it per row, and the row is the only
+   thing that knows. */
+.lib-where{font-style:normal;font-weight:600;color:var(--ink-dim)}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
-.lib-head{font-size:18px;font-weight:600;letter-spacing:.18em;color:var(--label);
-  text-transform:uppercase;padding:12px 0 4px}
-a.lib-row{text-decoration:none;color:inherit}
 
 /* --- the QR sheet ---
    Always black on white regardless of the theme: a camera wants
@@ -2920,10 +2914,8 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
   <div id="t-lib">
     <div class="t-title a-h1">Library</div>
     <div class="lib-list noscroll" id="lib-list"></div>
-    <!-- What a tap does is on each section's heading now, because the
-         two sections do opposite things. This says what the buttons do,
-         which is the same in both. -->
-    <div class="t-hint" id="lib-hint">⤓ SHARE · ✕ DELETE</div>
+    <!-- True of every row again, now that there is one kind of row. -->
+    <div class="t-hint" id="lib-hint">TAP TO LOAD · ⤓ SHARE · ✕ DELETE</div>
   </div>
 
   <!-- Outside the library on purpose: publishing a track raises this
@@ -5133,6 +5125,67 @@ function buildGPX(pts){
   return head+body+'\n </trkseg></trk>\n</gpx>\n';
 }
 
+/* The other half of buildGPX, and the thing whose absence split the
+   library in two. The app could write a race to the boat and never read
+   one back, so a file in the gpx folder - the copy every device aboard
+   can see, the copy that survives this browser being cleared - was the
+   one copy that could not be put on the chart.
+
+   Namespaces. GPX's own elements live in the topografix namespace and
+   nobody writes the prefix, so a prefixed selector would match nothing.
+   A type selector with no namespace matches ANY namespace, which is why
+   querySelectorAll('trkpt') is the right tool here and getElementsByTagName
+   with a literal 'gpxtpx:speed' is not.
+
+   Times are required, and fixes without one are dropped. Everything
+   downstream of a track here is time-based - the elapsed on the row, the
+   speed colouring, the bezel - so a fix with no time has nothing to give
+   any of them, and inventing one would put a made-up duration on the
+   glass next to real ones. A file of bare waypoints is a route, and
+   routes are the course sheet's business, not this list's. */
+function readGPX(xml){
+  let doc;
+  try{ doc=new DOMParser().parseFromString(String(xml||''),'application/xml'); }
+  catch(e){ return []; }
+  if(!doc || doc.querySelector('parsererror')) return [];
+  const pts=[];
+  doc.querySelectorAll('trkpt').forEach(n=>{
+    const la=+n.getAttribute('lat'), lo=+n.getAttribute('lon');
+    if(!isFinite(la) || !isFinite(lo)) return;
+    let t=NaN, s=NaN, c=NaN;
+    /* By localName, so a file that writes gpxtpx:speed, gpxx:speed or a
+       bare speed all land in the same place. */
+    for(const e of n.getElementsByTagName('*')){
+      const v=(e.textContent||'').trim();
+      if(e.localName==='time') t=Date.parse(v);
+      else if(e.localName==='speed')  s=+v;                   /* m/s, as written */
+      else if(e.localName==='course') c=+v*Math.PI/180;       /* degrees on the wire */
+    }
+    if(!isFinite(t)) return;                 /* no time, nothing to say */
+    pts.push({la, lo, t, s:isFinite(s)?s:NaN, c:isFinite(c)?c:NaN});
+  });
+  pts.sort((a,b)=>a.t-b.t);
+  /* A file from another program carries a position and a time and
+     nothing else, so the speed and the course are worked out from the
+     fixes themselves when they are not written down. Ours always writes
+     both; this is what makes a hand-dropped track loadable too. */
+  const kx=pts.length ? 111320*Math.cos(pts[0].la*Math.PI/180) : 0, ky=111320;
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i], dt=(b.t-a.t)/1000;
+    const dx=(b.lo-a.lo)*kx, dy=(b.la-a.la)*ky;
+    if(!isFinite(b.s)) b.s = dt>0 ? Math.hypot(dx,dy)/dt : 0;
+    if(!isFinite(b.c)) b.c = Math.atan2(dx,dy);
+  }
+  if(pts.length>1){                          /* the first has no previous */
+    if(!isFinite(pts[0].s)) pts[0].s=pts[1].s;
+    if(!isFinite(pts[0].c)) pts[0].c=pts[1].c;
+  }else if(pts.length===1){
+    if(!isFinite(pts[0].s)) pts[0].s=0;
+    if(!isFinite(pts[0].c)) pts[0].c=0;
+  }
+  return pts;
+}
+
 /* Safari on iOS turns a Blob download into the share sheet, which is
    where "Save to Files -> iCloud Drive" lives. So opening this page
    on the iPad and tapping export is the whole iCloud story - the Pi
@@ -6221,52 +6274,22 @@ $('trk-save').addEventListener('click',e=>{ e.stopPropagation(); saveRace(); });
 $('trk-lib') .addEventListener('click',e=>{ e.stopPropagation(); openLib();  });
 $('trk-cache').addEventListener('click',e=>{ e.stopPropagation(); cacheArea(); });
 
-/* one delegated handler for the whole list - rows come and go */
+/* one delegated handler for the whole list - rows come and go.
+   The row is no longer a link, so a tap that misses a button loads the
+   race rather than sharing it, and loading is the one thing here that
+   undoes itself. */
 $('lib-list').addEventListener('click',e=>{
   if(libDragged()) return;                    /* a scroll, not a choice */
-  /* A boat row is a real link, which is exactly right on a phone - tap
-     and the file downloads. On the helm that same tap would drop it in
-     the Pi's own downloads folder, where nothing can reach it, so here
-     it becomes a QR code for the phone to shoot instead. */
   e.stopPropagation();
-  /* Asked before the row itself, so the bin does not also open the QR
-     code for the file it is deleting. */
-  const rm=e.target.closest('[data-rm]');
-  if(rm) return void libRemove(rm.dataset.rm, rm);
-  const link=e.target.closest('.lib-link');
-  if(link){
-    e.preventDefault();
-    return void showQR(link.dataset.title, link.dataset.href);
-  }
-  const del=e.target.closest('[data-del]'), exp=e.target.closest('[data-exp]');
-  if(del) return void dbDel(del.dataset.del).then(renderLib);
-  if(exp) return void dbGet(exp.dataset.exp).then(r=>{ if(r) exportGPX(r.pts); });
+  /* Buttons before the row, so the bin does not also load what it is
+     about to delete. */
+  const kill=e.target.closest('[data-kill]');
+  if(kill) return void libKill(kill.dataset.kill, kill);
+  const sh=e.target.closest('[data-share]');
+  if(sh) return void libShare(sh.dataset.share);
   const row=e.target.closest('.lib-row');
-  if(row && row.dataset.id) loadRace(row.dataset.id);   /* links are not races */
+  if(row && row.dataset.key) libOpen(row.dataset.key);
 });
-/* Deleting a track off the BOAT, which is a different thing from
-   deleting one off this device: the file is in the folder AvNav serves,
-   so it takes netd, and every device on the boat wifi loses it at once.
-   Two taps, because it does not come back - the first arms the bin and
-   says so, the second does it, and anything else disarms. */
-let libArmed=null;
-function libRemove(name, btn){
-  if(libArmed!==name){
-    libArmed=name;
-    [...document.querySelectorAll('#lib-list .bin')].forEach(b=>{
-      b.classList.remove('arm'); b.textContent='✕'; });
-    btn.classList.add('arm'); btn.textContent='SURE?';
-    setTimeout(()=>{ if(libArmed===name){ libArmed=null;
-      btn.classList.remove('arm'); btn.textContent='✕'; } }, 4000);
-    return;
-  }
-  libArmed=null;
-  btn.textContent='…';
-  netApi('/gpx/delete',{name:name}).then(r=>{
-    if(!r||!r.ok){ btn.textContent='FAILED'; return; }
-    renderLib();
-  }).catch(()=>{ btn.textContent='FAILED'; });
-}
 
 /* tapping the backdrop, not a row, backs out */
 $('t-lib').addEventListener('click',e=>{ if(e.target===$('t-lib')) closeLib(); });
@@ -11698,6 +11721,46 @@ function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
    The index is fetched from AvNav rather than from netd, deliberately:
    netd is loopback-only and a phone cannot reach it. Same origin as the
    app, so this works identically on the helm and in a pocket. */
+/* The library's rows as last rendered, so a button's key can be turned
+   back into the race it belongs to. */
+let LIBRACES=[];
+const libRace=k=>LIBRACES.find(r=>r.key===k)||null;
+
+/* One race, wherever its copies are.
+   
+   There were two lists for one reason: the app could write GPX and not
+   read it, so a file on the boat could be handed to a phone and never
+   put on the chart. With readGPX that stops being true, and the split
+   stops earning its keep - a race is a race, and where it is stored is
+   something to say ABOUT it, not a category to file it under.
+   
+   The two copies find each other by the minute the race started. The
+   name the app gives a published race carries it -
+   Confluence-2026-09-23-1740 - and so does the record saved here, which
+   is keyed off the first fix's timestamp. A file dropped into the folder
+   by hand has no such stamp, so it is simply its own row, keyed by its
+   filename where it cannot collide with anything. */
+function mergeLib(rows, files){
+  const out=[], byMin=new Map(), min=ms=>'t:'+Math.floor(ms/60000);
+  (rows||[]).forEach(r=>{
+    const e={key:min(r.t), t:r.t, name:r.name, id:r.id, nm:r.nm, secs:r.secs,
+             max:r.max, here:true, file:null, size:0};
+    byMin.set(e.key, e); out.push(e);
+  });
+  (files||[]).forEach(f=>{
+    const m=/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/.exec(f.name||'');
+    const t=m ? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime()
+              : (f.at||0)*1000;
+    const hit=m ? byMin.get(min(t)) : null;
+    if(hit){ hit.file=f.name; hit.size=f.size||0; return; }
+    out.push({key:'f:'+f.name, t, name:String(f.name||'').replace(/\.gpx$/,''),
+              id:null, nm:null, secs:null, max:null, here:false,
+              file:f.name, size:f.size||0});
+  });
+  out.sort((a,b)=>b.t-a.t);
+  return out;
+}
+
 function renderLib(){
   const box=$('lib-list');
   const kb=n=>n<1024?n+' B':(n/1024).toFixed(n<102400?1:0)+' kB';
@@ -11706,62 +11769,101 @@ function renderLib(){
     fetchT('gpx/index.json?_='+Date.now(), 6000)
       .then(r=>r.ok?r.json():[]).catch(()=>[])
   ]).then(([rows,files])=>{
+    const races=LIBRACES=mergeLib(rows, files);
     let o='';
-    /* The heading carries the VERB, because the two sections do opposite
-       things to an identical-looking row and one hint at the foot of the
-       page cannot speak for both. A file on the boat is named
-       Confluence-2026-09-23-1740 and a race saved here is named for its
-       date too; tapping the first raises a QR code for a phone to shoot,
-       tapping the second loads the race onto the chart. Under a single
-       line reading TAP A RACE TO LOAD, the first of those is simply a
-       lie. */
-    if(files&&files.length){
-      o+='<div class="lib-head">On the boat · tap for a QR</div>';
-      o+=files.map(f=>{
-        const d=new Date((f.at||0)*1000);
-        const nice=esc(f.name.replace(/\.gpx$/,''));
-        /* The row is a link so a phone can just tap it and get the
-           file. The bin is a BUTTON inside it, which is why the click
-           handler checks for it before it checks for the link - a tap
-           on the bin must not also start a download. */
-        return `<div class="lib-row lib-link" data-href="gpx/${encodeURIComponent(f.name)}"
-                     data-title="${nice}">
-           <div class="lib-main">
-             <div class="lib-name">${nice}</div>
-             <div class="lib-sub">${kb(f.size||0)} · `
-          +`${d.toLocaleDateString()} ${String(d.getHours()).padStart(2,'0')}:`
-          +`${String(d.getMinutes()).padStart(2,'0')}</div>
-           </div>
-           <span class="mini">⤓</span>
-           <button class="mini bin" data-rm="${esc(f.name)}">✕</button></div>`;
-      }).join('');
-    }
-    /* This heading goes down whether or not there is anything under it.
-       It used to be emitted only when there WAS, so a boat with files in
-       its gpx folder and nothing saved on the panel got a library that
-       was all QR rows, with no heading to say the saved ones were a
-       separate thing and no line to say there were none - under a hint
-       that promised a tap would load a race. Every tap on that screen
-       gave a QR code, and the screen never said why. */
-    o+='<div class="lib-head">Saved here · tap to load</div>';
-    if(rows===null) o+='<div class="lib-empty">LIBRARY UNAVAILABLE</div>';
-    else if(!rows.length) o+='<div class="lib-empty">NO SAVED RACES</div>';
-    else {
-      rows.sort((a,b)=>b.t-a.t);
-      o+=rows.map(r=>
-        `<div class="lib-row" data-id="${r.id}">
+    if(rows===null && !races.length)
+      o='<div class="lib-empty">LIBRARY UNAVAILABLE</div>';
+    else if(!races.length)
+      o='<div class="lib-empty">NO RACES YET</div>';
+    else o=races.map(r=>{
+      const where = r.here&&r.file ? 'HERE+BOAT' : r.file ? 'BOAT' : 'HERE';
+      /* A race saved on this panel knows what it did. One that is only a
+         file on the boat does not, until it is read - and reading every
+         file in the folder to fill in a list nobody has asked to open yet
+         is a scan of the whole gpx folder on every render. So it says
+         what IS known about it, and the moment it is loaded the chart
+         says the rest. */
+      const sub = r.here
+        ? `${r.nm.toFixed(2)} NM · ${durTxt(r.secs)} · MAX ${r.max.toFixed(1)} KT`
+        : `${kb(r.size||0)} · ${new Date(r.t).toLocaleDateString()} `
+          +`${String(new Date(r.t).getHours()).padStart(2,'0')}:`
+          +`${String(new Date(r.t).getMinutes()).padStart(2,'0')}`;
+      return `<div class="lib-row" data-key="${esc(r.key)}">
            <div class="lib-main">
              <div class="lib-name">${esc(r.name)}</div>
-             <div class="lib-sub">${r.nm.toFixed(2)} NM · ${durTxt(r.secs)}`
-          +` · MAX ${r.max.toFixed(1)} KT</div>
+             <div class="lib-sub"><i class="lib-where">${where}</i> · ${sub}</div>
            </div>
-           <button class="mini" data-exp="${r.id}">⤓</button>
-           <button class="mini" data-del="${r.id}">✕</button>
-         </div>`).join('');
-    }
-    box.innerHTML = o;          /* never empty now - the heading is always in it */
+           <button class="mini" data-share="${esc(r.key)}">⤓</button>
+           <button class="mini bin" data-kill="${esc(r.key)}">✕</button>
+         </div>`;
+    }).join('');
+    box.innerHTML = o;
     scrollFit(box); drumPaint(box); rimDraw(box);
   });
+}
+
+/* A race that is only a file on the boat. Same destination as
+   loadRace - VIEWTRK and the chart - by way of the network and readGPX
+   instead of IndexedDB. */
+function loadBoat(name){
+  if(!name) return;
+  trkFlash('reading ' + String(name).replace(/\.gpx$/,'') + '…', 20000);
+  fetchT('gpx/'+encodeURIComponent(name), 12000)
+    .then(r=>r.ok?r.text():null)
+    .then(x=>{
+      const pts = x ? readGPX(x) : null;
+      if(!pts || pts.length<2)
+        return trkFlash(x ? 'no timed fixes in that file'
+                          : 'could not read that file');
+      VIEWTRK=pts; VIEWNAME=String(name).replace(/\.gpx$/,'');
+      MAPVIEW=null; tileKey='';
+      closeLib(); drawMap(VIEWTRK);
+      trkFlash('loaded · '+VIEWNAME, 4000);
+    })
+    .catch(()=>trkFlash('could not read that file'));
+}
+
+function libOpen(key){
+  const r=libRace(key); if(!r) return;
+  if(r.id) return loadRace(r.id);      /* this panel's own copy is right here */
+  loadBoat(r.file);
+}
+
+/* One button, one meaning. On the boat already: point a phone at it.
+   Only here: send it first - which is what publishGPX does - and it
+   raises the same code at the end. */
+function libShare(key){
+  const r=libRace(key); if(!r) return;
+  if(r.file) return void showQR(String(r.file).replace(/\.gpx$/,''),
+                                'gpx/'+encodeURIComponent(r.file));
+  dbGet(r.id).then(rec=>{ if(rec) publishGPX(rec.pts, null); });
+}
+
+/* Two taps, for every row now. It used to be two for a file on the boat
+   and ONE for a race saved here, which was backwards: the boat's copy
+   can be sent again off the panel, and this one usually cannot be got
+   back at all. The row stands for the race, so the bin takes every copy
+   of it - which is what the HERE+BOAT marker on the row is there to
+   tell you before you press it. */
+let libArmed=null;
+function libKill(key, btn){
+  const r=libRace(key); if(!r) return;
+  if(libArmed!==key){
+    libArmed=key;
+    [...document.querySelectorAll('#lib-list .bin')].forEach(b=>{
+      b.classList.remove('arm'); b.textContent='✕'; });
+    btn.classList.add('arm'); btn.textContent='SURE?';
+    setTimeout(()=>{ if(libArmed===key){ libArmed=null;
+      btn.classList.remove('arm'); btn.textContent='✕'; } }, 4000);
+    return;
+  }
+  libArmed=null; btn.textContent='…';
+  const jobs=[];
+  if(r.id)   jobs.push(dbDel(r.id));
+  if(r.file) jobs.push(netApi('/gpx/delete',{name:r.file})
+                         .then(x=>{ if(!x||!x.ok) throw new Error('boat'); }));
+  Promise.all(jobs).then(renderLib)
+    .catch(()=>{ btn.textContent='FAILED'; });
 }
 
 function loadRace(id){

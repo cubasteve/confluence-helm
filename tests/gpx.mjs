@@ -14,13 +14,41 @@ const seed=`(()=>{ const t0=Date.UTC(2026,8,23,17,40,0);
 const INDEX=[{name:'Confluence-2026-09-23-1740.gpx', size:41213, at:1758648000},
              {name:'Confluence-2026-09-16-1802.gpx', size:38004, at:1758043320}];
 
+/* One minute up the lake at 2 kn, as a file with nothing in it but
+   where and when - no extensions, default namespace. */
+const BOATGPX='<?xml version="1.0"?>\n'
+  +'<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">'
+  +'<trk><name>dropped in by hand</name><trkseg>'
+  +Array.from({length:61},(_,i)=>
+      `<trkpt lat="${(28.8100+i*9e-5).toFixed(6)}" lon="-81.2500">`
+      +`<time>2026-09-16T18:02:${String(i%60).padStart(2,'0')}`
+      +(i===60?'':'')+'Z</time></trkpt>').slice(0,60).join('')
+  +'</trkseg></trk></gpx>';
+
 const {b,p,posts}=await open(t,{
   status:{gpx:{available:true, dir:'/home/pi/avnav/user/gpx'}},
   reply:{'/gpx/save':body=>({ok:true, name:body.name+'.gpx',
                              url:'gpx/'+body.name+'.gpx'}),
-         '/gpx/delete':{ok:true}},
+         /* Stateful, because the library is re-read after a delete and a
+            mock that kept handing the file back would make "it is gone"
+            unprovable - and would have hidden the one thing this
+            section is for: the row stands for the race, so deleting it
+            takes the boat's copy too. */
+         '/gpx/delete':body=>{
+           const i=INDEX.findIndex(f=>f.name===body.name);
+           if(i<0) return {ok:false, error:'no such file'};
+           INDEX.splice(i,1); return {ok:true};
+         }},
   routes:{[ORIGIN+'/gpx/index.json*']:r=>r.fulfill({status:200,
-            contentType:'application/json', body:JSON.stringify(INDEX)})}});
+            contentType:'application/json', body:JSON.stringify(INDEX)}),
+          /* The second file is served for real, because a race that is
+             only on the boat is now loaded by reading it back - so the
+             probe has to have something to read. Deliberately a plain
+             GPX with no speed or course in it: that is what a track
+             dropped in by hand looks like, and the reader has to work
+             them out from the fixes. */
+          [ORIGIN+'/gpx/Confluence-2026-09-16-1802.gpx']:r=>r.fulfill({
+            status:200, contentType:'application/gpx+xml', body:BOATGPX})}});
 await p.evaluate(()=>openApp(APPS.find(a=>a.id==='tracks')));
 await p.waitForTimeout(700);
 await p.evaluate(seed);
@@ -107,127 +135,170 @@ t.ok(rows[0] && rows[0].nm>0.1 && rows[0].nm<1, 'and the distance it covered',
 t.ok(await p.evaluate(()=>trkSavedMark===trkMark(TRK)),
      'and the track is marked as saved, so the next countdown does not ask again');
 
-t.head('RACES shows both lists, and says which is which');
+t.head('the library is ONE list, and says where each race lives');
+/* It was two - "On the boat" and "Saved here" - for one reason: the app
+   could write GPX and not read it, so the copy on the boat could be
+   handed to a phone and never put on the chart. Two sections of
+   identically-shaped, identically-dated rows where a tap did opposite
+   things, which is exactly how it was reported: "I press a previous race
+   and it just pulls up a QR code." readGPX removes the reason, so the
+   split goes too. */
 await p.click('#trk-lib'); await p.waitForTimeout(1200);
 const lib=await p.evaluate(()=>({
-  heads:[...document.querySelectorAll('#lib-list .lib-head')].map(h=>h.textContent),
-  boat:[...document.querySelectorAll('#lib-list .lib-link')]
-         .map(r=>({title:r.dataset.title, href:r.dataset.href,
-                   sub:r.querySelector('.lib-sub').textContent})),
-  here:[...document.querySelectorAll('#lib-list .lib-row[data-id]')]
-         .map(r=>r.querySelector('.lib-name').textContent)}));
-/* The heading carries the verb. Two sections of identically-shaped
-   rows, named alike - a boat file is Confluence-2026-09-23-1740 and a
-   saved race is named for its date too - and a tap does opposite things
-   to them: a QR code for a phone to shoot, or the race onto the chart.
-   One hint at the foot of the page said TAP A RACE TO LOAD and spoke
-   for both, which made it a lie about half the list. */
-t.ok(lib.heads.join('|')==='On the boat · tap for a QR|Saved here · tap to load',
-     'each heading says what a tap does to the rows under it',
-     lib.heads.join('|'));
-t.ok(lib.heads.every(h=>/tap/i.test(h)), 'neither of them leaves it unsaid');
-t.ok(!/TAP A RACE TO LOAD/i.test(
-       await p.evaluate(()=>$('lib-hint').textContent)),
-     'and the foot of the page no longer promises it for the whole list',
-     await p.evaluate(()=>$('lib-hint').textContent));
-t.ok(lib.boat.length===2, "both of the boat's files", String(lib.boat.length));
-t.ok(lib.boat[0].href==='gpx/Confluence-2026-09-23-1740.gpx',
-     'each a link a phone can just tap', lib.boat[0].href);
-t.ok(!/\.gpx/.test(lib.boat[0].title), 'named without the extension', lib.boat[0].title);
-t.ok(/^40\.2 kB · /.test(lib.boat[0].sub), 'with its size', lib.boat[0].sub);
-t.ok(lib.here.length===1, 'and the one saved here', String(lib.here.length));
+  heads:document.querySelectorAll('#lib-list .lib-head').length,
+  links:document.querySelectorAll('#lib-list .lib-link').length,
+  rows:[...document.querySelectorAll('#lib-list .lib-row')].map(r=>({
+    key:r.dataset.key,
+    name:r.querySelector('.lib-name').textContent,
+    where:r.querySelector('.lib-where').textContent,
+    sub:r.querySelector('.lib-sub').textContent,
+    share:!!r.querySelector('[data-share]'),
+    kill:!!r.querySelector('[data-kill]')})),
+  hint:$('lib-hint').textContent}));
+t.ok(lib.heads===0 && lib.links===0,
+     'no section headings and no link rows left - there is one kind of row',
+     lib.heads+' heads / '+lib.links+' links');
+t.ok(lib.rows.length===2,
+     'the boat\'s two files and this device\'s one race come to two rows, '
+     +'because one of the files IS that race', String(lib.rows.length));
+t.ok(lib.rows.every(r=>r.share && r.kill),
+     'every row shares and deletes the same way');
+t.ok(/TAP TO LOAD/.test(lib.hint),
+     'and the hint is true of all of them again', lib.hint);
 
-t.head('on the helm a boat row is a QR code, not a download');
-const dl2=p.waitForEvent('download',{timeout:2500}).catch(()=>null);
-await p.click('#lib-list .lib-link'); await p.waitForTimeout(500);
-t.ok(await p.evaluate(()=>$('qr-sheet').classList.contains('on')), 'the code comes up');
-t.ok(await dl2===null, 'and nothing lands in the Pi\'s own downloads');
-await p.click('#qr-sheet'); await p.waitForTimeout(300);
+t.head('the two copies of one race are one row');
+/* They find each other by the minute the race started: the published
+   name carries it - Confluence-2026-09-23-1740 - and so does the record
+   saved here, which is keyed off the first fix. */
+const both=lib.rows.find(r=>r.where==='HERE+BOAT');
+t.ok(!!both, 'the race that is in both places says so once',
+     lib.rows.map(r=>r.where).join('|'));
+t.ok(both && /^t:/.test(both.key),
+     'keyed by its start minute, which is what let the two find each other',
+     both&&both.key);
+t.ok(both && /NM · /.test(both.sub),
+     'and it reads its real figures, from the copy that knows them',
+     both&&both.sub);
+const boatOnly=lib.rows.find(r=>r.where==='BOAT');
+t.ok(!!boatOnly && /^f:/.test(boatOnly.key),
+     'a file with no race behind it is its own row, keyed by its name so '
+     +'it cannot collide with anything', boatOnly&&boatOnly.key);
+t.ok(boatOnly && / kB · /.test(boatOnly.sub),
+     'saying what IS known about it - reading every file in the folder to '
+     +'fill in a list nobody has opened yet is a scan of the whole folder',
+     boatOnly&&boatOnly.sub);
 
-t.head('deleting off the boat takes two taps, because it does not come back');
-await p.click('#lib-list .bin'); await p.waitForTimeout(300);
-t.ok(await p.evaluate(()=>document.querySelector('#lib-list .bin').textContent)==='SURE?',
-     'the first arms it and says so');
-t.ok(!posts.some(o=>o.path==='/gpx/delete'), 'and asks the helper for nothing yet');
-await p.click('#lib-list .bin'); await p.waitForTimeout(700);
-const del=posts.find(o=>o.path==='/gpx/delete');
-t.ok(!!del && del.body.name==='Confluence-2026-09-23-1740.gpx',
-     'the second does it, by name', del&&del.body.name);
-
-t.head('loading a saved race shows it without touching the live track');
-await p.click('#lib-list .lib-row[data-id]'); await p.waitForTimeout(800);
-/* The inverse was never asserted, which is how a library where every
-   tap raised a QR code shipped green. Checking that the race loaded
-   does not check that the QR sheet stayed down. */
+t.head('a race that is only on the boat still loads onto the chart');
+/* The whole point. This file was never saved on this device - it is
+   read back off the boat through readGPX. */
+await p.evaluate(()=>{ VIEWTRK=null; VIEWNAME=''; });
+const boatKey=await p.evaluate(()=>
+  (LIBRACES.find(r=>!r.here)||{}).key||'');
+await p.click(`#lib-list .lib-row[data-key="${boatKey}"]`);
+await p.waitForTimeout(1500);
+t.ok(await p.evaluate(()=>!!VIEWTRK && VIEWTRK.length>1),
+     'it is on the chart', String(await p.evaluate(()=>VIEWTRK&&VIEWTRK.length)));
 t.ok(!await p.evaluate(()=>$('qr-sheet').classList.contains('on')),
-     'and no QR code comes up - that is what the OTHER section does');
-t.ok(await p.evaluate(()=>VIEWTRK&&VIEWTRK.length===90), 'the saved one is what is drawn');
+     'and no QR code came up, which is the bug this was reported as');
+t.ok(await p.evaluate(()=>VIEWTRK.every(x=>isFinite(x.la)&&isFinite(x.lo)
+                                         &&isFinite(x.t)&&isFinite(x.s)&&isFinite(x.c))),
+     'every fix complete - a file with no speed or course in it gets them '
+     +'worked out from the fixes themselves');
 t.ok(await p.evaluate(()=>TRK.length===90), 'and the live track is untouched');
-t.ok(!await p.evaluate(()=>$('t-lib').classList.contains('on')), 'the library closes behind it');
-t.ok(/^2026-09-23 /.test(await p.evaluate(()=>VIEWNAME)),
-     'and the race name is remembered - off the glass, because the heading '
-     +'that used to show it came off to give the chart the room, and the '
-     +'export is the only thing that ever needed it',
-     await p.evaluate(()=>VIEWNAME));
-t.ok(!await p.evaluate(()=>!!document.getElementById('t-title')),
-     'there is no heading left to read it back out of');
-await p.click('#trk-clr'); await p.waitForTimeout(500);
-t.ok(await p.evaluate(()=>VIEWTRK===null && TRK.length===90),
-     'CLEAR on a loaded race just puts it back down again');
+await p.evaluate(()=>{ unloadRace(); }); await p.waitForTimeout(300);
 
-t.head('a library with nothing saved in it says so');
-/* The shape the bug came in. A boat whose gpx folder has files and whose
-   panel has saved nothing used to get a library that was ALL boat rows:
-   no second heading, no line saying there were none, and a hint
-   promising a tap would load a race. Every tap on that screen gave a QR
-   code and nothing on it said why. The old fallback only fired when the
-   whole list was empty, which this is not. */
-await p.click('#trk-lib'); await p.waitForTimeout(600);
-await p.evaluate(async ()=>{ for(const r of await dbAll()) await dbDel(r.id);
-                             renderLib(); });
-await p.waitForTimeout(900);
-const bare=await p.evaluate(()=>({
-  heads:[...document.querySelectorAll('#lib-list .lib-head')].map(h=>h.textContent),
-  empty:[...document.querySelectorAll('#lib-list .lib-empty')].map(e=>e.textContent),
-  boat:document.querySelectorAll('#lib-list .lib-link').length,
-  saved:document.querySelectorAll('#lib-list .lib-row[data-id]').length}));
-t.ok(bare.boat===2 && bare.saved===0, 'the boat still has its files, this device none',
-     bare.boat+' boat / '+bare.saved+' saved');
-t.ok(bare.heads.length===2, 'both headings are still down',
-     bare.heads.join('|'));
-await p.locator('#stage').screenshot({path:(process.env.HELM_SHOTS||'/tmp/')+'lib-empty.png'});
-t.ok(bare.empty.join()==='NO SAVED RACES',
-     'and the empty one says so, under its own heading, rather than '
-     +'leaving the boat\'s files to look like the whole library',
-     JSON.stringify(bare.empty));
-
-t.head('the bin on a boat row keeps room to be missed');
-/* A boat row IS the link, so every pixel the bin does not cover opens a
-   QR code with no dead ground between them. Halving the row took the bin
-   from 81 px wide to 55, and all 26 of those became "share this file" -
-   a third easier to miss a delete into something that is not one. The
-   height follows the row; the width does not have to. */
-const bin=await p.evaluate(()=>{
-  const b=document.querySelector('#lib-list .lib-link .bin');
-  const r=document.querySelector('#lib-list .lib-link');
-  const q=b.getBoundingClientRect(), w=r.getBoundingClientRect();
-  return {w:Math.round(q.width), lay:b.offsetHeight, drawn:Math.round(q.height),
-          inside:q.right<=w.right+1 && q.left>=w.left};
+t.head('the reader is the writer, backwards');
+const trip=await p.evaluate(()=>{
+  const t0=Date.UTC(2026,8,23,17,40,0), src=[];
+  for(let i=0;i<60;i++) src.push({la:28.81+i*1e-4, lo:-81.25+i*5e-5,
+    t:t0+i*1000, s:1.5+Math.sin(i/6), c:(i%360)*Math.PI/180});
+  const back=readGPX(buildGPX(src));
+  const near=(a,b,e)=>Math.abs(a-b)<e;
+  return {n:back.length,
+          same:back.every((q,i)=>near(q.la,src[i].la,1e-9)
+                              && near(q.lo,src[i].lo,1e-9)
+                              && q.t===src[i].t
+                              && near(q.s,src[i].s,1e-6)),
+          nm:+trackStats(back).nm.toFixed(4)===+trackStats(src).nm.toFixed(4),
+          secs:trackStats(back).secs===trackStats(src).secs};
 });
-t.ok(bin.w>=76, 'wide enough that a thumb aimed at it lands on it',
-     bin.w+' px wide');
-t.ok(bin.lay===58, 'and as tall as the row allows',
-     bin.lay+' px of layout');
-/* Measured on the glass it is shorter than that, and should be: the
-   library is a drum, so drumPaint tilts every row about the X axis and
-   the projection loses the height a rotateX costs - about cos 25deg of
-   it - while leaving the width alone. That is the number a thumb
-   actually meets, which is the argument for the width being the thing
-   that was given back. */
-t.ok(bin.drawn<bin.lay && bin.drawn>=48,
-     'standing shorter once the drum has tilted it, which is why the '
-     +'width is where the room came from', bin.drawn+' px drawn');
-t.ok(bin.inside, 'without pushing out of the row');
+t.ok(trip.n===60 && trip.same,
+     'every fix comes back out of a file the app wrote', JSON.stringify(trip));
+t.ok(trip.nm && trip.secs,
+     'and the distance and the elapsed are the same numbers afterwards');
+
+t.head('and it reads a file the app did not write');
+/* A track dropped into the gpx folder by hand carries a position and a
+   time and nothing else. The namespace is the trap: GPX lives in the
+   topografix namespace and nobody writes a prefix, so a prefixed
+   selector matches nothing at all. */
+const alien=await p.evaluate(()=>{
+  const f=readGPX(`<?xml version="1.0"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+<trkpt lat="28.8100" lon="-81.2500"><time>2026-09-23T17:40:00Z</time></trkpt>
+<trkpt lat="28.8110" lon="-81.2500"><time>2026-09-23T17:40:30Z</time></trkpt>
+<trkpt lat="28.8120" lon="-81.2500"><time>2026-09-23T17:41:00Z</time></trkpt>
+</trkseg></trk></gpx>`);
+  return {n:f.length, s:f.map(x=>+x.s.toFixed(2)),
+          cDeg:f.map(x=>+(x.c*180/Math.PI).toFixed(0)),
+          secs:trackStats(f).secs, nm:+trackStats(f).nm.toFixed(3),
+          junk:readGPX('not xml at all <<<').length,
+          untimed:readGPX('<?xml version="1.0"?><gpx xmlns='
+            +'"http://www.topografix.com/GPX/1/1"><trk><trkseg>'
+            +'<trkpt lat="28.81" lon="-81.25"/></trkseg></trk></gpx>').length};
+});
+t.ok(alien.n===3, 'all three fixes, through the default namespace',
+     String(alien.n));
+t.ok(alien.s.every(v=>v>3.6 && v<3.8),
+     'with a speed worked out from the fixes - 111 m in 30 s is 3.7 m/s',
+     alien.s.join());
+t.ok(alien.cDeg.every(v=>v===0), 'and a course: due north, which is where '
+     +'it went', alien.cDeg.join());
+t.ok(alien.secs===60 && alien.nm>0.11 && alien.nm<0.13,
+     'and it measures the same as anything else', alien.secs+'s '+alien.nm+'nm');
+t.ok(alien.junk===0, 'rubbish in is nothing out, not a thrown page',
+     String(alien.junk));
+t.ok(alien.untimed===0,
+     'and a fix with no time is dropped - everything downstream of a track '
+     +'here is time-based, so inventing one would put a made-up duration on '
+     +'the glass beside real ones', String(alien.untimed));
+
+t.head('deleting takes two taps, for every row now');
+/* It used to be two for a file on the boat and ONE for a race saved
+   here, which was backwards: the boat's copy can be sent again off the
+   panel and this one usually cannot be got back at all. */
+await p.click('#trk-lib'); await p.waitForTimeout(1000);
+const hereKey=await p.evaluate(()=>
+  (LIBRACES.find(r=>r.here&&!r.file)||LIBRACES.find(r=>r.here)||{}).key||'');
+await p.click(`#lib-list .lib-row[data-key="${hereKey}"] [data-kill]`);
+await p.waitForTimeout(300);
+t.ok(await p.evaluate(k=>document.querySelector(
+       `#lib-list .lib-row[data-key="${k}"] [data-kill]`).textContent, hereKey)==='SURE?',
+     'the first tap arms it and says so, on a race saved here too');
+t.ok((await p.evaluate(()=>dbAll())).length===1,
+     'and nothing is gone yet', String((await p.evaluate(()=>dbAll())).length));
+await p.click(`#lib-list .lib-row[data-key="${hereKey}"] [data-kill]`);
+await p.waitForTimeout(900);
+t.ok((await p.evaluate(()=>dbAll())).length===0,
+     'the second does it', String((await p.evaluate(()=>dbAll())).length));
+const killed=posts.find(o=>o.path==='/gpx/delete');
+t.ok(!!killed && killed.body.name==='Confluence-2026-09-23-1740.gpx',
+     'and because the row stood for the race, the boat\'s copy goes with it '
+     +'- which is what HERE+BOAT on the row was telling you',
+     killed&&killed.body.name);
+
+t.head('with the races gone the list says so, rather than showing nothing');
+await p.waitForTimeout(400);
+await p.locator('#stage').screenshot({path:(process.env.HELM_SHOTS||'/tmp/')+'lib-merged.png'});
+const left=await p.evaluate(()=>({
+  rows:document.querySelectorAll('#lib-list .lib-row').length,
+  empty:[...document.querySelectorAll('#lib-list .lib-empty')].map(e=>e.textContent)}));
+t.ok(left.rows===1,
+     'one row left - the other file, which was never that race',
+     String(left.rows));
+t.ok(!INDEX.some(f=>f.name==='Confluence-2026-09-23-1740.gpx'),
+     'and the boat really has lost its copy, not just the panel',
+     INDEX.map(f=>f.name).join());
 
 t.head('the chart is a sideways circle, and a wider one than the round was');
 /* A round 456 threw away the widest part of round glass: at the height of
