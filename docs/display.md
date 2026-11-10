@@ -1573,3 +1573,79 @@ question after a reboot:
 [netd] sounder: audio out plughw:CARD=Headphones,DEV=0 (gain PCM)
 [netd] sounder: GPIO 17
 ```
+
+## Energy
+
+The house bank, and the fifth app on the dock.
+
+It reads **Signal K paths and nothing else** —
+`electrical.batteries.house.*`, the set in `BAT_PATHS`. That set *is* the
+contract between this panel and whatever ends up reading the BMS: a
+Signal K plugin over Bluetooth today, a wire into `netd` tomorrow, the
+demo in the meantime. All three arrive through the same door and the app
+cannot tell them apart, which is the point — change the source and
+nothing above that line moves.
+
+Cells are the one departure from the spec. Signal K has no path for a
+cell, and `cells.<n>.voltage` is what the BMS plugins settled on between
+them. Four of them, because the board is 3–4S; a 3S pack simply never
+publishes the fourth and the row draws three.
+
+### Nothing here falls back to zero
+
+A battery page reading `0%` because nothing is connected is
+indistinguishable from a flat bank, and it is the one number anybody
+would act on at two in the morning. Every value goes through `get()`,
+which returns null past `staleAfter`, and null draws an em dash. With no
+feed at all: every reading a dash, no cell bars rather than four empty
+ones, an empty foot, a bar at zero that is **not** red — an absent bank
+is not a flat one — and `NO BATTERY FEED` said once, at the top.
+
+That also covers the failure that matters most with a radio link. A
+naive BLE client keeps the last value it was pushed and shows 82% all
+afternoon; `get()` will not hold a reading past eight seconds.
+
+### The cells are a balance view
+
+Four bars of absolute voltage on a lithium pack are four identical bars —
+the plateau is the whole character of the chemistry. So each bar is that
+cell's distance from the pack mean over a fixed **±30 mV** window. A pack
+in balance reads as a level row at half height; one cell walking away is
+the only thing that moves. Fixed and not auto-scaled, or three millivolts
+of nothing would draw like a fault.
+
+### Amps have a word, not a sign
+
+Signal K signs current *into* the battery, which is correct and is also
+the opposite of how anybody says it out loud. The face shows the
+magnitude and labels it `AMPS IN` or `AMPS OUT`.
+
+### The demo bank defers path by path
+
+A 4S LiFePO₄ at 100 Ah, flat through the middle of its range, drawing
+what a boat under sail draws. It exists so the screen could be built,
+looked at and held to account before the board was out of its envelope.
+
+It defers like the **GPS group** and not like the wind. `DEMO_REAL`
+stands the *whole* demo down, which is right for an instrument saying the
+boat is real and wrong for one saying only that the battery is — a BMS
+turning up must not blank the invented vane with it. So `demoBank()`
+writes through `feedOwns`/`feedPut`, and a real reading wins on the next
+tick while everything else goes on being imagined.
+
+### Two things the app flushed out of the frame
+
+**The cached writers were never invalidated.** `_w` skips a write whose
+value has not changed, keyed by element id — right for a permanent node,
+wrong for one `closeApp()` has just deleted. Reopen an app and any
+reading that happened to be unchanged was never written, so the rebuilt
+element kept its placeholder and the page showed an em dash over live
+data. Energy is the first app that both builds its own nodes and uses
+`wText`, which is why it had gone unnoticed. `closeApp()` clears the
+cache now.
+
+**The dock tiles were a fixed 136 px.** Four fitted 600; the fifth made
+it 676 and the dock began to scroll, which is a poor thing for a menu of
+five to do. The tiles share the row now, with a 104 px floor — five come
+out at 108 each, and a sixth would hit the floor and scroll, which by
+then is the honest answer.

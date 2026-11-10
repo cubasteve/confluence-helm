@@ -72,12 +72,14 @@ t.head('the course is its own app, off the dock beside the radar');
    sheet that reads none of it. */
 await p.evaluate(()=>{ closeApp(); }); await p.waitForTimeout(400);
 await p.evaluate(()=>openApps()); await p.waitForTimeout(500);
-t.ok(await p.evaluate(()=>APPS.map(a=>a.id).join())==='radar,course,tracks,golden',
+t.ok(await p.evaluate(()=>APPS.map(a=>a.id)[1])==='course',
      'second on the dock, right off the radar',
      await p.evaluate(()=>APPS.map(a=>a.id).join()));
 t.ok(await p.evaluate(()=>{ const r=$('app-row');
        return r.scrollWidth<=r.clientWidth; }),
-     'and four tiles still fit the 600 px row without it scrolling',
+     'and every tile still fits the 600 px row without it scrolling - the '
+     +'tiles share the row, so an app costs all of them a few pixels rather '
+     +'than pushing the last one off the end',
      await p.evaluate(()=>$('app-row').scrollWidth+' of '+$('app-row').clientWidth));
 t.ok(!await p.evaluate(()=>!!document.getElementById('trk-course')),
      'with nothing left on the track rail to reach it by');

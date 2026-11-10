@@ -46,6 +46,7 @@ probes count on.
 | `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
 | `demotrack` | the demo sails the boat's own 6 Nov sail, in that evening's Open-Meteo wind |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
+| `energy` | the house bank: every reading right with a feed, and every one of them an em dash without — never a zero, which is a flat battery rather than an absent one |
 | `gpsfilter` | a noisy receiver reaching the dial calm: resends ignored, one logged point per fix on its own time, the flicker gone, a tack still showing, no lag on a leg, a spike held, and the dial's averaging window from the panel |
 | `score` | the card, what it posts, and the fallback when nothing answers |
 | `held` | the race set aside between races, and the armed DISCARD |
