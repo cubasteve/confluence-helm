@@ -95,6 +95,56 @@ hotspot and never decides which profile is one. It acts only on a profile
 one, and will not move a pin somebody else has set — it says so and
 leaves it.
 
+### The dongle that enumerates and never appears
+
+The boat's USB adapter is a Realtek **RTL8188EU** (`0bda:8179`) on the
+in-kernel `rtl8xxxu` driver, and `wifi-report.sh` caught it in the act:
+
+```
+usb 1-1.4: Product: 802.11n NIC    Manufacturer: Realtek
+usb 1-1.4: rtl8xxxu: Loading firmware rtlwifi/rtl8188eufw.bin
+usb 1-1.4: Firmware revision 28.0 (signature 0x88e1)
+usb 1-1.4: rtl8xxxu_writeN: Failed to write block at addr: 1e80 size: 0080
+```
+
+It enumerates, binds, loads firmware, reports its revision — and then
+fails a register write partway through init and **never creates a
+network interface**. Which is the first row of the table below: the
+kernel does not have it, so nothing above the driver can help, and the
+panel had nothing to show because there was genuinely no adapter.
+
+Not power, not the cable, not range, and nothing in NetworkManager. The
+in-kernel support for this chip is simply unreliable: the old `r8188eu`
+staging driver was removed and `rtl8xxxu` inherited the chip without
+inheriting its reliability.
+
+**`boot/dongle-rescue.sh` is the answer that costs nothing.** The init is
+not impossible, it is unreliable — *sometimes* the adapter shows up — so
+unbinding the device from its driver and binding it again runs init
+afresh, and a few goes gets there. No package, no DKMS, no out-of-tree
+module to rebuild on the next kernel, which is the whole argument for
+doing it this way.
+
+Two things in it are not obvious, and both were measured on the water:
+
+**An interface existing is not success.** The first rebind created
+`wlan1` and the adapter still would not come up; a second was what made
+it work. A half-initialised device can present an interface that cannot
+be brought up, so the test is that the interface goes **up** — a script
+stopping at the first `wlanN` hands you a dead row on the panel and
+calls it done.
+
+**It never touches a working adapter.** That is what makes it safe on a
+timer, which is what `install-dongle-rescue.sh` sets up: at boot and
+every five minutes, because the adapter can go away mid-voyage too, with
+nobody at the chart table to notice.
+
+`tests/dongle_test.py` drives it against a pretend `/sys` with pretend
+`ip` and `iw` on the PATH — a script whose job is to yank the boat's
+network adapter is not one to ship unexercised. It holds it to all of
+the above, including that an unknown driver is left alone: a rebind is a
+real interruption, not something to try on the off chance.
+
 ### Three ways a radio goes missing, and telling them apart
 
 "The radio didn't show up" looks the same from the helm whichever of

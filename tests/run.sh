@@ -42,9 +42,15 @@ if ! curl -sf -o /dev/null --max-time 2 "$HELM_URL"; then
 fi
 trap '[ "$OWN" != 0 ] && kill "$OWN" 2>/dev/null; rm -rf "$FONTS"' EXIT
 
-rc=0
+# `ran` and not an early exit on the first glob. Naming a probe that has
+# no .mjs used to bail here before the python loop below was ever
+# reached - so `run.sh sound`, which tests/README documents as "the netd
+# one of that name", answered "no such probe: sound" about a probe
+# sitting right there. A typo still gets told, at the end, once both
+# globs have had their turn.
+rc=0 ran=0
 for f in tests/${1:-*}.mjs; do
-  [ -e "$f" ] || { echo "no such probe: ${1:-}" >&2; exit 2; }
+  [ -e "$f" ] || break
   n=$(basename "$f" .mjs)
   [ "$n" = helpers ] && continue   # shared code, not a probe
   printf '%-12s ' "$n"
@@ -55,6 +61,7 @@ for f in tests/${1:-*}.mjs; do
     printf '%s\n' "$out" | sed 's/^/    /'
     rc=1
   fi
+  ran=$((ran+1))
 done
 # The helper's own tests. No browser, no server - they import netd with
 # a PATH full of pretend tools and a stand-in for the club's scoreboard.
@@ -69,7 +76,10 @@ for f in tests/${1:-*}_test.py; do
     printf '%s\n' "$out" | sed 's/^/    /'
     rc=1
   fi
+  ran=$((ran+1))
 done
+
+[ "$ran" = 0 ] && { echo "no such probe: ${1:-}" >&2; exit 2; }
 
 echo "shots in $HELM_SHOTS"
 exit $rc
