@@ -125,7 +125,24 @@ afresh, and a few goes gets there. No package, no DKMS, no out-of-tree
 module to rebuild on the next kernel, which is the whole argument for
 doing it this way.
 
-Two things in it are not obvious, and both were measured on the water:
+Three things in it are not obvious, and all three were measured on the
+water:
+
+**The device can have no driver at all.** This is the one that cost a
+round trip. The first version looked only for USB *interfaces* bound to
+a known wifi driver — and with `rtl8xxxu` having failed, the device sat
+there with no driver symlink anywhere, so the script found nothing and
+reported `no USB wifi adapter is plugged in` about a dongle that was
+plugged in. There is nothing to unbind an interface *from* in that
+state, so the whole USB device is reset through the `usb` driver
+instead, by device name (`1-1.4`, not `1-1.4:1.0`), and every driver
+re-probes it. Recognised by `idVendor:idProduct` rather than by what is
+bound, because nothing is.
+
+And when it still matches nothing, it **names every USB device on the
+bus** in the log rather than saying "nothing plugged in" and stopping —
+so the journal itself says which id belongs in `is_wifi_id()`.
+
 
 **An interface existing is not success.** The first rebind created
 `wlan1` and the adapter still would not come up; a second was what made

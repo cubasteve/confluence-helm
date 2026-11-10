@@ -53,9 +53,24 @@ GAP="${2:-3}"
 
 log(){ printf '[dongle-rescue] %s\n' "$*"; }
 
-# The drivers worth rescuing: USB wifi, nothing else. A rebind is a real
-# interruption, so this never guesses - an unknown driver is left alone
-# and said so, rather than being yanked on the off chance.
+# ---- finding it ------------------------------------------------------
+#
+# Two ways, because the interesting case has neither a driver nor an
+# interface. Measured on the boat: with rtl8xxxu having failed, the
+# device sat there with NO driver symlink at all, and a first version of
+# this script - which looked only for interfaces bound to a known wifi
+# driver - reported "no USB wifi adapter is plugged in" about a dongle
+# that was plugged in. It found nothing because there was nothing bound
+# to find.
+#
+#   iface:<driver>  an interface IS bound to a wifi driver. Rebind that
+#                   interface on that driver, which is the move proved by
+#                   hand on the water.
+#   id              nothing is bound, but we recognise the device. Reset
+#                   the whole USB device instead and let every driver
+#                   re-probe it, which is the stronger reset and the only
+#                   one available when there is no driver to unbind from.
+
 is_wifi_driver(){
   case "$1" in
     rtl8xxxu|r8188eu|8188eu|rtl8188eu|rtw88_8821au|rtw88_8812au) return 0;;
@@ -63,6 +78,52 @@ is_wifi_driver(){
     ath9k_htc|carl9170|rt2800usb|rtl8192cu|rtl8187)              return 0;;
     *) return 1;;
   esac
+}
+
+# Only consulted when nothing is bound. The log names any USB device it
+# could not place, so adding one here is a line and the journal says
+# which line to add.
+is_wifi_id(){
+  case "$1" in
+    0bda:8179|0bda:8176|0bda:8178|0bda:f179) return 0;;   # Realtek 8188/8192
+    0bda:b812|0bda:b82c|0bda:c811)           return 0;;   # Realtek 88x2
+    148f:5370|148f:5372|148f:3070)           return 0;;   # Ralink
+    0e8d:7610|0e8d:7612|0e8d:7961)           return 0;;   # MediaTek
+    0cf3:9271|0cf3:1006)                     return 0;;   # Atheros
+    *) return 1;;
+  esac
+}
+
+usb_id(){ printf '%s:%s' "$(cat "$1/idVendor" 2>/dev/null)" \
+                         "$(cat "$1/idProduct" 2>/dev/null)"; }
+
+# USB device directories: 1-1.4 and not 1-1.4:1.0, and not usb1.
+usb_devices(){
+  local dev
+  for dev in "$SYS"/bus/usb/devices/*; do
+    [ -d "$dev" ] || continue
+    case "$(basename "$dev")" in *:*|usb*) continue;; esac
+    [ -f "$dev/idVendor" ] || continue
+    printf '%s\n' "$dev"
+  done
+}
+
+# "<devpath> iface:<driver>" or "<devpath> id", for each one worth it.
+candidates(){
+  local dev i d how
+  while read -r dev; do
+    [ -n "${dev:-}" ] || continue
+    how=''
+    for i in "$dev":*; do
+      [ -L "$i/driver" ] || continue
+      d=$(basename "$(readlink -f "$i/driver")")
+      if is_wifi_driver "$d"; then how="iface:$d"; break; fi
+    done
+    [ -n "$how" ] || { is_wifi_id "$(usb_id "$dev")" && how='id'; }
+    [ -n "$how" ] && printf '%s %s\n' "$dev" "$how"
+  done <<EOT
+$(usb_devices)
+EOT
 }
 
 # Can this interface actually be used? Not "does it exist" - see above.
@@ -75,29 +136,42 @@ usable(){
   iw dev "$dev" info >/dev/null 2>&1
 }
 
-# Every USB interface bound to one of those drivers, as "<path> <driver>".
-wifi_usb_ifaces(){
-  local i d
-  for i in "$SYS"/bus/usb/devices/*:*; do
-    [ -L "$i/driver" ] || continue
-    d=$(basename "$(readlink -f "$i/driver")")
-    is_wifi_driver "$d" || continue
-    printf '%s %s\n' "$i" "$d"
-  done
-}
-
-# The network interface this USB interface made, if it made one.
+# The network interface this DEVICE made, through any of its interfaces.
 netdev_of(){
-  local n
-  for n in "$1"/net/*; do [ -d "$n" ] && { basename "$n"; return 0; }; done
+  local i n
+  for i in "$1":*; do
+    [ -d "$i/net" ] || continue
+    for n in "$i"/net/*; do [ -d "$n" ] && { basename "$n"; return 0; }; done
+  done
   return 1
 }
 
+rebind(){               # <devpath> <how>
+  local dev="$1" how="$2" drv i port
+  port=$(basename "$dev")
+  if [ "${how#iface:}" != "$how" ]; then
+    drv="${how#iface:}"
+    for i in "$dev":*; do
+      [ -L "$i/driver" ] || continue
+      echo "$(basename "$i")" > "$SYS/bus/usb/drivers/$drv/unbind" 2>/dev/null
+      sleep 1
+      echo "$(basename "$i")" > "$SYS/bus/usb/drivers/$drv/bind"   2>/dev/null
+    done
+  else
+    # Nothing to unbind an interface FROM, so reset the device itself.
+    echo "$port" > "$SYS/bus/usb/drivers/usb/unbind" 2>/dev/null
+    sleep 1
+    echo "$port" > "$SYS/bus/usb/drivers/usb/bind"   2>/dev/null
+  fi
+}
+
 rescued=0 looked=0
-while read -r path drv; do
+while read -r path how; do
   [ -n "${path:-}" ] || continue
   looked=$((looked+1))
   port=$(basename "$path")
+  [ "$how" = id ] && log "$port ($(usb_id "$path")) is plugged in with no "\
+"driver bound - resetting the device itself"
 
   for try in $(seq 1 "$TRIES"); do
     if dev=$(netdev_of "$path") && usable "$dev"; then
@@ -105,22 +179,30 @@ while read -r path drv; do
       break
     fi
     if [ "$try" = "$TRIES" ]; then
-      log "$port ($drv) still has no usable interface after $TRIES tries - "\
+      log "$port still has no usable interface after $TRIES tries - "\
 "this is past what a rebind can fix"
       break
     fi
-    # Unbind and bind by the interface's own name, which is what the
-    # driver's bind/unbind files take.
-    log "$port ($drv) has no usable interface - rebinding (try $try)"
-    echo "$port" > "$SYS/bus/usb/drivers/$drv/unbind" 2>/dev/null
-    sleep 1
-    echo "$port" > "$SYS/bus/usb/drivers/$drv/bind"   2>/dev/null
+    log "$port has no usable interface - rebinding (try $try)"
+    rebind "$path" "$how"
     rescued=1
     sleep "$GAP"
   done
 done <<EOF
-$(wifi_usb_ifaces)
+$(candidates)
 EOF
 
-[ "$looked" = 0 ] && log "no USB wifi adapter is plugged in"
+# Saying "nothing plugged in" and stopping is what sent this round the
+# houses once already. If nothing matched, name every USB device that is
+# there, so the journal itself says which id to add to is_wifi_id().
+if [ "$looked" = 0 ]; then
+  log "no USB wifi adapter found. What is on the bus:"
+  while read -r dev; do
+    [ -n "${dev:-}" ] || continue
+    log "   $(basename "$dev")  $(usb_id "$dev")  $(cat "$dev/product" 2>/dev/null)"
+  done <<EOT
+$(usb_devices)
+EOT
+  log "if one of those is the adapter, its id belongs in is_wifi_id()"
+fi
 exit 0
