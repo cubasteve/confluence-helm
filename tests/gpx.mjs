@@ -27,8 +27,17 @@ const BOATGPX='<?xml version="1.0"?>\n'
 
 const {b,p,posts}=await open(t,{
   status:{gpx:{available:true, dir:'/home/pi/avnav/user/gpx'}},
-  reply:{'/gpx/save':body=>({ok:true, name:body.name+'.gpx',
-                             url:'gpx/'+body.name+'.gpx'}),
+  reply:{/* Stateful, like the delete below: SAVE puts a race on the boat
+            now, so a mock that did not keep it could not show the two
+            copies becoming one row. Same name replaces, as a real
+            folder would. */
+         '/gpx/save':body=>{
+           const name=body.name+'.gpx';
+           const i=INDEX.findIndex(f=>f.name===name);
+           const rec={name, size:(body.xml||'').length, at:Date.now()/1000|0};
+           if(i<0) INDEX.push(rec); else INDEX[i]=rec;
+           return {ok:true, name, url:'gpx/'+name};
+         },
          /* Stateful, because the library is re-read after a delete and a
             mock that kept handing the file back would make "it is gone"
             unprovable - and would have hidden the one thing this
@@ -125,8 +134,16 @@ t.ok(/no track to send/.test(await p.evaluate(()=>$('trk-n').textContent)),
      'and it says so', await p.evaluate(()=>$('trk-n').textContent));
 await p.evaluate(seed); await p.waitForTimeout(300);
 
-t.head('SAVE puts the race in the library on this device');
-await p.click('#trk-save'); await p.waitForTimeout(800);
+t.head('SAVE means saved, and saved means both copies');
+/* It used to mean this device's copy only, with GPX as a second button
+   for the boat's - which is why a race could be in one place and not the
+   other, and why the library grew a word for which. One button now. */
+await p.evaluate(()=>{ NET.st.gpx={available:true, dir:'/home/pi/avnav/user/gpx'}; });
+const before=posts.filter(o=>o.path==='/gpx/save').length;
+await p.click('#trk-save'); await p.waitForTimeout(1600);
+t.ok(posts.filter(o=>o.path==='/gpx/save').length===before+1,
+     'one tap and it is on the boat as well, without being asked twice',
+     String(posts.filter(o=>o.path==='/gpx/save').length-before));
 const rows=await p.evaluate(()=>dbAll());
 t.ok(rows.length===1, 'one race saved', String(rows.length));
 t.ok(rows[0] && rows[0].n===90 && rows[0].pts.length===90, 'with all its fixes');
@@ -135,7 +152,7 @@ t.ok(rows[0] && rows[0].nm>0.1 && rows[0].nm<1, 'and the distance it covered',
 t.ok(await p.evaluate(()=>trkSavedMark===trkMark(TRK)),
      'and the track is marked as saved, so the next countdown does not ask again');
 
-t.head('the library is ONE list, and says where each race lives');
+t.head('the library is ONE list, and does not file races by where they are');
 /* It was two - "On the boat" and "Saved here" - for one reason: the app
    could write GPX and not read it, so the copy on the boat could be
    handed to a phone and never put on the chart. Two sections of
@@ -150,7 +167,7 @@ const lib=await p.evaluate(()=>({
   rows:[...document.querySelectorAll('#lib-list .lib-row')].map(r=>({
     key:r.dataset.key,
     name:r.querySelector('.lib-name').textContent,
-    where:r.querySelector('.lib-where').textContent,
+    where:(r.querySelector('.lib-where')||{}).textContent||'',
     sub:r.querySelector('.lib-sub').textContent,
     share:!!r.querySelector('[data-share]'),
     kill:!!r.querySelector('[data-kill]')})),
@@ -165,21 +182,25 @@ t.ok(lib.rows.every(r=>r.share && r.kill),
      'every row shares and deletes the same way');
 t.ok(/TAP TO LOAD/.test(lib.hint),
      'and the hint is true of all of them again', lib.hint);
+t.ok(lib.rows.every(r=>r.where===''),
+     'and NOT ONE of them says where it is kept - that is a fact about a '
+     +'race, not a kind of race, and it only earns a word when it is wrong',
+     lib.rows.map(r=>r.where||'-').join('|'));
 
 t.head('the two copies of one race are one row');
 /* They find each other by the minute the race started: the published
    name carries it - Confluence-2026-09-23-1740 - and so does the record
    saved here, which is keyed off the first fix. */
-const both=lib.rows.find(r=>r.where==='HERE+BOAT');
-t.ok(!!both, 'the race that is in both places says so once',
-     lib.rows.map(r=>r.where).join('|'));
+const both=lib.rows.find(r=>/NM · /.test(r.sub));
+t.ok(!!both, 'the race that is in both places is one row, not two',
+     String(lib.rows.length));
 t.ok(both && /^t:/.test(both.key),
      'keyed by its start minute, which is what let the two find each other',
      both&&both.key);
 t.ok(both && /NM · /.test(both.sub),
      'and it reads its real figures, from the copy that knows them',
      both&&both.sub);
-const boatOnly=lib.rows.find(r=>r.where==='BOAT');
+const boatOnly=lib.rows.find(r=>/ kB · /.test(r.sub));
 t.ok(!!boatOnly && /^f:/.test(boatOnly.key),
      'a file with no race behind it is its own row, keyed by its name so '
      +'it cannot collide with anything', boatOnly&&boatOnly.key);
@@ -187,6 +208,58 @@ t.ok(boatOnly && / kB · /.test(boatOnly.sub),
      'saying what IS known about it - reading every file in the folder to '
      +'fill in a list nobody has opened yet is a scan of the whole folder',
      boatOnly&&boatOnly.sub);
+
+t.head('a race that is NOT on the boat is the one case worth a word');
+/* The exception that replaced the taxonomy. netd binds 127.0.0.1, so a
+   phone can read the boat's folder and not write to it - a race saved
+   there is on that phone and nowhere else, and that is a thing to put
+   right rather than a kind of race to learn. The next save from the
+   panel clears it. */
+await p.evaluate(async ()=>{
+  const t=new Date(2026,6,4,11,15,0).getTime();
+  await dbPut({id:'r'+t, t, name:'2026-07-04 11:15', n:2, nm:0.5, secs:600,
+               avg:3, max:4.1,
+               pts:[{la:28.81,lo:-81.25,t,s:1,c:0},
+                    {la:28.82,lo:-81.25,t:t+1000,s:1,c:0}]});
+  renderLib();
+});
+await p.waitForTimeout(1000);
+const adrift=await p.evaluate(()=>[...document.querySelectorAll('#lib-list .lib-row')]
+  .map(r=>({name:r.querySelector('.lib-name').textContent,
+            warn:(r.querySelector('.lib-where')||{}).textContent||'',
+            colour:r.querySelector('.lib-where')
+              ? getComputedStyle(r.querySelector('.lib-where')).color : ''})));
+const lone=adrift.find(r=>r.name==='2026-07-04 11:15');
+t.ok(!!lone && /ONLY ON THIS PANEL/.test(lone.warn),
+     'the one with no copy on the boat says so', lone&&lone.warn);
+t.ok(adrift.filter(r=>r.warn).length===1,
+     'and it is the ONLY row that says anything about where it is kept',
+     adrift.map(r=>r.warn||'-').join('|'));
+/* Against a reference built in the same place rather than a hex string
+   turned into an rgb() by hand - the theme decides what --alarm is, and
+   the row is what has to resolve it. */
+const hue=await p.evaluate(()=>{
+  const w=document.querySelector('#lib-list .lib-where');
+  if(!w) return null;
+  const ref=document.createElement('i');
+  ref.style.color='var(--alarm)';
+  w.parentNode.appendChild(ref);
+  const want=getComputedStyle(ref).color;
+  ref.remove();
+  const sub=getComputedStyle(w.parentNode).color;
+  return {got:getComputedStyle(w).color, want, sub};
+});
+t.ok(hue && hue.got===hue.want,
+     'in the alarm colour, because it reads as a warning and is one',
+     hue && hue.got+' vs '+hue.want);
+t.ok(hue && hue.got!==hue.sub,
+     'and not the colour the rest of the line is, or it would not read '
+     +'as anything', hue && hue.sub);
+await p.evaluate(async ()=>{
+  const t=new Date(2026,6,4,11,15,0).getTime();
+  await dbDel('r'+t); renderLib();
+});
+await p.waitForTimeout(800);
 
 t.head('a race that is only on the boat still loads onto the chart');
 /* The whole point. This file was never saved on this device - it is

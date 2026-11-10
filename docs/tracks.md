@@ -109,11 +109,29 @@ where a tap did opposite things, which is exactly how it was reported:
 where it is stored is something to say **about** it, not a category to
 file it under.
 
-| the row says | what it means |
-|---|---|
-| `HERE` | saved on this panel, in IndexedDB |
-| `BOAT` | a file in the `gpx` folder AvNav serves |
-| `HERE+BOAT` | one race, both copies |
+**And the row does not say where the race is kept.** That was the next
+thing to go. A first pass marked every row `HERE`, `BOAT` or `HERE+BOAT`,
+which is storage leaking onto the glass: where a race is kept is a fact
+*about* a race, not a kind of race. A race is either running — save it or
+discard it — or saved. Two states, and the library is the second one.
+
+What made the marker necessary was that **SAVE only did half the job**:
+it wrote this panel's copy, and a second button, GPX, wrote the boat's.
+So a race really could be in one place and not the other, and once that
+is true the list has no choice but to say which.
+
+**SAVE means saved now**, in both places, on one tap. GPX is back to
+meaning only what its name says: hand this file to a phone. The send is
+deliberately *not* awaited — a POST to netd is allowed fifty seconds, and
+hanging the glass for any part of that after the race is already safely
+down is a worse answer than catching up a moment later.
+
+That leaves exactly one case worth a word. `netd` binds `127.0.0.1`
+(`docs/network.md:208`), so a phone can read the boat's folder and not
+write to it: a race saved from a phone is on that phone and nowhere
+else. The row says **`ONLY ON THIS PANEL`**, in the alarm colour, because
+it is a thing to put right rather than a category to learn — and the next
+save from the panel clears it.
 
 **The two copies find each other by the minute the race started.** The
 name the app gives a published race carries it —
@@ -131,8 +149,8 @@ Each row does three things, and all three mean one thing now:
 
 - **tap** → load, from IndexedDB if a copy is here, otherwise read it back
   off the boat
-- **⤓** → share: a QR if it is already on the boat, otherwise send it
-  there first (`publishGPX` already ends in the same code)
+- **⤓** → share: a QR if it is already on the boat, which after a SAVE it
+  is; otherwise send it there first and give the same code
 - **✕** → delete, **two taps, every row**. It used to be two for a file on
   the boat and *one* for a race saved here, which was backwards: the
   boat's copy can be sent again off the panel, and this one usually

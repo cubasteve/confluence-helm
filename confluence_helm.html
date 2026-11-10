@@ -1539,7 +1539,9 @@ body.night #cp-svg .wash{opacity:.55}
 /* Where this race's copies are, at the head of its own line. It was two
    section headings; one list needs it per row, and the row is the only
    thing that knows. */
-.lib-where{font-style:normal;font-weight:600;color:var(--ink-dim)}
+/* Only ever on a race that is not on the boat yet, so it is a warning
+   and reads like one. */
+.lib-where{font-style:normal;font-weight:600;color:var(--alarm)}
 .lib-empty{font-size:26px;color:var(--label);letter-spacing:.14em;text-align:center}
 
 /* --- the QR sheet ---
@@ -5218,9 +5220,17 @@ function trkFlash(msg,ms){
    netd writes it into the folder AvNav serves, so a phone on the boat
    WiFi can then fetch it - which is the whole point. The file never
    goes near the phone from here; the phone comes and gets it. */
-async function publishGPX(pts,label){
-  pts=pts||TRK;
-  if(!pts.length) return trkFlash('no track to send');
+/* Put a race in the boat's gpx folder. Quiet: no flash, no QR, nothing
+   on the glass - it is called by SAVE, where it is half of what saving
+   means and not an event in its own right. Returns the saved file or
+   null.
+
+   netd binds 127.0.0.1, so this only works from the panel. Opened on a
+   phone the same page can READ the folder and not write to it, which is
+   why a save can genuinely end up on one device and not the boat, and
+   why the library has a word for that. */
+async function sendToBoat(pts,label){
+  if(!pts||!pts.length) return null;
   const d=new Date(pts[0].t), pad=n=>String(n).padStart(2,'0');
   const stamp=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
              +`-${pad(d.getHours())}${pad(d.getMinutes())}`;
@@ -5230,9 +5240,21 @@ async function publishGPX(pts,label){
      of text existing - and when that heading came off to give the chart
      the room, the name had to live somewhere that was not a DOM node. */
   const nice=label?label+'-'+stamp:'Confluence-'+stamp;
+  try{
+    const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
+    return (j&&j.ok) ? j : null;
+  }catch(e){ return null; }
+}
+
+/* Hand this race to a phone. Sending it to the boat is how the phone
+   gets at it, so this still does that when it has to - but a race that
+   was SAVED is already there, and then this is only the code. */
+async function publishGPX(pts,label){
+  pts=pts||TRK;
+  if(!pts.length) return trkFlash('no track to send');
   trkFlash('sending…',30000);
-  const j=await netApi('/gpx/save',{name:nice, xml:buildGPX(pts)});
-  if(!j||!j.ok) return trkFlash((j&&j.error)||'send failed');
+  const j=await sendToBoat(pts,label);
+  if(!j) return trkFlash('send failed');
   trkFlash('on the boat · also in RACES',7000);
   showQR(j.name.replace(/\.gpx$/,''), j.url);   /* point the phone at it,
      if the map is still what is showing - see showQR */
@@ -9808,7 +9830,23 @@ function saveRace(pts){
     /* Marked only when it was the live track: this is what stops the
        next countdown asking about a race already in RACES. */
     if(pts===TRK) trkMarkSaved();
-    flashTrk('saved · '+rec.name); return rec;
+    flashTrk('saved · '+rec.name);
+    /* SAVE means saved, in both places. It used to mean only this
+       device's copy, with a second button - GPX - for the boat's, which
+       is why a race could be in one place and not the other and why the
+       library had to grow a word for which. There is one button now;
+       GPX is back to meaning only "hand this to a phone".
+
+       Not awaited, deliberately. A POST to netd is allowed fifty
+       seconds, and a save that hangs the glass for any part of that
+       after the race is already safely down is a worse answer than one
+       that catches up a moment later. The library says which races are
+       not on the boat yet, and this is what clears it. */
+    const boat=(NET.st&&NET.st.gpx)||{};
+    if(boat.available)
+      sendToBoat(pts).then(j=>{ if(j && $('t-lib').classList.contains('on'))
+                                  renderLib(); });
+    return rec;
   }).catch(()=>{ flashTrk('save failed'); return null; });
 }
 
@@ -11776,13 +11814,19 @@ function renderLib(){
     else if(!races.length)
       o='<div class="lib-empty">NO RACES YET</div>';
     else o=races.map(r=>{
-      const where = r.here&&r.file ? 'HERE+BOAT' : r.file ? 'BOAT' : 'HERE';
-      /* A race saved on this panel knows what it did. One that is only a
-         file on the boat does not, until it is read - and reading every
-         file in the folder to fill in a list nobody has asked to open yet
-         is a scan of the whole gpx folder on every render. So it says
-         what IS known about it, and the moment it is loaded the chart
-         says the rest. */
+      /* Where a race is kept is not a kind of race, so the row does not
+         say. The one time it has to is when a race is NOT on the boat -
+         which is a thing to put right, not a category to learn. It
+         happens when the save was made on a phone, because netd is
+         loopback-only and a phone cannot write to the folder; the next
+         save from the panel clears it. */
+      const adrift = r.here && !r.file
+        ? '<i class="lib-where">ONLY ON THIS PANEL</i> · ' : '';
+      /* A race saved here knows what it did. One that is only a file on
+         the boat does not, until it is read - and reading every file in
+         the folder to fill in a list nobody has asked to open yet is a
+         scan of the whole gpx folder on every render. So it says what IS
+         known, and the moment it is loaded the chart says the rest. */
       const sub = r.here
         ? `${r.nm.toFixed(2)} NM · ${durTxt(r.secs)} · MAX ${r.max.toFixed(1)} KT`
         : `${kb(r.size||0)} · ${new Date(r.t).toLocaleDateString()} `
@@ -11791,7 +11835,7 @@ function renderLib(){
       return `<div class="lib-row" data-key="${esc(r.key)}">
            <div class="lib-main">
              <div class="lib-name">${esc(r.name)}</div>
-             <div class="lib-sub"><i class="lib-where">${where}</i> · ${sub}</div>
+             <div class="lib-sub">${adrift}${sub}</div>
            </div>
            <button class="mini" data-share="${esc(r.key)}">⤓</button>
            <button class="mini bin" data-kill="${esc(r.key)}">✕</button>
@@ -11843,8 +11887,7 @@ function libShare(key){
    and ONE for a race saved here, which was backwards: the boat's copy
    can be sent again off the panel, and this one usually cannot be got
    back at all. The row stands for the race, so the bin takes every copy
-   of it - which is what the HERE+BOAT marker on the row is there to
-   tell you before you press it. */
+   of it. */
 let libArmed=null;
 function libKill(key, btn){
   const r=libRace(key); if(!r) return;
