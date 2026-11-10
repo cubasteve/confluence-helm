@@ -151,10 +151,41 @@ be brought up, so the test is that the interface goes **up** — a script
 stopping at the first `wlanN` hands you a dead row on the panel and
 calls it done.
 
-**It never touches a working adapter.** That is what makes it safe on a
-timer, which is what `install-dongle-rescue.sh` sets up: at boot and
-every five minutes, because the adapter can go away mid-voyage too, with
-nobody at the chart table to notice.
+**It never touches a working adapter, and never touches the link at
+all.** That is what makes it safe on a timer, which is what
+`install-dongle-rescue.sh` sets up: at boot and every five minutes,
+because the adapter can go away mid-voyage too, with nobody at the chart
+table to notice.
+
+The readiness test used to begin `ip link set <dev> up`, which was wrong
+twice over and both ways are worth remembering:
+
+- **It fought the panel.** Bringing the link up is a side effect, and the
+  helm's own per-adapter switch turns an adapter off *deliberately* —
+  netd uses `nmcli device disconnect` precisely so one radio can be down
+  while the other stays up. On a five-minute timer this quietly put it
+  back up again, for ever.
+- **It called a healthy adapter dead.** `ip link set up` fails with
+  *"Operation not possible due to RF-kill"* whenever the radio is soft
+  blocked — the Raspberry Pi OS default until a country is set, and what
+  `nmcli radio wifi off` does. rfkill is **global** on this hardware
+  (netd's `wifi_powered()` says so, and it is why the panel's switch
+  avoids it), so one soft block made *every* adapter look dead and the
+  timer rebound a working dongle seven times every five minutes. A
+  rebind re-runs an init that is known to be flaky, so that is a machine
+  for turning working into broken — worse than doing nothing.
+
+It asks nl80211 instead (`iw dev <dev> info`) and leaves up and down to
+the panel. With no `iw` installed it falls back to "an interface exists",
+because looping on a question it cannot put is the same failure wearing
+a different coat.
+
+**And the journal is honest.** Every sysfs write was `> file 2>/dev/null`
+with no test, so a run that could not write a thing logged
+`rebinding (try 1 … 7)` and read exactly like one that was trying. Each
+write is checked and says which way it failed. A run killed partway also
+restores anything it unbound, so one interrupted run cannot leave the
+adapter in the single state this script cannot see.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip` and `iw` on the PATH — a script whose job is to yank the boat's

@@ -37,7 +37,8 @@ class Rig:
     VID, PID = '0bda', '8179'                    # the boat's RTL8188EU
 
     def __init__(self, driver='rtl8xxxu', netdev_at=1, up_at=1,
-                 bound=True, vid=None, pid=None, port='1-1.4'):
+                 bound=True, vid=None, pid=None, port='1-1.4',
+                 with_iw=True, writable=True):
         self.d = tempfile.mkdtemp(prefix='helm-dongle-')
         self.port, self.driver, self.bound = port, driver, bound
         self.dev = os.path.join(self.d, 'bus/usb/devices', port)
@@ -63,7 +64,19 @@ class Rig:
             f.write('0 %d %d\n' % (netdev_at, up_at))
         self.bin = os.path.join(self.d, 'bin')
         os.makedirs(self.bin)
+        self.iplog = os.path.join(self.d, 'ip-calls')
+        open(self.iplog, 'w').close()
+        self.with_iw = with_iw
         self._tools()
+        if not writable:
+            # A directory where the attribute should be. chmod would not
+            # do it: these run as root, and root writes a 0444 file
+            # quite happily - which is how the first version of this
+            # test passed while proving nothing.
+            for drv in (driver, 'usb'):
+                for name in ('bind', 'unbind'):
+                    f = os.path.join(self.d, 'bus/usb/drivers', drv, name)
+                    os.remove(f); os.makedirs(f)
 
     def _tools(self):
         """ip and iw answer from the state file, and `up` only succeeds
@@ -71,14 +84,15 @@ class Rig:
         helper = os.path.join(self.bin, '_state.sh')
         with open(helper, 'w') as f:
             f.write('STATE=%s\n' % self.state)
-        for name, body in (
-            ('ip', 'read n netdev_at up_at < "$STATE"\n'
-                   'if [ "$1 $2" = "link set" ]; then\n'
-                   '  [ "$n" -ge "$up_at" ] && [ "$up_at" != 0 ] && exit 0\n'
-                   '  exit 1\nfi\nexit 0\n'),
-            ('iw',  'read n netdev_at up_at < "$STATE"\n'
-                    '[ "$n" -ge "$up_at" ] && [ "$up_at" != 0 ] && exit 0\n'
-                    'exit 1\n')):
+        # ip records every call and does nothing else: the script must
+        # never touch link state, and silence in this file is the proof.
+        tools = [('ip', 'echo "$@" >> %s\nexit 0\n' % self.iplog)]
+        if self.with_iw:
+            tools.append(
+                ('iw', 'read n netdev_at up_at < "$STATE"\n'
+                       '[ "$n" -ge "$up_at" ] && [ "$up_at" != 0 ] && exit 0\n'
+                       'exit 1\n'))
+        for name, body in tools:
             p = os.path.join(self.bin, name)
             with open(p, 'w') as f:
                 f.write('#!/bin/sh\n. %s\n%s' % (helper, body))
@@ -111,7 +125,9 @@ class Rig:
                 f.write('1 %d %d\n' % (netdev_at, up_at))
         env = dict(os.environ)
         env['DONGLE_SYSFS'] = self.d
-        env['PATH'] = self.bin + os.pathsep + env['PATH']
+        # Only the pretend tools. Nothing here has a real ip, iw or
+        # rfkill, so leaving them off the PATH is how `iw` goes missing.
+        env['PATH'] = self.bin + ':/usr/bin:/bin'
         proc = subprocess.Popen(['bash', RESCUE, str(tries), '0'],
                                 env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -124,6 +140,10 @@ class Rig:
                     self.bump()
         proc.wait()
         return ''.join(out), self.rebinds
+
+    def ip_calls(self):
+        with open(self.iplog) as f:
+            return [l.strip() for l in f if l.strip()]
 
     def close(self):
         shutil.rmtree(self.d, ignore_errors=True)
@@ -240,6 +260,77 @@ class Unbound(unittest.TestCase):
             self.assertIn('1234:abcd', out)
             self.assertIn('802.11n NIC', out)
             self.assertIn('is_wifi_id', out)
+        finally:
+            r.close()
+
+
+class LeavesTheLinkAlone(unittest.TestCase):
+    """It used to begin `ip link set DEV up`, which was wrong twice.
+
+    It fought the panel - the helm's switch turns an adapter off on
+    purpose, and a five-minute timer put it back up for ever. And it
+    called a healthy adapter dead, because `ip link set up` fails with
+    "Operation not possible due to RF-kill" whenever the radio is soft
+    blocked, which is the Pi OS default until a country is set. rfkill
+    is global on this hardware, so one block made every adapter look
+    dead and the timer rebound a working dongle seven times every five
+    minutes - a machine for turning working into broken."""
+
+    def test_it_never_touches_link_state(self):
+        r = Rig(netdev_at=1, up_at=1)
+        try:
+            out, _ = r.run()
+            self.assertEqual(r.ip_calls(), [],
+                             'ran ip: ' + ' | '.join(r.ip_calls()) + out)
+        finally:
+            r.close()
+
+    def test_not_even_while_rescuing(self):
+        r = Rig(bound=False, netdev_at=2, up_at=2)
+        try:
+            out, _ = r.run()
+            self.assertGreaterEqual(r.rebinds, 1, out)
+            self.assertEqual(r.ip_calls(), [], out)
+        finally:
+            r.close()
+
+
+class WithoutIw(unittest.TestCase):
+    """No iw, no way to ask the driver anything - and looping on a
+    question that cannot be put is the same failure in another coat.
+    An interface existing is the weaker test and the honest one."""
+
+    def test_an_existing_interface_is_accepted(self):
+        r = Rig(with_iw=False, netdev_at=1, up_at=99)
+        try:
+            out, _ = r.run()
+            self.assertEqual(r.rebinds, 0,
+                             'rebound a working adapter with no way to '
+                             'check it:\n' + out)
+        finally:
+            r.close()
+
+    def test_a_missing_interface_is_still_rescued(self):
+        r = Rig(with_iw=False, netdev_at=2, up_at=99)
+        try:
+            out, _ = r.run()
+            self.assertGreaterEqual(r.rebinds, 1, out)
+        finally:
+            r.close()
+
+
+class TheJournalIsHonest(unittest.TestCase):
+    """Every sysfs write was `> file 2>/dev/null` with no test, so a run
+    that could not write a thing logged "rebinding (try 1 ... 7)" and
+    read exactly like one that was trying. The journal is the only thing
+    anybody has to go on out there."""
+
+    def test_a_write_that_fails_says_so(self):
+        r = Rig(bound=False, netdev_at=0, up_at=0, writable=False)
+        try:
+            out, _ = r.run()
+            self.assertIn('failed', out)
+            self.assertIn('unbind', out)
         finally:
             r.close()
 

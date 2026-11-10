@@ -126,13 +126,40 @@ $(usb_devices)
 EOT
 }
 
-# Can this interface actually be used? Not "does it exist" - see above.
+# ---- is it usable? ---------------------------------------------------
+#
+# This asks the driver and CHANGES NOTHING, which took two goes to get
+# right. It used to begin `ip link set "$dev" up`, which is wrong twice
+# over:
+#
+#   It fights the panel. Bringing the link up is a side effect, and the
+#   helm's own per-adapter switch turns an adapter OFF deliberately -
+#   netd uses `nmcli device disconnect` precisely so one radio can be
+#   down while the other stays up. On a five-minute timer this quietly
+#   put it back up again, for ever.
+#
+#   It calls a healthy adapter dead. `ip link set up` fails with
+#   "Operation not possible due to RF-kill" whenever the radio is soft
+#   blocked - which is the Raspberry Pi OS default until a country is
+#   set, and is also what `nmcli radio wifi off` does. rfkill is global
+#   on this hardware (netd's wifi_powered() says so, and it is why the
+#   panel's switch avoids it), so one soft block made every adapter look
+#   dead and the timer rebound a working dongle seven times every five
+#   minutes. A rebind re-runs an init that is known to be flaky, so that
+#   is a machine for turning "working" into "broken" - worse than doing
+#   nothing at all.
+#
+# So: ask nl80211 whether the driver answers for this interface, and
+# leave the link alone. Up and down belong to the panel.
+HAVE_IW=1
+command -v iw >/dev/null 2>&1 || HAVE_IW=0
+
 usable(){
   local dev="$1"
-  ip link set "$dev" up 2>/dev/null || return 1
-  # operstate on a wifi station sits at "down" or "dormant" until it
-  # associates, which is fine and is not what we are asking. What we are
-  # asking is whether the driver will answer for it at all.
+  # Without iw there is no way to ask, and looping on a question we
+  # cannot put is the failure above in another coat. An interface
+  # existing is the weaker test and it is the honest one here.
+  [ "$HAVE_IW" = 1 ] || return 0
   iw dev "$dev" info >/dev/null 2>&1
 }
 
@@ -146,22 +173,46 @@ netdev_of(){
   return 1
 }
 
+# Every sysfs write checked and reported. They were all `> file
+# 2>/dev/null` with no test, so a run with no write permission, or a
+# driver that refuses the bind, logged "rebinding (try 1 ... 7)" and
+# looked exactly like a run that was trying - which makes the journal,
+# the only thing anybody has to go on out there, a liar.
+poke(){                 # <file> <value>
+  if printf '%s' "$2" > "$1" 2>/dev/null; then return 0; fi
+  log "   write to ${1#$SYS} failed - $( [ -w "$1" ] && echo 'the driver refused it' || echo 'not writable (run me with sudo)')"
+  return 1
+}
+
+# What was unbound and not yet bound back, so a run that is killed
+# partway does not leave the adapter in the one state this script cannot
+# see - unbound, with no driver symlink. install-dongle-rescue.sh allows
+# 120 seconds for exactly this reason; the trap is what makes it true.
+PENDING=''
+restore(){ [ -n "$PENDING" ] && poke "${PENDING%% *}" "${PENDING#* }"; }
+trap restore EXIT INT TERM
+
 rebind(){               # <devpath> <how>
-  local dev="$1" how="$2" drv i port
+  local dev="$1" how="$2" drv i port name
   port=$(basename "$dev")
   if [ "${how#iface:}" != "$how" ]; then
     drv="${how#iface:}"
     for i in "$dev":*; do
       [ -L "$i/driver" ] || continue
-      echo "$(basename "$i")" > "$SYS/bus/usb/drivers/$drv/unbind" 2>/dev/null
+      name=$(basename "$i")
+      poke "$SYS/bus/usb/drivers/$drv/unbind" "$name" || continue
+      PENDING="$SYS/bus/usb/drivers/$drv/bind $name"
       sleep 1
-      echo "$(basename "$i")" > "$SYS/bus/usb/drivers/$drv/bind"   2>/dev/null
+      poke "$SYS/bus/usb/drivers/$drv/bind" "$name"
+      PENDING=''
     done
   else
     # Nothing to unbind an interface FROM, so reset the device itself.
-    echo "$port" > "$SYS/bus/usb/drivers/usb/unbind" 2>/dev/null
+    poke "$SYS/bus/usb/drivers/usb/unbind" "$port" || return 1
+    PENDING="$SYS/bus/usb/drivers/usb/bind $port"
     sleep 1
-    echo "$port" > "$SYS/bus/usb/drivers/usb/bind"   2>/dev/null
+    poke "$SYS/bus/usb/drivers/usb/bind" "$port"
+    PENDING=''
   fi
 }
 
