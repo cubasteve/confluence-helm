@@ -211,6 +211,49 @@ write is checked and says which way it failed. A run killed partway also
 restores anything it unbound, so one interrupted run cannot leave the
 adapter in the single state this script cannot see.
 
+### What is actually wrong with this dongle
+
+Worth writing down, because almost everything on the internet about the
+RTL8188EU is about a choice that does not exist here.
+
+`rtl8xxxu_writeN: Failed to write block at addr: 1e80` is **not** a
+register problem, and `1e80` carries no meaning. `REG_FW_START_ADDRESS`
+is `0x1000` and `rtl8xxxu_writeN()` walks the address up one block at a
+time, so `0x1e80` is byte 3712 of a 4096-byte firmware page — chunk 29
+of 32. Reports of this failure name addresses all over that range
+(`1000`, `1080`, `1100`, `1280`, `1500`, `1680`, `1c80`, `1e80`), which
+is the giveaway: it is a **transient failure of one USB control
+transfer**, status −71 / `EPROTO`. The driver converts it to `-EAGAIN`,
+nothing retries, and probe dies with `error -11`.
+
+The `size:` field is the interesting one. `size: 0080` is 128 bytes —
+the block size upstream raised to 196 (`00c4`) in **6.14**, because a
+reporter proved 128 loses this race and 196 does not. **6.15** then
+wrapped the whole download in a six-attempt retry loop. The Raspberry Pi
+kernel on this box (`rpi-6.6.y`) has **neither**, so one unlucky
+`EPROTO` is fatal to probe and every fresh probe is an independent coin
+flip. That is exactly why a rebind "worked on the second attempt".
+
+Two consequences worth holding on to:
+
+- **It is not power, and not a dying chip.** Inserting a 5 ms delay
+  before the first write makes it load every time; so does the 196-byte
+  block size. Neither of those fixes a power problem. Port choice still
+  matters — it shifts control-transfer timing, and every detailed report
+  has the dongle behind or beside a hub — but the mechanism is timing,
+  not amps.
+- **There is no fallback driver and no choice to make.** Mainline
+  deleted `drivers/staging/r8188eu` and taught `rtl8xxxu` this chip in
+  the *same* release, 6.3. Every RPi branch that still carries
+  `r8188eu` (5.10, 6.1) has an `rtl8xxxu` that does not claim
+  `0bda:8179`; every branch that claims it (6.6, 6.12, 6.18) has no
+  `r8188eu` at all. Debian packages none of it. `rtl8xxxu` is the right
+  driver, not the consolation prize.
+
+The permanent fix is a kernel: `rpi-6.12.y` carries the retry loop
+(survives the race), `rpi-6.18.y` also carries the 196-byte block size
+(removes it).
+
 ### The timer and the hammer
 
 `dongle-rescue.sh` is the **timer**. It runs unattended every five
@@ -227,43 +270,46 @@ looks like.
 
 ```
 sudo bash boot/dongle-fix.sh --look    # diagnose, change nothing
-sudo bash boot/dongle-fix.sh           # diagnose, then escalate
+sudo bash boot/dongle-fix.sh           # diagnose, then act
 ```
 
-Someone running it has already decided the adapter is broken, so it does
-not have to be careful about *that* judgement — only about not cutting
-the branch it is sitting on. It prints the full state first (which USB
-device, which driver if any, the interface, the rfkill bits, nmcli's
-STATE **and** REASON, whether `r8188eu` is even on this kernel, the
-kernel's own complaints, and the power picture), and then climbs a
-ladder, re-testing after each rung so the rung that works tells you what
-was wrong:
+It prints the full state first — which USB device, which driver if any,
+the interface, the rfkill bits, nmcli's STATE **and** REASON, whether
+`r8188eu` could even exist here, the kernel's own complaints, the power
+picture — and then reads a **verdict** out of the log, because the two
+failures live on opposite sides of `probe()` and want opposite
+treatments:
 
-1. hand it back to NetworkManager (`device set managed yes`)
-2. rebind the interface to its driver
-3. reset the whole USB device (`/sys/bus/usb/drivers/usb/{unbind,bind}`)
-4. de-authorise and re-authorise it
-5. unload and reload `rtl8xxxu`
+| in the log | what it means | what it does |
+|---|---|---|
+| `probe of … failed with error -11`, or no interface at all | the firmware upload lost its race; there is no driver state to fix | rolls the dice again — 20 fresh device resets, which is upstream's own 6.15 retry loop supplied from userspace |
+| `Firmware revision …` and an interface exists | the chip is fine; resetting it brings it back identical | works above the driver: hand it back to NM, rebind, and surface the MAC-randomisation remedy |
 
-Three rounds of that, and then it stops and says what to do with your
-hands, because at that point the answer is a different port, a powered
-hub, or a different dongle.
+That second remedy —
+`wifi.scan-rand-mac-address=no` in
+`/etc/NetworkManager/conf.d/80-wifi.conf` — is **printed, not applied**.
+A reset is transient and an edit under `/etc` is not, and which of those
+to make is the owner's call. `nmcli general reload conf` picks it up
+without restarting NetworkManager, which would bounce the hotspot.
 
 **It is scoped to one USB device, deliberately.** The boat SSHes in over
 the hotspot on the *internal* radio. It never touches `nmcli radio`,
 never unloads `brcmfmac`, and never resets a device that is not the
-dongle — a probe asserts all three, because locking the owner out of the
-box is a worse outcome than a dongle that stays dead. It also leaves a
-**blocked** radio alone, for the same reason the timer does.
+dongle — a probe asserts all three on *both* branches, because locking
+the owner out of the box is a worse outcome than a dongle that stays
+dead. It also leaves a **blocked** radio alone, for the same reason the
+timer does.
 
 Everything it does works with no internet and nothing installed, which
 is the constraint that matters: the dongle *is* the box's route to the
-internet, so any fix that needs a download is circular.
+internet, so any fix that needs a download is circular. Measured on the
+boat: a reset loop pasted over SSH brought it back.
 
 `tests/donglefix_test.py` drives it against a pretend `/sys` with
-pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 11
-tests, including that a switched-off radio is never yanked and that the
-other radio is never touched.
+pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 14
+tests, including that each verdict gets its own ladder, that a
+switched-off radio is never yanked, and that the other radio is never
+touched.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's

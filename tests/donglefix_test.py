@@ -43,7 +43,7 @@ class Rig:
     def __init__(self, nm_states=('disconnected',), port='1-1.4',
                  netdev='wlan1', bound='rtl8xxxu', rfkill=None,
                  r8188eu=False, vid=None, pid=None, others=(),
-                 with_nmcli=True):
+                 with_nmcli=True, dmesg='race'):
         self.d = tempfile.mkdtemp(prefix='helm-fix-')
         self.port, self.netdev = port, netdev
         self.dev = os.path.join(self.d, 'bus/usb/devices', port)
@@ -84,7 +84,7 @@ class Rig:
         open(self.calls, 'w').close()
         self.bin = os.path.join(self.d, 'bin')
         os.makedirs(self.bin)
-        self._tools(r8188eu, with_nmcli)
+        self._tools(r8188eu, with_nmcli, dmesg)
 
     def _attrs(self, d, vid, pid, product):
         for name, val in (('idVendor', vid), ('idProduct', pid),
@@ -93,13 +93,25 @@ class Rig:
             with open(os.path.join(d, name), 'w') as f:
                 f.write(val + '\n')
 
-    def _tools(self, r8188eu, with_nmcli):
+    # The two kernel logs that mean completely different things, which is
+    # the whole reason the script branches. 'race' is a probe that never
+    # finished, so there can be no interface; 'ok' is a chip that loaded
+    # its firmware, so a reset is cargo cult.
+    DMESG = {
+        'race': ('rtl8xxxu_writeN: Failed to write block at addr: 1e80 size: 0080\n'
+                 'rtl8xxxu: probe of 1-1.4:1.0 failed with error -11'),
+        'ok': ('usb 1-1.4: Firmware revision 11.1 (signature 0x88e1)\n'
+               'rtl8xxxu 1-1.4:1.0 wlan1: renamed from wlan%d'),
+        'silent': 'usb 1-1.4: new high-speed USB device',
+    }
+
+    def _tools(self, r8188eu, with_nmcli, dmesg):
         tools = {
             # Every call recorded, so a probe can assert what was NOT run -
             # `nmcli radio` and anything touching brcmfmac would take the
             # hotspot down and lock the owner out.
             'modprobe': 'echo "modprobe $@" >> %s\nexit 0\n' % self.calls,
-            'dmesg': 'echo "  rtl8xxxu_writeN: Failed to write block at addr: 1e80"\n',
+            'dmesg': 'cat <<\'D\'\n%s\nD\n' % self.DMESG[dmesg],
             'vcgencmd': 'echo throttled=0x0\n',
             'uname': 'echo 6.6.51+rpt-rpi-v8\n',
             'modinfo': ('echo "modinfo $@" >> %s\n'
@@ -128,7 +140,7 @@ class Rig:
                 f.write('#!/bin/sh\n' + body)
             os.chmod(p, 0o755)
 
-    def run(self, *args, rounds=3):
+    def run(self, *args, rounds=3, attempts=4):
         env = dict(os.environ)
         env['DONGLE_SYSFS'] = self.d
         # Small but REAL. The rig advances the pretend kernel when it
@@ -139,6 +151,7 @@ class Rig:
         env['DONGLE_SETTLE'] = '0.3'
         env['DONGLE_NAP'] = '0.05'
         env['DONGLE_ROUNDS'] = str(rounds)
+        env['DONGLE_ATTEMPTS'] = str(attempts)
         env['PATH'] = self.bin + ':/usr/bin:/bin'
         proc = subprocess.Popen(['bash', FIX] + list(args), env=env,
                                 stdout=subprocess.PIPE,
@@ -147,7 +160,8 @@ class Rig:
         with proc.stdout as pipe:
             for line in pipe:
                 out.append(line)
-                if line.strip().startswith('->'):
+                t = line.strip()
+                if t.startswith('->') or t.startswith('try '):
                     # A rung ran. The pretend kernel counts it, which is
                     # what moves nmcli along its state list.
                     self.resets += 1
@@ -201,7 +215,8 @@ class Fix(unittest.TestCase):
             out, rc = r.run()
             self.assertEqual(rc, 0, out)
             self.assertGreaterEqual(r.resets, 2, out)
-            self.assertIn('WORKED', out)
+            self.assertIn('UP.', out)
+            self.assertIn('coin flip', out)
         finally:
             r.close()
 
@@ -213,6 +228,7 @@ class Fix(unittest.TestCase):
             out, rc = r.run()
             self.assertGreaterEqual(r.resets, 1, out)
             self.assertIn('NONE - init never got far enough', out)
+            self.assertIn('The probe is what is failing', out)
         finally:
             r.close()
 
@@ -229,15 +245,66 @@ class Fix(unittest.TestCase):
     def test_it_never_touches_the_other_radio(self):
         """The hotspot on the internal radio is the session this is being
         typed into. Unloading brcmfmac, or hitting the global `nmcli
-        radio` switch, locks the owner out of the boat."""
-        r = Rig(nm_states=('unavailable',), rfkill='none')
+        radio` switch, locks the owner out of the boat. Checked on BOTH
+        branches, because they run different commands."""
+        for log in ('race', 'ok'):
+            r = Rig(nm_states=('unavailable',), rfkill='none', dmesg=log)
+            try:
+                out, _ = r.run(attempts=3)
+                for call in r.ran():
+                    self.assertNotIn('brcmfmac', call, '%s: %s' % (log, out))
+                    self.assertFalse(call.startswith('nmcli radio'), call)
+            finally:
+                r.close()
+
+    def test_a_failed_probe_is_rolled_again_not_reasoned_with(self):
+        """The firmware push is a transient USB EPROTO, so each probe is an
+        independent dice roll - upstream's own fix in 6.15 is a six-attempt
+        retry loop, and this kernel has not got it. Nothing above the
+        driver can help, because there is no driver state to help: probe
+        never finished. So the answer is MANY fresh probes, and the
+        script must not waste them on nmcli."""
+        r = Rig(nm_states=('unavailable', 'unavailable', 'unavailable',
+                           'disconnected'),
+                rfkill='none', dmesg='race')
         try:
-            out, _ = r.run()
-            for call in r.ran():
-                self.assertNotIn('brcmfmac', call, out)
-                self.assertFalse(call.startswith('nmcli radio'), call)
-            self.assertTrue(any('modprobe -r rtl8xxxu' in c for c in r.ran()),
-                            'it should still cycle its OWN module: %s' % r.ran())
+            out, rc = r.run(attempts=8)
+            self.assertEqual(rc, 0, out)
+            self.assertIn('The probe is what is failing', out)
+            self.assertIn('UP', out)
+            self.assertTrue(any('modprobe' in c for c in r.ran()) or r.resets >= 3,
+                            out)
+            self.assertFalse(any('nmcli device set' in c for c in r.ran()),
+                             'nmcli cannot help a probe that never ran: %s' % out)
+        finally:
+            r.close()
+
+    def test_a_loaded_chip_is_not_reset_at_it(self):
+        """The other side of probe(). The firmware loaded, so the adapter
+        is there and working as far as the driver is concerned - yanking
+        the USB device brings it back in exactly the same state. The
+        problem is above the driver and so is the remedy."""
+        r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='ok')
+        try:
+            out, rc = r.run(rounds=1)
+            self.assertIn('not the reset-it-until-it-works case', out)
+            self.assertTrue(any('nmcli device set' in c for c in r.ran()), out)
+            self.assertIn('scan-rand-mac-address', out)
+            self.assertNotIn('The probe is what is failing', out)
+        finally:
+            r.close()
+
+    def test_the_mac_randomisation_remedy_is_offered_not_applied(self):
+        """A reset is transient; an edit under /etc is not. Which of those
+        to make is the owner's call, not a script's - so it prints the
+        command and does not run it."""
+        r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='ok')
+        try:
+            out, _ = r.run(rounds=1)
+            self.assertIn('80-wifi.conf', out)
+            self.assertIn('nmcli general reload conf', out)
+            self.assertFalse(any('general reload' in c for c in r.ran()),
+                             'it printed it AND ran it: %s' % r.ran())
         finally:
             r.close()
 
@@ -274,26 +341,28 @@ class Fix(unittest.TestCase):
         r = Rig(nm_states=('disconnected',), rfkill='none', r8188eu=False)
         try:
             out, _ = r.run()
-            self.assertIn('r8188eu      : not on this kernel', out)
-            self.assertIn('needs the internet', out)
+            self.assertIn('absent, and necessarily so', out)
+            self.assertIn('deleted in 6.3', out)
+            self.assertIn('not the\n                 consolation prize', out)
         finally:
             r.close()
         r = Rig(nm_states=('disconnected',), rfkill='none', r8188eu=True)
         try:
             out, _ = r.run()
             self.assertIn('PRESENT', out)
-            self.assertIn('no download', out)
         finally:
             r.close()
 
     def test_it_gives_up_and_says_what_to_do_with_your_hands(self):
-        r = Rig(nm_states=('unavailable',), rfkill='none')
+        r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='race')
         try:
-            out, rc = r.run(rounds=2)
+            out, rc = r.run(attempts=3)
             self.assertEqual(rc, 1, out)
-            self.assertEqual(r.resets, len(RUNGS) * 2, out)
-            self.assertIn('BLACK (USB 2.0) ports', out)
-            self.assertIn('past what a reset can fix', out)
+            self.assertIn('different USB port', out)
+            self.assertIn('NOT for power', out)
+            self.assertIn('6.12', out)
+            self.assertNotIn('marginal', out)
+            self.assertNotIn('powered hub', out)
         finally:
             r.close()
 

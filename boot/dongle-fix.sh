@@ -42,6 +42,7 @@ SYS="${DONGLE_SYSFS:-/sys}"
 ROUNDS="${DONGLE_ROUNDS:-3}"
 SETTLE="${DONGLE_SETTLE:-4}"   # after a rung, for NM to catch up
 NAP="${DONGLE_NAP:-2}"         # inside a rung, between unbind and bind
+ATTEMPTS="${DONGLE_ATTEMPTS:-20}"  # fresh probes to roll at a firmware race
 if [ "$SYS" = "/sys" ]; then
   [ "$LOOK" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run me with sudo (or --look)" >&2; exit 1; }
 fi
@@ -132,16 +133,23 @@ report
 # it is a real fix and costs no download. If it is not, every "just use
 # r8188eu" answer on the internet needs a download first, and saying so
 # here saves an evening of looking for it.
-hr "is the other driver on this box"
+# There is no driver CHOICE to make here, which is worth saying because
+# every answer on the internet about this chip assumes there is. Mainline
+# deleted drivers/staging/r8188eu and added RTL8188EU to rtl8xxxu in the
+# SAME release - 6.3 - so the two never ship together. A kernel whose
+# rtl8xxxu claims 0bda:8179 is by definition one with no r8188eu on it,
+# and Debian packages none. Checked anyway, because being told "not an
+# option" beats spending an evening looking for it.
+hr "is there another driver to fall back to"
 say "  kernel       : $(uname -r)"
 if modinfo r8188eu >/dev/null 2>&1; then
   say "  r8188eu      : PRESENT - $(modinfo -n r8188eu 2>/dev/null)"
-  say "                 swapping to it is possible with no download."
 else
-  say "  r8188eu      : not on this kernel"
-  say "                 (removed from mainline staging in 6.7; rtl8xxxu is all"
-  say "                  there is here unless something is installed, and"
-  say "                  installing needs the internet this adapter was for)"
+  say "  r8188eu      : absent, and necessarily so - staging r8188eu was"
+  say "                 deleted in 6.3, the same release that taught"
+  say "                 rtl8xxxu this chip. No fallback exists and none is"
+  say "                 packaged. rtl8xxxu is the right driver, not the"
+  say "                 consolation prize."
 fi
 say "  rtl8xxxu     : $(modinfo -n rtl8xxxu 2>/dev/null || echo 'not found?')"
 say "  firmware     : $(ls /lib/firmware/rtlwifi/rtl8188eufw.bin 2>/dev/null || echo MISSING)"
@@ -149,6 +157,41 @@ say "  firmware     : $(ls /lib/firmware/rtlwifi/rtl8188eufw.bin 2>/dev/null || 
 hr "what the kernel said about it"
 dmesg 2>/dev/null | grep -iE 'rtl8|8188|usb 1-|insufficient' | tail -14 \
   | sed 's/^/  /' || say "  (dmesg needs sudo)"
+
+# The one line that decides which of two completely different problems
+# this is, and the reason the rest of this script branches.
+#
+# The firmware push happens inside rtl8xxxu_init_device() at probe time,
+# and ieee80211_register_hw() runs only after it. So if the firmware
+# write fails there is NO wlan interface at all - "Failed to write block"
+# and "I can see wlan1" are mutually exclusive, and if you have both, the
+# writeN line is stale from an earlier boot and is not tonight's problem.
+#
+# What that write failure actually is: a USB control transfer returning
+# -71/EPROTO partway through pushing the firmware image into the chip.
+# The address is meaningless - 0x1e80 is just chunk 29 of 32 of a 4 KB
+# page starting at REG_FW_START_ADDRESS 0x1000. The SIZE is the
+# interesting field: `size: 0080` is 128 bytes, the block size upstream
+# raised to 196 (0x00c4) in 6.14 precisely because 128 loses this race.
+# A kernel printing 0080 has neither that fix nor the six-attempt retry
+# loop added in 6.15, so one unlucky EPROTO kills the probe outright.
+VERDICT=unknown
+if dmesg 2>/dev/null | grep -qE 'rtl8xxxu: probe of .* failed with error -11'; then
+  VERDICT=fwrace
+elif dmesg 2>/dev/null | grep -q 'Firmware revision'; then
+  VERDICT=fwok
+fi
+say ""
+case $VERDICT in
+  fwrace) say "  VERDICT: the firmware upload lost a race and probe FAILED (-11)."
+          say "           Each probe is an independent dice roll, so the answer is"
+          say "           to roll it many times. That is what this script does."
+          BS=$(dmesg 2>/dev/null | grep -o 'size: [0-9a-f]*' | tail -1 | awk '{print $2}')
+          [ -n "${BS:-}" ] && say "           block size $BS $([ "$BS" = 0080 ] && echo '(128 - the unfixed path)' || echo '')" ;;
+  fwok)   say "  VERDICT: the chip loaded its firmware. Whatever is wrong is ABOVE"
+          say "           the driver - rfkill, NetworkManager, or association." ;;
+  *)      say "  VERDICT: no firmware evidence either way in the ring buffer." ;;
+esac
 
 hr "power"
 say "  throttled    : $(vcgencmd get_throttled 2>/dev/null || echo '(no vcgencmd)')"
@@ -233,26 +276,81 @@ rung_nm(){
   nmcli device set "$dev" autoconnect yes 2>/dev/null
 }
 
-for round in $(seq 1 "$ROUNDS"); do
+# Which ladder, and the answer is not "both". The two failures live on
+# opposite sides of probe():
+#
+#   no interface, or probe failed with -11
+#     The firmware push lost its race and the driver never registered a
+#     netdev. Nothing above the driver can help, and nothing below it is
+#     broken. Each fresh probe is an independent dice roll against a
+#     transient EPROTO, so the fix is to roll it a lot - which is
+#     literally what upstream did in 6.15, a six-attempt retry loop
+#     around this exact download. This supplies that from userspace, on
+#     a kernel that has not got it.
+#
+#   an interface exists and NetworkManager will not use it
+#     The chip loaded fine. Resetting it is cargo cult - it will come
+#     back in exactly the same state. The problem is above the driver.
+if [ "$VERDICT" = fwrace ] || ! netdev_of >/dev/null; then
+  say "  The probe is what is failing, so the only thing that helps is more"
+  say "  probes. $ATTEMPTS of them, about $((ATTEMPTS * 9)) seconds."
+  i=0
+  while [ "$i" -lt "$ATTEMPTS" ]; do
+    i=$((i+1))
+    # Mostly the device-level reset, because that re-runs enumeration
+    # AND the firmware load, which is the part that has to win. Every
+    # sixth go, cycle the module instead - a different code path into
+    # the same probe, and free to try.
+    if [ $((i % 6)) = 0 ]; then rung_module; else rung_device_reset; fi
+    sleep "$SETTLE"
+    if working; then
+      say "  try $i: UP. $(netdev_of) is $(nm_state "$(netdev_of)")."
+      say ""
+      say "  It took $i tries, which is the whole story: the firmware upload"
+      say "  is a coin flip on this kernel and nothing is wrong with the"
+      say "  adapter. Expect this again after a reboot."
+      exit 0
+    fi
+    say "  try $i: $(netdev_of || echo 'still no interface')"
+  done
+else
+  say "  There IS an interface and the chip loaded its firmware, so this is"
+  say "  not the reset-it-until-it-works case. Trying the things above the"
+  say "  driver instead."
+  for round in $(seq 1 "$ROUNDS"); do
+    try_rung "hand it back to NetworkManager"     rung_nm           && exit 0
+    try_rung "rebind the interface to its driver" rung_driver_cycle && exit 0
+    try_rung "reset the whole USB device"         rung_device_reset && exit 0
+  done
+  # Documented for this adapter family and fixable with no internet:
+  # NetworkManager randomises the MAC while scanning and the 8188EU does
+  # not support it, so the device never gets anywhere. Not applied
+  # automatically - a reset is transient and an edit under /etc is not,
+  # and that difference is the owner's to make, not this script's.
   say ""
-  say "  --- round $round of $ROUNDS ---"
-  try_rung "hand it back to NetworkManager"        rung_nm            && exit 0
-  try_rung "rebind the interface to its driver"    rung_driver_cycle  && exit 0
-  try_rung "reset the whole USB device"            rung_device_reset  && exit 0
-  try_rung "de-authorise and re-authorise it"      rung_authorized    && exit 0
-  try_rung "unload and reload rtl8xxxu"            rung_module        && exit 0
-done
+  say "  Worth trying, and it needs no internet. NetworkManager randomises"
+  say "  the MAC while scanning; this adapter family does not support that,"
+  say "  and the symptom is exactly an adapter that is there and will not"
+  say "  go. Reloading config does NOT bounce the hotspot, unlike a restart:"
+  say ""
+  say "    printf '[device]\\nwifi.scan-rand-mac-address=no\\n' | \\"
+  say "      sudo tee /etc/NetworkManager/conf.d/80-wifi.conf"
+  say "    sudo nmcli general reload conf"
+  say ""
+fi
 
 say ""
-say "  $ROUNDS rounds of everything software can do, and it is still"
-say "  $(nm_state "$(netdev_of || echo wlan1)")."
-say ""
-say "  That is past what a reset can fix. In order of how likely they are:"
-say "    1. Move the dongle to one of the BLACK (USB 2.0) ports, or onto a"
-say "       powered hub, and reboot. A Realtek that enumerates and then fails"
-say "       a register write is the classic marginal-power symptom."
-say "    2. Unplug it, wait ten seconds, plug it back in. A cold start does"
-say "       things a soft reset cannot."
-say "    3. Reboot the Pi."
-say "    4. Suspect the dongle. It worked once and does not now."
+say "  That is past what a reset can fix from here. In order:"
+say "    1. Move it to a different USB port and take other USB devices off"
+say "       the bus. NOT for power - the failure is a timing race on a"
+say "       control transfer, and every detailed report of it has the"
+say "       dongle behind a hub or sharing one. A different port changes"
+say "       the timing, which is the only thing that matters."
+say "    2. Unplug it, wait ten seconds, plug it back in. A cold start"
+say "       does things a soft reset cannot."
+say "    3. Reboot."
+say "    4. Get the box online by some other route and move to a 6.12"
+say "       kernel, which carries upstream's own six-attempt retry around"
+say "       this exact failure. 6.18 also has the block-size fix that"
+say "       removes the race rather than surviving it."
 exit 1
