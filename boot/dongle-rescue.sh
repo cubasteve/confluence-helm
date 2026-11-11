@@ -153,14 +153,66 @@ EOT
 # leave the link alone. Up and down belong to the panel.
 HAVE_IW=1
 command -v iw >/dev/null 2>&1 || HAVE_IW=0
+HAVE_NMCLI=1
+command -v nmcli >/dev/null 2>&1 || HAVE_NMCLI=0
+
+# Is this radio switched OFF, rather than broken? Straight out of sysfs,
+# so it needs neither the rfkill binary nor root.
+#
+# This is the whole discriminator, and getting it wrong costs something
+# either way. Testing the adapter by bringing the link up is what made
+# an earlier version of this script rebind PERFECTLY HEALTHY dongles
+# seven times in five minutes: it fought the panel's own switch and read
+# "off" as "dead". But refusing to test at all - which is where that
+# left it - means an adapter the driver enumerated and then gave up on
+# looks exactly like one somebody turned off, and the rescue walks past
+# the one case it exists for.
+#
+# Blocked is not broken. Everything else is fair to ask about.
+blocked(){
+  local r v
+  for r in "$SYS"/class/net/"$1"/phy80211/rfkill*; do
+    [ -d "$r" ] || continue
+    for v in soft hard; do
+      [ -r "$r/$v" ] || continue
+      [ "$(cat "$r/$v" 2>/dev/null)" = "1" ] && return 0
+    done
+  done
+  return 1
+}
 
 usable(){
-  local dev="$1"
+  local dev="$1" state
   # Without iw there is no way to ask, and looping on a question we
   # cannot put is the failure above in another coat. An interface
   # existing is the weaker test and it is the honest one here.
   [ "$HAVE_IW" = 1 ] || return 0
-  iw dev "$dev" info >/dev/null 2>&1
+  iw dev "$dev" info >/dev/null 2>&1 || return 1
+
+  # And an interface that EXISTS is not an interface that WORKS. This
+  # is the state the script was blind to and the one reported off the
+  # boat: the adapter is in the panel's list, the switch is tapped, and
+  # nothing happens. rtl8xxxu enumerates the device, fails a register
+  # write at 0x1e80, and leaves behind a wlan node that answers `iw dev
+  # info` quite happily and that NetworkManager will never use.
+  [ "$HAVE_NMCLI" = 1 ] || return 0
+  blocked "$dev" && return 0          # off on purpose; nothing to fix
+  state=$(nmcli -t -f DEVICE,STATE device status 2>/dev/null \
+          | awk -F: -v d="$dev" '$1==d{print $2; exit}')
+  case "$state" in
+    # The two NetworkManager will not act on. `disconnected` is NOT one
+    # of them: that is an idle radio, which is what the panel's own off
+    # switch leaves behind, and yanking the adapter out from under it
+    # would be fighting the switch again.
+    unavailable|failed) return 1 ;;
+    # Deliberately left alone. An adapter NM has been told to keep its
+    # hands off is one command away from working, and the panel's switch
+    # IS that command - `device set managed yes`, which netd runs every
+    # time the radio is turned on. Resetting the USB device for it would
+    # fix nothing and loop every five minutes.
+    unmanaged) log "   $dev is unmanaged - that is the panel's switch to fix, not mine" ;;
+  esac
+  return 0
 }
 
 # The network interface this DEVICE made, through any of its interfaces.

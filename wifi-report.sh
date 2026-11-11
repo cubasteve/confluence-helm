@@ -28,9 +28,46 @@ done
 [ -n "$(ls -d /sys/class/net/*/phy80211 2>/dev/null)" ] || echo "  none"
 
 line "what NetworkManager reports"
-nmcli -t -f GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE device show 2>/dev/null \
+# STATE and REASON together, because the pair is the whole diagnosis.
+# `unavailable` says the stack will not use this adapter; the reason
+# says whether that is the radio being switched off, which is fine, or
+# the driver having given up on it, which is not - and those two look
+# identical from the helm, where the switch simply does not take.
+nmcli -t -f GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,GENERAL.REASON \
+      device show 2>/dev/null \
   | awk -F: '/GENERAL.DEVICE/{d=$2} /GENERAL.TYPE/{t=$2}
-             /GENERAL.STATE/{if(t=="wifi") printf "  %-8s %s\n", d, substr($0,index($0,":")+1)}'
+             /GENERAL.STATE/{s=substr($0,index($0,":")+1)}
+             /GENERAL.REASON/{if(t=="wifi") printf "  %-8s %-28s %s\n", d, s, substr($0,index($0,":")+1)}'
+
+line "switched off, or given up on"
+# Straight out of sysfs, so it needs no rfkill binary and no sudo. An
+# adapter that is BLOCKED is one somebody turned off and there is
+# nothing to fix. An adapter that is unavailable and NOT blocked is one
+# the driver enumerated and then failed - which is the case where the
+# panel shows the radio, the switch does nothing, and re-seating the
+# device is the only thing that helps.
+for d in /sys/class/net/*; do
+  n=$(basename "$d"); [ -e "$d/phy80211" ] || continue
+  soft='-'; hard='-'
+  for r in "$d"/phy80211/rfkill*; do
+    [ -r "$r/soft" ] && soft=$(cat "$r/soft" 2>/dev/null)
+    [ -r "$r/hard" ] && hard=$(cat "$r/hard" 2>/dev/null)
+  done
+  printf '  %-8s soft=%s hard=%s\n' "$n" "$soft" "$hard"
+done
+[ -n "$(ls -d /sys/class/net/*/phy80211 2>/dev/null)" ] || echo "  no phy at all"
+
+line "is the rescue installed, and has it run"
+if systemctl list-unit-files 2>/dev/null | grep -q '^dongle-rescue'; then
+  systemctl is-enabled dongle-rescue.timer 2>/dev/null \
+    | sed 's/^/  timer: /'
+  systemctl list-timers dongle-rescue.timer --no-pager 2>/dev/null | sed -n '2p;3p' \
+    | sed 's/^/  /'
+  journalctl -u dongle-rescue --since '30 min ago' --no-pager 2>/dev/null \
+    | tail -12 | sed 's/^/  /' || echo "  (journal needs sudo)"
+else
+  echo "  NOT INSTALLED - sudo bash ~/helm/boot/install-dongle-rescue.sh"
+fi
 
 line "what netd is serving the panel"
 curl -sf --max-time 3 http://127.0.0.1:8091/status \

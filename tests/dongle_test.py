@@ -38,7 +38,8 @@ class Rig:
 
     def __init__(self, driver='rtl8xxxu', netdev_at=1, up_at=1,
                  bound=True, vid=None, pid=None, port='1-1.4',
-                 with_iw=True, writable=True):
+                 with_iw=True, writable=True,
+                 nm_state=None, rfkill=None):
         self.d = tempfile.mkdtemp(prefix='helm-dongle-')
         self.port, self.driver, self.bound = port, driver, bound
         self.dev = os.path.join(self.d, 'bus/usb/devices', port)
@@ -67,6 +68,16 @@ class Rig:
         self.iplog = os.path.join(self.d, 'ip-calls')
         open(self.iplog, 'w').close()
         self.with_iw = with_iw
+        # What NetworkManager says about wlan1, and whether the radio is
+        # rfkilled. None for nm_state means no nmcli on the PATH at all.
+        self.nm_state = nm_state
+        self.netdir = os.path.join(self.d, 'class/net/wlan1')
+        if rfkill is not None:
+            os.makedirs(os.path.join(self.netdir, 'phy80211/rfkill0'))
+            for v in ('soft', 'hard'):
+                with open(os.path.join(self.netdir, 'phy80211/rfkill0', v),
+                          'w') as f:
+                    f.write(('1' if rfkill == v else '0') + '\n')
         self._tools()
         if not writable:
             # A directory where the attribute should be. chmod would not
@@ -92,6 +103,11 @@ class Rig:
                 ('iw', 'read n netdev_at up_at < "$STATE"\n'
                        '[ "$n" -ge "$up_at" ] && [ "$up_at" != 0 ] && exit 0\n'
                        'exit 1\n'))
+        if self.nm_state is not None:
+            # Only `device status` is asked for, and only one line of it
+            # matters. Anything else gets an empty answer, which is what
+            # nmcli gives for a device it does not know.
+            tools.append(('nmcli', 'echo "wlan1:%s"\n' % self.nm_state))
         for name, body in tools:
             p = os.path.join(self.bin, name)
             with open(p, 'w') as f:
@@ -167,6 +183,74 @@ class Rescue(unittest.TestCase):
             out, _ = r.run()
             self.assertGreaterEqual(r.rebinds, 1, out)
             self.assertIn('rebinding', out)
+        finally:
+            r.close()
+
+    def test_an_enumerated_adapter_nm_will_not_use_is_rescued(self):
+        """The state reported off the boat, and the one this script was
+        blind to: `I do see it. When I try to turn it on, it does not
+        turn on.`
+
+        rtl8xxxu enumerates the device, fails its register write, and
+        leaves a wlan1 that answers `iw dev info` perfectly well. The old
+        test was that one question, so the rescue looked at a dead
+        adapter, called it healthy and went back to sleep for five
+        minutes - every five minutes, forever.
+        """
+        r = Rig(netdev_at=1, up_at=1, nm_state='unavailable', rfkill='none')
+        try:
+            out, _ = r.run()
+            self.assertGreaterEqual(r.rebinds, 1, out)
+        finally:
+            r.close()
+
+    def test_a_radio_that_is_merely_switched_off_is_left_alone(self):
+        """And the other half of it, which is why the old test was
+        weakened to `iw` in the first place. An adapter that is down
+        because somebody turned it off is not broken, and an earlier
+        version that tested by bringing the link up fought the panel's
+        own switch - rebinding healthy dongles seven times in five
+        minutes. Blocked is not broken."""
+        for kind in ('soft', 'hard'):
+            r = Rig(netdev_at=1, up_at=1, nm_state='unavailable', rfkill=kind)
+            try:
+                out, _ = r.run()
+                self.assertEqual(r.rebinds, 0, '%s-blocked: %s' % (kind, out))
+            finally:
+                r.close()
+
+    def test_an_idle_adapter_is_left_alone(self):
+        """`disconnected` is what the panel's own off switch leaves
+        behind - netd runs `device disconnect`, not rfkill, so one radio
+        can be off while the other carries the hotspot. Yanking that one
+        would be fighting the switch in a third coat."""
+        r = Rig(netdev_at=1, up_at=1, nm_state='disconnected', rfkill='none')
+        try:
+            out, _ = r.run()
+            self.assertEqual(r.rebinds, 0, out)
+        finally:
+            r.close()
+
+    def test_unmanaged_is_named_rather_than_yanked(self):
+        """One command away from working, and the panel's switch is that
+        command - netd runs `device set managed yes` every time a radio
+        is turned on. Resetting the USB device would fix nothing and
+        loop every five minutes."""
+        r = Rig(netdev_at=1, up_at=1, nm_state='unmanaged', rfkill='none')
+        try:
+            out, _ = r.run()
+            self.assertEqual(r.rebinds, 0, out)
+            self.assertIn('unmanaged', out)
+        finally:
+            r.close()
+
+    def test_without_nmcli_it_falls_back_to_the_weaker_question(self):
+        """No nmcli, no second opinion. Looping on a question we cannot
+        put is worse than answering it optimistically."""
+        r = Rig(netdev_at=1, up_at=1, nm_state=None, rfkill='none')
+        try:
+            out, _ = r.run()
+            self.assertEqual(r.rebinds, 0, out)
         finally:
             r.close()
 

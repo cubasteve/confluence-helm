@@ -180,6 +180,30 @@ the panel. With no `iw` installed it falls back to "an interface exists",
 because looping on a question it cannot put is the same failure wearing
 a different coat.
 
+### And then it was blind to the case it exists for
+
+Backing off to `iw dev info` traded one failure for another, and the
+boat found it: *"I do see it. When I try to turn it on, it doesn't turn
+on."* `rtl8xxxu` enumerates the device, fails its register write, and
+leaves behind a `wlan1` that answers `iw dev info` perfectly well and
+that NetworkManager will never use. The rescue looked at a dead adapter,
+called it healthy, and went back to sleep — every five minutes, for ever.
+
+The discriminator is **rfkill, not the link**, which is the whole reason
+the earlier version was dangerous:
+
+| what sysfs and nmcli say | what it means | what the rescue does |
+|---|---|---|
+| `rfkill soft` or `hard` = 1 | somebody turned the radio off | nothing |
+| state `disconnected` | idle — what the panel's own off switch leaves | nothing |
+| state `unmanaged` | one command away, and the panel's switch *is* that command (`device set managed yes`) | names it in the journal |
+| state `unavailable` or `failed`, not blocked | the driver enumerated it and gave up | resets it |
+
+Blocked is never broken, so the switch is never fought — and `blocked()`
+reads `/sys/class/net/<dev>/phy80211/rfkill*/{soft,hard}` directly, so it
+needs neither the `rfkill` binary nor root. With no `nmcli` on the PATH
+it falls back to the weaker question again, for the same reason as above.
+
 **And the journal is honest.** Every sysfs write was `> file 2>/dev/null`
 with no test, so a run that could not write a thing logged
 `rebinding (try 1 … 7)` and read exactly like one that was trying. Each
@@ -188,7 +212,7 @@ restores anything it unbound, so one interrupted run cannot leave the
 adapter in the single state this script cannot see.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
-`ip` and `iw` on the PATH — a script whose job is to yank the boat's
+`ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's
 network adapter is not one to ship unexercised. It holds it to all of
 the above, including that an unknown driver is left alone: a rebind is a
 real interruption, not something to try on the off chance.
