@@ -232,7 +232,14 @@ case $VERDICT in
 esac
 
 hr "power"
-say "  throttled    : $(vcgencmd get_throttled 2>/dev/null || echo '(no vcgencmd)')"
+# 0x0 means the Pi's own 5V INPUT never sagged past threshold since
+# boot. It says nothing about a droop across the USB connector, a thin
+# extension lead or a corroded contact - which is where this class of
+# fault actually lives. There is no per-port USB current telemetry on a
+# Pi 4, and its downstream budget is about 1.1 A SHARED across all four
+# sockets. bMaxPower below is a declared descriptor figure, not a
+# measurement.
+say "  throttled    : $(vcgencmd get_throttled 2>/dev/null || echo '(no vcgencmd)')  (0x0 = the Pi's own 5V input was fine; says nothing about the socket)"
 say "  bMaxPower    : $(cat "$SYS"/bus/usb/devices/"$PORT"/bMaxPower 2>/dev/null)"
 say "  speed        : $(cat "$SYS"/bus/usb/devices/"$PORT"/speed 2>/dev/null) Mb/s"
 
@@ -402,8 +409,14 @@ say "       ports changes less than it sounds like it does."
 say "    2. Unplug it, wait ten seconds, plug it back in. A cold start"
 say "       does things a soft reset cannot."
 say "    3. Reboot."
-say "    4. Get the box online by some other route and move to a 6.12"
-say "       kernel, which carries upstream's own six-attempt retry around"
-say "       this exact failure. 6.18 also has the block-size fix that"
-say "       removes the race rather than surviving it."
+say "    4. Move to a 6.12 kernel, which carries upstream's own"
+say "       six-attempt retry around this exact failure. Note that"
+say "       upgrading WITHIN 6.6 buys nothing: rpi-6.6.y stops at"
+say "       6.6.78 and the retry landed upstream at 6.6.93. 6.18 also"
+say "       has the block-size fix, which removes the race rather than"
+say "       surviving it."
+say "       Not on passage: a kernel upgrade interrupted half way, on a"
+say "       box whose only way in is a hotspot it serves itself, can"
+say "       lose you both radios. At anchor, with a card image, and"
+say "       with a screen and keyboard you can actually reach."
 exit 1

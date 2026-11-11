@@ -214,6 +214,10 @@ class Fix(unittest.TestCase):
             self.assertEqual(rc, 0, out)
             self.assertEqual(r.resets, 0, out)
             self.assertIn('Nothing here is broken', out)
+            # 0x0 covers the Pi's 5V input, not the USB socket. Saying
+            # it without that caveat is how "it is not power" became an
+            # overclaim the first time.
+            self.assertIn("says nothing about the socket", out)
         finally:
             r.close()
 
@@ -471,6 +475,12 @@ class Fix(unittest.TestCase):
             self.assertIn('6.12', out)
             self.assertNotIn('marginal', out)
             self.assertNotIn('powered hub', out)
+            # Upgrading within 6.6 buys nothing - rpi-6.6.y stops at
+            # 6.6.78 and the retry landed upstream at 6.6.93 - and a
+            # kernel upgrade is the single most dangerous thing on this
+            # list for a box whose only way in is its own hotspot.
+            self.assertIn('WITHIN 6.6 buys nothing', out)
+            self.assertIn('Not on passage', out)
         finally:
             r.close()
 

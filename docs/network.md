@@ -223,7 +223,9 @@ time, so `0x1e80` is byte 3712 of a 4096-byte firmware page — chunk 29
 of 32. Reports of this failure name addresses all over that range
 (`1000`, `1080`, `1100`, `1280`, `1500`, `1680`, `1c80`, `1e80`), which
 is the giveaway: it is a **transient failure of one USB control
-transfer**, status −71 / `EPROTO`. The driver converts it to `-EAGAIN`,
+transfer**, status −71 / `EPROTO`. Do not go hunting for that `-71` in the log, though: the
+in-tree driver never prints the `usb_control_msg` return value, so its
+absence proves nothing. It was identified upstream, not locally. The driver converts it to `-EAGAIN`,
 nothing retries, and probe dies with `error -11`.
 
 The `size:` field is the interesting one. `size: 0080` is 128 bytes —
@@ -242,9 +244,17 @@ Two consequences worth holding on to:
   general argument, and it is worth distrusting on a boat — a 12 V-to-5 V
   supply is exactly where a Pi 4's rail sags, and none of the reports
   behind it were on one. So the script reads `vcgencmd get_throttled`
-  and prints it rather than asserting: `0x0` is *never under-voltage
-  since boot*, not merely "fine right now", and on this box it reads
-  `0x0`. Port choice is
+  and prints it rather than asserting. On this box it reads `0x0`.
+
+  **But do not read more into that than it says.** `0x0` means the Pi's
+  own **5 V input** never sagged past threshold since boot (bit 0 is
+  now, bit 16 is since boot). It says nothing about a droop across a USB
+  connector, a thin extension lead or a corroded contact — which is
+  exactly where this class of fault lives. There is no per-port USB
+  current telemetry on a Pi 4 at all, and its downstream USB budget is
+  about **1.1 A shared across all four sockets**, not per socket.
+  `bMaxPower` in the topology dump is a *declared* descriptor figure,
+  not a measurement. Port choice is
   worth trying because it is free, not because it is known to work: all
   four of the Pi 4's type-A ports hang off the one VL805 controller, so
   moving between them changes the port and the speed but not the
