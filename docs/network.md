@@ -280,10 +280,27 @@ picture — and then reads a **verdict** out of the log, because the two
 failures live on opposite sides of `probe()` and want opposite
 treatments:
 
-| in the log | what it means | what it does |
+| state | what it means | what it does |
 |---|---|---|
-| `probe of … failed with error -11`, or no interface at all | the firmware upload lost its race; there is no driver state to fix | rolls the dice again — 20 fresh device resets, which is upstream's own 6.15 retry loop supplied from userspace |
-| `Firmware revision …` and an interface exists | the chip is fine; resetting it brings it back identical | works above the driver: hand it back to NM, rebind, and surface the MAC-randomisation remedy |
+| no interface, and the last thing in the log was `probe of … failed with error -11` | the firmware upload lost its race; there is no driver state to fix | rolls the dice again — 20 fresh device resets, which is upstream's own 6.15 retry loop supplied from userspace |
+| an interface exists | the chip is fine, whatever is in the log; resetting it brings it back identical | works above the driver: hand it back to NM, rebind, and surface the MAC-randomisation remedy |
+
+**dmesg is a ring buffer, not a status register**, and the first version
+of that verdict forgot it. A bare `grep -q` for the failure found a
+stale `-11` from an hour earlier and announced a failed firmware upload
+about a `wlan1` sitting in `connected`. Caught on the boat, in the
+script's own `--look` output.
+
+That is not cosmetic. `fwrace` sends the ladder into twenty USB resets,
+and doing that to a working adapter is precisely the harm the rfkill
+guard exists to prevent — arriving through a different door. The rule
+that settles it cannot be argued with: **an interface existing proves
+this incarnation's firmware push succeeded**, because the push happens
+inside `rtl8xxxu_init_device()` and `ieee80211_register_hw()` runs only
+after it returns. "Failed to write block" and "I can see wlan1" cannot
+both describe the same incarnation. Failing that, the verdict goes by
+whichever of the two lines came *last* in the buffer. The block size is
+read off the live failure only, for the same reason.
 
 That second remedy —
 `wifi.scan-rand-mac-address=no` in
@@ -306,10 +323,10 @@ internet, so any fix that needs a download is circular. Measured on the
 boat: a reset loop pasted over SSH brought it back.
 
 `tests/donglefix_test.py` drives it against a pretend `/sys` with
-pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 14
-tests, including that each verdict gets its own ladder, that a
-switched-off radio is never yanked, and that the other radio is never
-touched.
+pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 17
+tests, including that each verdict gets its own ladder, that a stale
+failure never outvotes a live interface, that a switched-off radio is
+never yanked, and that the other radio is never touched.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's

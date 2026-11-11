@@ -43,9 +43,20 @@ class Rig:
     def __init__(self, nm_states=('disconnected',), port='1-1.4',
                  netdev='wlan1', bound='rtl8xxxu', rfkill=None,
                  r8188eu=False, vid=None, pid=None, others=(),
-                 with_nmcli=True, dmesg='race'):
+                 with_nmcli=True, dmesg='race', netdev_at=0):
         self.d = tempfile.mkdtemp(prefix='helm-fix-')
         self.port, self.netdev = port, netdev
+        # A failed probe leaves NO interface - ieee80211_register_hw()
+        # runs only after the firmware push returns. So a rig that wants
+        # to model "it came good on the third roll" has to create the
+        # netdev then, not have it there all along. netdev_at is which
+        # reset finally wins; 0 means it never does.
+        self.netdev_at = netdev_at
+        # What the pretend nmcli calls the device. Not `netdev`, which
+        # is None for a rig whose probe has not succeeded yet - the
+        # interface it goes on to create is still called wlan1, and
+        # nmcli has to agree or the script reads "(not listed)".
+        self.nm_name = netdev or 'wlan1'
         self.dev = os.path.join(self.d, 'bus/usb/devices', port)
         self.iface = self.dev + ':1.0'
         os.makedirs(self.dev)
@@ -103,6 +114,17 @@ class Rig:
         'ok': ('usb 1-1.4: Firmware revision 11.1 (signature 0x88e1)\n'
                'rtl8xxxu 1-1.4:1.0 wlan1: renamed from wlan%d'),
         'silent': 'usb 1-1.4: new high-speed USB device',
+        # Verbatim shape of the boat's own buffer after the reset loop
+        # won: a failed probe from an hour ago, then a reset, then a
+        # clean load. The first version of the verdict read the -11 and
+        # announced a firmware failure about a connected adapter.
+        'stale': ('usb 1-1.4: rtl8xxxu_writeN: Failed to write block at addr: 1e80 size: 0080\n'
+                  'rtl8xxxu: probe of 1-1.4:1.0 failed with error -11\n'
+                  'usb 1-1.4: disconnecting\n'
+                  'usb 1-1.4: Device still attached, trying to reset\n'
+                  'usb 1-1.4: reset high-speed USB device number 4 using xhci_hcd\n'
+                  'usb 1-1.4: Firmware revision 28.0 (signature 0x88e1)\n'
+                  'usb 1-1.4: rtl8xxxu_bss_info_changed: HT supported'),
     }
 
     def _tools(self, r8188eu, with_nmcli, dmesg):
@@ -133,7 +155,7 @@ class Rig:
                 '  *REASON*) echo "GENERAL.REASON:0 (No reason given)";;\n'
                 'esac\nexit 0\n'
                 % (self.calls, self.counter, self.states, self.states,
-                   self.netdev))
+                   self.nm_name))
         for name, body in tools.items():
             p = os.path.join(self.bin, name)
             with open(p, 'w') as f:
@@ -162,9 +184,14 @@ class Rig:
                 out.append(line)
                 t = line.strip()
                 if t.startswith('->') or t.startswith('try '):
-                    # A rung ran. The pretend kernel counts it, which is
-                    # what moves nmcli along its state list.
+                    # A rung is about to run, or just did. Count it and
+                    # move the pretend kernel along: nmcli's answer is
+                    # indexed by this, and the netdev appears once the
+                    # roll that wins has happened.
                     self.resets += 1
+                    if self.netdev_at and self.resets >= self.netdev_at:
+                        os.makedirs(os.path.join(self.iface, 'net', 'wlan1'),
+                                    exist_ok=True)
                     with open(self.counter, 'w') as f:
                         f.write('%d\n' % self.resets)
         proc.wait()
@@ -207,16 +234,20 @@ class Fix(unittest.TestCase):
 
     def test_the_reported_state_is_rescued(self):
         """"I do see it. When I try to turn it on, it doesn't turn on."
-        An interface exists, iw would answer about it happily, and
-        NetworkManager will not use it. The timer walks past this."""
+
+        An interface exists, so `iw dev info` answers happily and the
+        timer walks straight past - which is what made it look broken.
+        And because an interface exists, this is NOT the firmware race
+        however much of one is in the buffer: the chip loaded. The
+        remedy is above the driver."""
         r = Rig(nm_states=('unavailable', 'unavailable', 'disconnected'),
-                rfkill='none')
+                rfkill='none', dmesg='ok')
         try:
             out, rc = r.run()
             self.assertEqual(rc, 0, out)
+            self.assertIn('not the reset-it-until-it-works case', out)
+            self.assertIn('WORKED', out)
             self.assertGreaterEqual(r.resets, 2, out)
-            self.assertIn('UP.', out)
-            self.assertIn('coin flip', out)
         finally:
             r.close()
 
@@ -266,16 +297,77 @@ class Fix(unittest.TestCase):
         script must not waste them on nmcli."""
         r = Rig(nm_states=('unavailable', 'unavailable', 'unavailable',
                            'disconnected'),
-                rfkill='none', dmesg='race')
+                netdev=None, bound=None, rfkill='none', dmesg='race',
+                netdev_at=3)
         try:
             out, rc = r.run(attempts=8)
             self.assertEqual(rc, 0, out)
             self.assertIn('The probe is what is failing', out)
-            self.assertIn('UP', out)
-            self.assertTrue(any('modprobe' in c for c in r.ran()) or r.resets >= 3,
-                            out)
+            self.assertIn('UP.', out)
+            self.assertIn('coin flip', out)
+            self.assertGreaterEqual(r.resets, 3, out)
             self.assertFalse(any('nmcli device set' in c for c in r.ran()),
                              'nmcli cannot help a probe that never ran: %s' % out)
+        finally:
+            r.close()
+
+    def test_a_stale_failure_does_not_outvote_a_live_interface(self):
+        """Measured on the boat. dmesg is a ring buffer, not a status
+        register: an hour-old `-11` sat in it alongside a wlan1 that was
+        `connected`, and a bare grep read the failure and announced it.
+
+        The rule that settles it cannot be argued with - the firmware
+        push happens inside rtl8xxxu_init_device() and
+        ieee80211_register_hw() runs only after it returns, so a failed
+        upload leaves NO interface. Both in the buffer means the failure
+        belongs to an earlier incarnation.
+
+        Not cosmetic: fwrace sends the ladder into twenty USB resets,
+        and doing that to a working adapter is the exact harm the rfkill
+        guard exists to prevent."""
+        r = Rig(nm_states=('connected',), rfkill='none', dmesg='stale')
+        try:
+            out, rc = r.run()
+            self.assertIn('has its firmware and registered an interface', out)
+            self.assertNotIn('lost a race', out)
+            self.assertIn('from an earlier attempt', out)
+            self.assertEqual(r.resets, 0, out)
+            self.assertEqual(rc, 0, out)
+        finally:
+            r.close()
+
+    def test_a_stale_failure_cannot_start_the_dice_roll(self):
+        """The dangerous half of the same bug, with working() no longer
+        short-circuiting: a connected adapter is let alone by luck in
+        the test above, because the script exits before the ladder. Here
+        NetworkManager is unhappy, so the ladder DOES run - and it must
+        be the above-the-driver one, not twenty resets of a chip whose
+        firmware is loaded."""
+        r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='stale')
+        try:
+            out, _ = r.run(rounds=1)
+            self.assertIn('not the reset-it-until-it-works case', out)
+            self.assertNotIn('The probe is what is failing', out)
+            self.assertTrue(any('nmcli device set' in c for c in r.ran()), out)
+        finally:
+            r.close()
+
+    def test_the_block_size_is_only_read_off_a_live_failure(self):
+        """`size: 0080` is the most quotable number in the output and it
+        was being scraped from anywhere in the buffer - so it got printed
+        under a verdict that did not come from it."""
+        r = Rig(nm_states=('connected',), rfkill='none', dmesg='stale')
+        try:
+            out, _ = r.run()
+            self.assertNotIn('block size', out)
+        finally:
+            r.close()
+        r = Rig(nm_states=('unavailable',), netdev=None, bound=None,
+                dmesg='race')
+        try:
+            out, _ = r.run(attempts=1)
+            self.assertIn('block size 0080', out)
+            self.assertIn('the unfixed path', out)
         finally:
             r.close()
 

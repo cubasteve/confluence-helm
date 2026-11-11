@@ -175,21 +175,59 @@ dmesg 2>/dev/null | grep -iE 'rtl8|8188|usb 1-|insufficient' | tail -14 \
 # raised to 196 (0x00c4) in 6.14 precisely because 128 loses this race.
 # A kernel printing 0080 has neither that fix nor the six-attempt retry
 # loop added in 6.15, so one unlucky EPROTO kills the probe outright.
-VERDICT=unknown
-if dmesg 2>/dev/null | grep -qE 'rtl8xxxu: probe of .* failed with error -11'; then
+# dmesg is a RING BUFFER, not a status register. It holds every attempt
+# this boot, successful and not, and the first version of this read it
+# with a bare grep -q: one stale `-11` from an hour ago outvoted an
+# adapter that was connected right now. Caught on the boat - the script
+# announced a failed firmware upload about a wlan1 sitting in `connected`.
+#
+# Two rules, and the first is the one that cannot be argued with.
+#
+#   An interface existing PROVES this incarnation's firmware push
+#   succeeded. The push happens inside rtl8xxxu_init_device() at probe
+#   time and ieee80211_register_hw() runs only after it returns, so a
+#   failed upload leaves no netdev at all. "Failed to write block" and
+#   "I can see wlan1" are mutually exclusive in the same incarnation,
+#   and if you have both, the write failure is from an earlier one.
+#
+#   Otherwise, go by which came LAST. grep -n numbers the buffer in
+#   time order, so comparing the line of the last failure against the
+#   line of the last "Firmware revision" says which way the most recent
+#   attempt went.
+#
+# Getting this wrong is not cosmetic: fwrace sends the ladder below into
+# twenty USB resets, and doing that to a working adapter is exactly the
+# harm the rfkill guard exists to prevent.
+VERDICT=unknown; STALE=0
+LAST_FAIL=$(dmesg 2>/dev/null | grep -n 'probe of .* failed with error -11' \
+            | tail -1 | cut -d: -f1)
+LAST_OK=$(dmesg 2>/dev/null | grep -n 'Firmware revision' | tail -1 | cut -d: -f1)
+if netdev_of >/dev/null; then
+  VERDICT=fwok
+  [ -n "${LAST_FAIL:-}" ] && STALE=1
+elif [ "${LAST_FAIL:-0}" -gt "${LAST_OK:-0}" ] 2>/dev/null; then
   VERDICT=fwrace
-elif dmesg 2>/dev/null | grep -q 'Firmware revision'; then
+elif [ -n "${LAST_OK:-}" ]; then
   VERDICT=fwok
 fi
 say ""
 case $VERDICT in
-  fwrace) say "  VERDICT: the firmware upload lost a race and probe FAILED (-11)."
-          say "           Each probe is an independent dice roll, so the answer is"
-          say "           to roll it many times. That is what this script does."
+  fwrace) say "  VERDICT: the firmware upload lost a race and probe FAILED (-11),"
+          say "           with no interface to show for it. Each probe is an"
+          say "           independent dice roll, so the answer is to roll it many"
+          say "           times. That is what this script does."
+          # Read off the CURRENT failure, not any failure: this only
+          # prints on the branch where the last thing that happened was
+          # that failure.
           BS=$(dmesg 2>/dev/null | grep -o 'size: [0-9a-f]*' | tail -1 | awk '{print $2}')
-          [ -n "${BS:-}" ] && say "           block size $BS $([ "$BS" = 0080 ] && echo '(128 - the unfixed path)' || echo '')" ;;
-  fwok)   say "  VERDICT: the chip loaded its firmware. Whatever is wrong is ABOVE"
-          say "           the driver - rfkill, NetworkManager, or association." ;;
+          [ -n "${BS:-}" ] && say "           block size $BS$([ "$BS" = 0080 ] && echo ' - 128, the unfixed path: no retry' || echo '')" ;;
+  fwok)   say "  VERDICT: the chip has its firmware and registered an interface."
+          say "           Anything wrong is ABOVE the driver - rfkill,"
+          say "           NetworkManager, or association."
+          [ "$STALE" = 1 ] && {
+            say "           (there IS a failed probe further back in the buffer."
+            say "            It is from an earlier attempt - a failed upload"
+            say "            leaves no interface at all, and there is one.)"; } ;;
   *)      say "  VERDICT: no firmware evidence either way in the ring buffer." ;;
 esac
 
@@ -301,17 +339,21 @@ if [ "$VERDICT" = fwrace ] || ! netdev_of >/dev/null; then
     # AND the firmware load, which is the part that has to win. Every
     # sixth go, cycle the module instead - a different code path into
     # the same probe, and free to try.
+    # Announced BEFORE the attempt, not after. Each roll is about nine
+    # seconds of silence otherwise, and a script that prints nothing for
+    # three minutes is one you kill halfway through.
+    say "  try $i of $ATTEMPTS ..."
     if [ $((i % 6)) = 0 ]; then rung_module; else rung_device_reset; fi
     sleep "$SETTLE"
     if working; then
-      say "  try $i: UP. $(netdev_of) is $(nm_state "$(netdev_of)")."
+      say "       UP. $(netdev_of) is $(nm_state "$(netdev_of)")."
       say ""
-      say "  It took $i tries, which is the whole story: the firmware upload"
-      say "  is a coin flip on this kernel and nothing is wrong with the"
-      say "  adapter. Expect this again after a reboot."
+      say "  It took $i $([ "$i" = 1 ] && echo try || echo tries), which is the whole story: the firmware"
+      say "  upload is a coin flip on this kernel and nothing is wrong with"
+      say "  the adapter. Expect this again after a reboot."
       exit 0
     fi
-    say "  try $i: $(netdev_of || echo 'still no interface')"
+    say "       $(netdev_of || echo 'still no interface')"
   done
 else
   say "  There IS an interface and the chip loaded its firmware, so this is"
