@@ -310,12 +310,80 @@ both describe the same incarnation. Failing that, the verdict goes by
 whichever of the two lines came *last* in the buffer. The block size is
 read off the live failure only, for the same reason.
 
-That second remedy —
-`wifi.scan-rand-mac-address=no` in
-`/etc/NetworkManager/conf.d/80-wifi.conf` — is **printed, not applied**.
-A reset is transient and an edit under `/etc` is not, and which of those
-to make is the owner's call. `nmcli general reload conf` picks it up
-without restarting NetworkManager, which would bounce the hotspot.
+That second remedy is **printed, not applied** by `dongle-fix.sh` — a
+reset is transient and an edit under `/etc` is not. It has an installer
+of its own.
+
+### Scan-time MAC randomisation
+
+```
+sudo bash boot/install-wifi-mac.sh
+sudo bash boot/uninstall-wifi-mac.sh
+```
+
+Several Realtek 8188-family adapters fail to apply a randomised MAC,
+after which NetworkManager retries in a loop and the adapter
+authenticates but never associates. Debian ships a file for exactly
+this — `/usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf` — but it
+matches only `driver:eagle_sdio` and `driver:wl`, so `rtl8xxxu` is not
+covered and randomisation is **on** here.
+
+**It is insurance, not a diagnosis, and the installer says so in its own
+header.** The dated evidence tying 8188eu to this is from 2017 and
+kernel 4.9; its root cause was traced to `wpa_supplicant` and fixed long
+before Bookworm's wpa 2.10, and the documented signature is
+*authenticates but will not associate* — not *present but will not turn
+on, cleared by a USB reset*, which is what this boat saw. Applied
+because it is one reversible file, not because it is known to be the
+fault.
+
+Three things make it safe to put on a boat:
+
+- **Scoped by driver, and the driver string is read off the box.** The
+  advice everywhere is "confirm the `DRIVER` string by hand, byte for
+  byte, before writing the file" — a step to be skipped at 2 a.m., and
+  skipping it produces a file that looks applied and is not, because an
+  unmatched `match-device` spec is not an error and is not logged. So it
+  is not a step: the installer reads it and writes what it read. The
+  8188eu family is served by `rtl8xxxu` in-tree, `r8188eu` in staging
+  and `8188eu` out-of-tree, and the value is compared exactly.
+- **By driver, not by interface name.** `wlan0`/`wlan1` here are
+  kernel-assigned, which systemd documents as not fixed across boots —
+  and a USB re-enumeration of this dongle can bring it back as `wlan2`.
+- **It fails toward doing nothing.** An unrecognised spec means the
+  section never matches, the key is never read, and randomisation stays
+  on for the dongle. A typo means "the fix did not apply", never "wlan0
+  changed behaviour". The installer additionally *refuses* if both
+  radios report the same driver, and records `wlan0`'s MAC before and
+  after.
+
+Two traps in `match-device`, both verified against NetworkManager
+1.42.4's own matcher and both asserted by the probe: **commas are OR,
+not AND**, so `driver:x,type:wifi` would *widen* this to both radios;
+and a `match-device` made only of `except:` specs **inverts** and
+matches every device there is.
+
+It reloads config and **never restarts NetworkManager** — the restart is
+the one action here that can drop the access point, and the access point
+is the way onto the boat. `NetworkManager --print-config` is run first,
+because it reads from disk and so catches a drop-in sorting after `80-`
+that would override this one; if the section does not come back, the
+daemon is left alone. That read-back proves the file parses, *not* that
+the match matched — NetworkManager exposes no effective per-device
+value, so the only real proof is behavioural: a randomised address has
+the `02` bit set in its first octet and rotates, a permanent one does
+not move.
+
+Not set, deliberately: `wifi.cloned-mac-address` (association-time
+randomisation) already defaults to `preserve` since NM 1.6, so it is
+off unless a connection profile sets it explicitly — and a global
+default would not beat a profile anyway. `wifi.mac-address-randomization`
+is deprecated since NM 1.4 and writing it would be a dead setting.
+
+`tests/wifimac_test.py` drives both scripts against a pretend `/sys` and
+a pretend `nmcli` — 12 tests. Four controls run: hardcode the driver,
+drop the shared-driver refusal, restart instead of reload, or reload
+before the parse check, and the probe that describes each one fails.
 
 **It is scoped to one USB device, deliberately.** The boat SSHes in over
 the hotspot on the *internal* radio. It never touches `nmcli radio`,
