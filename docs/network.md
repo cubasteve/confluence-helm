@@ -238,10 +238,18 @@ Two consequences worth holding on to:
 
 - **It is not power, and not a dying chip.** Inserting a 5 ms delay
   before the first write makes it load every time; so does the 196-byte
-  block size. Neither of those fixes a power problem. Port choice still
-  matters — it shifts control-transfer timing, and every detailed report
-  has the dongle behind or beside a hub — but the mechanism is timing,
-  not amps.
+  block size. Neither of those fixes a power problem. That is the
+  general argument, and it is worth distrusting on a boat — a 12 V-to-5 V
+  supply is exactly where a Pi 4's rail sags, and none of the reports
+  behind it were on one. So the script reads `vcgencmd get_throttled`
+  and prints it rather than asserting: `0x0` is *never under-voltage
+  since boot*, not merely "fine right now", and on this box it reads
+  `0x0`. Port choice is
+  worth trying because it is free, not because it is known to work: all
+  four of the Pi 4's type-A ports hang off the one VL805 controller, so
+  moving between them changes the port and the speed but not the
+  controller. The detailed reports do have the dongle sharing a bus with
+  something busy, which is suggestive and no more.
 - **There is no fallback driver and no choice to make.** Mainline
   deleted `drivers/staging/r8188eu` and taught `rtl8xxxu` this chip in
   the *same* release, 6.3. Every RPi branch that still carries
