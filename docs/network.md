@@ -211,6 +211,60 @@ write is checked and says which way it failed. A run killed partway also
 restores anything it unbound, so one interrupted run cannot leave the
 adapter in the single state this script cannot see.
 
+### The timer and the hammer
+
+`dongle-rescue.sh` is the **timer**. It runs unattended every five
+minutes and must never yank an adapter that is working, so it asks one
+question and leaves if the answer is good. That timidity is a feature
+right up until the adapter is in a state where the question has the
+wrong answer — and then it is useless, silently: the loop breaks on try
+1, and the log line for try 1 is suppressed, so running it by hand
+prints *nothing at all* and changes *nothing at all*. Reported from the
+boat as "the dongle rescue is not working", which is exactly what it
+looks like.
+
+`dongle-fix.sh` is the **hammer**, and it is run by a person:
+
+```
+sudo bash boot/dongle-fix.sh --look    # diagnose, change nothing
+sudo bash boot/dongle-fix.sh           # diagnose, then escalate
+```
+
+Someone running it has already decided the adapter is broken, so it does
+not have to be careful about *that* judgement — only about not cutting
+the branch it is sitting on. It prints the full state first (which USB
+device, which driver if any, the interface, the rfkill bits, nmcli's
+STATE **and** REASON, whether `r8188eu` is even on this kernel, the
+kernel's own complaints, and the power picture), and then climbs a
+ladder, re-testing after each rung so the rung that works tells you what
+was wrong:
+
+1. hand it back to NetworkManager (`device set managed yes`)
+2. rebind the interface to its driver
+3. reset the whole USB device (`/sys/bus/usb/drivers/usb/{unbind,bind}`)
+4. de-authorise and re-authorise it
+5. unload and reload `rtl8xxxu`
+
+Three rounds of that, and then it stops and says what to do with your
+hands, because at that point the answer is a different port, a powered
+hub, or a different dongle.
+
+**It is scoped to one USB device, deliberately.** The boat SSHes in over
+the hotspot on the *internal* radio. It never touches `nmcli radio`,
+never unloads `brcmfmac`, and never resets a device that is not the
+dongle — a probe asserts all three, because locking the owner out of the
+box is a worse outcome than a dongle that stays dead. It also leaves a
+**blocked** radio alone, for the same reason the timer does.
+
+Everything it does works with no internet and nothing installed, which
+is the constraint that matters: the dongle *is* the box's route to the
+internet, so any fix that needs a download is circular.
+
+`tests/donglefix_test.py` drives it against a pretend `/sys` with
+pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 11
+tests, including that a switched-off radio is never yanked and that the
+other radio is never touched.
+
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's
 network adapter is not one to ship unexercised. It holds it to all of
