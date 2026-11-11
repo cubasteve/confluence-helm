@@ -381,22 +381,38 @@ class Fix(unittest.TestCase):
             out, rc = r.run(rounds=1)
             self.assertIn('not the reset-it-until-it-works case', out)
             self.assertTrue(any('nmcli device set' in c for c in r.ran()), out)
-            self.assertIn('scan-rand-mac-address', out)
             self.assertNotIn('The probe is what is failing', out)
         finally:
             r.close()
 
-    def test_the_mac_randomisation_remedy_is_offered_not_applied(self):
-        """A reset is transient; an edit under /etc is not. Which of those
-        to make is the owner's call, not a script's - so it prints the
-        command and does not run it."""
+    def test_it_names_the_mac_randomisation_dead_end_as_one(self):
+        """This branch used to print the MAC-randomisation fix as its
+        remedy. It is not one: Raspberry Pi OS ships its own build of
+        network-manager whose single change is disabling scan-time
+        randomisation, globally, in a conffile - so it was already off
+        while the adapter was failing and cannot be the cause.
+
+        The script still mentions it, because it is the first thing
+        anybody searching this symptom will find, and "not this, and
+        here is how to check" is worth more than silence."""
         r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='ok')
         try:
             out, _ = r.run(rounds=1)
-            self.assertIn('80-wifi.conf', out)
-            self.assertIn('nmcli general reload conf', out)
-            self.assertFalse(any('general reload' in c for c in r.ran()),
-                             'it printed it AND ran it: %s' % r.ran())
+            self.assertIn('NOT this', out)
+            self.assertIn('check-wifi-mac.sh', out)
+            # and it must never go back to telling anyone to write it
+            self.assertNotIn('tee /etc/NetworkManager', out)
+            self.assertNotIn('80-wifi.conf', out)
+        finally:
+            r.close()
+
+    def test_it_points_at_what_is_actually_left(self):
+        """Naming a dead end is only useful with somewhere to go next."""
+        r = Rig(nm_states=('unavailable',), rfkill='none', dmesg='ok')
+        try:
+            out, _ = r.run(rounds=1)
+            self.assertIn('nmcli device disconnect', out)
+            self.assertIn('journalctl -u NetworkManager', out)
         finally:
             r.close()
 

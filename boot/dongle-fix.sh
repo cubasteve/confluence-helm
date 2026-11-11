@@ -370,14 +370,23 @@ else
   # automatically - a reset is transient and an edit under /etc is not,
   # and that difference is the owner's to make, not this script's.
   say ""
-  say "  Worth trying, and it needs no internet. NetworkManager randomises"
-  say "  the MAC while scanning; this adapter family does not support that,"
-  say "  and the symptom is exactly an adapter that is there and will not"
-  say "  go. Reloading config does NOT bounce the hotspot, unlike a restart:"
+  # NOT the MAC-randomisation fix that used to be printed here.
+  # Raspberry Pi OS turns scan-time randomisation off in its own rebuild
+  # of network-manager, globally, in a conffile - so it was already off
+  # while this adapter was failing and cannot be the cause. See
+  # boot/check-wifi-mac.sh, which proves it rather than assuming it.
+  say "  Scan-time MAC randomisation is the usual suspect here and it is"
+  say "  NOT this: Raspberry Pi OS disables it in its own build, so it was"
+  say "  already off while this was failing. Confirm with"
+  say "  check-wifi-mac.sh rather than taking my word for it."
   say ""
-  say "    printf '[device]\\nwifi.scan-rand-mac-address=no\\n' | \\"
-  say "      sudo tee /etc/NetworkManager/conf.d/80-wifi.conf"
-  say "    sudo nmcli general reload conf"
+  say "  What is left to look at: whether something ran"
+  say "  'nmcli device disconnect' on it, which also blocks autoconnect"
+  say "  until something clears it; the connection profile's own"
+  say "  cloned-mac-address; and the journal around the moment it stopped."
+  say ""
+  say "    nmcli -f GENERAL.STATE,GENERAL.REASON device show $(netdev_of)"
+  say "    journalctl -u NetworkManager -b | tail -40"
   say ""
 fi
 

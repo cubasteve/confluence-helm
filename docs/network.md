@@ -314,92 +314,79 @@ That second remedy is **printed, not applied** by `dongle-fix.sh` — a
 reset is transient and an edit under `/etc` is not. It has an installer
 of its own.
 
-### Scan-time MAC randomisation
+### Scan-time MAC randomisation — already done, and a dead end
 
 ```
-sudo bash boot/install-wifi-mac.sh
-sudo bash boot/uninstall-wifi-mac.sh
+bash boot/check-wifi-mac.sh      # read-only; writes nothing
 ```
 
-With `wifi.scan-rand-mac-address` at its default of `yes`,
-NetworkManager gives a wifi device a fresh random MAC every five minutes
-for as long as it is **not associated** — and setting a wifi MAC means
-taking the interface administratively **down and back up**, because
-`wpa_supplicant` needs that to notice the change (`_hw_addr_set()` says
-so in a comment). So an adapter that is failing to associate gets downed
-and re-upped every five minutes, for ever.
+This started as an installer that wrote
+`wifi.scan-rand-mac-address=no` into `/etc/NetworkManager/conf.d/`. It
+was a no-op, and finding that out killed the theory behind it.
 
-On a flaky RTL8188EU that is a mechanism rather than a theory: it is
-exactly the kind of repeated USB-level churn that wedges this chip, and
-a USB device reset is exactly what clears it. It is still **not a
-diagnosis** — the dated reports tying 8188eu to this are from 2017 and
-kernel 4.9, and their root cause was traced to `wpa_supplicant` and
-fixed long before Bookworm's wpa 2.10. Plausible, cheap and reversible,
-which is the argument for it.
+**Raspberry Pi does not ship Debian's `network-manager`.** It ships its
+own rebuild, and the only thing the rebuild changes is this. Verified
+against the actual arm64 package rather than docs — `network-manager
+1.42.4-1+rpt1+deb12u1`, whose changelog reads, in full:
 
-Debian ships a file for this already —
-`/usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf` — but it
-matches only `driver:eagle_sdio` and `driver:wl`, so neither radio here
-is covered and randomisation is on for both.
+```
+  * NetworkManager.conf: disable MAC randomization feature
+ -- Serge Schneider <serge@raspberrypi.com>  Mon, 07 Apr 2025 13:28:21 +0100
+```
 
-**It covers both radios, and the first version was wrong to scope it.**
-Scoping to the dongle's driver looked like the careful choice. It is the
-opposite, for two reasons in NetworkManager's own source:
+The binary ships `/etc/NetworkManager/NetworkManager.conf` as a dpkg
+**conffile**, and it is:
 
-- Scan randomisation **cannot touch an activated device** —
-  `_hw_addr_set_scanning()` returns immediately when the device is
-  activating or activated. While `wlan0` serves SeaWire the setting is a
-  no-op for it either way, so covering it costs nothing.
-- If SeaWire ever **drops**, `wlan0` becomes a scanning candidate — and
-  NM would start taking the one radio that must come back down and up
-  every five minutes, on a driver its own comments flag for MAC-set
-  defects: *"either due to a driver issue (brcmfmac, bgo#770456,
-  rh#1374023)"*, noting it *"can block NetworkManager for 500 msec while
-  taking down the device"*.
+```ini
+[main]
+plugins=ifupdown,keyfile
 
-A bare `[device]` section also sidesteps the exact-match trap: `driver:`
-does not glob, so a scoped file silently does nothing the day the
-adapter comes up on `r8188eu` or an out-of-tree `8188eu` instead.
+[ifupdown]
+managed=false
 
-**The lockout this is careful about.** A malformed file in
-`/etc/NetworkManager/conf.d` is *not* tolerated with a warning:
-`nm-config.c read_config()` returns FALSE on any key-file parse error,
-and `main.c` then prints `Failed to read configuration` and `exit(1)`.
-NetworkManager does not start **at the next boot** — no hotspot, no SSH,
-on a boat. The reload is the safe part; a bad file left on disk is a
-mine with a timer on it. So the installer parse-checks with
-`NetworkManager --print-config` (same `nm_config_setup()` path, safe
-beside a running daemon) *before* reloading, and **removes** the file if
-it does not parse — restoring the previous one if there was one.
+[device]
+wifi.scan-rand-mac-address=no
+```
 
-**And a reload reports success even when the file failed to parse.**
-`nm_config_reload()` logs the error, keeps the old config and returns
-void; the D-Bus call succeeds anyway. So the exit status proves nothing
-and the journal is the only witness — the installer greps it for
-`Failed to reload the configuration`.
+A bare `[device]` section, so it covers every radio, and it has been
+there since the image was built. Two things follow.
 
-It reloads and **never restarts** NetworkManager. Wi-Fi devices are
-always taken down on quit (`unmanaged_on_quit()` is explicit), so a
-restart definitely drops the AP.
+**It was already off while the dongle was failing, so it cannot have
+been the cause.** The mechanism was never silly — setting a wifi MAC
+means taking the interface administratively down and back up (because
+`wpa_supplicant` needs that to notice), and NM does it every five
+minutes to any device that is not associated, which is real USB churn
+on an adapter already struggling. It just was not happening here. Keep
+looking.
 
-**Watch for the right thing afterwards.** Switching randomisation off
-does *not* put the old MAC back: at scan kickoff
-`_hw_addr_set_scanning()` runs with `do_reset` false, so an adapter
-keeps whatever random MAC it last had until it next activates. Success
-is the MAC **no longer changing** across rescans, not it reverting to
-the one on the label. The installer prints the loop to watch it.
+**And layering another file on top would have been worse than
+useless.** Every config file merges into **one** keyfile, group by
+group, so a second bare `[device]` section merges into the distro's.
+Today that writes the same key with the same value and changes nothing
+— but it leaves a section sitting there that anyone adding a
+`match-device` to would silently *narrow* the distro's global setting,
+re-enabling five-minutely down/up MAC churn on the radio carrying the
+hotspot. Meanwhile a `conf.d` file NetworkManager cannot parse is fatal
+at **startup**, not at reload: `read_config()` returns FALSE on any
+key-file error and `main.c` prints `Failed to read configuration` and
+`exit(1)`. No hotspot, no SSH, at the next power cycle.
 
-Not set, deliberately: `wifi.cloned-mac-address` (association-time
-randomisation) already defaults to `preserve` since NM 1.6, and a scan
-MAC cannot leak into it — the scan path derives its random address *from*
-the initial MAC and never overwrites it. `wifi.mac-address-randomization`
-has been deprecated since NM 1.4 and writing it would be a dead setting.
+So the script writes nothing. What it does is report where the setting
+comes from, what the *merged* config says (via `NetworkManager
+--print-config`, which reads from disk through the same path the daemon
+uses and is safe beside a running one), and whether the conffile still
+matches the shipped original — a conffile survives upgrades, so it can
+have been edited. If randomisation really is on, the advice is to
+restore the distro file, not to layer over it.
 
-`tests/wifimac_test.py` drives both scripts against a pretend `/sys`,
-`nmcli` and `journalctl` — 14 tests. Four controls run: leave the
-unparseable file on disk, believe the reload, scope it to one driver
-again, or restart instead of reload, and the probe describing each one
-fails.
+It distinguishes **unknown** from **on**: without the `NetworkManager`
+binary it cannot see precedence, and saying "it is on" would send
+someone reinstalling a package over the very link that may be at fault.
+
+`tests/wifimac_test.py` — 9 tests, including that the md5 constant still
+matches the real package and that the script modifies nothing anywhere
+under `/etc`. Four controls run: wrong md5, guess when it cannot merge,
+treat a missing setting as neutral, or write a file after all.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's
