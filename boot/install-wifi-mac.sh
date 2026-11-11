@@ -1,7 +1,6 @@
 #!/bin/bash
 # =====================================================================
-# Stop NetworkManager randomising the USB wifi dongle's MAC while it
-# scans.
+# Stop NetworkManager randomising a wifi MAC while it scans.
 #
 #   sudo bash ~/helm/boot/install-wifi-mac.sh
 #   sudo bash ~/helm/boot/uninstall-wifi-mac.sh
@@ -10,41 +9,63 @@
 # restart NetworkManager, which is the only thing here that could drop
 # the hotspot this is probably being typed over.
 #
-# ---- what this is, honestly -----------------------------------------
+# ---- what it is for -------------------------------------------------
 #
-# Several Realtek 8188-family adapters fail to apply a randomised MAC,
-# after which NetworkManager retries in a loop and the adapter
-# authenticates but never associates. Debian ships a file for exactly
-# this - /usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf - but it
-# matches only driver:eagle_sdio and driver:wl, so rtl8xxxu is not
-# covered and randomisation is ON here.
+# With wifi.scan-rand-mac-address at its default of yes, NetworkManager
+# gives a wifi device a fresh random MAC every five minutes for as long
+# as it is NOT associated - and setting a wifi MAC means taking the
+# interface administratively DOWN and back up, because wpa_supplicant
+# needs that to notice the change. So an adapter that is failing to
+# associate gets downed and re-upped every five minutes, for ever.
 #
-# It is INSURANCE, not a diagnosis. The dated evidence tying 8188eu to
-# this is from 2017 and kernel 4.9, its root cause was traced to
-# wpa_supplicant and fixed long before Bookworm's wpa 2.10, and the
-# documented signature is "authenticates but will not associate" - not
-# "present but will not turn on, cleared by a USB reset", which is what
-# this boat saw. Applied because it is one reversible file and costs
-# nothing, not because it is known to be the fault.
+# On a flaky RTL8188EU that is a mechanism, not a theory: it is exactly
+# the kind of repeated USB-level churn that wedges this chip, and a USB
+# device reset is exactly what clears it. It is still not a DIAGNOSIS -
+# the dated reports tying 8188eu to this are from 2017 and kernel 4.9,
+# and their root cause was traced to wpa_supplicant and fixed long
+# before Bookworm's wpa 2.10. Plausible and cheap and reversible, which
+# is the whole argument for it.
 #
-# ---- why it is scoped by DRIVER -------------------------------------
+# Debian ships a file for this already -
+# /usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf - but it
+# matches only driver:eagle_sdio and driver:wl, so neither radio here is
+# covered and randomisation is on for both.
 #
-# wlan0 carries the SeaWire access point and is the only way onto this
-# boat. Scoping keeps it at stock behaviour, and the scoping fails the
-# right way: an unrecognised match-device spec is not an error and is
-# not logged - the section simply never matches, the key is never read,
-# and randomisation stays ON for the dongle. A typo means "the fix did
-# not apply", never "wlan0 changed behaviour".
+# ---- why this covers BOTH radios ------------------------------------
 #
-# By driver and not by interface name, because wlan0/wlan1 here are
-# kernel-assigned and systemd documents those as not fixed across boots
-# - and a USB re-enumeration of this dongle can bring it back as wlan2.
+# The first version scoped it to the dongle's driver, to keep the radio
+# carrying the hotspot at stock behaviour. That is backwards, for two
+# reasons that are both in NetworkManager's own source:
 #
-# Two traps, both avoided below and both asserted by the probe:
-#   - commas in match-device are OR, not AND. "driver:x,type:wifi" would
-#     WIDEN this to both radios.
-#   - a match-device made only of "except:" specs INVERTS and matches
-#     every device, wlan0 included.
+#   Scan randomisation cannot touch an ACTIVATED device at all -
+#   _hw_addr_set_scanning() returns immediately when the device is
+#   activating or activated. So while wlan0 is serving SeaWire, the
+#   setting is a no-op for it either way, and the "risk" of covering it
+#   is not a risk.
+#
+#   And if SeaWire ever drops, wlan0 becomes a scanning candidate -
+#   which means NM would start taking the one radio that must come back
+#   down and up every five minutes, on a driver NM's own comments flag
+#   for MAC-set defects: "either due to a driver issue (brcmfmac,
+#   bgo#770456, rh#1374023)", noting it "can block NetworkManager for
+#   500 msec while taking down the device".
+#
+# So covering everything is the conservative choice, not the bold one,
+# and it avoids the other trap entirely: driver: matching is exact with
+# no globbing, so a driver-scoped file silently does nothing the day the
+# adapter comes up on r8188eu or an out-of-tree 8188eu instead.
+#
+# ---- the lockout this is careful about ------------------------------
+#
+# A malformed file in /etc/NetworkManager/conf.d is NOT tolerated with a
+# warning. nm-config.c read_config() returns FALSE on any key-file parse
+# error and main.c then prints "Failed to read configuration" and
+# exit(1) - so a syntax error means NetworkManager does not start at the
+# next BOOT. No hotspot, no ssh, on a boat. The reload is the safe part;
+# a bad file left on disk is a mine with a timer on it.
+#
+# Hence: parse-check before reloading, and REMOVE the file if it does
+# not parse rather than leaving it to detonate later.
 # =====================================================================
 set -u
 CONF="${WIFIMAC_CONF:-/etc/NetworkManager/conf.d/80-confluence-wifi.conf}"
@@ -57,131 +78,130 @@ ok(){ printf '   %s\n' "$*"; }
 
 command -v nmcli >/dev/null 2>&1 || { say "no nmcli - nothing to configure"; exit 1; }
 
-# ---- find the dongle, and read its driver off the box ----------------
-#
-# The research for this said "confirm the DRIVER string by hand before
-# writing the file, byte for byte". That is a step to be skipped at 2
-# a.m., and skipping it produces a file that looks applied and is not.
-# So it is not a step: the script reads the string and writes what it
-# read. The 8188eu family is served by rtl8xxxu in-tree, r8188eu in
-# staging and 8188eu out-of-tree, and the value is compared exactly,
-# with no globbing.
-usb_wifi(){
-  local d p
-  for d in "$SYS"/class/net/*; do
-    [ -e "$d/phy80211" ] || continue
-    p=$(readlink -f "$d/device" 2>/dev/null) || continue
-    case "$p" in */usb*) basename "$d"; return 0;; esac
-  done
-  return 1
-}
+# ---- what is here, for the report and for the baseline ---------------
+radios(){ local d; for d in "$SYS"/class/net/*; do
+  [ -e "$d/phy80211" ] && basename "$d"; done; }
+is_usb(){ case "$(readlink -f "$SYS/class/net/$1/device" 2>/dev/null)" in
+  */usb*) return 0;; *) return 1;; esac; }
 driver_of(){ nmcli -t -f GENERAL.DRIVER device show "$1" 2>/dev/null \
                | cut -d: -f2- | head -1; }
 
-DEV=$(usb_wifi) || {
-  say "No USB wifi adapter is present."
-  say "This configures the DONGLE and nothing else, so there is nothing"
-  say "to do until it is plugged in and enumerating. Nothing was changed."
-  exit 1; }
-DRV=$(driver_of "$DEV")
-[ -n "$DRV" ] || {
-  say "NetworkManager does not report a driver for $DEV."
-  say "Writing a match-device for an empty string would match nothing and"
-  say "look like it had worked. Nothing was changed."
-  exit 1; }
-
-say "the dongle is $DEV, driver $DRV"
-
-# Scoping by driver only helps if the OTHER radio does not share it. If
-# it does, this would quietly change the adapter carrying the hotspot,
-# which is the one outcome worth refusing over.
-for d in "$SYS"/class/net/*; do
-  [ -e "$d/phy80211" ] || continue
-  n=$(basename "$d"); [ "$n" = "$DEV" ] && continue
-  if [ "$(driver_of "$n")" = "$DRV" ]; then
-    say ""
-    say "REFUSING: $n also uses $DRV."
-    say "Scoping by driver would catch it too, and $n may be the radio"
-    say "carrying the hotspot. Nothing was changed."
-    exit 1
-  fi
+FOUND=0
+for n in $(radios); do
+  FOUND=1
+  ok "$n  $(driver_of "$n")  $(is_usb "$n" && echo dongle || echo onboard)"
 done
+[ "$FOUND" = 1 ] || { say "no wifi radios at all - nothing to configure"; exit 1; }
 
-# ---- a baseline for the one thing that must not move -----------------
-AP=''; APMAC=''
-for d in "$SYS"/class/net/*; do
-  [ -e "$d/phy80211" ] || continue
-  n=$(basename "$d"); [ "$n" = "$DEV" ] && continue
-  AP=$n; APMAC=$(cat "$d/address" 2>/dev/null); break
-done
-[ -n "$AP" ] && ok "leaving $AP alone (currently $APMAC)"
+# The MACs either side of the reload. Not scoped to one radio, because
+# the file is not either: anything that moves here is worth saying.
+BEFORE=$(for n in $(radios); do
+  printf '%s=%s\n' "$n" "$(cat "$SYS/class/net/$n/address" 2>/dev/null)"; done)
 
 # ---- write it --------------------------------------------------------
+# Keep any previous copy, so a parse failure can put back exactly what
+# was working rather than just deleting and hoping.
+PREV=''
+[ -f "$CONF" ] && { PREV="$CONF.prev.$$"; cp -p "$CONF" "$PREV"; }
 mkdir -p "$(dirname "$CONF")"
-cat > "$CONF" <<EOT
+cat > "$CONF" <<'EOT'
 # Written by confluence-helm boot/install-wifi-mac.sh - do not hand-edit.
 # Remove with boot/uninstall-wifi-mac.sh.
 #
-# Stops NetworkManager randomising the MAC of the USB wifi dongle while
-# it scans. Several Realtek 8188-family adapters fail to apply the
-# randomised address and then never associate.
+# Stops NetworkManager randomising a wifi MAC while it scans. Setting a
+# wifi MAC means taking the interface administratively down and back up,
+# and NM does it every five minutes to any device that is not
+# associated - which is repeated USB churn on an adapter that is already
+# struggling to associate.
 #
-# Scoped to the dongle's driver so the radio carrying the hotspot keeps
-# stock behaviour. ONE positive spec on purpose: commas here mean OR,
-# so adding another would widen this to every matching device, and an
-# "except:"-only list inverts and matches everything.
+# Covers every device on purpose. Scan randomisation already skips any
+# ACTIVATED device, so this is a no-op for a radio serving an access
+# point; and if that access point ever drops, this is what stops NM
+# cycling it every five minutes on a driver with known MAC-set defects.
 #
-# Debian's own /usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf
-# covers only driver:eagle_sdio and driver:wl, which is why this exists.
-# /etc/NetworkManager/conf.d is read after /usr/lib, so this wins.
-[device-confluence-no-scan-mac-rand]
-match-device=driver:$DRV
+# Debian's /usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf covers
+# only driver:eagle_sdio and driver:wl. /etc is read after /usr/lib, so
+# this wins.
+#
+# Association-time randomisation is NOT set here: wifi.cloned-mac-address
+# already defaults to "preserve" (NM >= 1.6) and a global default would
+# not beat a profile that sets it anyway - check the profiles instead.
+# wifi.mac-address-randomization is deprecated since NM 1.4 and writing
+# it would be a dead setting.
+[device]
 wifi.scan-rand-mac-address=no
 EOT
 chmod 0644 "$CONF"
 ok "wrote $CONF"
 
 # ---- prove it parses BEFORE touching the running daemon --------------
-# --print-config reads from DISK, so this is safe and proves the file
-# parses and survives precedence. It does NOT prove the daemon reloaded
-# it, and nothing anywhere proves the match matched - NetworkManager
-# exposes no effective per-device value. The only real proof is
-# behavioural, which is what the last step looks for.
-if NetworkManager --print-config 2>/dev/null \
-     | grep -q 'device-confluence-no-scan-mac-rand'; then
+#
+# --print-config reads from DISK through the same nm_config_setup() path
+# the daemon uses, so it fails the same way the daemon would - which is
+# the whole point, because the daemon's way of failing is to not start.
+# It is safe to run beside a running NM: main.c handles the flag and
+# exits before the single-instance check.
+#
+# It proves the file PARSES and survives precedence. It does not prove
+# the daemon reloaded it, and nothing proves the setting took - NM
+# exposes no effective per-device value. The journal is the only witness.
+if NetworkManager --print-config 2>/dev/null | grep -q 'scan-rand-mac-address'; then
   ok "it parses, and nothing later in conf.d overrode it"
 else
+  rm -f "$CONF"
+  if [ -n "$PREV" ]; then mv -f "$PREV" "$CONF"; ok "put the previous file back"; fi
   say ""
-  say "WARNING: the section did not come back from --print-config."
-  say "Something in conf.d may sort after 80- and override it. The file"
-  say "is written; config was NOT reloaded. Check with:"
-  say "   sudo NetworkManager --print-config | grep -i scan-rand"
+  say "The file did not come back from --print-config, so it has been"
+  say "REMOVED. That is deliberate: a conf.d file NetworkManager cannot"
+  say "parse stops it starting at the next boot, and on this boat that is"
+  say "the hotspot and the ssh session with it. Nothing was reloaded."
+  say "Look at:  sudo NetworkManager --print-config"
   exit 1
 fi
+[ -n "$PREV" ] && rm -f "$PREV"
 
 # ---- apply -----------------------------------------------------------
-# reload conf, NEVER `systemctl restart NetworkManager`. A restart is
-# the one action here that can take the access point down, and the
-# access point is the way onto this boat.
+# reload conf, NEVER `systemctl restart NetworkManager`. Wi-Fi devices
+# are always taken down on quit - nm-device-wifi.c unmanaged_on_quit()
+# is explicit about it - so a restart definitely drops the AP.
 nmcli general reload conf 2>/dev/null
 ok "config reloaded (not restarted - the hotspot never moved)"
 
-# ---- and check that it did not ---------------------------------------
-if [ -n "$AP" ]; then
-  NOW=$(cat "$SYS/class/net/$AP/address" 2>/dev/null)
-  if [ "$NOW" = "$APMAC" ]; then
-    ok "$AP is still $NOW"
-  else
-    say ""
-    say "WARNING: $AP's MAC changed from $APMAC to $NOW."
-    say "Undo with: sudo bash $(dirname "$0")/uninstall-wifi-mac.sh"
-  fi
+# A reload REPORTS SUCCESS even when the new file failed to parse:
+# nm_config_reload() logs the error, keeps the old config and returns
+# void, and the D-Bus call succeeds anyway. So the exit status above is
+# worth nothing and the journal is the only witness there is.
+if journalctl -u NetworkManager -n 50 --no-pager 2>/dev/null \
+     | grep -q 'Failed to reload the configuration'; then
+  say ""
+  say "WARNING: NetworkManager logged a reload failure. It is still"
+  say "running on its OLD config. Remove the file before rebooting:"
+  say "   sudo bash $(dirname "$0")/uninstall-wifi-mac.sh"
+  exit 1
+fi
+ok "and the journal has no reload failure in it"
+
+# ---- and check that nothing moved ------------------------------------
+AFTER=$(for n in $(radios); do
+  printf '%s=%s\n' "$n" "$(cat "$SYS/class/net/$n/address" 2>/dev/null)"; done)
+if [ "$BEFORE" = "$AFTER" ]; then
+  ok "every radio is on the MAC it had before"
+else
+  say ""
+  say "WARNING: a MAC changed across the reload."
+  say "before: $(echo "$BEFORE" | tr '\n' ' ')"
+  say "after : $(echo "$AFTER" | tr '\n' ' ')"
 fi
 
 say ""
-say "Done. It takes effect on the next scan, not on the reload. To see it:"
-say "   sudo nmcli device wifi rescan ifname $DEV"
-say "   cat $SYS/class/net/$DEV/address"
-say "A randomised address has the 02 bit set in its first octet (02:, 06:,"
-say "0a:, 0e:) and rotates; the permanent one does not move."
+say "Done. It takes effect at the next SCAN, not at the reload."
+say ""
+say "And watch for the right thing: switching randomisation off does NOT"
+say "put the old MAC back. _hw_addr_set_scanning() runs with do_reset"
+say "false, so an adapter keeps whatever random MAC it last had until it"
+say "next activates or deactivates. Success is the MAC no longer CHANGING"
+say "across rescans - not it reverting to the one on the label."
+say ""
+say "   for i in 1 2 3; do nmcli device wifi rescan >/dev/null 2>&1;"
+say "     sleep 20; cat $SYS/class/net/*/address | tr '\\n' ' '; echo; done"
 exit 0

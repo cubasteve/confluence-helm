@@ -26,11 +26,15 @@ class Rig:
     """
 
     def __init__(self, drivers=None, usb=('wlan1',), macs=None,
-                 print_config_ok=True, with_nmcli=True):
+                 print_config_ok=True, with_nmcli=True, reload_fails=False,
+                 mac_moves=False, preexisting=None):
         self.d = tempfile.mkdtemp(prefix='helm-wifimac-')
-        self.drivers = drivers or {'wlan0': 'brcmfmac', 'wlan1': 'rtl8xxxu'}
-        self.macs = macs or {'wlan0': 'b8:27:eb:11:22:33',
-                             'wlan1': 'e8:de:27:0d:f5:58'}
+        # `is None`, not `or`: an empty dict is falsy, and a rig with
+        # NO radios is exactly the case one of the probes needs.
+        self.drivers = ({'wlan0': 'brcmfmac', 'wlan1': 'rtl8xxxu'}
+                        if drivers is None else drivers)
+        self.macs = ({'wlan0': 'b8:27:eb:11:22:33',
+                      'wlan1': 'e8:de:27:0d:f5:58'} if macs is None else macs)
         self.conf = os.path.join(self.d, 'etc/NetworkManager/conf.d',
                                  '80-confluence-wifi.conf')
         for dev in self.drivers:
@@ -45,10 +49,16 @@ class Rig:
             real = os.path.join(self.d, bus)
             os.makedirs(real, exist_ok=True)
             os.symlink(real, os.path.join(nd, 'device'))
+        if preexisting is not None:
+            os.makedirs(os.path.dirname(self.conf), exist_ok=True)
+            with open(self.conf, 'w') as f:
+                f.write(preexisting)
         self.calls = os.path.join(self.d, 'calls')
         open(self.calls, 'w').close()
         self.bin = os.path.join(self.d, 'bin')
         os.makedirs(self.bin)
+        self.reload_fails = reload_fails
+        self.mac_moves = mac_moves
         self._tools(print_config_ok, with_nmcli)
 
     def _tools(self, print_config_ok, with_nmcli):
@@ -57,9 +67,21 @@ class Rig:
             cases = '\n'.join(
                 "    *'GENERAL.DRIVER device show %s'*) echo 'GENERAL.DRIVER:%s';;"
                 % (dev, drv) for dev, drv in self.drivers.items())
+            # A reload that moves a MAC, to prove the before/after check
+            # is a check and not decoration.
+            moved = ('''    *'reload conf'*) printf '%s' > %s/class/net/wlan1/address;;\n'''
+                     % ('aa:bb:cc:dd:ee:ff', self.d)) if self.mac_moves else ''
             tools['nmcli'] = (
-                'echo "nmcli $@" >> %s\ncase "$*" in\n%s\nesac\nexit 0\n'
-                % (self.calls, cases))
+                'echo "nmcli $@" >> %s\ncase "$*" in\n%s%s\nesac\nexit 0\n'
+                % (self.calls, moved, cases))
+        # nm_config_reload() logs the failure, keeps the OLD config and
+        # returns void - the D-Bus call succeeds regardless. So the
+        # journal is the only witness, and the probe needs one.
+        tools['journalctl'] = (
+            'echo "journalctl $@" >> %s\n%s\n'
+            % (self.calls,
+               "echo 'Failed to reload the configuration: bad'"
+               if self.reload_fails else "echo 'NetworkManager is fine'"))
         # Reads the written file back, the way the real one reads disk.
         tools['NetworkManager'] = (
             'echo "NetworkManager $@" >> %s\n%s\n'
@@ -99,84 +121,112 @@ class Rig:
 
 class WifiMac(unittest.TestCase):
 
-    def test_it_writes_the_driver_it_read_off_the_box(self):
-        """The research said "confirm the DRIVER string by hand, byte for
-        byte, before writing the file". That is a step to be skipped at
-        2 a.m., and skipping it produces a file that looks applied and
-        is not - an unmatched spec is not an error and is not logged.
-        So it is not a step: the script reads it and writes what it
-        read."""
+    def test_it_covers_every_radio_and_matches_on_nothing(self):
+        """The first version scoped this to the dongle's driver to keep
+        the AP at stock behaviour. That is backwards, and NetworkManager's
+        own source says why twice over:
+
+        _hw_addr_set_scanning() returns immediately for an activating or
+        activated device, so while wlan0 serves SeaWire this setting is a
+        no-op for it either way - the "risk" of covering it is not one.
+        And if SeaWire ever drops, wlan0 becomes a scanning candidate,
+        and NM would take the one radio that must come back down and up
+        every five minutes on a driver its own comments flag for MAC-set
+        defects (brcmfmac, bgo#770456, rh#1374023).
+
+        A bare [device] section also sidesteps the exact-match trap:
+        driver: does not glob, so a scoped file silently does nothing the
+        day the adapter comes up on r8188eu instead."""
         r = Rig(drivers={'wlan0': 'brcmfmac', 'wlan1': 'r8188eu'})
         try:
             out, rc = r.run()
             self.assertEqual(rc, 0, out)
-            self.assertIn('match-device=driver:r8188eu', r.written())
-            self.assertNotIn('rtl8xxxu', r.written())
+            w = r.written()
+            self.assertIn('[device]', w)
+            self.assertIn('wifi.scan-rand-mac-address=no', w)
+            self.assertNotIn('match-device', w)
+            self.assertNotIn('r8188eu', w)
         finally:
             r.close()
 
-    def test_it_scopes_to_the_dongle_and_never_the_ap(self):
+    def test_it_reports_both_radios_and_which_is_the_dongle(self):
         r = Rig()
         try:
             out, rc = r.run()
             self.assertEqual(rc, 0, out)
-            w = r.written()
-            self.assertIn('match-device=driver:rtl8xxxu', w)
-            self.assertNotIn('brcmfmac', w)
-            self.assertIn('leaving wlan0 alone', out)
+            self.assertIn('wlan0  brcmfmac  onboard', out)
+            self.assertIn('wlan1  rtl8xxxu  dongle', out)
         finally:
             r.close()
 
-    def test_the_match_line_carries_neither_trap(self):
-        """Two ways to widen this onto the AP by accident, both verified
-        against NetworkManager 1.42 source: commas in match-device are
-        OR and not AND, so a second spec widens rather than narrows; and
-        a match-device made only of "except:" specs inverts and matches
-        every device there is."""
-        r = Rig()
-        try:
-            r.run()
-            line = [l for l in r.written().splitlines()
-                    if l.startswith('match-device=')]
-            self.assertEqual(len(line), 1, r.written())
-            self.assertNotIn(',', line[0])
-            self.assertNotIn('except:', line[0])
-            self.assertEqual(line[0], 'match-device=driver:rtl8xxxu')
-        finally:
-            r.close()
-
-    def test_it_refuses_when_both_radios_share_a_driver(self):
-        """Scoping by driver only helps if the other radio does not share
-        it. If it does, this would quietly change the adapter carrying
-        the hotspot - the one outcome worth refusing over."""
-        r = Rig(drivers={'wlan0': 'rtl8xxxu', 'wlan1': 'rtl8xxxu'})
+    def test_a_file_that_will_not_parse_is_REMOVED(self):
+        """The lockout, and the one thing here that could strand someone
+        on a boat. A malformed file in conf.d is not tolerated with a
+        warning: nm-config.c read_config() returns FALSE on any key-file
+        parse error and main.c then prints "Failed to read configuration"
+        and exit(1). So NetworkManager does not start at the next BOOT -
+        no hotspot, no ssh. A bad file left on disk is a mine with a
+        timer on it, and the first version of this script left it."""
+        r = Rig(print_config_ok=False)
         try:
             out, rc = r.run()
             self.assertEqual(rc, 1, out)
-            self.assertIn('REFUSING', out)
-            self.assertIsNone(r.written(), 'it wrote the file anyway')
+            self.assertIsNone(r.written(), 'it left the file to detonate')
+            self.assertIn('REMOVED', out)
+            self.assertFalse(any('reload' in c for c in r.ran()),
+                             'it reloaded anyway: %s' % r.ran())
         finally:
             r.close()
 
-    def test_it_refuses_when_there_is_no_dongle(self):
+    def test_a_previous_good_file_is_put_back(self):
+        """Removing the bad file is right; restoring the one that was
+        working is better. Otherwise a second run of this script turns a
+        box that was configured into one that is not, quietly."""
+        OLD = '[device]\nwifi.scan-rand-mac-address=no\n# the old one\n'
+        r = Rig(print_config_ok=False, preexisting=OLD)
+        try:
+            out, rc = r.run()
+            self.assertEqual(rc, 1, out)
+            self.assertEqual(r.written(), OLD,
+                             'it did not put the working file back')
+            self.assertIn('put the previous file back', out)
+        finally:
+            r.close()
+
+    def test_a_reload_that_failed_is_not_believed(self):
+        """nm_config_reload() logs the error, keeps the OLD config and
+        returns void - the D-Bus call succeeds anyway. So "the reload
+        worked" is not evidence of anything and the journal is the only
+        witness."""
+        r = Rig(reload_fails=True)
+        try:
+            out, rc = r.run()
+            self.assertEqual(rc, 1, out)
+            self.assertIn('logged a reload failure', out)
+            self.assertIn('Remove the file before rebooting', out)
+        finally:
+            r.close()
+
+    def test_no_dongle_is_not_a_reason_to_refuse(self):
+        """It was, when the file was scoped to the dongle's driver. A
+        bare [device] section is about every radio, so it installs with
+        the dongle unplugged - which is also when you would want to set
+        it, before plugging the thing back in."""
         r = Rig(drivers={'wlan0': 'brcmfmac'}, usb=(),
                 macs={'wlan0': 'b8:27:eb:11:22:33'})
         try:
             out, rc = r.run()
-            self.assertEqual(rc, 1, out)
-            self.assertIn('No USB wifi adapter', out)
-            self.assertIsNone(r.written())
+            self.assertEqual(rc, 0, out)
+            self.assertIn('wifi.scan-rand-mac-address=no', r.written())
         finally:
             r.close()
 
-    def test_it_refuses_an_empty_driver_string(self):
-        """A match-device for an empty string matches nothing and looks
-        exactly like a fix that worked."""
-        r = Rig(drivers={'wlan0': 'brcmfmac', 'wlan1': ''})
+    def test_it_refuses_with_no_wifi_at_all(self):
+        r = Rig(drivers={}, usb=(), macs={})
         try:
             out, rc = r.run()
             self.assertEqual(rc, 1, out)
-            self.assertIn('does not report a driver', out)
+            self.assertIn('no wifi radios at all', out)
             self.assertIsNone(r.written())
         finally:
             r.close()
@@ -196,18 +246,9 @@ class WifiMac(unittest.TestCase):
             r.close()
 
     def test_it_checks_the_file_parses_before_touching_the_daemon(self):
-        """--print-config reads from disk, so it is free and it catches a
-        drop-in sorting after 80- that would override this one. If it
-        does not come back, the daemon is left alone."""
-        r = Rig(print_config_ok=False)
-        try:
-            out, rc = r.run()
-            self.assertEqual(rc, 1, out)
-            self.assertIn('did not come back from --print-config', out)
-            self.assertFalse(any('reload' in c for c in r.ran()),
-                             'it reloaded anyway: %s' % r.ran())
-        finally:
-            r.close()
+        """--print-config goes through the same nm_config_setup() path the
+        daemon uses, so it fails the same way the daemon would - which is
+        the point, because the daemon's way of failing is to not start."""
         r = Rig(print_config_ok=True)
         try:
             out, rc = r.run()
@@ -220,11 +261,32 @@ class WifiMac(unittest.TestCase):
         finally:
             r.close()
 
-    def test_it_says_the_ap_did_not_move(self):
+    def test_it_notices_a_mac_moving_across_the_reload(self):
         r = Rig()
         try:
             out, _ = r.run()
-            self.assertIn('wlan0 is still b8:27:eb:11:22:33', out)
+            self.assertIn('every radio is on the MAC it had before', out)
+        finally:
+            r.close()
+        r = Rig(mac_moves=True)
+        try:
+            out, _ = r.run()
+            self.assertIn('a MAC changed across the reload', out)
+        finally:
+            r.close()
+
+    def test_it_does_not_promise_the_mac_reverts(self):
+        """The success criterion the first version printed was wrong. At
+        scan kickoff _hw_addr_set_scanning() runs with do_reset false, so
+        switching randomisation off only stops the next change - the
+        adapter keeps whatever random MAC it last had until it next
+        activates. Success is the MAC no longer CHANGING, not it going
+        back to the one on the label."""
+        r = Rig()
+        try:
+            out, _ = r.run()
+            self.assertIn('no longer CHANGING', out)
+            self.assertIn('does NOT', out)
         finally:
             r.close()
 

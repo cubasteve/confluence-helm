@@ -321,88 +321,85 @@ sudo bash boot/install-wifi-mac.sh
 sudo bash boot/uninstall-wifi-mac.sh
 ```
 
-Several Realtek 8188-family adapters fail to apply a randomised MAC,
-after which NetworkManager retries in a loop and the adapter
-authenticates but never associates. Debian ships a file for exactly
-this — `/usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf` — but it
-matches only `driver:eagle_sdio` and `driver:wl`, so `rtl8xxxu` is not
-covered and randomisation is **on** here.
+With `wifi.scan-rand-mac-address` at its default of `yes`,
+NetworkManager gives a wifi device a fresh random MAC every five minutes
+for as long as it is **not associated** — and setting a wifi MAC means
+taking the interface administratively **down and back up**, because
+`wpa_supplicant` needs that to notice the change (`_hw_addr_set()` says
+so in a comment). So an adapter that is failing to associate gets downed
+and re-upped every five minutes, for ever.
 
-**It is insurance, not a diagnosis, and the installer says so in its own
-header.** The dated evidence tying 8188eu to this is from 2017 and
-kernel 4.9; its root cause was traced to `wpa_supplicant` and fixed long
-before Bookworm's wpa 2.10, and the documented signature is
-*authenticates but will not associate* — not *present but will not turn
-on, cleared by a USB reset*, which is what this boat saw. Applied
-because it is one reversible file, not because it is known to be the
-fault.
+On a flaky RTL8188EU that is a mechanism rather than a theory: it is
+exactly the kind of repeated USB-level churn that wedges this chip, and
+a USB device reset is exactly what clears it. It is still **not a
+diagnosis** — the dated reports tying 8188eu to this are from 2017 and
+kernel 4.9, and their root cause was traced to `wpa_supplicant` and
+fixed long before Bookworm's wpa 2.10. Plausible, cheap and reversible,
+which is the argument for it.
 
-Three things make it safe to put on a boat:
+Debian ships a file for this already —
+`/usr/lib/NetworkManager/conf.d/no-mac-addr-change.conf` — but it
+matches only `driver:eagle_sdio` and `driver:wl`, so neither radio here
+is covered and randomisation is on for both.
 
-- **Scoped by driver, and the driver string is read off the box.** The
-  advice everywhere is "confirm the `DRIVER` string by hand, byte for
-  byte, before writing the file" — a step to be skipped at 2 a.m., and
-  skipping it produces a file that looks applied and is not, because an
-  unmatched `match-device` spec is not an error and is not logged. So it
-  is not a step: the installer reads it and writes what it read. The
-  8188eu family is served by `rtl8xxxu` in-tree, `r8188eu` in staging
-  and `8188eu` out-of-tree, and the value is compared exactly.
-- **By driver, not by interface name.** `wlan0`/`wlan1` here are
-  kernel-assigned, which systemd documents as not fixed across boots —
-  and a USB re-enumeration of this dongle can bring it back as `wlan2`.
-- **It fails toward doing nothing.** An unrecognised spec means the
-  section never matches, the key is never read, and randomisation stays
-  on for the dongle. A typo means "the fix did not apply", never "wlan0
-  changed behaviour". The installer additionally *refuses* if both
-  radios report the same driver, and records `wlan0`'s MAC before and
-  after.
+**It covers both radios, and the first version was wrong to scope it.**
+Scoping to the dongle's driver looked like the careful choice. It is the
+opposite, for two reasons in NetworkManager's own source:
 
-Two traps in `match-device`, both verified against NetworkManager
-1.42.4's own matcher and both asserted by the probe: **commas are OR,
-not AND**, so `driver:x,type:wifi` would *widen* this to both radios;
-and a `match-device` made only of `except:` specs **inverts** and
-matches every device there is.
+- Scan randomisation **cannot touch an activated device** —
+  `_hw_addr_set_scanning()` returns immediately when the device is
+  activating or activated. While `wlan0` serves SeaWire the setting is a
+  no-op for it either way, so covering it costs nothing.
+- If SeaWire ever **drops**, `wlan0` becomes a scanning candidate — and
+  NM would start taking the one radio that must come back down and up
+  every five minutes, on a driver its own comments flag for MAC-set
+  defects: *"either due to a driver issue (brcmfmac, bgo#770456,
+  rh#1374023)"*, noting it *"can block NetworkManager for 500 msec while
+  taking down the device"*.
 
-It reloads config and **never restarts NetworkManager** — the restart is
-the one action here that can drop the access point, and the access point
-is the way onto the boat. `NetworkManager --print-config` is run first,
-because it reads from disk and so catches a drop-in sorting after `80-`
-that would override this one; if the section does not come back, the
-daemon is left alone. That read-back proves the file parses, *not* that
-the match matched — NetworkManager exposes no effective per-device
-value, so the only real proof is behavioural: a randomised address has
-the `02` bit set in its first octet and rotates, a permanent one does
-not move.
+A bare `[device]` section also sidesteps the exact-match trap: `driver:`
+does not glob, so a scoped file silently does nothing the day the
+adapter comes up on `r8188eu` or an out-of-tree `8188eu` instead.
+
+**The lockout this is careful about.** A malformed file in
+`/etc/NetworkManager/conf.d` is *not* tolerated with a warning:
+`nm-config.c read_config()` returns FALSE on any key-file parse error,
+and `main.c` then prints `Failed to read configuration` and `exit(1)`.
+NetworkManager does not start **at the next boot** — no hotspot, no SSH,
+on a boat. The reload is the safe part; a bad file left on disk is a
+mine with a timer on it. So the installer parse-checks with
+`NetworkManager --print-config` (same `nm_config_setup()` path, safe
+beside a running daemon) *before* reloading, and **removes** the file if
+it does not parse — restoring the previous one if there was one.
+
+**And a reload reports success even when the file failed to parse.**
+`nm_config_reload()` logs the error, keeps the old config and returns
+void; the D-Bus call succeeds anyway. So the exit status proves nothing
+and the journal is the only witness — the installer greps it for
+`Failed to reload the configuration`.
+
+It reloads and **never restarts** NetworkManager. Wi-Fi devices are
+always taken down on quit (`unmanaged_on_quit()` is explicit), so a
+restart definitely drops the AP.
+
+**Watch for the right thing afterwards.** Switching randomisation off
+does *not* put the old MAC back: at scan kickoff
+`_hw_addr_set_scanning()` runs with `do_reset` false, so an adapter
+keeps whatever random MAC it last had until it next activates. Success
+is the MAC **no longer changing** across rescans, not it reverting to
+the one on the label. The installer prints the loop to watch it.
 
 Not set, deliberately: `wifi.cloned-mac-address` (association-time
-randomisation) already defaults to `preserve` since NM 1.6, so it is
-off unless a connection profile sets it explicitly — and a global
-default would not beat a profile anyway. `wifi.mac-address-randomization`
-is deprecated since NM 1.4 and writing it would be a dead setting.
+randomisation) already defaults to `preserve` since NM 1.6, and a scan
+MAC cannot leak into it — the scan path derives its random address *from*
+the initial MAC and never overwrites it. `wifi.mac-address-randomization`
+has been deprecated since NM 1.4 and writing it would be a dead setting.
 
-`tests/wifimac_test.py` drives both scripts against a pretend `/sys` and
-a pretend `nmcli` — 12 tests. Four controls run: hardcode the driver,
-drop the shared-driver refusal, restart instead of reload, or reload
-before the parse check, and the probe that describes each one fails.
-
-**It is scoped to one USB device, deliberately.** The boat SSHes in over
-the hotspot on the *internal* radio. It never touches `nmcli radio`,
-never unloads `brcmfmac`, and never resets a device that is not the
-dongle — a probe asserts all three on *both* branches, because locking
-the owner out of the box is a worse outcome than a dongle that stays
-dead. It also leaves a **blocked** radio alone, for the same reason the
-timer does.
-
-Everything it does works with no internet and nothing installed, which
-is the constraint that matters: the dongle *is* the box's route to the
-internet, so any fix that needs a download is circular. Measured on the
-boat: a reset loop pasted over SSH brought it back.
-
-`tests/donglefix_test.py` drives it against a pretend `/sys` with
-pretend `nmcli`, `modinfo`, `dmesg` and `vcgencmd` on the PATH — 17
-tests, including that each verdict gets its own ladder, that a stale
-failure never outvotes a live interface, that a switched-off radio is
-never yanked, and that the other radio is never touched.
+`tests/wifimac_test.py` drives both scripts against a pretend `/sys`,
+`nmcli` and `journalctl` — 14 tests. Four controls run: leave the
+unparseable file on disk, believe the reload, scope it to one driver
+again, or restart instead of reload, and the probe describing each one
+fails.
 
 `tests/dongle_test.py` drives it against a pretend `/sys` with pretend
 `ip`, `iw` and `nmcli` on the PATH — a script whose job is to yank the boat's
