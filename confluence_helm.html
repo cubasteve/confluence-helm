@@ -42,6 +42,10 @@ body{                                   /* DAY - built to beat sun   */
   --hairline:#B9C1C7; --accent:#0B4FD6; --port:#C81E1E; --stbd:#0E7A43;
   --warn:#B36A00; --alarm:#C81E1E; --panel:#E4E8EA; --chip:#D2D8DC;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
+  /* The same pair for the accent, which until the energy arc had nothing
+     big enough to sweep across. These two ARE the blues the race pill
+     has always used hard-coded in its own gradient. */
+  --accent-g1:#0B4FD6; --accent-g2:#2E9BFF;
   /* The club's colour, worn by the one control in this file that reaches
      off the boat. Deliberately not the accent: pulling tonight's course
      off the members' site is not the kind of thing the app's blue
@@ -59,6 +63,7 @@ body.dusk{
   --hairline:#242A2F; --accent:#4A9EFF; --port:#FF4D4D; --stbd:#24D17E;
   --warn:#FFB020; --alarm:#FF3B30; --panel:#15181B; --chip:#22272B;
   --port-g1:#C81E1E; --port-g2:#FF4D4D; --stbd-g1:#0E7A43; --stbd-g2:#24D17E;
+  --accent-g1:#1C6FE0; --accent-g2:#6FB6FF;
   --club:#19A8A8;                       /* lifted off a dark panel     */
   --buoy-y:#F5B72E; --buoy-r:#FF4D4D; --buoy-w:#E6EAEE; --buoy-g:#24D17E;
   --buoy-gy:#79838B;
@@ -73,6 +78,7 @@ body.night{
      for a starboard rounding would undo an hour of dark adaptation for
      a fact the box states in words two lines below it. */
   --port-g1:#7A201C; --port-g2:#C8342E; --stbd-g1:#7A201C; --stbd-g2:#C8342E;
+  --accent-g1:#7A201C; --accent-g2:#C8342E;     /* the one colour again */
   /* And the club's colour is red too here, for the same reason - it goes
      to an outline at night rather than a lit block. A yellow special and
      a red nun are the same red at 2 a.m.; their SHAPES still differ,
@@ -1072,55 +1078,140 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    nothing is connected is the worst failure this app has: it is
    indistinguishable from a flat bank, and it is the one reading you
    would act on at two in the morning. Every value goes through get(),
-   which returns null past staleAfter, and null draws an em dash. */
-/* 230, not 176: the heading owns the top of the glass and the close
-   button the foot, which leaves a band from about 160 to 940. At 176
-   the column's own centre landed at y=430 on a band centred at 550 and
-   the face read bottom-heavy with emptiness. */
-#en{position:absolute;left:50%;top:230px;transform:translateX(-50%);
-  width:660px;display:flex;flex-direction:column;align-items:center;
+   which returns null past staleAfter, and null draws an em dash.
+
+   There is no heading. The frame says ENERGY in the pill at the top of
+   the glass already, and there is one battery on this boat - so a line
+   under it reading HOUSE BANK was the app saying twice what it is and
+   not once what it is doing. The gauge starts where that heading was,
+   and the top of the glass belongs to the reading now.
+
+   Four bands down the face, in the order you would ask for them:
+   the charge, what it is doing, the balance, the paperwork. */
+
+/* An ARC, not a bar. Every other reading on this panel is polar - the
+   rose, the grooves, the lay lines, the sun's own dial - and a 560 px
+   rule across the middle was the one straight line in the instrument.
+   270 degrees, with the gap at the foot where the close button sits.
+
+   Sized in px and not stretched to the box, because the readings over
+   it are positioned in px: one coordinate system over the glass, not
+   two that agree only at 1080. */
+#en-g{position:absolute;left:0;top:0;width:1080px;height:1080px;
   pointer-events:none}
-#en-soc{display:flex;align-items:baseline;gap:.10em;line-height:1}
-#en-soc b{font-size:168px;font-weight:600;color:var(--ink);
-  letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+#en-trk{fill:none;stroke:var(--chip);stroke-width:28;stroke-linecap:round}
+#en-arc{fill:none;stroke:url(#en-grad-n);stroke-width:28;
+  stroke-linecap:round;transition:stroke-dasharray .7s ease,opacity .3s}
+/* Charging and flat are the two states worth seeing before you have
+   read anything, so they are the two that take the arc off the accent.
+   Both gradients are the ones the race pill already uses, which is why
+   night - where port, starboard and accent are all the one red - comes
+   out as three identical arcs and not a green one. */
+#en-arc.chg{stroke:url(#en-grad-c)}
+#en-arc.low{stroke:url(#en-grad-l)}
+/* A zero-length dash with a round cap is a DOT, so an empty gauge drew
+   a 28 px bead at the seven-o'clock tip - which reads as "1%", on the
+   one screen where the difference between nothing and almost nothing
+   is the entire point. */
+#en-arc.off{opacity:0}
+
+#en-core{position:absolute;left:50%;top:299px;transform:translateX(-50%);
+  width:420px;display:flex;flex-direction:column;align-items:center;
+  pointer-events:none}
+#en-soc{display:flex;align-items:baseline;gap:.08em;line-height:1}
+#en-soc b{font-size:172px;font-weight:600;color:var(--ink);
+  letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
 #en-soc em{font-style:normal;font-size:46px;font-weight:600;
   color:var(--label);line-height:1}
 /* With no state of charge there is no percentage, so there is no % sign
    either - and the dash comes down to a size that reads as "nothing to
-   say" rather than as a 168 px rule struck through the middle of the
-   face. The heading above it is already carrying the news. */
-#en-soc.none b{font-size:88px;color:var(--label)}
-#en-soc.none em{display:none}
-#en-bar{margin-top:20px;width:560px;height:18px;border-radius:9px;
-  background:var(--chip);overflow:hidden}
-#en-fill{display:block;height:100%;width:0;border-radius:9px;
-  background:var(--accent);transition:width .6s ease,background .3s}
-#en-fill.low{background:var(--alarm)}
-#en-row{margin-top:32px;width:660px;display:grid;
-  grid-template-columns:repeat(3,1fr);text-align:center}
-#en-row b{display:block;font-size:50px;font-weight:600;color:var(--ink);
-  line-height:1.1;font-variant-numeric:tabular-nums}
-#en-row span{font-size:18px;font-weight:600;letter-spacing:.16em;
-  color:var(--label);line-height:1.25}
+   say" rather than as a 172 px rule struck through the middle of the
+   face. The line below it is carrying the news.
+
+   And the whole column drops 69 px with it. The gauge's own centre is
+   at 424 and the stack is built down from the top of a 172 px number:
+   take the number away and leave the top where it was and the dash
+   floats at the shoulder of an empty arc, which looks like a reading
+   that failed rather than a bank that is not there. */
+#en-core.none{top:368px}
+#en-core.none #en-soc b{font-size:88px;color:var(--label)}
+#en-core.none #en-soc em{display:none}
+
+/* What the bank is DOING, which is the second question and had no answer
+   at all before: the old face put a signed current in a cell labelled
+   AMPS IN and left you to read the label to find out. */
+#en-state{margin-top:4px;height:40px;padding:0 20px;border-radius:20px;
+  display:flex;align-items:center;gap:9px;background:var(--chip);
+  color:var(--label);font-size:19px;font-weight:600;letter-spacing:.16em;
+  line-height:1;white-space:nowrap}
+#en-state svg{width:15px;height:21px;flex:none;display:none;
+  fill:currentColor;stroke:none}
+#en-state.chg{color:var(--stbd)}
+#en-state.chg svg{display:block}
+#en-state.bad{background:var(--alarm);color:#fff}
+#en-state.off{display:none}
+#en-sub{margin-top:11px;font-size:20px;font-weight:600;letter-spacing:.1em;
+  color:var(--label);line-height:1.3;white-space:nowrap}
+#en-sub.warn{color:var(--warn)}
+#en-sub.bad{color:var(--alarm)}
+
+/* Volts, amps, watts: the three that say the same event three ways, so
+   they belong in one row under the gauge rather than scattered. The
+   hairlines are the dial's own, at the dial's own weight. */
+#en-grid{position:absolute;left:50%;top:658px;transform:translateX(-50%);
+  width:640px;display:grid;grid-template-columns:repeat(3,1fr);
+  text-align:center;pointer-events:none}
+#en-grid>div{position:relative}
+#en-grid>div+div::before{content:'';position:absolute;left:0;top:5px;
+  bottom:9px;width:2px;background:var(--hairline);opacity:.75}
+#en-grid b{display:block;font-size:52px;font-weight:600;color:var(--ink);
+  line-height:1.08;font-variant-numeric:tabular-nums}
+#en-grid span{display:block;font-size:18px;font-weight:600;
+  letter-spacing:.16em;color:var(--label);line-height:1.25}
+/* Current is the one reading whose SIGN is news, so it is the one that
+   takes a colour. The word under it still says which way. */
+#en-grid b.in{color:var(--stbd)}
+
 /* The cells are a BALANCE view, not a charge view. Four bars of absolute
    voltage on a lithium pack are four identical bars - the plateau is the
    whole character of the chemistry - so the bar is each cell's distance
-   from the pack mean over a fixed +/-30 mV window. A pack in balance
-   reads as a level row at half height; one cell walking away is the only
-   thing that moves, which is the only thing worth seeing. Fixed and not
-   auto-scaled, or three millivolts of nothing would draw like a fault. */
-#en-cells{margin-top:32px;display:flex;gap:16px;align-items:flex-end}
-.en-c{width:82px;text-align:center}
-.en-c i{display:block;height:72px;border-radius:7px;background:var(--chip);
+   from the pack mean over a fixed +/-30 mV window, with the mean drawn
+   across the row as the datum. A pack in balance reads as a level row on
+   the line; one cell walking away is the only thing that moves, which is
+   the only thing worth seeing. Fixed and not auto-scaled, or three
+   millivolts of nothing would draw like a fault. */
+/* 508 wide against the row above it at 640: narrower, so it reads as
+   the subordinate band it is, and wide enough to belong to the same
+   column rather than float under it at 376. */
+#en-cells{position:absolute;left:50%;top:748px;transform:translateX(-50%);
+  display:flex;gap:20px;align-items:flex-end;pointer-events:none}
+.en-c{width:112px;text-align:center}
+.en-c i{display:block;height:66px;border-radius:8px;background:var(--chip);
   position:relative;overflow:hidden}
+.en-c i::after{content:'';position:absolute;left:0;right:0;top:50%;
+  height:2px;margin-top:-1px;background:var(--hairline);opacity:.8}
 .en-c i u{position:absolute;left:0;right:0;bottom:0;display:block;
-  background:var(--accent);text-decoration:none}
-.en-c s{display:block;margin-top:8px;font-size:19px;font-weight:600;
+  background:var(--accent);text-decoration:none;transition:height .5s ease}
+/* The cell furthest from the mean, marked only once the spread is big
+   enough to mean something. Marked at three millivolts the badge would
+   hop between cells every second on a pack that is perfectly happy. */
+.en-c.far i u{background:var(--warn)}
+.en-c.far s{color:var(--warn)}
+.en-c s{display:block;margin-top:9px;font-size:19px;font-weight:600;
   color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums;
   line-height:1.2}
-#en-foot{margin-top:28px;font-size:20px;font-weight:600;letter-spacing:.1em;
-  color:var(--label);text-transform:uppercase;line-height:1.35;
-  text-align:center}
+
+/* The paperwork, on two lines by design rather than by wrapping: the
+   pack at this moment, then the pack's life. Each line is its own nowrap
+   row, because a line allowed to wrap puts a lone separator dot at the
+   start of the next one, and the dot is not a reading. */
+#en-foot{position:absolute;left:50%;top:866px;transform:translateX(-50%);
+  width:820px;font-size:20px;font-weight:600;letter-spacing:.1em;
+  color:var(--label);line-height:1.35;text-align:center;
+  pointer-events:none}
+#en-foot div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#en-foot div:empty{display:none}
+#en-f2{color:var(--ink-dim)}
 
 /* --- track library --- */
 #t-lib,#t-course{position:absolute;inset:0;background:var(--panel);opacity:0;
@@ -3612,17 +3703,40 @@ function gpsPosition(lat, lon, tms){
    deliberately knows nothing about which. Change the source and nothing
    above this line moves.
 
-   Cells are the one departure: the spec has no path for a cell, and
-   `cells.<n>.voltage` is what the BMS plugins settled on between them.
-   Four of them, because the board is 3-4S; a 3S pack simply never
-   publishes the fourth and the row draws three. */
+   The spec was written for a shunt on a lead-acid bank, and a lithium
+   BMS knows things a shunt cannot. Four departures, each named the way
+   the BMS plugins have settled on between them:
+
+     cells.<n>.voltage   there is no path in the spec for a cell.
+     temperatures.<n>    nor for one probe of several. `temperature`
+                         stays the pack's own single figure.
+     capacity.nominalAh  the spec's capacity.nominal is in JOULES, which
+                         takes a nominal voltage to turn back into the
+                         amp-hours printed on the case. The case number
+                         is what the BMS reports and what anybody says
+                         out loud, so it is carried as itself.
+     problem             a BMS raises one flag for "I am unhappy" well
+                         before it says why - the Eco-Worthy reports a
+                         raw 16-bit code with no published bit meanings.
+                         So this is the flag and the code, NOT a decoded
+                         fault, and the app says exactly that much.
+
+   Four cells and two probes, because the board is 3-4S and packs carry
+   one probe or two. Not one path here is required: a 3S pack never
+   publishes the fourth cell and the row draws three, a plugin with no
+   state of health never publishes it and the line it would sit on is
+   not written. That is the whole rule for this app - absent is absent,
+   and nothing anywhere below turns a missing reading into a number. */
 const BAT_ID='house';
 const bp=k=>'electrical.batteries.'+BAT_ID+'.'+k;
 const BAT_CELLS=4;
+const BAT_TEMPS=2;
 const BAT_PATHS=[bp('voltage'), bp('current'), bp('power'),
   bp('capacity.stateOfCharge'), bp('capacity.timeRemaining'),
-  bp('temperature'),
-  ...Array.from({length:BAT_CELLS},(_,i)=>bp('cells.'+i+'.voltage'))];
+  bp('capacity.stateOfHealth'), bp('capacity.nominalAh'),
+  bp('temperature'), bp('cycles'), bp('problem'), bp('rssi'),
+  ...Array.from({length:BAT_CELLS},(_,i)=>bp('cells.'+i+'.voltage')),
+  ...Array.from({length:BAT_TEMPS},(_,i)=>bp('temperatures.'+i))];
 
 const PATHS=[...BAT_PATHS,
  'navigation.speedOverGround','navigation.speedThroughWater',
@@ -8271,7 +8385,22 @@ function windDemoTick(){
    down. */
 let demoAh=72;                                /* of 100, at the dock */
 function demoBank(awsKt){
-  const own=p=>feedOwns(p,'demo'), set=(p,v)=>feedPut(p,v,'demo');
+  /* set() checks ownership ITSELF here, which the GPS group above does
+     with an `if(own(p))` per line. Same rule, written once instead of
+     fifteen times - and written once because the fifteen times is how
+     this got out the door deferring on the VOLTAGE alone. feedPut does
+     not check: it is the caller's job, and a caller that gates the
+     whole bank on one path trampled the other ten at 8 Hz. It did not
+     show, because every BMS publishes a voltage and the gate below
+     closed before anything else arrived. A plugin that publishes a
+     state of charge one tick ahead of its voltage is all it would have
+     taken, and the fault would have looked like a bad battery. */
+  const own=p=>feedOwns(p,'demo');
+  const set=(p,v)=>{ if(own(p)) feedPut(p,v,'demo'); };
+  /* And still a gate on the voltage, for coherence rather than safety:
+     once something real is reading this bank, a face carrying its volts
+     over invented cells and an invented state of charge is a mongrel,
+     and worse than either. */
   if(!own(bp('voltage'))) return;             /* a real bank has it */
   const amps = -(4.2 + 1.8*Math.min(1,awsKt/14)) + 0.6*Math.sin(demoT/4.3);
   demoAh = Math.min(100, Math.max(8, demoAh + amps*(0.12*DEMO_SPEED*RACE_RATE)/3600));
@@ -8292,7 +8421,24 @@ function demoBank(awsKt){
   /* Only when it is going out. Time-to-full on a boat with no charger
      running is a number with nothing behind it. */
   set(bp('capacity.timeRemaining'), amps<-0.2 ? (demoAh/-amps)*3600 : null);
-  set(bp('temperature'), 273.15 + 19 + 2*Math.sin(demoT/9.1));
+  set(bp('temperature'), 273.15 + 20 + 1.7*Math.sin(demoT/9.1));
+  /* Two probes, a couple of degrees apart, because that is what a pack
+     with a probe at each end of the stack actually reports - and because
+     a single invented figure would never exercise the range. */
+  set(bp('temperatures.0'), 273.15 + 19 + 2.0*Math.sin(demoT/9.1));
+  set(bp('temperatures.1'), 273.15 + 21 + 1.4*Math.sin(demoT/7.3));
+  /* The paperwork of a bank a season old. Fixed, because none of it
+     moves on the timescale of a race, and because inventing a state of
+     health that drifts would make the demo the only place this app has
+     ever shown a number nothing measured. */
+  set(bp('capacity.stateOfHealth'), 0.98);
+  set(bp('capacity.nominalAh'), 100);
+  set(bp('cycles'), 37);
+  set(bp('rssi'), -58 - 7*Math.sin(demoT/11.3));
+  /* Zero, not null: a demo that leaves the flag absent never shows that
+     the flag is absent, and a demo that raises it would put a red arc
+     and the word FAULT on a face nobody has wired a battery to yet. */
+  set(bp('problem'), 0);
 }
 /* left running rather than conditionally started, so the flag can be
    flipped live from a console without a reload. Eight no-op calls a
@@ -14139,26 +14285,75 @@ function goldenClose(){
    Everything about the house bank, from whatever is reading the BMS.
    The app does not know and must not care: it reads the Signal K paths
    in BAT_PATHS, and a plugin over Bluetooth, a wire into netd and the
-   demo all arrive through the same door. */
+   demo all arrive through the same door.
+
+   Two of the readings on this face are ARITHMETIC and the rest are
+   measurements. The arithmetic is here, in the open, and labelled in
+   batRead - because a battery page that quietly computes a number the
+   battery never said is how you end up trusting a figure that has a
+   division by a guess in it. Everything the pack does not report is
+   left out of the line it would have sat on. */
 const EN_DASH='—';
 let EN=null;
 
+/* The circle's own start is three o'clock running clockwise, so with
+   pathLength="100" the arc starts at 37.5 - half past seven, the
+   lower-left tip - and runs 75 units, which is its 270 degrees. */
+const EN_SPAN=75;
+/* Below this a pack is simply in balance and the badge would hop from
+   cell to cell once a second on a battery that is perfectly happy. */
+const EN_FAR=0.020;
+/* Either side of this current the bank is neither charging nor
+   discharging, and a BMS idling reports a few tens of milliamps of its
+   own draw forever. */
+const EN_IDLE=0.2;
+
 /* Null, not zero, for anything missing. get() already returns null past
-   staleAfter; power is the one value worth deriving, because volts times
-   amps is not a guess - it is the same measurement twice. */
+   staleAfter. Exactly two things are derived here:
+
+     power   volts times amps is not a guess - it is the same
+             measurement twice - and plenty of BMS plugins publish two
+             of the three and leave the product to the reader.
+     ahLeft  state of charge times the capacity printed on the case.
+             The Eco-Worthy reports both and neither one is the product,
+             and "72 of 100" is the figure people actually carry in
+             their heads about a battery.
+
+   Time remaining and state of health are NOT derived. A pack that does
+   not report them leaves them out and the line gets shorter: a runtime
+   computed from this instant's current would read six hours on a boat
+   that just eased the sheets, and an invented state of health is worse
+   than none at all. */
 function batRead(){
   const v=get(bp('voltage')), i=get(bp('current'));
   let w=get(bp('power'));
   if(w===null && v!==null && i!==null) w=v*i;
-  const k=get(bp('temperature'));
-  const cells=[];
+  const cells=[], temps=[];
   for(let n=0;n<BAT_CELLS;n++){
     const c=get(bp('cells.'+n+'.voltage'));
     if(c!==null) cells.push(c);
   }
-  return {v, i, w, soc:get(bp('capacity.stateOfCharge')),
+  for(let n=0;n<BAT_TEMPS;n++){
+    const t=get(bp('temperatures.'+n));
+    if(t!==null) temps.push(t-273.15);
+  }
+  /* The pack's single figure is the fallback, not the preference: a
+     plugin publishing both is publishing an average and its parts. */
+  const k=get(bp('temperature'));
+  if(!temps.length && k!==null) temps.push(k-273.15);
+  const soc=get(bp('capacity.stateOfCharge'));
+  const ah=get(bp('capacity.nominalAh'));
+  /* A flag and, if there is one, a raw code. The Eco-Worthy's 16 bits
+     have no published meanings, so the app reports the number and says
+     nothing it does not know. A plugin that publishes a bare boolean
+     raises the flag with no code, and the face says FAULT and no more. */
+  const p=get(bp('problem'));
+  return {v, i, w, soc, ah, cells, temps,
+          soh:get(bp('capacity.stateOfHealth')),
           left:get(bp('capacity.timeRemaining')),
-          degC:(k===null ? null : k-273.15), cells};
+          cycles:get(bp('cycles')), rssi:get(bp('rssi')),
+          bad:!!p, code:(typeof p==='number' && p>0) ? p : null,
+          ahLeft:(soc===null||ah===null) ? null : soc*ah};
 }
 
 const enTxt=(x,d)=> (x===null||!isFinite(x)) ? EN_DASH : x.toFixed(d);
@@ -14169,24 +14364,59 @@ function enLeft(sec){
   const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60);
   return h ? h+' H '+String(m).padStart(2,'0')+' M' : m+' MIN';
 }
+/* One probe draws one number. Two that agree draw one number too - the
+   warmer of them, because that is the one every limit is written
+   against - and only probes that genuinely disagree draw a range. */
+function enTemp(ts){
+  if(!ts.length) return null;
+  const lo=Math.round(Math.min(...ts)), hi=Math.round(Math.max(...ts));
+  return (hi-lo>=2 ? lo+'–'+hi : String(hi))+'°C';
+}
+/* A true minus, not a hyphen. Every signal strength there is is
+   negative and the hyphen sits a third of the way up the digit. */
+const enSign=n=>String(n).replace('-','−');
+
+/* In the app body rather than the dial's own <defs>, so they leave when
+   the app does. url(#id) resolves across the document - a gradient only
+   has to EXIST, not to live in the svg that paints with it. */
+const enGrad=(id,c1,c2)=>
+  '<linearGradient id="'+id+'" gradientUnits="userSpaceOnUse"'
+  +' x1="300" y1="600" x2="780" y2="200">'
+  +'<stop offset="0" stop-color="'+c1+'"/>'
+  +'<stop offset="1" stop-color="'+c2+'"/></linearGradient>';
 
 function energyOpen(host){
   host.insertAdjacentHTML('beforeend',
-    '<div class="a-head"><div class="a-h1">House bank</div>'
-    +'<div class="a-h2" id="en-link"></div></div>'
-    +'<div id="en">'
-    +'<div id="en-soc"><b id="en-pct">'+EN_DASH+'</b><em>%</em></div>'
-    +'<div id="en-bar"><i id="en-fill"></i></div>'
-    +'<div id="en-row">'
+    '<svg id="en-g" viewBox="0 0 1080 1080"><defs>'
+    +enGrad('en-grad-n','var(--accent-g1)','var(--accent-g2)')
+    +enGrad('en-grad-c','var(--stbd-g1)','var(--stbd-g2)')
+    +enGrad('en-grad-l','var(--port-g1)','var(--port-g2)')
+    +'</defs>'
+    +'<circle id="en-trk" cx="540" cy="424" r="252" pathLength="100"'
+    +' stroke-dasharray="75 25" stroke-dashoffset="-37.5"/>'
+    /* Opens empty and fills to the reading, because the transition is on
+       the dash array and a gauge that is already right when it appears
+       has not told you it is live. */
+    +'<circle id="en-arc" class="off" cx="540" cy="424" r="252"'
+    +' pathLength="100" stroke-dasharray="0 100"'
+    +' stroke-dashoffset="-37.5"/></svg>'
+    +'<div id="en-core" class="none">'
+    +'<div id="en-soc"><b id="en-pct">'+EN_DASH+'</b>'
+    +'<em>%</em></div>'
+    +'<div id="en-state" class="off">'
+    +'<svg viewBox="0 0 10 14"><path d="M6.8 0L0 8.2h4.1l-.8 5.8L10 5.6H6.1z"/>'
+    +'</svg><span id="en-stxt"></span></div>'
+    +'<div id="en-sub"></div></div>'
+    +'<div id="en-grid">'
     +'<div><b id="en-v">'+EN_DASH+'</b><span>VOLTS</span></div>'
     +'<div><b id="en-a">'+EN_DASH+'</b><span id="en-alab">AMPS</span></div>'
     +'<div><b id="en-w">'+EN_DASH+'</b><span>WATTS</span></div></div>'
     +'<div id="en-cells"></div>'
-    +'<div id="en-foot"></div></div>');
+    +'<div id="en-foot"><div id="en-f1"></div><div id="en-f2"></div></div>');
   EN={cells:0, timer:null};
   enPaint();
   /* A battery is not a bezel. Once a second is faster than anything here
-     moves, and a redraw costs a layout of the whole column. */
+     moves, and a redraw costs a layout of the whole face. */
   EN.timer=setInterval(enPaint, 1000);
 }
 function energyClose(){
@@ -14199,48 +14429,114 @@ function enPaint(){
   if(!EN) return;
   const b=batRead();
   const pct = b.soc===null ? null : Math.round(b.soc*100);
+  const live = b.soc!==null || b.v!==null || b.cells.length>0;
+  const chg = b.i!==null && b.i>EN_IDLE;
+  const low = pct!==null && pct<=20;
+
+  /* ---- the arc ---- */
+  const f = pct===null ? 0 : Math.max(0,Math.min(100,pct))/100;
+  wAttr('en-arc','stroke-dasharray',(f*EN_SPAN).toFixed(2)+' 100');
+  wCls ('en-arc','off', f<=0);
+  wCls ('en-arc','low', low || b.bad);
+  wCls ('en-arc','chg', chg && !low && !b.bad);
+
+  /* ---- the charge ---- */
   wText('en-pct', pct===null ? EN_DASH : String(pct));
-  wCls ('en-soc','none', pct===null);
-  wSty ('en-fill','width', pct===null ? '0%'
-                         : Math.max(0,Math.min(100,pct))+'%');
-  wCls ('en-fill','low', pct!==null && pct<=20);
+  wCls ('en-core','none', pct===null);
+
+  /* ---- what it is doing ---- */
+  const st = b.bad ? 'BMS FAULT'
+           : b.i===null ? null
+           : chg ? 'CHARGING'
+           : b.i < -EN_IDLE ? 'DISCHARGING' : 'IDLE';
+  wText('en-stxt', st||'');
+  wCls ('en-state','off', !st);
+  wCls ('en-state','chg', st==='CHARGING');
+  wCls ('en-state','bad', b.bad);
+
+  /* One line under the number, in this order of precedence. A code
+     outranks the rest because a BMS that is talking and unhappy is a
+     different thing from one that is not talking, and "no feed" is said
+     once here rather than by eleven readings each drawing a dash and
+     leaving you to work out whether the bank is flat or absent. */
+  const left=enLeft(b.left);
+  const sub = b.code!==null
+                ? 'FAULT CODE 0x'+b.code.toString(16).toUpperCase()
+                                       .padStart(4,'0')
+            : !live ? 'NO BATTERY FEED'
+            : left ? left+' LEFT' : '';
+  wText('en-sub', sub);
+  wCls ('en-sub','bad', b.code!==null);
+  wCls ('en-sub','warn', !b.bad && !live);
+
+  /* ---- volts, amps, watts ---- */
   wText('en-v', enTxt(b.v,2));
   /* The magnitude with a word, not a minus sign. Signal K signs current
-     into the battery, which is correct and is also the opposite of how
+     INTO the battery, which is correct and is also the opposite of how
      anybody says it out loud. */
   wText('en-a', b.i===null ? EN_DASH : Math.abs(b.i).toFixed(1));
-  wText('en-alab', b.i===null ? 'AMPS' : (b.i>=0 ? 'AMPS IN' : 'AMPS OUT'));
+  wText('en-alab', b.i===null ? 'AMPS'
+                 : chg ? 'AMPS IN'
+                 : b.i < -EN_IDLE ? 'AMPS OUT' : 'AMPS');
+  wCls ('en-a','in', chg);
   wText('en-w', b.w===null ? EN_DASH : String(Math.round(Math.abs(b.w))));
 
+  /* ---- the cells ---- */
   /* Rebuilt only when the cell COUNT changes - a 3S pack publishes three
-     - so the usual case writes text and a height and nothing else. */
+     - so the usual case writes a text and a height and nothing else.
+     The cache goes with it: the ids come back pointing at BRAND NEW
+     elements with no height on them, and a cache that still remembers
+     the old one's 52% suppresses the write that would set it. That is
+     the same bug closeApp was carrying, one deck up. */
   if(b.cells.length!==EN.cells){
     EN.cells=b.cells.length;
+    _w.clear();
     $('en-cells').innerHTML=b.cells.map((_,i)=>
-      '<div class="en-c"><i><u id="en-cb'+i+'"></u></i>'
+      '<div class="en-c" id="en-cc'+i+'"><i><u id="en-cb'+i+'"></u></i>'
       +'<s id="en-cv'+i+'">'+EN_DASH+'</s></div>').join('');
   }
+  let spread=null;
   if(b.cells.length){
     const mean=b.cells.reduce((a,c)=>a+c,0)/b.cells.length;
+    spread=Math.max(...b.cells)-Math.min(...b.cells);
+    /* Furthest from the mean either way: a cell dropping behind and a
+       cell running away are the same thing to go and look for. */
+    let far=-1, d=-1;
     b.cells.forEach((c,i)=>{
-      const f=Math.max(0,Math.min(1, 0.5+(c-mean)/0.060));
-      wSty ('en-cb'+i,'height',(f*100).toFixed(1)+'%');
+      if(Math.abs(c-mean)>d){ d=Math.abs(c-mean); far=i; }
+    });
+    b.cells.forEach((c,i)=>{
+      /* Floored and capped just off the ends rather than at them: a
+         cell outside the window clamps, and a bar clamped to nothing is
+         an EMPTY BOX - which is what a cell with no reading would look
+         like, if one were ever drawn, and which has no ink left to carry
+         the colour that says this is the cell to go and look at. */
+      const g=Math.max(0.045,Math.min(0.955, 0.5+(c-mean)/0.060));
+      wSty ('en-cb'+i,'height',(g*100).toFixed(1)+'%');
       wText('en-cv'+i, c.toFixed(3));
+      wCls ('en-cc'+i,'far', i===far && spread>=EN_FAR);
     });
   }
 
-  const foot=[];
-  if(b.cells.length>1)
-    foot.push('SPREAD '+Math.round((Math.max(...b.cells)
-                                   -Math.min(...b.cells))*1000)+' MV');
-  if(b.degC!==null) foot.push(Math.round(b.degC)+'°C');
-  const left=enLeft(b.left);
-  if(left) foot.push(left+' LEFT');
-  wText('en-foot', foot.join('  ·  '));
-  /* Said once, at the top, rather than by every reading drawing a dash
-     and leaving you to work out whether the bank is flat or absent. */
-  const dead = b.soc===null && b.v===null && !b.cells.length;
-  wText('en-link', dead ? 'NO BATTERY FEED' : '');
+  /* ---- the paperwork ----
+     Two lines, and the split is not cosmetic: the first is the pack at
+     this moment and the second is the pack's life, which is the order
+     you would ask for them in and the order you would stop reading. */
+  const now=[], life=[];
+  if(b.ahLeft!==null)
+    now.push(Math.round(b.ahLeft)+' OF '+Math.round(b.ah)+' AH');
+  else if(b.ah!==null) now.push(Math.round(b.ah)+' AH BANK');
+  const t=enTemp(b.temps); if(t) now.push(t);
+  if(spread!==null && b.cells.length>1)
+    now.push('SPREAD '+Math.round(spread*1000)+' MV');
+  if(b.soh!==null) life.push('SOH '+Math.round(b.soh*100)+'%');
+  if(b.cycles!==null) life.push(Math.round(b.cycles)+' CYCLES');
+  /* Not decoration. This bank talks over Bluetooth, and a reading four
+     minutes stale looks exactly like a reading that is wrong. staleAfter
+     already blanks a feed that has died; this says how near it is. */
+  if(b.rssi!==null) life.push('BLE '+enSign(Math.round(b.rssi))+' DBM');
+  wText('en-f1', now.join('  ·  '));
+  wText('en-f2', life.join('  ·  '));
 }
 
 /* ---- Tracks -----------------------------------------------------

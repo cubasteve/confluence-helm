@@ -1576,7 +1576,13 @@ question after a reboot:
 
 ## Energy
 
-The house bank, and the fifth app on the dock.
+The house bank, and the fifth app on the dock. One Eco-Worthy 100 Ah
+LiFePO₄ with a Bluetooth BMS, which is the whole electrical system, which
+is why the app says **ENERGY** once — in the frame's own name pill — and
+nothing else. It used to put a heading of its own underneath, so the top
+of the glass read ENERGY and then HOUSE BANK: the page saying twice what
+it is and not once what it was doing. The gauge starts where that
+heading was.
 
 It reads **Signal K paths and nothing else** —
 `electrical.batteries.house.*`, the set in `BAT_PATHS`. That set *is* the
@@ -1586,10 +1592,48 @@ demo in the meantime. All three arrive through the same door and the app
 cannot tell them apart, which is the point — change the source and
 nothing above that line moves.
 
-Cells are the one departure from the spec. Signal K has no path for a
-cell, and `cells.<n>.voltage` is what the BMS plugins settled on between
-them. Four of them, because the board is 3–4S; a 3S pack simply never
-publishes the fourth and the row draws three.
+### Four departures from the spec
+
+Signal K's battery schema was written for a shunt on a lead-acid bank,
+and a lithium BMS knows things a shunt cannot. Each of these is named the
+way the BMS plugins have settled on between them:
+
+| path | why it is not in the spec |
+|---|---|
+| `cells.<n>.voltage` | there is no path for a cell |
+| `temperatures.<n>` | nor for one probe of several; `temperature` stays the pack's own single figure |
+| `capacity.nominalAh` | `capacity.nominal` is in **joules**, which takes a nominal voltage to turn back into the amp-hours printed on the case |
+| `problem` | the flag, and the raw code if there is one — *not* a decoded fault |
+
+Four cells and two probes, because the board is 3–4S and packs carry one
+probe or two. **Not one path is required.** A 3S pack never publishes the
+fourth cell and the row draws three; a plugin with no state of health
+never publishes it and the line it would have sat on is not written.
+
+### What this battery actually reports
+
+Read off `patman15/aiobmsble`, the library behind the Home Assistant BMS
+integration, for the Eco-Worthy BW 02/0B — service `fff0`, notify `fff1`,
+write `fff2`, frames `0xA1` and `0xA2`, CRC-16/MODBUS:
+
+**measured** — state of charge, state of health, voltage, current,
+design capacity, cell voltages, a temperature per probe, and a raw
+16-bit problem code.
+
+**derived by the library, not by the pack** — power, runtime,
+delta cell voltage, average temperature.
+
+**not available from this plugin at all** — cycle count (the line is
+commented out in the source), charge and discharge MOSFET states,
+balancer state, heater, and any *meaning* for the bits in the problem
+code.
+
+The app subscribes to `cycles` anyway, because three of the four plugins
+an Eco-Worthy can land on do publish it and a path nothing writes costs
+one entry in a list. Which plugin a given battery lands on depends on how
+it advertises — `ECO-WORTHY 02_*` and the `fff0`/`DCHOUSE*` matchers go
+to one, `ECO????` to another — so the honest design is the one here: ask
+for everything, draw what arrives, and leave the rest of the line out.
 
 ### Nothing here falls back to zero
 
@@ -1598,42 +1642,108 @@ indistinguishable from a flat bank, and it is the one number anybody
 would act on at two in the morning. Every value goes through `get()`,
 which returns null past `staleAfter`, and null draws an em dash. With no
 feed at all: every reading a dash, no cell bars rather than four empty
-ones, an empty foot, a bar at zero that is **not** red — an absent bank
-is not a flat one — and `NO BATTERY FEED` said once, at the top.
+ones, both foot lines gone, no state chip, an arc that is **empty and
+hidden**, and `NO BATTERY FEED` said once, under the number.
+
+Hidden as well as empty, because a zero-length dash with a round cap is a
+**dot** — an empty gauge drew a 28 px bead at the seven-o'clock tip,
+which reads as 1% on the one screen where nothing and almost nothing must
+not look alike.
 
 That also covers the failure that matters most with a radio link. A
 naive BLE client keeps the last value it was pushed and shows 82% all
-afternoon; `get()` will not hold a reading past eight seconds.
+afternoon; `get()` will not hold a reading past eight seconds. The foot
+carries `BLE −58 DBM` for the same reason: four minutes stale and plain
+wrong look identical on a gauge, and the link strength is the warning
+that comes first.
+
+### An arc, not a bar
+
+Every other reading on this panel is polar — the rose, the grooves, the
+lay lines, the sun's own dial — and a 560 px rule across the middle was
+the one straight line in the instrument. The gauge is 270° with the gap
+at the foot, where the close button sits anyway.
+
+It is drawn as a **circle with `pathLength="100"`**, not an arc path. The
+circle's own start is three o'clock running clockwise, so 37.5 of 100 is
+half past seven — the lower-left tip — and 75 units is the 270° it spans.
+A repaint changes one number in a dash array: no trigonometry per frame,
+no path to rebuild, and the browser does the animating. The attribute is
+the whole mechanism, so the probe asserts `pathLength.baseVal === 100`;
+if the HTML parser ever stopped camel-casing it in foreign content the
+dash array would fall back to user units against a circumference of 1583
+and the gauge would still *look* plausible at low charge.
+
+Three gradients, which are the ones the race pill already uses: accent
+normally, starboard charging, port at 20% or on a fault. In night mode
+all three resolve to the same red, which is the point of that theme.
+
+### Four bands, in the order you would ask
+
+1. **the charge** — the state of charge, huge, inside the arc, with a
+   word for what the bank is *doing* (`CHARGING` with a bolt,
+   `DISCHARGING`, `IDLE`, `BMS FAULT`) and one line under it: time
+   remaining, or the fault code, or why there is nothing.
+2. **what it is doing** — volts, amps, watts in one row, divided by the
+   dial's own hairlines. Current is the one reading whose *sign* is news,
+   so it is the one that takes a colour.
+3. **the balance** — the cells.
+4. **the paperwork** — amp-hours, temperature and spread on the first
+   line; state of health, cycles and link strength on the second. Two
+   lines by design rather than by wrapping, because a line allowed to
+   wrap puts a lone separator dot at the start of the next one.
+
+Only two numbers on the face are arithmetic rather than measurement, and
+both are stated as such in `batRead`: **power**, when the pack publishes
+volts and amps but not their product, and **amp-hours remaining**, which
+is the state of charge times the capacity printed on the case. Runtime
+and state of health are *not* derived — a runtime computed from this
+instant's current would read six hours on a boat that just eased the
+sheets.
 
 ### The cells are a balance view
 
 Four bars of absolute voltage on a lithium pack are four identical bars —
 the plateau is the whole character of the chemistry. So each bar is that
-cell's distance from the pack mean over a fixed **±30 mV** window. A pack
-in balance reads as a level row at half height; one cell walking away is
-the only thing that moves. Fixed and not auto-scaled, or three millivolts
-of nothing would draw like a fault.
+cell's distance from the pack mean over a fixed **±30 mV** window, with
+the mean drawn across the row as a datum. A pack in balance reads as a
+level row on the line; one cell walking away is the only thing that
+moves. Fixed and not auto-scaled, or three millivolts of nothing would
+draw like a fault.
+
+Past 20 mV of spread the cell furthest from the mean — above it or below
+it, because a cell dropping behind and one running away are the same
+thing to go and look for — is badged in `--warn`. Only past 20 mV: a
+badge that hopped from cell to cell once a second on a perfectly happy
+pack would be noise. The bar clamps just short of the ends rather than at
+them, because a bar clamped to nothing is an empty box, and an empty box
+has no ink left to carry the colour that says *this is the one*.
 
 ### Amps have a word, not a sign
 
 Signal K signs current *into* the battery, which is correct and is also
 the opposite of how anybody says it out loud. The face shows the
-magnitude and labels it `AMPS IN` or `AMPS OUT`.
+magnitude and labels it `AMPS IN` or `AMPS OUT`, and plain `AMPS` within
+±0.2 A — a BMS idling reports a few tens of milliamps of its own draw
+forever, and that is not a discharge.
 
 ### The demo bank defers path by path
 
 A 4S LiFePO₄ at 100 Ah, flat through the middle of its range, drawing
-what a boat under sail draws. It exists so the screen could be built,
-looked at and held to account before the board was out of its envelope.
+what a boat under sail draws, with a state of health, a cycle count, two
+probes and a link strength on it. It exists so the screen could be built,
+looked at and held to account before the board was out of its envelope —
+and it carries every line of the face, because a demo that leaves half
+the face on dashes is not exercising the half it leaves.
 
 It defers like the **GPS group** and not like the wind. `DEMO_REAL`
 stands the *whole* demo down, which is right for an instrument saying the
 boat is real and wrong for one saying only that the battery is — a BMS
 turning up must not blank the invented vane with it. So `demoBank()`
-writes through `feedOwns`/`feedPut`, and a real reading wins on the next
+checks `feedOwns` before every write, and a real reading wins on the next
 tick while everything else goes on being imagined.
 
-### Two things the app flushed out of the frame
+### Three things the app flushed out of the frame
 
 **The cached writers were never invalidated.** `_w` skips a write whose
 value has not changed, keyed by element id — right for a permanent node,
@@ -1642,7 +1752,18 @@ reading that happened to be unchanged was never written, so the rebuilt
 element kept its placeholder and the page showed an em dash over live
 data. Energy is the first app that both builds its own nodes and uses
 `wText`, which is why it had gone unnoticed. `closeApp()` clears the
-cache now.
+cache now — and so does the cell row, which rebuilds itself whenever the
+cell count changes and hit the same trap one level down.
+
+**`feedPut` does not check ownership; the caller does.** The GPS group
+writes `if(own(p)) set(p, v)` on every line. `demoBank` gated the *whole
+bank* on owning the voltage and then wrote the other ten paths
+unconditionally — at 8 Hz, over anything real. It never showed, because
+every BMS publishes a voltage and the gate closed before anything else
+arrived; a plugin that published a state of charge one tick ahead of its
+voltage is all it would have taken, and the fault would have looked like
+a bad battery. `set()` checks for itself now: the same rule written once
+instead of fifteen times.
 
 **The dock tiles were a fixed 136 px.** Four fitted 600; the fifth made
 it 676 and the dock began to scroll, which is a poor thing for a menu of
