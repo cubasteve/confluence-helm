@@ -74,6 +74,10 @@ elif 'device' in argv and 'show' in argv:
         emit('GENERAL.STATE:' + d['state'])
         emit('GENERAL.AUTOCONNECT:' + d.get('auto', 'yes'))
         emit('GENERAL.CONNECTION:' + (show(d['con']) or '--'))
+        # netd asks for this in the same call, and the remote needs it
+        # to know which address to put in the QR.
+        if d.get('ip'):
+            emit('IP4.ADDRESS[1]:' + d['ip'])
 elif 'connection' in argv and 'show' in argv and 'NAME,UUID,TYPE' in fields:
     for c in spec['profiles']:
         emit('%s:%s:802-11-wireless' % (show(c['name']).replace(':', r'\:'),

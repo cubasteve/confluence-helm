@@ -30,7 +30,8 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import array, contextlib, json, math, os, re, shutil, subprocess, sys
+import array, contextlib, json, math, os, re, secrets, shutil, socket
+import subprocess, sys
 import tempfile, threading, time, urllib.error, urllib.request, wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -2461,6 +2462,18 @@ def route(path, body):
                 'score': score_status(), 'gpx': gpx_status(),
                 'spotify': spotify_status(), 'fit': fit_status()}
 
+    # The remote's three, all LOOPBACK: they arrive on the panel's own
+    # socket, from the panel's own browser. Nothing on the phone's
+    # socket can reach route() at all - see RemoteHandler.
+    if path == '/remote/status':
+        return remote_status()
+    if path == '/remote/arm':
+        return remote_arm(body)
+    if path == '/remote/disarm':
+        return remote_disarm()
+    if path == '/remote/poll':
+        return remote_poll(body)
+
     if path == '/spotify/like':
         return spotify_like(body.get('id'), body.get('want'))
     if path == '/spotify/control':
@@ -2549,6 +2562,426 @@ def route(path, body):
             rc, _, _ = bt_call(['remove', mac], 15)
         return {'ok': rc == 0}
     return None
+
+
+# ---------------------------------------------------------------- remote
+#
+# The phone remote. A settings remote and not a second instrument: it
+# changes WHICH reading sits in which slot, and the theme, and nothing
+# else. No boat data crosses - the payload is slot names and reading
+# keys both ways, so the phone never learns the depth.
+#
+# ---- what is exposed, and what is not --------------------------------
+#
+# Not netd. The repo already wrote down why, in docs/network.md: "There
+# is no auth in the service because the socket makes it unnecessary; if
+# you ever bind it wider, that stops being true." Flipping
+# HELM_NETD_BIND would publish all 27 routes at once.
+#
+# So the remote gets its own socket and its own handler class, and that
+# class has NO call path to route(). Not an allowlist inside one
+# dispatcher - a different dispatcher. The property is then structural
+# rather than maintained: a route added to route() next year cannot
+# become remotely reachable, because nothing on that socket can reach
+# route() to begin with.
+#
+# ---- which interface, and why not an address check -------------------
+#
+# Pinned to the dongle by SO_BINDTODEVICE, not by IP.
+#
+# An address check does not do what it looks like it does. The Pi is
+# SeaWire's access point and its default gateway, so a guest on SeaWire
+# who dials wlan1's address has the packet ARRIVE on wlan0 and be
+# accepted for a locally-configured address - and a check on
+# client_address, or on getsockname, passes it. Binding wlan1's address
+# directly has its own problem: it fails with EADDRNOTAVAIL before DHCP
+# and goes stale the next time the phone hands out a different lease.
+#
+# SO_BINDTODEVICE filters on the device the packet ARRIVED on, which is
+# the property actually wanted, and the bind stays on 0.0.0.0 so a new
+# lease changes nothing.
+#
+# It needed CAP_NET_RAW before Linux 5.9 and does not since. netd runs
+# as the desktop user, so if that relaxation is not present here the
+# setsockopt raises and we fall back to a per-request subnet check -
+# which is a guarantee made by this code rather than by the kernel, and
+# remote_how() says which one is in force so nobody has to guess.
+REMOTE_DEV = os.environ.get('HELM_REMOTE_DEV', 'wlan1')
+REMOTE_PORT = PORT + 2
+# Commands older than this are dropped rather than applied. A panel that
+# was asleep, or reloading, should not come back and replay a tap from
+# ten minutes ago.
+REMOTE_STALE = 30
+
+_remote = {'armed': False, 'token': '', 'how': '', 'srv': None,
+           'pend': {}, 'at': 0.0,
+           # What the PANEL says its slots and readings are, handed over
+           # when it arms. netd validates against this rather than
+           # carrying its own copy of the catalogue - the readings live
+           # in the HTML and a second list here would drift the first
+           # time one was added.
+           'slots': {}, 'readings': [], 'themes': []}
+_rlock = threading.Lock()
+
+
+def remote_how():
+    """Which guarantee is in force: the kernel's, or this file's."""
+    return _remote['how']
+
+
+def _dev_subnet(dev):
+    """The dongle's address and prefix, for the fallback path only."""
+    rc, out, _ = run(['nmcli', '-t', '-f', 'IP4.ADDRESS', 'device', 'show', dev], 8)
+    for line in out.splitlines():
+        v = line.split(':', 1)[-1].strip()
+        if '/' in v:
+            return v
+    return ''
+
+
+def _same_subnet(ip, cidr):
+    """Is ip inside cidr, without importing ipaddress for one call."""
+    try:
+        net, bits = cidr.split('/')
+        bits = int(bits)
+        to_i = lambda a: int.from_bytes(bytes(int(x) for x in a.split('.')), 'big')
+        mask = (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF
+        return (to_i(ip) & mask) == (to_i(net) & mask)
+    except Exception:
+        return False
+
+
+def remote_socket():
+    """A listening socket on the dongle, by the strongest means available."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    how = 'subnet'
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE,
+                     REMOTE_DEV.encode())
+        how = 'device'
+    except OSError:
+        pass                      # pre-5.9, or no permission: see the fallback
+    s.bind(('0.0.0.0', REMOTE_PORT))
+    s.listen(8)
+    return s, how
+
+
+def remote_status():
+    r = _remote
+    return {'ok': True, 'armed': r['armed'], 'how': r['how'],
+            'url': r.get('url', ''), 'token': r['token'],
+            'dev': REMOTE_DEV, 'port': REMOTE_PORT}
+
+
+def remote_arm(body):
+    """Open the remote socket and mint a token.
+
+    The panel hands over its OWN catalogue here - which slots it has and
+    which readings exist - and netd validates every command against
+    that. It deliberately keeps no copy of its own: the readings live in
+    the HTML, and a second list in this file would drift the first time
+    one was added, in the direction of rejecting a perfectly good
+    command or accepting a meaningless one.
+
+    A fresh token every time. Nothing is persisted, so netd restarting
+    disarms - which is the safe way round."""
+    slots = body.get('slots')
+    readings = body.get('readings')
+    if not isinstance(slots, dict) or not slots:
+        return {'ok': False, 'error': 'NO SLOTS'}
+    if not isinstance(readings, list) or not readings:
+        return {'ok': False, 'error': 'NO READINGS'}
+    if not all(isinstance(v, list) and v for v in slots.values()):
+        return {'ok': False, 'error': 'BAD SLOTS'}
+    themes = body.get('themes')
+    if not isinstance(themes, list) or not themes:
+        themes = ['day', 'dusk', 'night', 'auto']
+
+    cidr = _dev_subnet(REMOTE_DEV)
+    if not cidr:
+        return {'ok': False, 'error': 'NO ADDRESS ON ' + REMOTE_DEV.upper()}
+
+    with _rlock:
+        _remote_stop()
+        try:
+            sock, how = remote_socket()
+        except OSError as e:
+            return {'ok': False, 'error': str(e)[:80].upper()}
+        srv = ThreadingHTTPServer.__new__(ThreadingHTTPServer)
+        ThreadingHTTPServer.__init__(srv, ('0.0.0.0', REMOTE_PORT),
+                                     RemoteHandler, bind_and_activate=False)
+        srv.socket.close()
+        srv.socket = sock
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        _remote.update(armed=True, how=how, srv=srv, pend={}, at=0.0,
+                       token=secrets.token_urlsafe(9),
+                       slots={k: list(v) for k, v in slots.items()},
+                       readings=list(readings), themes=list(themes),
+                       cidr=cidr,
+                       url='http://%s:%d/r' % (cidr.split('/')[0], REMOTE_PORT))
+    return remote_status()
+
+
+def _remote_stop():
+    srv = _remote.get('srv')
+    if srv:
+        try:
+            srv.shutdown()
+            srv.server_close()
+        except Exception:
+            pass
+    _remote.update(armed=False, srv=None, token='', pend={}, how='', url='')
+
+
+def remote_disarm():
+    with _rlock:
+        _remote_stop()
+    return remote_status()
+
+
+def remote_poll(body=None):
+    """See remote_poll below - this signature takes the panel's own
+    current state along with the drain, so the phone can show what is
+    in each slot without ever being told what it reads."""
+    body = body or {}
+    now = body.get('now')
+    if isinstance(now, dict):
+        _remote['now'] = now
+    return _remote_drain()
+
+
+def _remote_drain():
+    """The panel draining whatever the phone has asked for.
+
+    Loopback only, and it touches no subprocess and takes no lock the
+    radios use - it is a dict swap, which is what lets the panel poll it
+    at a second and a half without costing anything."""
+    with _rlock:
+        pend, at = _remote['pend'], _remote['at']
+        _remote['pend'] = {}
+        if at and time.time() - at > REMOTE_STALE:
+            pend = {}                      # the panel was away; do not replay
+    return {'ok': True, 'armed': _remote['armed'], 'cmds': pend}
+
+
+def remote_cmd(body, token):
+    """One command from the phone. Validated against what the panel said
+    it had, because nothing arriving on that socket is trusted."""
+    r = _remote
+    if not r['armed']:
+        return {'ok': False, 'error': 'NOT ARMED'}, 403
+    if not token or not secrets.compare_digest(token, r['token']):
+        return {'ok': False, 'error': 'BAD TOKEN'}, 403
+    kind = body.get('kind')
+    with _rlock:
+        if kind == 'slot':
+            page, slot = body.get('page'), body.get('slot')
+            reading = body.get('reading')
+            if page not in r['slots'] or slot not in r['slots'].get(page, []):
+                return {'ok': False, 'error': 'NO SUCH SLOT'}, 400
+            if reading not in r['readings']:
+                return {'ok': False, 'error': 'NO SUCH READING'}, 400
+            # Latest wins, per slot. Two taps on the same cell before the
+            # panel polls should be one change, not a queue of them.
+            r['pend']['slot:%s:%s' % (page, slot)] = {
+                'kind': 'slot', 'page': page, 'slot': slot, 'reading': reading}
+        elif kind == 'theme':
+            theme = body.get('theme')
+            if theme not in r['themes']:
+                return {'ok': False, 'error': 'NO SUCH THEME'}, 400
+            r['pend']['theme'] = {'kind': 'theme', 'theme': theme}
+        else:
+            return {'ok': False, 'error': 'NO SUCH COMMAND'}, 400
+        r['at'] = time.time()
+    return {'ok': True}, 200
+
+
+REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Confluence</title><style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#0B0C0E;color:#F2F4F6;
+ font:600 17px/1.3 -apple-system,'Segoe UI',Roboto,sans-serif;
+ padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+h1{font-size:13px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
+.row{display:flex;align-items:center;gap:12px;width:100%;
+ background:#15181B;border:0;color:inherit;border-radius:14px;
+ padding:14px 16px;margin-bottom:8px;font:inherit;text-align:left}
+.row b{flex:none;width:34px;color:#6C757C;font-size:13px;letter-spacing:.1em}
+.row s{flex:1;text-decoration:none;color:#F2F4F6}
+.row i{font-style:normal;color:#4A9EFF;font-size:14px}
+.row:active{background:#22272B}
+.th{display:flex;gap:8px}
+.th button{flex:1;background:#15181B;border:0;color:#9AA2A9;border-radius:14px;
+ padding:14px 0;font:inherit;font-size:14px;letter-spacing:.1em}
+.th button.on{background:#4A9EFF;color:#06080A}
+#list{position:fixed;inset:0;background:#0B0C0E;overflow:auto;
+ padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:none}
+#list.on{display:block}
+#list h1{margin-top:env(safe-area-inset-top)}
+.grp{font-size:11px;letter-spacing:.2em;color:#4A9EFF;margin:16px 0 6px}
+#msg{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));
+ background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
+ font-size:14px;display:none}
+</style></head><body>
+<div id="main"></div>
+<div id="list"></div>
+<div id="msg"></div>
+<script>
+var T=new URLSearchParams(location.search).get('t')||'';
+var S=null, GRP={gps:'GPS',dpt:'DEPTH',wnd:'WIND',mot:'MOTION',
+                 crs:'COURSE',perf:'PERFORMANCE'};
+function say(m){var e=document.getElementById('msg');e.textContent=m;
+  e.style.display='block';setTimeout(function(){e.style.display='none'},2500);}
+function get(u,cb){var x=new XMLHttpRequest();x.open('GET',u);
+  x.onload=function(){try{cb(JSON.parse(x.responseText))}catch(e){say('BAD REPLY')}};
+  x.onerror=function(){say('NO ANSWER FROM THE BOAT')};x.send();}
+function post(b,cb){var x=new XMLHttpRequest();x.open('POST','/r/cmd?t='+T);
+  x.setRequestHeader('Content-Type','application/json');
+  x.onload=function(){var j={};try{j=JSON.parse(x.responseText)}catch(e){}
+    if(x.status!==200){say(j.error||('HTTP '+x.status));return}cb&&cb()};
+  x.onerror=function(){say('NO ANSWER FROM THE BOAT')};x.send(JSON.stringify(b));}
+function name(k){for(var i=0;i<S.readings.length;i++)
+  if(S.readings[i].k===k)return S.readings[i].name;return k;}
+function draw(){
+  var h='',p;
+  for(p in S.slots){
+    h+='<h1>'+(p==='dial'?'THE DIAL':'THE MUSIC PAGE')+'</h1>';
+    S.slots[p].forEach(function(sl){
+      h+='<button class="row" data-p="'+p+'" data-s="'+sl+'">'
+        +'<b>'+sl.toUpperCase()+'</b><s>'+name((S.now.slots||{})[p+':'+sl])
+        +'</s><i>&#9656;</i></button>';});
+  }
+  h+='<h1>THEME</h1><div class="th">';
+  S.themes.forEach(function(t){
+    h+='<button data-t="'+t+'"'+((S.now.theme===t)?' class="on"':'')+'>'
+      +t.toUpperCase()+'</button>';});
+  h+='</div>';
+  document.getElementById('main').innerHTML=h;
+}
+function pick(p,sl){
+  var h='<h1>'+sl.toUpperCase()+' &mdash; PICK A READING</h1>',last='';
+  S.readings.forEach(function(r){
+    if(r.sen!==last){last=r.sen;h+='<div class="grp">'+(GRP[r.sen]||r.sen)+'</div>';}
+    h+='<button class="row" data-k="'+r.k+'"><s>'+r.name+'</s></button>';});
+  var L=document.getElementById('list');
+  L.innerHTML=h;L.className='on';
+  L.onclick=function(e){var b=e.target.closest('[data-k]');if(!b)return;
+    post({kind:'slot',page:p,slot:sl,reading:b.dataset.k},function(){
+      S.now.slots=S.now.slots||{};S.now.slots[p+':'+sl]=b.dataset.k;
+      L.className='';draw();});};
+}
+document.getElementById('main').onclick=function(e){
+  var r=e.target.closest('[data-s]');
+  if(r){pick(r.dataset.p,r.dataset.s);return;}
+  var t=e.target.closest('[data-t]');
+  if(t)post({kind:'theme',theme:t.dataset.t},function(){
+    S.now.theme=t.dataset.t;draw();});
+};
+get('/r/state?t='+encodeURIComponent(T),function(j){
+  if(!j.ok){say(j.error||'NOT ARMED');return}S=j;draw();});
+</script></body></html>"""
+
+
+class RemoteHandler(BaseHTTPRequestHandler):
+    """The phone's door, and the whole of it.
+
+    A different class from Handler on purpose. It has no call path to
+    route(), so the twenty-seven endpoints behind that function are not
+    reachable from this socket by any request - not because a list says
+    so, but because the code to reach them is not here. A route added
+    next year inherits that for free.
+    """
+
+    server_version = 'helm-remote/1.0'
+
+    def log_message(self, fmt, *a):
+        pass
+
+    def handle_error(self, *a):
+        # The stdlib default prints a traceback to stderr, and
+        # cage-session.sh sends stderr to a file on the SD card. A phone
+        # walking out of wifi range is not worth a stack trace, and a
+        # stranger probing the port is not worth filling the card.
+        pass
+
+    def _ok_here(self):
+        """Only the dongle, and only when the kernel is not doing it.
+
+        With SO_BINDTODEVICE the socket itself refuses anything that did
+        not arrive on wlan1, so there is nothing to check. Without it -
+        an older kernel, or no permission - this is the guarantee
+        instead, and it is weaker: it is made here rather than by the
+        kernel, and it trusts the source address."""
+        if _remote['how'] == 'device':
+            return True
+        return _same_subnet(self.client_address[0], _remote.get('cidr', ''))
+
+    def _send(self, obj, code=200, ctype='application/json'):
+        payload = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header('Content-Type', ctype)
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Cache-Control', 'no-store')
+        # No Access-Control-* at all, ever. The token is only a defence
+        # against another page on the phone if a browser will not send
+        # the request in the first place.
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_OPTIONS(self):
+        # Refused rather than answered. An obliging preflight would let
+        # any page on the phone try its luck and leave the token as the
+        # only thing in the way.
+        self._send({'ok': False, 'error': 'NO'}, 403)
+
+    def _token(self):
+        from urllib.parse import parse_qs, urlparse
+        return (parse_qs(urlparse(self.path).query).get('t') or [''])[0]
+
+    def do_GET(self):
+        if not self._ok_here():
+            return self._send({'ok': False, 'error': 'NOT HERE'}, 403)
+        path = urlparse_path(self.path)
+        if path == '/r':
+            return self._send(REMOTE_PAGE.encode(), 200,
+                              'text/html; charset=utf-8')
+        if path == '/r/state':
+            r = _remote
+            if not r['armed']:
+                return self._send({'ok': False, 'error': 'NOT ARMED'}, 403)
+            if not secrets.compare_digest(self._token(), r['token']):
+                return self._send({'ok': False, 'error': 'BAD TOKEN'}, 403)
+            return self._send({'ok': True, 'slots': r['slots'],
+                               'readings': r['readings'],
+                               'themes': r['themes'],
+                               'now': r.get('now') or {}})
+        return self._send({'ok': False, 'error': 'NO'}, 404)
+
+    def do_POST(self):
+        if not self._ok_here():
+            return self._send({'ok': False, 'error': 'NOT HERE'}, 403)
+        if urlparse_path(self.path) != '/r/cmd':
+            return self._send({'ok': False, 'error': 'NO'}, 404)
+        if 'json' not in (self.headers.get('Content-Type') or ''):
+            # Stops a cross-origin text/plain POST, which a browser will
+            # send with no preflight at all.
+            return self._send({'ok': False, 'error': 'JSON ONLY'}, 415)
+        try:
+            n = min(int(self.headers.get('Content-Length') or 0), 4096)
+            body = json.loads(self.rfile.read(n) or b'{}') if n else {}
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        res, code = remote_cmd(body, self._token())
+        self._send(res, code)
+
+
+def urlparse_path(p):
+    return p.split('?')[0].rstrip('/') or '/'
 
 
 # Anything that changes a radio invalidates the caches above. One list,
