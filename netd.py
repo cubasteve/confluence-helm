@@ -2973,7 +2973,7 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Confluence Helm</title>
 <link rel="manifest" href="/r/manifest.webmanifest?t=%T%">
-<link rel="apple-touch-icon" href="/r/icon.png">
+<link rel="apple-touch-icon" href="/r/icon.png?v=%V%">
 <!-- Both spellings: the apple- one is what iOS has always read, the
      bare one is the standard that replaced it, and Android reads the
      manifest instead. Together they are what makes Add to Home Screen
@@ -3170,6 +3170,19 @@ function lanes(G){
     if(fromUp===up && up){ up.B-=need; r.T-=need; }
     else if(dn){ dn.T+=need; r.B+=need; }
   }
+  /* The rules are the content's width. The big number's own rect runs
+     270 to 890 and so centres on 580, not 540 - the face's middle, and
+     where its anchor and both rules are. On the glass that rect is a
+     transparent tap target and nobody ever sees it; here the lane is
+     DRAWN when its card is open, so the forty units showed up as a
+     block sitting right of everything above and below it.
+     A row with one slot in it takes the full ruled width, and no lane
+     reaches past the rules at all. */
+  var span=null;
+  (G.cut||[]).forEach(function(c){
+    var lo=Math.min(c[0],c[2]), hi=Math.max(c[0],c[2]);
+    span = span ? [Math.min(span[0],lo), Math.max(span[1],hi)] : [lo,hi];
+  });
   rows.forEach(function(r){
     r.ks.sort(function(x,y){return box[x][0]-box[y][0];});
     for(var j=0;j<r.ks.length;j++){
@@ -3178,6 +3191,10 @@ function lanes(G){
                 : Math.max(0, b[0]-40);
       var R = j<r.ks.length-1 ? (b[0]+b[2]+box[r.ks[j+1]][0])/2
                               : Math.min(1080, b[0]+b[2]+40);
+      if(span){
+        if(r.ks.length===1){ L=span[0]; R=span[1]; }
+        else { L=Math.max(L,span[0]); R=Math.min(R,span[1]); }
+      }
       out[k]=keepOff([L, r.T, R-L, r.B-r.T], G.art);
     }
   });
@@ -3413,6 +3430,34 @@ document.addEventListener('visibilitychange',function(){
 </script></body></html>"""
 
 
+_icon_v = {'at': 0, 'v': ''}
+
+
+def icon_tag():
+    """A short stamp of the icon's own bytes.
+
+    The picture is served with a week of max-age, which is right for
+    something that never changes and exactly wrong if the ADDRESS stays
+    the same when it does: a new icon then sits behind the old one on
+    the phone until the cache lets go. Putting the stamp in the URL
+    makes a different icon a different address, and the long max-age
+    becomes true rather than a gamble."""
+    try:
+        st = os.stat(REMOTE_ICON)
+    except OSError:
+        return ''
+    key = (int(st.st_mtime), st.st_size)
+    if _icon_v['at'] != key:
+        import hashlib
+        try:
+            with open(REMOTE_ICON, 'rb') as fh:
+                _icon_v['v'] = hashlib.sha1(fh.read()).hexdigest()[:8]
+        except OSError:
+            return ''
+        _icon_v['at'] = key
+    return _icon_v['v']
+
+
 def html_q(s):
     """Enough quoting for an attribute. The token is base64url and the
     port is an int, so nothing here can carry a quote - which is exactly
@@ -3440,7 +3485,7 @@ def remote_manifest(token):
         # One icon, 512, declared maskable as well: the artwork sits
         # inside the 80% safe circle, so Android can mask it to whatever
         # shape the launcher uses without taking a bite out of the ring.
-        'icons': [{'src': '/r/icon.png', 'sizes': '512x512',
+        'icons': [{'src': '/r/icon.png?v=' + icon_tag(), 'sizes': '512x512',
                    'type': 'image/png', 'purpose': 'any maskable'}],
     }
 
@@ -3514,7 +3559,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
             # it: a manifest fetched without one would have to be public,
             # and a public manifest holding start_url would hand the
             # token to anything else on the hotspot.
-            page = REMOTE_PAGE.replace('%T%', html_q(self._token()))
+            page = (REMOTE_PAGE.replace('%T%', html_q(self._token()))
+                    .replace('%V%', html_q(icon_tag())))
             return self._send(page.encode(), 200, 'text/html; charset=utf-8')
         if path == '/r/icon.png':
             # No token. It is a picture of the number 45.

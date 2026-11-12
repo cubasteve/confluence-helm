@@ -258,6 +258,43 @@ t.ok(Math.abs(mine-glassMark.mid) < 40,
      'the mirror puts it where the panel does',
      Math.round(mine)+' vs the glass at '+Math.round(glassMark.mid));
 
+t.head('the lanes are bounded by the rules you can see');
+/* The big number's own rect runs 270 to 890 and centres on 580, not
+   540 - the face's middle, where its anchor and both rules are. On the
+   glass that rect is a transparent tap target and nobody ever sees it;
+   here the lane is DRAWN when its card is open, and the forty units
+   showed up as a block sitting right of everything above and below. */
+await p.click('[data-f="dial"]'); await p.waitForTimeout(300);
+const span=cat.geom.dial.cut.filter(c=>c[1]===c[3]);
+const lo=Math.min(...span.map(c=>c[0])), hi=Math.max(...span.map(c=>c[2]));
+const fd=await faceBox(), kd=fd.w/1080;
+for(const c of await cells()){
+  const x0=(c.lane.x-fd.x)/kd, x1=x0+c.lane.w/kd;
+  t.ok(x0>=lo-1 && x1<=hi+1, c.s+"'s lane stays inside the rules",
+       Math.round(x0)+'..'+Math.round(x1)+' in '+lo+'..'+hi);
+}
+for(const sl of ['c0','c4']){
+  const c=(await cells()).find(x=>x.s===sl);
+  const mid=(c.lane.x+c.lane.w/2-fd.x)/kd;
+  t.ok(Math.abs(mid-540)<1.5, sl+' is centred on the face, not on its own rect',
+       String(Math.round(mid)));
+  t.ok(Math.abs((c.lane.x-fd.x)/kd-lo)<1.5 &&
+       Math.abs((c.lane.x+c.lane.w-fd.x)/kd-hi)<1.5,
+       '...and spans the whole ruled width, being alone on its row');
+}
+
+t.head('a new icon is a new address');
+/* The picture is served with a week of max-age, which is right for
+   something that never changes and exactly wrong if the address stays
+   the same when it does - the new icon then sits behind the old one on
+   the phone until the cache lets go. */
+const href=await p.getAttribute('link[rel=apple-touch-icon]','href');
+t.ok(/^\/r\/icon\.png\?v=[0-9a-f]{8}$/.test(href),
+     'the icon is asked for by a stamp of its own bytes', href);
+const man=await (await fetch(base+'/r/manifest.webmanifest?t=T0KEN')).json();
+t.ok(man.icons[0].src===href,
+     'and the manifest asks for exactly the same one', man.icons[0].src);
+
 t.head('tapping a zone drops a card that never covers the face');
 await p.click('g.z[data-s="c0"]'); await p.waitForTimeout(400);
 t.ok(await p.isVisible('#list'), 'the card is up');

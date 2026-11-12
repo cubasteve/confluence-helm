@@ -16,7 +16,7 @@ so.
 
     python3 tests/remote_test.py
 """
-import json, os, sys, threading, time, unittest, urllib.error, urllib.request
+import json, os, shutil, sys, threading, time, unittest, urllib.error, urllib.request
 from http.server import ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -125,7 +125,11 @@ class App(unittest.TestCase):
                 self.assertEqual(j['name'], 'Confluence Helm', j)
                 self.assertEqual(j['short_name'], 'Confluence', j)
                 self.assertTrue(len(j['short_name']) <= 12, j)
-                self.assertEqual(j['icons'][0]['src'], '/r/icon.png', j)
+                # With the stamp of its own bytes on it, so a new
+                # picture is a new address and the week of max-age on
+                # it becomes true rather than a gamble.
+                self.assertRegex(j['icons'][0]['src'],
+                                 r'^/r/icon\.png\?v=[0-9a-f]{8}$')
                 self.assertIn('maskable', j['icons'][0]['purpose'], j)
                 self.assertEqual(p.hdr['Content-Type'],
                                  'application/manifest+json')
@@ -150,6 +154,40 @@ class App(unittest.TestCase):
                 self.assertEqual(p.hdr['Cache-Control'], 'no-store')
             finally:
                 p.close()
+
+    def test_a_new_icon_gets_a_new_address(self):
+        """A week of max-age on a URL that does not change when the
+        picture does means the old one stays on the phone until the
+        cache lets go. The stamp is of the bytes, so a different icon
+        cannot arrive at the same address."""
+        import tempfile
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            d = tempfile.mkdtemp(prefix='helm-icon-')
+            keep = netd.REMOTE_ICON
+            netd.REMOTE_ICON = os.path.join(d, 'i.png')
+            try:
+                with open(netd.REMOTE_ICON, 'wb') as fh:
+                    fh.write(b'\x89PNG' + b'one')
+                a = netd.icon_tag()
+                self.assertRegex(a, r'^[0-9a-f]{8}$')
+                self.assertEqual(a, netd.icon_tag(), 'and is stable')
+                # a different picture, same path
+                os.utime(netd.REMOTE_ICON, (0, 0))
+                with open(netd.REMOTE_ICON, 'wb') as fh:
+                    fh.write(b'\x89PNG' + b'another one entirely')
+                self.assertNotEqual(netd.icon_tag(), a)
+            finally:
+                netd.REMOTE_ICON = keep
+                shutil.rmtree(d, ignore_errors=True)
+
+    def test_no_icon_is_a_blank_stamp_and_not_a_crash(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            keep = netd.REMOTE_ICON
+            netd.REMOTE_ICON = '/nonexistent/remote-icon.png'
+            try:
+                self.assertEqual(netd.icon_tag(), '')
+            finally:
+                netd.REMOTE_ICON = keep
 
     def test_a_missing_icon_is_a_404_and_not_a_stack_trace(self):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
