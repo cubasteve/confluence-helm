@@ -611,14 +611,49 @@ override only ever sits on a club mark and the bin only ever on one of
 yours — so a kind check would be a branch nothing can reach, and a
 branch no probe can hold to account.
 
-**What this does not fix: there is still nothing to restore from.** The
-marks themselves are safe either way — `markDelete` refuses anything
-that is not yours, so a club mark cannot be deleted at all, only
-un-corrected. But a dropped correction is gone from `markMoves` and the
-app has no copy. If that should be recoverable, the override wants
-writing somewhere durable before it is deleted — the `gpx` folder is
-the obvious home, since it already survives the browser being cleared.
-Not built.
+**What this does not fix: there is still nothing to restore from.** A
+club mark is safe either way — `markDelete` refuses anything that is
+not yours, so one cannot be deleted at all, only un-corrected, and the
+book's number is underneath. A mark of **your own** has nothing
+underneath: it *is* its position. Deleting one is the most destructive
+tap in the app.
+
+If that should be recoverable, the mark wants writing somewhere durable
+before it goes — the `gpx` folder is the obvious home, since it already
+survives the browser being cleared. Not built.
+
+### Digging one back out
+
+```
+python3 boot/mark-recover.py
+```
+
+Read-only, and worth trying the moment a mark goes. LevelDB does not
+overwrite in place: a new value is appended to the write-ahead log and
+the old record stays on disk until a compaction gets to it. On a panel
+that is mostly idle that can be days. So a deleted mark is often still
+there, in a file nothing has reason to touch — **which is why the first
+thing to do after losing one is stop writing to that storage.**
+
+It prints every mark of your own ever written, each one twice: as the
+mark sheet shows it, so it can be held against the glass, and as the
+NEW MARK form wants it typed. Both are the app's own `hemDM` and
+`fmtDM`, asserted against known values in the probe, because a
+recovery that puts the buoy somewhere it never was is worse than none.
+
+It searches **both** encodings. Chromium prefixes a localStorage value
+with one byte saying how the rest is written — `0x01` Latin-1, `0x00`
+UTF-16LE — and which you get depends on the characters, so the same key
+goes down one way today and the other tomorrow. Searching only the
+obvious one finds nothing and reports "they are gone", which is the
+worst answer this can give.
+
+`tests/markrecover_test.py` — 10 tests, against pretend LevelDB files
+in both encodings, including a log cut off mid-write (the normal state
+of a live one, and exactly where the newest records are). Seven
+controls: search one encoding, drop the dedupe, a space in the pattern,
+two decimal places instead of three, a form line without its minus,
+accept an object with no position, and a quiet "nothing found".
 
 `tests/marks.mjs` and `tests/markmove.mjs` hold both badges to it — one
 tap does nothing, the badge lights, the row says why, the arm expires,
