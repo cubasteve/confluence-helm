@@ -568,6 +568,66 @@ answer is recorded at the moment the race ends — by then the demo may
 have been switched off, and the race would still not be one that
 happened.
 
+## The two taps in EDIT that cannot be undone
+
+EDIT on the course sheet puts one badge on each mark tile. Two of them
+destroy something, and both used to do it on a single tap, on a 40 px
+disc, beside a drag handle, on a sheet you scroll with your thumb:
+
+| badge | on | does |
+|---|---|---|
+| `✕` | a mark of your own | takes it out of the book, off the sheet and out of the course |
+| `↺` | a club mark you have corrected | drops the correction and reloads |
+
+`↺` is the worse of the two, and `markRevert` says so in its own
+comment: *"The compiled values are not kept anywhere to restore
+FROM."* A correction is a position you got by standing at the buoy
+with the boat; the book's number is a sailing instruction given to a
+tenth of a minute. Dropping one throws away the measurement and keeps
+the paperwork.
+
+Reported from the water after two went in a single sitting, with
+nothing to put back. **Both arm before they fire now**, on the same
+shape as the race library's bin: first tap arms, four seconds, second
+tap does it.
+
+What the first tap does:
+
+- the badge **fills** — alarm for `✕`, accent for `↺`. It fills rather
+  than widening into `SURE?` the way the library's bin does, because
+  the library's bin has a full-width row to grow into and this one sits
+  in a flex row on a 140 px tile, where 90 px of button would push the
+  mark's own name out.
+- the tile's **subtitle** says what the second tap will do — `TAP ✕
+  AGAIN TO DELETE`, `TAP ↺ AGAIN TO DROP YOUR FIX`. The row that is
+  about to be destroyed is the one that should say so, which is the
+  same place the committee mark's flash already borrows.
+- it **lets go after four seconds**. An arm that outlives the moment is
+  how you drop the wrong thing with a thumb two minutes later.
+
+Armed by mark id alone, not by id *and* which badge. A tile carries one
+badge and never two, and the two are mutually exclusive anyway — an
+override only ever sits on a club mark and the bin only ever on one of
+yours — so a kind check would be a branch nothing can reach, and a
+branch no probe can hold to account.
+
+**What this does not fix: there is still nothing to restore from.** The
+marks themselves are safe either way — `markDelete` refuses anything
+that is not yours, so a club mark cannot be deleted at all, only
+un-corrected. But a dropped correction is gone from `markMoves` and the
+app has no copy. If that should be recoverable, the override wants
+writing somewhere durable before it is deleted — the `gpx` folder is
+the obvious home, since it already survives the browser being cleared.
+Not built.
+
+`tests/marks.mjs` and `tests/markmove.mjs` hold both badges to it — one
+tap does nothing, the badge lights, the row says why, the arm expires,
+the second tap fires. Four controls run: no arm at all, an arm whose
+badge never lights, an arm whose row says nothing, and an arm that
+never expires. A fifth — arming one badge and firing the other — is
+unreachable by construction, which is why that check is not in the
+code.
+
 ## Golden hour
 
 The icon is a half sun on the horizon with its light on the water — half

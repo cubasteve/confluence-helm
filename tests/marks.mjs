@@ -102,6 +102,33 @@ await save();
 t.ok(/^MARK \d+$/.test(await p.evaluate(()=>USER_MARKS[1].name)),
      'numbered rather than blank', await p.evaluate(()=>USER_MARKS[1].name));
 
+t.head('the bin arms before it bites');
+/* markDelete() itself is unconditional, and right to be - the guard is
+   on the TAP, which is where the accident happens: a 40 px disc beside
+   a drag handle, on a sheet you scroll with a thumb, and nothing to put
+   back afterwards. Reported from the water after two went at once. */
+await p.evaluate(()=>{ if(!courseEdit) $('course-edit').click(); });
+await p.waitForTimeout(300);
+const arm=await p.evaluate(()=>{
+  const id=USER_MARKS[1].id;
+  const sel='.cv-tile[data-mark="'+id+'"]';
+  document.querySelector(sel+' .del').click();
+  return {id, gone:!markOf(id),
+          lit:!!document.querySelector(sel+' .del.arm'),
+          say:(document.querySelector(sel+' s')||{}).textContent||''};
+});
+t.ok(!arm.gone, 'one tap does not delete it', JSON.stringify(arm));
+t.ok(arm.lit, 'the bin lights instead');
+t.ok(/TAP .* AGAIN TO DELETE/.test(arm.say),
+     'and the row says what the second tap does', arm.say);
+const fired=await p.evaluate(id=>{
+  document.querySelector('.cv-tile[data-mark="'+id+'"] .del').click();
+  return !markOf(id); }, arm.id);
+t.ok(fired, 'and the second tap deletes it');
+await p.evaluate(()=>mkOpen()); await p.waitForTimeout(250);
+await p.click('#mk-here'); await p.waitForTimeout(300);
+await save();
+
 t.head('and deleting one takes it out of everything');
 const del=await p.evaluate(()=>{ const id=USER_MARKS[1].id;
   markDelete(id);

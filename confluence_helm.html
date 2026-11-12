@@ -1431,6 +1431,13 @@ body.night #cp-svg .wash{opacity:.55}
   border:2px solid var(--alarm);color:var(--alarm);font-size:18px;
   display:flex;align-items:center;justify-content:center}
 .cv-tile .del.undo{border-color:var(--accent);color:var(--accent);font-size:24px}
+/* Armed. Filled rather than widened: the library's bin grows to say
+   SURE?, which it can afford on a full-width row - here the badge sits
+   in a flex row on a 140 px tile and taking 90 px of it would push the
+   name out, which is the very thing the comment below warns about. So
+   the disc fills and the tile's own subtitle carries the words. */
+.cv-tile .del.arm{background:var(--alarm);border-color:var(--alarm);color:#fff}
+.cv-tile .del.undo.arm{background:var(--accent);border-color:var(--accent)}
 /* The committee's. ⌖ is the accent because it is the thing to do with
    that tile, and it is there whether or not you are in EDIT: you press
    it standing at the mark with the boat still moving, which is the worst
@@ -4468,6 +4475,25 @@ const rcClock=()=>{ if(!RCSET) return '';
    a press with no fix would otherwise do nothing at all and look like a
    control that is broken. The sheet has no message line of its own, and
    this did not seem worth inventing one for. */
+/* The two destructive badges in EDIT arm before they fire.
+   Both are one tap on a 40 px disc, next to a drag handle, on a sheet
+   you scroll with your thumb - and both are irreversible. ✕ takes a
+   mark of your own out of the book; ↺ drops a correction you made
+   standing at the buoy, and markRevert says so itself: "the compiled
+   values are not kept anywhere to restore FROM".
+
+   Measured on the water: two corrections went that way in one sitting,
+   and there was nothing to put back. Same shape as libKill on the race
+   library - arm, say so, four seconds, tap again - because that is
+   already what a destructive tap looks like in this app. */
+let mkArm=null, mkArmT=0;
+const mkArmClear=()=>{ if(!mkArm) return; mkArm=null; clearTimeout(mkArmT);
+                       renderCourse(); };
+function mkArmSet(id,kind){
+  mkArm={id,kind}; clearTimeout(mkArmT);
+  mkArmT=setTimeout(()=>{ if(mkArm&&mkArm.id===id) mkArmClear(); }, 4000);
+  renderCourse();
+}
 let rcSay='', rcSayAt=0;
 const rcFlash=m=>{ rcSay=m; rcSayAt=Date.now()+4000;
   if(APP.on && APP.on.id==='course') renderCourse(); };
@@ -10522,7 +10548,12 @@ function renderCourse(){
        characters before this ellipsises - and a sub-line you cannot read
        the end of is worse than a shorter one. The ⌖ says what to do; the
        words only have to say where it stands. */
-    const sub = rc && rcSay ? rcSay
+    /* The row that is about to be destroyed is the one that should say
+       so. Ahead of everything, including the committee's own flash. */
+    const armed = mkArm && mkArm.id===m.id;
+    const sub = armed ? (mkArm.kind==='del' ? 'TAP ✕ AGAIN TO DELETE'
+                                            : 'TAP ↺ AGAIN TO DROP YOUR FIX')
+              : rc && rcSay ? rcSay
               : rc && !here ? 'NOT PLACED'
               : courseEdit  ? posDM(m)
               : at.length   ? 'IN COURSE · '+at.map(k=>k+1).join(',')
@@ -10541,8 +10572,9 @@ function renderCourse(){
     const badge = rc && courseEdit && here ? '<div class="del rcoff">✕</div>'
       : rc ? '<div class="del here">⌖</div>'
       : !courseEdit ? ''
-      : isUserMark(m.id) ? '<div class="del">✕</div>'
-      : moved            ? '<div class="del undo">↺</div>' : '';
+      : isUserMark(m.id) ? '<div class="del'+(armed?' arm':'')+'">✕</div>'
+      : moved            ? '<div class="del undo'+(armed?' arm':'')+'">↺</div>'
+      :                    '';
     return '<button class="cv-tile'+(at.length?' in':'')
       +(rc?' rc':'')+(rc&&!here?' unset':'')
       +(at.indexOf(COURSE.next)>=0?' next':'')
@@ -11746,8 +11778,25 @@ $('course-list').addEventListener('click',e=>{
     rcSay=''; renderCourse(); drawMap(shownTrack()); return; }
   if(e.target.closest('.rcoff')){
     rcClear(); rcSay=''; renderCourse(); drawMap(shownTrack()); return; }
-  if(e.target.closest('.undo')){ markRevert(id); return; }
-  if(e.target.closest('.del')){ markDelete(id); return; }
+  /* Arm, then fire. A first tap on either badge only says what the
+     second one will do - see mkArm. Tapping the OTHER badge, or another
+     tile, disarms: an arm that outlived the tile it was about is how
+     you delete the wrong thing. */
+  const undo=e.target.closest('.undo'), del=e.target.closest('.del');
+  if(undo||del){
+    /* Armed by id alone, not by id AND which badge. A tile carries ONE
+       badge and never two - see the comment where they are built - and
+       del and undo are mutually exclusive anyway, since an override is
+       only ever on a club mark and the bin is only ever on one of
+       yours. A kind check here would be a branch nothing can reach,
+       which is a branch no probe can hold to account. */
+    if(!(mkArm && mkArm.id===id))
+      return void mkArmSet(id, undo ? 'undo' : 'del');
+    mkArm=null; clearTimeout(mkArmT);
+    if(undo) markRevert(id); else markDelete(id);
+    return;
+  }
+  mkArmClear();
   if(e.target.closest('.grip')) return;       /* a handle to drag by */
   /* EDIT is the mode for changing the LIST rather than the course, so a
      tap in it opens the mark instead of adding or removing it. ANY mark:

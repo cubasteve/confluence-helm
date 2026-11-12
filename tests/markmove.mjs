@@ -98,14 +98,38 @@ ok(!v.moved, 'it goes nowhere near markMoves', JSON.stringify(v.moved));
 ok(Math.abs(v.lat-(28+50/60))<1e-9, 'it just moves', String(v.lat));
 ok((await row('u1abc')).del, 'and keeps its bin');
 
-console.log('\n=== the book is one tap away ===');
+console.log('\n=== the book is TWO taps away ===');
+/* It was one, and two corrections went that way in a single sitting
+   with nothing to put back - markRevert says so itself: "the compiled
+   values are not kept anywhere to restore FROM". One tap on a 40 px
+   disc, beside a drag handle, on a sheet you scroll with a thumb. */
+await p.click('.cv-tile[data-mark="cb12"] .undo');
+await p.waitForTimeout(400);
+let armed = await p.evaluate(()=>({
+  cls: !!document.querySelector('.cv-tile[data-mark="cb12"] .undo.arm'),
+  say: (document.querySelector('.cv-tile[data-mark="cb12"] s')||{}).textContent||'',
+  still: isMoved('cb12')}));
+ok(armed.still, 'ONE tap does not drop the correction');
+ok(armed.cls, 'the badge arms instead');
+ok(/TAP .* AGAIN/.test(armed.say),
+   'and the row itself says what the second tap will do', armed.say);
+
+/* And it lets go on its own. An arm that outlives the moment is how
+   you drop the wrong thing with a thumb two minutes later. */
+await p.waitForTimeout(4400);
+ok(!await p.evaluate(()=>!!document.querySelector('.cv-tile[data-mark="cb12"] .undo.arm')),
+   'the arm expires rather than waiting all day');
+ok(await p.evaluate(()=>isMoved('cb12')), 'still corrected');
+
+await p.click('.cv-tile[data-mark="cb12"] .undo');
+await p.waitForTimeout(300);
 await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(2600);                     /* markRevert reloads */
 await p.evaluate(()=>bootSettle());
 await p.evaluate(()=>openCourse());
 await p.waitForTimeout(700);
 v=await mark('cb12');
-ok(!v.moved, 'the correction is gone');
+ok(!v.moved, 'and the second tap drops it');
 ok(Math.abs(v.lat-(28+49.262/60))<1e-9 && Math.abs(v.lon-(-(81+16.515/60)))<1e-9,
    'and the sheet\'s number is back', v.lat+', '+v.lon);
 ok((await p.evaluate(()=>JSON.parse(localStorage.getItem('markMoves')||'{}')))
