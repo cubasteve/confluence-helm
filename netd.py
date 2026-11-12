@@ -2971,7 +2971,7 @@ def remote_cmd(body, token):
 
 REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Confluence</title>
+<title>Confluence Helm</title>
 <link rel="manifest" href="/r/manifest.webmanifest?t=%T%">
 <link rel="apple-touch-icon" href="/r/icon.png">
 <!-- Both spellings: the apple- one is what iOS has always read, the
@@ -3005,9 +3005,8 @@ body{margin:0;background:var(--bg);color:var(--ink);
  padding:calc(env(safe-area-inset-top) + 10px) var(--pad)
          env(safe-area-inset-bottom);
  min-height:100dvh;display:flex;flex-direction:column}
-.top{display:flex;align-items:baseline;gap:10px;padding:14px 2px 2px;
- font-size:15px;letter-spacing:.26em;color:var(--ink)}
-.top i{font-style:normal;color:var(--label);font-size:12px;letter-spacing:.2em}
+.top{padding:14px 2px 12px;font-size:15px;letter-spacing:.26em;
+ color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px}
 #main{flex:1}
 
 /* The switch. Outlined rather than filled: hairline-to-accent is how
@@ -3083,7 +3082,7 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
  font-size:14px;display:none;z-index:9}
 </style></head><body>
-<div class="top">CONFLUENCE<i>45</i></div>
+<div class="top">CONFLUENCE HELM</div>
 <div id="main"></div>
 <div id="foot"></div>
 <div id="list"></div>
@@ -3429,7 +3428,10 @@ def remote_manifest(token):
     needs one to fetch: it is the credential, written down on the phone
     where the home screen can relaunch with it."""
     return {
-        'name': 'Confluence', 'short_name': 'Confluence',
+        # name is what an install prompt and a task switcher show;
+        # short_name is the twelve-or-so characters a launcher has room
+        # for under an icon, and "Confluence Helm" is not twelve.
+        'name': 'Confluence Helm', 'short_name': 'Confluence',
         'start_url': '/r?t=' + token,
         'scope': '/r',
         'display': 'standalone',

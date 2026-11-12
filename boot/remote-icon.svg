@@ -1,10 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0B0C0E"/>
-  <!-- an instrument ring, so the icon reads as a dial and not a jersey -->
-  <circle cx="256" cy="256" r="186" fill="none" stroke="#1E2429" stroke-width="18"/>
-  <path d="M256 70 A186 186 0 0 1 418 349" fill="none" stroke="#4A9EFF"
-        stroke-width="18" stroke-linecap="round"/>
-  <text x="256" y="258" text-anchor="middle" dominant-baseline="central"
-        font-family="Poppins, 'DejaVu Sans', sans-serif" font-weight="700"
-        font-size="200" fill="#F2F4F6" letter-spacing="-6">45</text>
+<!-- The dial in miniature. The five cells are
+     the panel's own rects from <g id="dial-cells">, mapped from the
+     1080 face into this circle - generated, not drawn by eye. -->
+<rect width="512" height="512" fill="#0B0C0E"/>
+<circle cx="256" cy="256" r="196" fill="none" stroke="#1E2429" stroke-width="14"/>
+<path d="M256 60 A196 196 0 0 1 427 352" fill="none" stroke="#4A9EFF" stroke-width="14" stroke-linecap="round"/>
+<rect x="158.0" y="176.9" width="225.0" height="100.9" rx="14" fill="#F2F4F6" opacity="0.26"/>
+<rect x="212.4" y="280.0" width="87.1" height="21.8" rx="8" fill="#F2F4F6" opacity="0.50"/>
+<rect x="132.6" y="303.2" width="72.6" height="69.0" rx="10" fill="#F2F4F6" opacity="0.34"/>
+<rect x="219.7" y="303.2" width="72.6" height="69.0" rx="10" fill="#F2F4F6" opacity="0.34"/>
+<rect x="306.8" y="303.2" width="72.6" height="69.0" rx="10" fill="#F2F4F6" opacity="0.34"/>
 </svg>

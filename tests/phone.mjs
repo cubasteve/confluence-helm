@@ -159,6 +159,23 @@ t.ok(cs.find(c=>c.s==='c4').lane.h>=28,
      'the strip\'s lane is grown to something a thumb can hit',
      String(Math.round(cs.find(c=>c.s==='c4').lane.h)));
 
+t.head('it says what it is, and says it once');
+const top=await p.$eval('.top',e=>({
+  txt:e.textContent.trim(),
+  rule:getComputedStyle(e).borderBottomWidth,
+  bottom:e.getBoundingClientRect().bottom}));
+t.ok(top.txt==='CONFLUENCE HELM', 'the name is the boat and the thing',
+     top.txt);
+t.ok(!/45/.test(top.txt), 'and the hull number is not in it twice - it is '
+     +'already on the face behind everything', top.txt);
+t.ok(parseFloat(top.rule)>=2,
+     'with a rule under it, which is what the number used to do '
+     +'structurally', top.rule);
+/* And the switch sits under the rule rather than on it. */
+const pg=await p.$eval('.pg',e=>e.getBoundingClientRect().top);
+t.ok(pg>=top.bottom-1, 'and nothing crowds it', Math.round(pg)+' vs '
+     +Math.round(top.bottom));
+
 t.head('the app does not draw under the status bar');
 /* black-translucent makes a saved app extend behind the clock, and on
    a phone with a notch the first line of it is simply gone - the

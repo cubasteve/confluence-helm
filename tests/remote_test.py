@@ -118,6 +118,13 @@ class App(unittest.TestCase):
                 self.assertEqual(code, 200, j)
                 self.assertEqual(j['start_url'], '/r?t=T0KEN', j)
                 self.assertEqual(j['display'], 'standalone', j)
+                # The full name is what an install prompt shows; the
+                # short one is the dozen characters a launcher has room
+                # for under an icon, and "Confluence Helm" is not a
+                # dozen - it would arrive as "Confluence H...".
+                self.assertEqual(j['name'], 'Confluence Helm', j)
+                self.assertEqual(j['short_name'], 'Confluence', j)
+                self.assertTrue(len(j['short_name']) <= 12, j)
                 self.assertEqual(j['icons'][0]['src'], '/r/icon.png', j)
                 self.assertIn('maskable', j['icons'][0]['purpose'], j)
                 self.assertEqual(p.hdr['Content-Type'],
@@ -159,6 +166,51 @@ class App(unittest.TestCase):
             finally:
                 netd.REMOTE_ICON = keep
                 p.close()
+
+
+class Icon(unittest.TestCase):
+    """The home screen icon is the dial in miniature, and it is
+    GENERATED from the panel's own cell rects rather than drawn by eye.
+    So it can drift, the same way a written-down coordinate drifts, and
+    the same rule applies: if it can drift, something checks."""
+
+    def rects(self):
+        import io, re
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        html = io.open(os.path.join(root, 'confluence_helm.html'),
+                       encoding='utf-8').read()
+        i = html.index('<g id="dial-cells">')
+        g = html[i:html.index('</g>', i)]
+        cells = {m.group(1): [int(m.group(k)) for k in (2, 3, 4, 5)]
+                 for m in re.finditer(
+                     r'data-slot="(\w+)"\s+x="(\d+)"\s+y="(\d+)"\s*\n?\s*'
+                     r'width="(\d+)"\s+height="(\d+)"', g)}
+        svg = io.open(os.path.join(root, 'boot', 'remote-icon.svg')).read()
+        drawn = [[float(x) for x in m.groups()] for m in re.finditer(
+            r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" '
+            r'height="([\d.]+)"', svg)]
+        return cells, drawn
+
+    def test_the_icon_is_the_panel_s_own_cells(self):
+        cells, drawn = self.rects()
+        self.assertEqual(len(cells), 5, cells)
+        self.assertEqual(len(drawn), 5, drawn)
+        k = 196.0 / 540.0
+        want = sorted([256 + (c[0] - 540) * k, 256 + (c[1] - 540) * k,
+                       c[2] * k, c[3] * k] for c in cells.values())
+        for a, b in zip(want, sorted(drawn)):
+            for p, q in zip(a, b):
+                self.assertLess(abs(p - q), 0.6, '%s vs %s' % (a, b))
+
+    def test_the_artwork_stays_inside_the_maskable_circle(self):
+        """A launcher may mask this to any shape it likes. Everything
+        has to sit inside the 80% circle or the mask takes a bite out
+        of it."""
+        _, drawn = self.rects()
+        for x, y, w, h in drawn:
+            for cx, cy in ((x, y), (x + w, y), (x, y + h), (x + w, y + h)):
+                r = ((cx - 256) ** 2 + (cy - 256) ** 2) ** 0.5
+                self.assertLess(r, 205, (x, y, w, h))
 
 
 def armed(netd):
