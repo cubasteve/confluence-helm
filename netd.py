@@ -2467,8 +2467,12 @@ def route(path, body):
     # socket can reach route() at all - see RemoteHandler.
     if path == '/remote/status':
         return remote_status()
-    if path == '/remote/arm':
-        return remote_arm(body)
+    if path == '/remote/register':
+        return remote_register(body)
+    # No tile arms this and none disarms it - the point is an app on a
+    # phone that just works. Kept as an escape hatch over ssh, for the
+    # day something is wrong and the door should be shut without
+    # stopping netd and the panel's radios with it.
     if path == '/remote/disarm':
         return remote_disarm()
     if path == '/remote/poll':
@@ -2606,14 +2610,32 @@ def route(path, body):
 # setsockopt raises and we fall back to a per-request subnet check -
 # which is a guarantee made by this code rather than by the kernel, and
 # remote_how() says which one is in force so nobody has to guess.
+#
+# ---- always on, because a saved app is the point --------------------
+#
+# This is meant to live on the owner's home screen and just work, so
+# there is nothing to arm and no tile on the glass to arm it from. The
+# socket comes up with netd and stays up, and the TOKEN PERSISTS -
+# minted once, kept in a file, and carried in the URL that gets saved.
+# A fresh token per session would break the saved app every reboot,
+# which is the opposite of what was asked for.
+#
+# What that costs, said plainly: the door is open whenever netd is
+# running and the dongle has an address. Anyone on the same hotspot who
+# knows the token can change which reading sits in which slot, and the
+# theme. Nothing else - not the radios, not power, not the marks. The
+# hotspot is the owner's own phone, so "anyone" is whoever he has let
+# onto it.
 REMOTE_DEV = os.environ.get('HELM_REMOTE_DEV', 'wlan1')
-REMOTE_PORT = PORT + 2
+REMOTE_PORT = int(os.environ.get('HELM_REMOTE_PORT', PORT + 2))
+REMOTE_CFG = os.environ.get('HELM_REMOTE_CFG') or os.path.expanduser(
+    '~/.config/confluence-remote.json')
 # Commands older than this are dropped rather than applied. A panel that
 # was asleep, or reloading, should not come back and replay a tap from
 # ten minutes ago.
 REMOTE_STALE = 30
 
-_remote = {'armed': False, 'token': '', 'how': '', 'srv': None,
+_remote = {'armed': False, 'token': '', 'how': '', 'srv': None, 'cidr': '',
            'pend': {}, 'at': 0.0,
            # What the PANEL says its slots and readings are, handed over
            # when it arms. netd validates against this rather than
@@ -2627,6 +2649,37 @@ _rlock = threading.Lock()
 def remote_how():
     """Which guarantee is in force: the kernel's, or this file's."""
     return _remote['how']
+
+
+def remote_token():
+    """Minted once and kept, because the app on the phone saves a URL.
+
+    Not a secret worth much - it rides in a query string on an
+    unencrypted link - and it is not pretending to be. It is the
+    difference between someone on this hotspot being able to drive the
+    panel by guessing a path and having to be told a token, which on a
+    boat is the whole threat model."""
+    t = _remote.get('token')
+    if t:
+        return t
+    try:
+        with open(REMOTE_CFG) as f:
+            t = (json.load(f) or {}).get('token') or ''
+    except Exception:
+        t = ''
+    if not t:
+        t = secrets.token_urlsafe(9)
+        try:
+            os.makedirs(os.path.dirname(REMOTE_CFG), exist_ok=True)
+            # 0600: it is in a URL anyway, but a token in a world-readable
+            # file in a home directory is a different kind of careless.
+            fd = os.open(REMOTE_CFG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                json.dump({'token': t}, f)
+        except Exception:
+            pass                      # a read-only home still gets a session
+    _remote['token'] = t
+    return t
 
 
 def _dev_subnet(dev):
@@ -2674,18 +2727,15 @@ def remote_status():
             'dev': REMOTE_DEV, 'port': REMOTE_PORT}
 
 
-def remote_arm(body):
-    """Open the remote socket and mint a token.
+def remote_register(body):
+    """The panel saying what it has. Not an arm - there is nothing to
+    arm, and no tile to arm it from.
 
-    The panel hands over its OWN catalogue here - which slots it has and
-    which readings exist - and netd validates every command against
-    that. It deliberately keeps no copy of its own: the readings live in
-    the HTML, and a second list in this file would drift the first time
-    one was added, in the direction of rejecting a perfectly good
-    command or accepting a meaningless one.
-
-    A fresh token every time. Nothing is persisted, so netd restarting
-    disarms - which is the safe way round."""
+    netd validates every command against this and keeps no catalogue of
+    its own on purpose: the readings live in the HTML, and a second list
+    in this file would drift the first time one was added, in the
+    direction of refusing a good command or accepting a meaningless
+    one."""
     slots = body.get('slots')
     readings = body.get('readings')
     if not isinstance(slots, dict) or not slots:
@@ -2697,33 +2747,62 @@ def remote_arm(body):
     themes = body.get('themes')
     if not isinstance(themes, list) or not themes:
         themes = ['day', 'dusk', 'night', 'auto']
-
-    cidr = _dev_subnet(REMOTE_DEV)
-    if not cidr:
-        return {'ok': False, 'error': 'NO ADDRESS ON ' + REMOTE_DEV.upper()}
-
     with _rlock:
-        _remote_stop()
+        _remote.update(slots={k: list(v) for k, v in slots.items()},
+                       readings=list(readings), themes=list(themes))
+        if isinstance(body.get('now'), dict):
+            _remote['now'] = body['now']
+        # A register also lifts a hand-shut latch. The panel registers
+        # when it loads, so a reload is the move an owner makes when the
+        # remote has stopped working - and it should be the move that
+        # fixes it, rather than leaving them with a dead remote and no
+        # idea that an ssh session weeks ago is why.
+        _remote['held'] = False
+    remote_up()
+    return remote_status()
+
+
+def remote_up():
+    """Open the door if the dongle has an address, and move it if that
+    address changed. Idempotent, and safe to call on a timer.
+
+    The address moves because the phone is the access point and the Pi
+    is a DHCP client on it - a new lease, or a different phone, and the
+    old socket is listening on a subnet nobody is on. The bind itself is
+    on 0.0.0.0, so only the FALLBACK path cares; it is the subnet check
+    that goes stale, not the socket."""
+    if _remote.get('held'):
+        return False                  # shut by hand; see remote_disarm
+    cidr = _dev_subnet(REMOTE_DEV)
+    with _rlock:
+        if not cidr:
+            if _remote['armed']:
+                _remote_stop()        # the dongle went; so does the door
+            return False
+        if _remote['armed'] and cidr == _remote.get('cidr'):
+            return True               # already up, same subnet
+        if _remote['armed']:
+            _remote_stop()
         try:
             sock, how = remote_socket()
-        except OSError as e:
-            return {'ok': False, 'error': str(e)[:80].upper()}
+        except OSError:
+            return False
         srv = ThreadingHTTPServer.__new__(ThreadingHTTPServer)
         ThreadingHTTPServer.__init__(srv, ('0.0.0.0', REMOTE_PORT),
                                      RemoteHandler, bind_and_activate=False)
         srv.socket.close()
         srv.socket = sock
         threading.Thread(target=srv.serve_forever, daemon=True).start()
-        _remote.update(armed=True, how=how, srv=srv, pend={}, at=0.0,
-                       token=secrets.token_urlsafe(9),
-                       slots={k: list(v) for k, v in slots.items()},
-                       readings=list(readings), themes=list(themes),
-                       cidr=cidr,
-                       url='http://%s:%d/r' % (cidr.split('/')[0], REMOTE_PORT))
-    return remote_status()
+        _remote.update(armed=True, how=how, srv=srv, cidr=cidr,
+                       token=remote_token(),
+                       url='http://%s:%d/r?t=%s'
+                           % (cidr.split('/')[0], REMOTE_PORT, remote_token()))
+    return True
 
 
 def _remote_stop():
+    """Close the door. Keeps the TOKEN - that lives in a file and the
+    phone has it saved; only the socket and the pending commands go."""
     srv = _remote.get('srv')
     if srv:
         try:
@@ -2731,13 +2810,36 @@ def _remote_stop():
             srv.server_close()
         except Exception:
             pass
-    _remote.update(armed=False, srv=None, token='', pend={}, how='', url='')
+    _remote.update(armed=False, srv=None, pend={}, how='', url='', cidr='')
 
 
 def remote_disarm():
+    """The escape hatch, over ssh. Nothing on the glass calls this -
+    there is no tile - but the day something is wrong the door should
+    be shuttable without stopping netd and taking the panel's radios
+    with it.
+
+    It STAYS shut. The first version of this just closed the socket,
+    and the thirty-second watcher reopened it - which is not an escape
+    hatch, it is a thirty-second pause with a reassuring name. The
+    latch is in memory on purpose: restarting netd opens the door
+    again, so an owner who shut it in a hurry and forgot is not left
+    with a remote that never works again and no idea why."""
     with _rlock:
+        _remote['held'] = True
         _remote_stop()
     return remote_status()
+
+
+def remote_watch():
+    """Every half minute, because a lease change is the one thing that
+    silently breaks this and nothing else will notice."""
+    while True:
+        time.sleep(30)
+        try:
+            remote_up()
+        except Exception:
+            pass
 
 
 def remote_poll(body=None):
@@ -3121,4 +3223,25 @@ if __name__ == '__main__':
     # whether the panel draws its radios or its empty state.
     threading.Thread(target=lambda: (wifi_status(), bt_status()),
                      daemon=True).start()
+    # The remote's door, opened here rather than by anything on the
+    # glass: this is meant to be an app on a phone that already knows
+    # how to connect, so there is nothing to arm. It needs the dongle to
+    # have an address, which at boot it often does not yet - hence the
+    # watcher, which is also what moves the door when the phone hands
+    # out a new lease.
+    try:
+        up = remote_up()
+    except Exception as e:
+        up, _ = False, print('[netd] remote: %s' % str(e)[:80], flush=True)
+    print('[netd] remote: %s' % (_remote.get('url') or
+                                 'waiting for an address on ' + REMOTE_DEV),
+          flush=True)
+    if up:
+        print('[netd] remote: %s'
+              % ('pinned to %s by the kernel' % REMOTE_DEV
+                 if remote_how() == 'device' else
+                 'SO_BINDTODEVICE unavailable - falling back to a subnet '
+                 'check, which this file enforces rather than the kernel'),
+              flush=True)
+    threading.Thread(target=remote_watch, daemon=True).start()
     ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

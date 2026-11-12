@@ -21,6 +21,15 @@ from http.server import ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+
+# The token lives in a file so a saved app keeps working across
+# reboots, which means these tests would otherwise write into the
+# developer's own ~/.config and leak a token between runs.
+import atexit, tempfile                                     # noqa: E402
+_CFGDIR = tempfile.mkdtemp(prefix='helm-remote-test-')
+os.environ['HELM_REMOTE_CFG'] = os.path.join(_CFGDIR, 'remote.json')
+os.environ.setdefault('HELM_REMOTE_PORT', '18093')
+atexit.register(lambda: __import__('shutil').rmtree(_CFGDIR, ignore_errors=True))
 from wifi_test import rig, ONBOARD, MAC_USB                 # noqa: E402
 
 DONGLE = {'dev': 'wlan1', 'bus': 'usb', 'mac': MAC_USB,
@@ -130,7 +139,12 @@ class Door(unittest.TestCase):
                 self.assertEqual(netd._remote['pend'], {})
                 code, j = p.js('/r/cmd?t=T0KEN', cmd)
                 self.assertEqual(code, 200, j)
-                self.assertIn('slot:dial:c1', netd._remote['pend'])
+                # That the command LANDED, not what it is filed under:
+                # the key shape belongs to the latest-wins probe, and
+                # asserting it here made this probe fail for that too.
+                pend = list(netd._remote['pend'].values())
+                self.assertEqual(len(pend), 1, netd._remote['pend'])
+                self.assertEqual(pend[0].get('reading'), 'vmg', pend)
             finally:
                 p.close()
 
@@ -287,14 +301,126 @@ class Door(unittest.TestCase):
             finally:
                 p.close()
 
-    def test_arm_refuses_a_catalogue_it_cannot_validate_against(self):
+    def test_register_refuses_a_catalogue_it_cannot_validate_against(self):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
             for bad in ({}, {'slots': {}}, {'slots': SLOTS},
                         {'slots': SLOTS, 'readings': []},
                         {'slots': {'dial': 'c0'}, 'readings': ['sog']}):
-                r = netd.remote_arm(bad)
+                r = netd.remote_register(bad)
                 self.assertFalse(r['ok'], '%s -> %s' % (bad, r))
             self.assertFalse(netd._remote['armed'])
+
+
+class AlwaysOn(unittest.TestCase):
+    """There is nothing to arm and no tile to arm it from. The app on
+    the phone is a saved URL that has to keep working across reboots,
+    which is what makes the token persist and the door open itself."""
+
+    def test_the_token_survives_a_restart(self):
+        """A fresh token per session would break the saved app every
+        reboot, which is the opposite of what was asked for."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            first = netd.remote_token()
+            self.assertTrue(first)
+            self.assertEqual(netd.remote_token(), first, 'it re-minted')
+            path = netd.REMOTE_CFG
+        self.assertTrue(os.path.isfile(path), path)
+        # A second netd, same file.
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd2:
+            self.assertEqual(netd2.remote_token(), first,
+                             'a restart handed out a different token')
+
+    def test_the_token_file_is_not_world_readable(self):
+        with rig([], devices=[dict(ONBOARD)]) as netd:
+            netd.remote_token()
+            mode = os.stat(netd.REMOTE_CFG).st_mode & 0o777
+        self.assertEqual(mode, 0o600, oct(mode))
+
+    def test_the_door_opens_itself_when_the_dongle_has_an_address(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                self.assertTrue(netd.remote_up(), 'it did not come up')
+                self.assertTrue(netd._remote['armed'])
+                self.assertIn('172.20.10.3', netd._remote['url'])
+                self.assertIn(netd.remote_token(), netd._remote['url'])
+            finally:
+                netd.remote_disarm()
+
+    def test_no_address_means_no_door(self):
+        """The dongle on this boat drops. The door should go with it
+        rather than listen on a subnet nobody is on."""
+        with rig([], devices=[dict(ONBOARD)]) as netd:     # no dongle at all
+            self.assertFalse(netd.remote_up())
+            self.assertFalse(netd._remote['armed'])
+
+    def test_a_new_lease_moves_the_door(self):
+        """The phone is the access point and the Pi is a client on it,
+        so the address changes. Only the subnet check cares - the bind
+        is on 0.0.0.0 - but it is the subnet check that is doing the
+        work when SO_BINDTODEVICE is unavailable."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                netd.remote_up()
+                self.assertEqual(netd._remote['cidr'], '172.20.10.3/28')
+                netd._dev_subnet = lambda dev: '192.168.43.57/24'
+                self.assertTrue(netd.remote_up())
+                self.assertEqual(netd._remote['cidr'], '192.168.43.57/24')
+                self.assertIn('192.168.43.57', netd._remote['url'])
+            finally:
+                netd.remote_disarm()
+
+    def test_coming_up_twice_on_the_same_lease_changes_nothing(self):
+        """remote_up runs on a 30 s timer; it must not rebuild the
+        socket every time it is asked."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                netd.remote_up()
+                srv = netd._remote['srv']
+                netd.remote_up()
+                self.assertIs(netd._remote['srv'], srv, 'it rebound for nothing')
+            finally:
+                netd.remote_disarm()
+
+    def test_disarm_stays_disarmed(self):
+        """The first version just closed the socket and the thirty
+        second watcher reopened it, which is not an escape hatch - it is
+        a thirty second pause with a reassuring name."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                netd.remote_up()
+                self.assertTrue(netd._remote['armed'])
+                netd.remote_disarm()
+                self.assertFalse(netd._remote['armed'])
+                self.assertFalse(netd.remote_up(), 'the watcher reopened it')
+                self.assertFalse(netd._remote['armed'])
+            finally:
+                netd._remote['held'] = False
+                netd.remote_disarm()
+
+    def test_the_panel_reloading_lifts_the_latch(self):
+        """The latch is in memory, and a register is what the owner
+        reaches for when the remote has stopped working - so an owner
+        who shut it in a hurry and forgot is not left with a remote that
+        never works again and no idea why."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                netd.remote_disarm()
+                r = netd.remote_register({'slots': SLOTS,
+                                          'readings': [x['k'] for x in READINGS]})
+                self.assertTrue(r['armed'], r)
+            finally:
+                netd._remote['held'] = False
+                netd.remote_disarm()
+
+    def test_registering_brings_the_door_up(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            try:
+                r = netd.remote_register({'slots': SLOTS,
+                                          'readings': [x['k'] for x in READINGS]})
+                self.assertTrue(r['ok'], r)
+                self.assertTrue(r['armed'], r)
+            finally:
+                netd.remote_disarm()
 
 
 if __name__ == '__main__':
