@@ -9082,7 +9082,107 @@ function remoteNow(){
     const m=PICK_G[g].map();
     for(const sl of PICK_G[g].slots) slots[g+':'+sl]=m[sl];
   }
-  return { slots:slots, theme:CFG.theme };
+  /* The theme the phone should wear. A mirror in the wrong colours is
+     a worse lie than a list, and because the panel's own theme tracks
+     the sun this hands the phone the right brightness at the right
+     time for free: bright in your hand by day, dark at 2am. */
+  return { slots:slots, theme:CFG.theme, eff:THEME_EFF, pal:remotePal() };
+}
+
+/* The eight colours the mirror needs, and only those. Recomputed when
+   the resolved theme changes rather than on every poll: this resolves
+   style, and the poll runs every second and a half for as long as the
+   panel is on. */
+const REM_PAL=['bg','ink','ink-dim','label','hairline','accent','panel','chip'];
+let remPalAt=null, remPal={};
+function remotePal(){
+  if(remPalAt===THEME_EFF) return remPal;
+  const cs=getComputedStyle(document.body), o={};
+  for(const k of REM_PAL) o[k]=cs.getPropertyValue('--'+k).trim();
+  remPalAt=THEME_EFF; remPal=o;
+  return o;
+}
+
+/* Where every complication SITS, measured off the glass milliseconds
+   before it goes on the wire. Not a table in this file and certainly
+   not one in netd.py: a second copy of the layout is a copy that drifts
+   the first time a cell moves, and the drift is silent - the phone goes
+   on drawing a face that is no longer this one and puts your thumb on
+   the wrong reading.
+
+   box is the slot's rect. a is where the glass actually prints the
+   VALUE, which is not the same thing and that is the whole reason this
+   field exists: c0's rect runs 270 to 890 and centres at 580, but #spd
+   is authored at x=540, in line with the strip and the middle cell. A
+   mirror that centres the word in the box puts it thirteen pixels off
+   the line everything else on the face is hung from, and it looks like
+   a mistake because it is one.
+
+   cut is the four rules. They are sent because they FRAME the boxes: if
+   one moved and the phone drew the old one, the picture and the targets
+   would disagree with nothing to say so. */
+function remoteGeom(){
+  const at=(e,n)=>+e.getAttribute(n);
+  const dial={box:{}, a:{}, cut:[]};
+  for(const sl of PICK_G.dial.slots){
+    const r=document.querySelector('.dcell[data-slot="'+sl+'"]');
+    if(r) dial.box[sl]=[at(r,'x'), at(r,'y'), at(r,'width'), at(r,'height')];
+    /* The value element, which is els[1] on a three-line cell and the
+       only one on the strip - the same test paintDialCells makes. */
+    const els=DIAL_EL[sl]||[], v=els.length ? $(els[els.length===1?0:1]) : null;
+    if(v) dial.a[sl]=[at(v,'x'), at(v,'y')];
+  }
+  document.querySelectorAll('#svg .cut').forEach(l=>
+    dial.cut.push([at(l,'x1'), at(l,'y1'), at(l,'x2'), at(l,'y2')]));
+
+  /* The music page has no static rects to read: paintStrip builds its
+     cells and emits nothing at all for a reading with no value, and its
+     one caller returns unless that page is open. So on a panel that
+     booted on the dial and stayed there - which is the panel this
+     remote exists for - there is nothing in #ms-strip to measure.
+     Three throwaways under the real stylesheet, measured against the
+     page's own box and removed before anything can paint them. The tall
+     case on purpose: <em> is what gives a cell its third line, and
+     `em:empty` takes it away again for the two readings that have no
+     unit. */
+  const mus={box:{}, a:{}, cut:[]};
+  const strip=$('ms-strip'), page=$('music');
+  if(strip && page){
+    const pr=page.getBoundingClientRect();
+    /* Into panel units whatever the glass is scaled to. */
+    const k=pr.width ? 1080/pr.width : 1;
+    const U=(px)=>Math.round(px*k);
+    const made=[];
+    for(const sl of PICK_G.mus.slots){
+      let e=strip.querySelector('.mcell[data-slot="'+sl+'"]');
+      if(!e){
+        e=document.createElement('span');
+        e.className='mcell'; e.dataset.slot=sl;
+        e.innerHTML='<u>X</u><b>8.8</b><em>KT</em>';
+        strip.appendChild(e); made.push(e);
+      }
+      const r=e.getBoundingClientRect(), b=e.querySelector('b');
+      mus.box[sl]=[U(r.left-pr.left), U(r.top-pr.top), U(r.width), U(r.height)];
+      if(b){ const q=b.getBoundingClientRect();
+             mus.a[sl]=[U(q.left-pr.left+q.width/2),
+                        U(q.top-pr.top+q.height/2)]; }
+    }
+    made.forEach(e=>e.remove());
+    /* Legitimately empty, and read rather than assumed so that "ruled
+       or floating" is a fact about the glass. */
+    page.querySelectorAll('.cut').forEach(l=>
+      mus.cut.push([at(l,'x1'), at(l,'y1'), at(l,'x2'), at(l,'y2')]));
+    /* The album art, which is what says MUSIC PAGE at a glance. It is
+       the one piece of furniture on either face with a position, so it
+       is measured like everything else rather than written down on the
+       phone - a square in the wrong place is the drift this whole
+       contract exists to refuse, decoration or not. */
+    const art=$('m-art');
+    if(art){ const q=art.getBoundingClientRect();
+             if(q.width) mus.art=[U(q.left-pr.left), U(q.top-pr.top),
+                                  U(q.width), U(q.height)]; }
+  }
+  return {dial:dial, mus:mus};
 }
 
 function remoteCat(){
@@ -9094,8 +9194,20 @@ function remoteCat(){
   }
   /* Key, name, group. The name is for the row, the group for the
      heading above it, and there is deliberately no value. */
-  return { slots:slots, pages:pages, names:names,
+  return { slots:slots, pages:pages, names:names, geom:remoteGeom(),
            readings:MUS_CELLS.map(c=>({k:c.k, name:c.name, sen:c.sen})),
+           /* The word the GLASS puts over that number, which is what
+              makes a cell two characters wide legible. Only when it IS
+              a word: four of these resolve their header off live boat
+              state - the wind pair off which reading is in force, the
+              mark pair off the next mark's NAME - and sending those
+              would put a reading on the wire, which this remote does
+              not do. Those fall back to the catalogue name, which is
+              steadier and says more. */
+           tags:MUS_CELLS.reduce((o,c)=>(
+             o[c.k]= typeof c.hdr==='string' ? c.hdr : c.name, o), {}),
+           /* The instrument headings, so netd's copy of them can go. */
+           sens:SENSORS.reduce((o,p)=>(o[p[0]]=p[1], o), {}),
            themes:THEMES, now:remoteNow() };
 }
 

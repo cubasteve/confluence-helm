@@ -405,6 +405,61 @@ class Door(unittest.TestCase):
             armed(netd)
             self.assertTrue(netd.remote_poll({})['have'])
 
+    def test_the_face_survives_the_round_trip_whole(self):
+        """The geometry is the only thing on this wire the phone cannot
+        work out for itself, and a box that arrives bent is a touch
+        target in the wrong place on a face that still looks right."""
+        geom = {'dial': {'box': {'c0': [270, 322, 620, 278]},
+                         'a': {'c0': [540, 510]},
+                         'cut': [[200, 606, 880, 606]]},
+                'mus': {'box': {'a': [410, 64, 260, 142]},
+                        'a': {'a': [540, 140]}, 'cut': [], 'art': [400, 400, 280, 280]}}
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            r = netd.remote_register({'slots': SLOTS,
+                                      'readings': [dict(x) for x in READINGS],
+                                      'tags': {'sog': 'SOG'},
+                                      'sens': {'gps': 'GPS'},
+                                      'geom': geom})
+            self.assertTrue(r['ok'], r)
+            p = Phone(netd)
+            try:
+                code, j = p.js('/r/state?t=T0KEN')
+                self.assertEqual(code, 200, j)
+                self.assertEqual(j['geom'], geom, j['geom'])
+                self.assertEqual(j['tags'], {'sog': 'SOG'}, j)
+                self.assertEqual(j['sens'], {'gps': 'GPS'}, j)
+            finally:
+                p.close()
+
+    def test_a_face_that_is_not_numbers_is_refused(self):
+        """It raises rather than filtering, for the reason the
+        catalogue already gives: a box silently dropped is a phone
+        drawing a mirror with a hole in it and nothing saying why."""
+        bad = [
+            {'dial': {'box': {'c0': ['270', 322, 620, 278]}}},   # a string
+            {'dial': {'box': {'c0': [True, 0, 1, 1]}}},          # bool is int
+            {'dial': {'box': {'c0': [None, 0, 1, 1]}}},
+            {'dial': {'box': {'c0': {'x': {'y': {'z': {'w': 1}}}}}}},  # too deep
+        ]
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            for g in bad:
+                r = netd.remote_register({'slots': SLOTS,
+                                          'readings': [dict(x) for x in READINGS],
+                                          'geom': g})
+                self.assertFalse(r['ok'], '%s -> %s' % (g, r))
+                self.assertEqual(r['error'], 'BAD GEOM', r)
+
+    def test_true_is_not_a_coordinate(self):
+        """True is an int in Python, so [True,0,1,1] passes every
+        numeric test there is and arrives as a one-by-one target at the
+        origin - a slot you cannot tap on a face that looks almost
+        right. The guard is first in _geom for that reason."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            self.assertRaises(ValueError, netd._geom, True)
+            self.assertRaises(ValueError, netd._geom, [True, 0, 1, 1])
+            self.assertEqual(netd._geom([1, 2.5, 3]), [1, 2.5, 3])
+
     def test_register_refuses_a_catalogue_it_cannot_validate_against(self):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
             for bad in ({}, {'slots': {}}, {'slots': SLOTS},

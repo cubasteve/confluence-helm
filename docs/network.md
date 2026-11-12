@@ -770,22 +770,69 @@ and every installed app stops working until you redo the above.
 
 ### What the phone shows
 
-A row per slot, named the way you would point at it — **APEX**, **PORT**,
-**STARBOARD** on the music page; **THE BIG NUMBER**, **LEFT**, **MIDDLE**,
-**RIGHT**, **THE STRIP** on the dial — with what is in it underneath, and
-a theme row at the bottom. Tapping a row opens the reading list, grouped
-by instrument, scrolled to what is set and with it ticked; **BACK**
-leaves without choosing, because otherwise opening the list by accident
-means changing a cell you never meant to touch.
+A small picture of the glass. The complications sit where the panel
+puts them — the big number, the strip, the three cells across the
+bottom; the apex and the two flanks on the music page — each carrying
+the word the glass prints over that reading. Tap one and a card drops
+from the face's feet with every reading in it, grouped by instrument,
+scrolled to the one that is set. The card never covers the face, so the
+zone you tapped stays lit while you choose, the way the glass turns an
+open cell accent.
 
-Those names come from the panel with the catalogue (`pages` and `names`
-in `PICK_G`), not from `netd.py`. `c2` is a perfectly good id and says
-nothing about which cell is about to change, and a second copy of the
-geometry in the helper would drift the first time a slot moved.
+One face at a time, busiest first: two stacked is 724px of phone
+against 636px of budget, which puts what you came for below the fold.
 
-`tests/phone.mjs` drives the real page against the real handler.
+It wears the panel's colours. `now.pal` carries eight custom properties
+and `now.eff` the resolved theme, so the mirror is light when the glass
+is light. Because the panel's theme follows the sun, that also hands
+the phone the right brightness at the right time for nothing: bright in
+your hand by day, dark at two in the morning.
 
-### No tile, always on
+**The geometry is measured, never written down twice.** Nothing on the
+phone and nothing in `netd.py` holds a coordinate:
+
+| | |
+|---|---|
+| `geom.dial.box` | the four attributes off each `.dcell` in `#dial-cells` |
+| `geom.dial.cut` | the four `.cut` rules — sent because they *frame* the boxes |
+| `geom.dial.a` | the authored x/y of the value element `DIAL_EL` names |
+| `geom.mus.box` | three throwaway `.mcell` spans under the real stylesheet, measured and removed |
+| `geom.mus.art` | the album art's box |
+| `tags` | `typeof c.hdr === 'string' ? c.hdr : c.name` |
+| `sens` | the instrument headings, which `netd.py` used to keep its own copy of |
+
+`a` is not the middle of `box`, and that is the whole reason it exists.
+c0's rect runs 270 to 890 and centres at 580, but `#spd` is authored at
+x=540, in line with the strip and the middle cell. A mirror that centres
+the word in the box puts it thirteen pixels off the line the face hangs
+from — and only c0 shows it, because for the other three the anchor *is*
+the box centre. That is the shape of the mistake, and the probe for it
+fails on c0 alone.
+
+The music page needs the throwaways because `paintStrip()` emits nothing
+for a reading with no value, and its one caller returns unless that page
+is open — so on a panel that booted on the dial and stayed there,
+`#ms-strip` is an empty string. That is precisely the panel the remote
+exists for.
+
+netd validates the geometry and holds none of it: `_geom()` takes
+numbers, nested, four deep, and **raises** rather than filtering. The
+first line tests for `bool`, because `True` is an `int` in Python and
+`[True, 0, 1, 1]` would otherwise arrive as a one-by-one touch target at
+the origin — a slot you cannot tap, on a face that looks almost right.
+
+The lanes are not the boxes. Each rect is grown to meet its neighbours
+halfway, so the gutters the glass can afford to leave dead belong to
+somebody at a third the size; on the dial the halfway point lands on the
+rules you can see. The strip is the exception: 60 units is 20px on a
+362px face, and no amount of aim finds it, so it takes what it needs
+from the big number, which has it to give.
+
+`tests/phone.mjs` drives the real page against the real handler and
+asserts where things are, not what they say — the old probe checked that
+the first row spelled APEX, which tests that the phone can spell.
+
+### No tile, always on### No tile, always on
 
 There is nothing on the glass for this: no tile, no arming, no QR. A
 remote you have to walk to the panel and switch on is a remote you would

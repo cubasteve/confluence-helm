@@ -29,6 +29,102 @@ const themes=await p.evaluate(()=>THEMES);
 t.ok(JSON.stringify(cat.themes)===JSON.stringify(themes),
      'the themes, from the one list the button cycles', JSON.stringify(cat.themes));
 
+t.head('the face is measured off the glass, not written down twice');
+/* The whole contract. A table of coordinates in the panel - or worse,
+   in netd.py - is a table that drifts the first time a cell moves, and
+   it drifts SILENTLY: the phone goes on drawing a face that is no
+   longer this one and puts your thumb on the wrong reading. */
+const live=await p.evaluate(()=>{
+  const at=(e,n)=>+e.getAttribute(n), o={box:{}, a:{}, cut:[]};
+  document.querySelectorAll('#dial-cells .dcell').forEach(r=>{
+    o.box[r.dataset.slot]=[at(r,'x'),at(r,'y'),at(r,'width'),at(r,'height')]; });
+  for(const sl in DIAL_EL){ const e=DIAL_EL[sl], v=$(e[e.length===1?0:1]);
+    if(v) o.a[sl]=[at(v,'x'), at(v,'y')]; }
+  document.querySelectorAll('#svg .cut').forEach(l=>
+    o.cut.push([at(l,'x1'),at(l,'y1'),at(l,'x2'),at(l,'y2')]));
+  return o;
+});
+t.ok(JSON.stringify(cat.geom.dial.box)===JSON.stringify(live.box),
+     'every dial box IS the rect the glass taps', JSON.stringify(cat.geom.dial.box));
+t.ok(JSON.stringify(cat.geom.dial.cut)===JSON.stringify(live.cut),
+     'and the four rules are the glass\'s own, because they frame the boxes',
+     JSON.stringify(cat.geom.dial.cut));
+
+t.head("the anchor is where the glass prints the value, not the middle of the box");
+/* c0's rect runs 270..890 and centres at 580. #spd is authored at 540,
+   in line with the strip and the middle cell. Centring the word in the
+   box puts it thirteen pixels off the line the whole face hangs from -
+   and it is only visible on c0, because for c1, c2 and c3 the anchor IS
+   the box centre. That is the shape of the mistake. */
+t.ok(JSON.stringify(cat.geom.dial.a)===JSON.stringify(live.a),
+     'every anchor is the value element\'s own x and y', JSON.stringify(cat.geom.dial.a));
+t.ok(cat.geom.dial.a.c0[0]===540 && cat.geom.dial.box.c0[0]+cat.geom.dial.box.c0[2]/2===580,
+     'and on the big number those two are forty units apart',
+     JSON.stringify([cat.geom.dial.a.c0, cat.geom.dial.box.c0]));
+
+t.head('the music page is measured even though its cells may not exist');
+/* paintStrip emits nothing for a reading with no value and its one
+   caller returns unless that page is open, so on a panel that booted on
+   the dial there is nothing in #ms-strip at all. The throwaways have to
+   agree with the cells the page really builds. */
+await p.evaluate(()=>goPage(2)); await p.waitForTimeout(600);
+const musLive=await p.evaluate(()=>{
+  const pg=$('music').getBoundingClientRect(), k=pg.width?1080/pg.width:1, o={};
+  document.querySelectorAll('#ms-strip .mcell[data-slot]').forEach(e=>{
+    const r=e.getBoundingClientRect();
+    o[e.dataset.slot]=[Math.round((r.left-pg.left)*k), Math.round((r.top-pg.top)*k),
+                       Math.round(r.width*k), Math.round(r.height*k)]; });
+  return o;
+});
+t.ok(Object.keys(musLive).length===3, 'the page really has three cells to compare with',
+     JSON.stringify(musLive));
+t.ok(JSON.stringify(cat.geom.mus.box)===JSON.stringify(musLive),
+     'and the throwaways measured every one of them exactly',
+     JSON.stringify(cat.geom.mus.box)+' vs '+JSON.stringify(musLive));
+t.ok(cat.geom.mus.art && cat.geom.mus.art[2]>0,
+     'the album art is measured too, so no coordinate lives on the phone',
+     JSON.stringify(cat.geom.mus.art));
+/* The case the throwaways EXIST for, which is the one the panel is
+   normally in: booted on the dial, music page never opened, #ms-strip
+   an empty string. Measuring with the real cells already there proves
+   nothing about them - `made` is empty and no throwaway is created. */
+const cold=await p.evaluate(()=>{
+  const box=$('ms-strip'); box.innerHTML='';
+  const g=remoteGeom();
+  return {box:g.mus.box, art:g.mus.art,
+          after:box.querySelectorAll('.mcell').length};
+});
+t.ok(JSON.stringify(cold.box)===JSON.stringify(musLive),
+     'with the strip empty the throwaways measure the same boxes',
+     JSON.stringify(cold.box));
+t.ok(cold.after===0,
+     'and leave nothing behind - a span left on the glass is a cell with '
+     +'no reading in it', String(cold.after));
+await p.evaluate(()=>{ stripKey=''; paintStrip(); });
+await p.evaluate(()=>goPage(1)); await p.waitForTimeout(400);
+
+t.head('the tags are the glass\'s words, and they do not move');
+t.ok(cat.tags.sog==='SOG' && cat.tags.tws==='TWS',
+     'a reading with a plain header gets that header', JSON.stringify(cat.tags.sog));
+t.ok(cat.tags.mkb==='NEXT MARK' && cat.tags.wa==='WIND ANGLE · AUTO',
+     'and one whose header is a function of live state falls back to its name',
+     JSON.stringify([cat.tags.mkb, cat.tags.wa]));
+/* The four live-header readings are the whole reason for the typeof
+   test: markGeo's header is the NEXT MARK'S NAME, and sending it would
+   put a reading on a wire that carries none. */
+const before2=JSON.stringify(cat.tags);
+await p.evaluate(()=>{ COURSE.marks=['cb8','rum']; COURSE.next=0;
+                       try{ renderCourse(); }catch(e){} });
+await p.waitForTimeout(400);
+const after2=await p.evaluate(()=>JSON.stringify(remoteCat().tags));
+t.ok(after2===before2, 'so setting a course changes not one of them');
+t.ok(!/CB 8/.test(after2), 'and no mark name reaches the wire', after2.slice(0,80));
+
+t.head('the instrument headings come from the panel too');
+const sens=await p.evaluate(()=>JSON.stringify(SENSORS.reduce((o,p)=>(o[p[0]]=p[1],o),{})));
+t.ok(JSON.stringify(cat.sens)===sens,
+     'netd no longer keeps its own copy of them to drift', JSON.stringify(cat.sens));
+
 t.head('and it carries what is in each slot right now');
 const now=await p.evaluate(()=>remoteNow());
 t.ok(Object.keys(now.slots).length===8, 'one entry per slot, flat',

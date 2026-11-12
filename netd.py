@@ -2649,7 +2649,7 @@ _remote = {'armed': False, 'token': '', 'how': '', 'srv': None, 'cidr': '',
            # in the HTML and a second list here would drift the first
            # time one was added.
            'slots': {}, 'readings': [], 'themes': [],
-           'pages': {}, 'names': {}}
+           'pages': {}, 'names': {}, 'tags': {}, 'sens': {}, 'geom': {}}
 _rlock = threading.Lock()
 
 
@@ -2734,6 +2734,32 @@ def remote_status():
             'dev': REMOTE_DEV, 'port': REMOTE_PORT}
 
 
+def _geom(v, d=0):
+    """The face's geometry, which is numbers and nothing else.
+
+    It RAISES rather than filtering, for the reason remote_register
+    already gives about the catalogue: a panel that sends the wrong
+    shape should be told so, not quietly half-served. A box that was
+    silently dropped is a phone drawing a mirror with a hole in it and
+    nothing anywhere saying why.
+
+    The bool test is first and is not decoration. True is an int in
+    Python, so [True, 0, 1, 1] passes every numeric test there is and
+    arrives as a one-by-one touch target at the origin - a slot you
+    cannot tap, on a face that looks almost right."""
+    if isinstance(v, bool):
+        raise ValueError('BAD GEOM')
+    if isinstance(v, (int, float)):
+        return v
+    if d >= 4:                     # geom.dial.box.c0[0] is the deepest leaf
+        raise ValueError('BAD GEOM')
+    if isinstance(v, list):
+        return [_geom(x, d + 1) for x in v]
+    if isinstance(v, dict):
+        return {str(k): _geom(x, d + 1) for k, x in v.items()}
+    raise ValueError('BAD GEOM')
+
+
 def remote_register(body):
     """The panel saying what it has. Not an arm - there is nothing to
     arm, and no tile to arm it from.
@@ -2771,11 +2797,23 @@ def remote_register(body):
     def _labels(v):
         return ({str(a): str(b) for a, b in v.items()}
                 if isinstance(v, dict) else {})
+    try:
+        geom = _geom(body.get('geom') or {})
+    except ValueError:
+        return {'ok': False, 'error': 'BAD GEOM'}
     with _rlock:
         _remote.update(slots={k: list(v) for k, v in slots.items()},
                        readings=list(readings), themes=list(themes),
                        pages=_labels(body.get('pages')),
-                       names=_labels(body.get('names')))
+                       names=_labels(body.get('names')),
+                       # The word the GLASS puts over each reading, and
+                       # the instrument headings it files them under.
+                       # Both are the panel's, for the same reason the
+                       # catalogue is: netd holding its own copy of
+                       # either is a copy that drifts.
+                       tags=_labels(body.get('tags')),
+                       sens=_labels(body.get('sens')),
+                       geom=geom)
         if isinstance(body.get('now'), dict):
             _remote['now'] = body['now']
         # A register also lifts a hand-shut latch. The panel registers
@@ -2946,57 +2984,105 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="apple-mobile-web-app-title" content="Confluence">
 <meta name="theme-color" content="#0B0C0E">
 <style>
-:root{color-scheme:dark}
+:root{color-scheme:dark light;
+ /* Replaced wholesale from now.pal the moment the state lands. These
+    are the dusk values, and they are only what is on screen for the
+    one frame before the boat answers. */
+ --bg:#0B0C0E; --ink:#F2F4F6; --ink-dim:#9AA2A9; --label:#6C757C;
+ --hairline:#242A2F; --accent:#4A9EFF; --panel:#15181B; --chip:#1B2531;
+ --pad:14px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:#0B0C0E;color:#F2F4F6;
+body{margin:0;background:var(--bg);color:var(--ink);
  font:600 17px/1.3 -apple-system,'Segoe UI',Roboto,sans-serif;
- padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-/* There is no browser chrome in standalone mode, so the app has to say
-   what it is itself. */
-.top{display:flex;align-items:baseline;gap:10px;padding:16px 2px 2px;
- font-size:15px;letter-spacing:.26em}
-.top i{font-style:normal;color:#6C757C;font-size:12px;letter-spacing:.2em}
-h1{font-size:12px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
-.row{display:flex;align-items:center;gap:12px;width:100%;
- background:#15181B;border:0;color:inherit;border-radius:14px;
- padding:12px 16px;margin-bottom:8px;font:inherit;text-align:left}
-/* Two lines: WHICH CELL, then what is in it. The slot's name does not
-   fit on one line beside the reading - THE BIG NUMBER is not C0 - and
-   the thing you are looking for is the second line anyway. */
-.row u{flex:1;text-decoration:none;min-width:0}
-.row u b{display:block;font:600 11px/1.4 inherit;letter-spacing:.18em;
- color:#6C757C}
-.row u s{display:block;text-decoration:none;font-size:18px;
- overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row i{font-style:normal;color:#4A9EFF;font-size:15px;flex:none}
-.row:active{background:#22272B}
-.row.sel{background:#1B2531}
-.row.sel i{color:#4A9EFF}
-.back{background:none;padding:12px 2px;margin:0}
-.back u s{font-size:14px;letter-spacing:.14em;color:#9AA2A9}
-.th{display:flex;gap:8px}
-.th button{flex:1;background:#15181B;border:0;color:#9AA2A9;border-radius:14px;
- padding:14px 0;font:inherit;font-size:14px;letter-spacing:.1em}
-.th button.on{background:#4A9EFF;color:#06080A}
-#list{position:fixed;inset:0;background:#0B0C0E;overflow:auto;
- padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:none}
-#list.on{display:block}
-#list .back{margin-top:env(safe-area-inset-top)}
-.grp{font-size:11px;letter-spacing:.2em;color:#4A9EFF;margin:16px 0 6px}
-#msg{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));
+ padding:env(safe-area-inset-top) var(--pad) env(safe-area-inset-bottom);
+ min-height:100dvh;display:flex;flex-direction:column}
+.top{display:flex;align-items:baseline;gap:10px;padding:14px 2px 2px;
+ font-size:15px;letter-spacing:.26em;color:var(--ink)}
+.top i{font-style:normal;color:var(--label);font-size:12px;letter-spacing:.2em}
+#main{flex:1}
+
+/* The switch. Outlined rather than filled: hairline-to-accent is how
+   this whole app says "in force", and the one filled inversion on the
+   glass is a single key on the gun pad. A filled chip here would make
+   the remote louder than the instrument it mirrors. */
+.pg{display:flex;gap:8px;margin:12px 0 10px}
+.pg button{flex:1;background:none;border:2px solid var(--hairline);
+ color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
+ font-size:12px;letter-spacing:.18em}
+.pg button.on{border-color:var(--accent);color:var(--accent)}
+
+/* The face. Full content width - the mirror's job is to be a picture,
+   and the strip is the smallest target on it. */
+.fv{display:block;width:100%;aspect-ratio:1}
+.rim{fill:none;stroke:var(--hairline);stroke-width:6;stroke-dasharray:3 15}
+.spoke{stroke:var(--label);stroke-width:6;stroke-linecap:round;opacity:.55}
+.cut{stroke:var(--hairline);stroke-width:4}
+.art{fill:none;stroke:var(--hairline);stroke-width:5}
+.mk{fill:var(--ink);font-weight:700;text-anchor:middle;letter-spacing:-.06em}
+/* The lane is the touch target and the box is the glass's own rect.
+   They are not the same shape on purpose: the rect is where the ink
+   goes, the lane is everything up to the hairline you can see, because
+   a dead gutter that reads as part of a cell is a tap that does
+   nothing. */
+.cl{fill:transparent}
+.tg{fill:var(--ink);text-anchor:middle;font-weight:600;
+ font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+g.z.on .cl{fill:var(--accent);fill-opacity:.14}
+g.z.on .tg{fill:var(--accent)}
+.hint{text-align:center;color:var(--label);font-size:11px;
+ letter-spacing:.16em;margin:10px 0 0}
+
+h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
+.th{display:flex;gap:8px;margin-bottom:10px}
+.th button{flex:1;background:none;border:2px solid var(--hairline);
+ color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
+ font-size:13px;letter-spacing:.1em}
+.th button.on{border-color:var(--accent);color:var(--accent)}
+
+/* The card. It drops from the face's FEET and never covers it, so the
+   zone it belongs to stays lit while you choose - which is the signal
+   the glass gives by turning the open cell accent, and the thing that
+   makes this a drop-down rather than a second screen. */
+#list{position:fixed;left:var(--pad);right:var(--pad);display:none;
+ flex-direction:column;background:var(--panel);border-radius:18px;
+ border:2px solid var(--hairline);overflow:hidden}
+#list.on{display:flex}
+#list .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;
+ border-bottom:2px solid var(--hairline);flex:none}
+#list .hd b{flex:1;font-size:12px;letter-spacing:.2em;color:var(--label)}
+#list .hd button{background:none;border:0;color:var(--accent);font:inherit;
+ font-size:12px;letter-spacing:.14em;padding:4px 2px}
+#roll{overflow:auto;padding:8px;flex:1;-webkit-overflow-scrolling:touch}
+.row{display:flex;align-items:center;gap:12px;width:100%;background:none;
+ border:0;color:inherit;border-radius:12px;padding:12px 12px;
+ margin-bottom:4px;font:inherit;text-align:left}
+.row s{flex:1;text-decoration:none;font-size:17px;overflow:hidden;
+ text-overflow:ellipsis;white-space:nowrap}
+.row i{font-style:normal;color:var(--accent);font-size:15px;flex:none}
+.row:active{background:var(--chip)}
+.row.sel{background:var(--chip)}
+.grp{font-size:10px;letter-spacing:.2em;color:var(--accent);
+ margin:12px 0 4px 12px}
+#msg{position:fixed;left:var(--pad);right:var(--pad);
+ bottom:calc(14px + env(safe-area-inset-bottom));
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
- font-size:14px;display:none}
+ font-size:14px;display:none;z-index:9}
 </style></head><body>
+<div class="top">CONFLUENCE<i>45</i></div>
 <div id="main"></div>
+<div id="foot"></div>
 <div id="list"></div>
 <div id="msg"></div>
 <script>
 var T=new URLSearchParams(location.search).get('t')||'';
-var S=null, GRP={gps:'GPS',dpt:'DEPTH',wnd:'WIND',mot:'MOTION',
-                 crs:'COURSE',perf:'PERFORMANCE'};
-/* Everything drawn here came over a network, from a panel that is
+var S=null, PG='', OPEN=null;
+/* Furniture, and nothing with a coordinate in it: every line and box on
+   the face arrives on the wire. What is left here is which page wears a
+   tick ring and which wears an album square, which is decoration. */
+var ART={dial:{ticks:1, mark:'45'}, mus:{ticks:1}};
+/* Everything drawn here came over a network from a panel that is
    trusted - and is escaped anyway, because the day it is not is the day
-   nobody remembers this file builds its rows as strings. */
+   nobody remembers this file builds its markup as strings. */
 function esc(s){return String(s===undefined||s===null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;');}
@@ -3010,61 +3096,244 @@ function post(b,cb){var x=new XMLHttpRequest();x.open('POST','/r/cmd?t='+T);
   x.onload=function(){var j={};try{j=JSON.parse(x.responseText)}catch(e){}
     if(x.status!==200){say(j.error||('HTTP '+x.status));return}cb&&cb()};
   x.onerror=function(){say('NO ANSWER FROM THE BOAT')};x.send(JSON.stringify(b));}
-function name(k){for(var i=0;i<S.readings.length;i++)
+
+function held(p,sl){return (S.now.slots||{})[p+':'+sl];}
+function tag(k){return (S.tags||{})[k] || nameOf(k);}
+function nameOf(k){for(var i=0;i<S.readings.length;i++)
   if(S.readings[i].k===k)return S.readings[i].name;return k||'—';}
 function slotName(p,sl){return (S.names||{})[p+':'+sl]||sl.toUpperCase();}
-function held(p,sl){return (S.now.slots||{})[p+':'+sl];}
-function draw(){
-  var h='<div class="top">CONFLUENCE<i>45</i></div>',p;
-  for(p in S.slots){
-    h+='<h1>'+esc((S.pages||{})[p]||p.toUpperCase())+'</h1>';
-    S.slots[p].forEach(function(sl){
-      h+='<button class="row" data-p="'+esc(p)+'" data-s="'+esc(sl)+'">'
-        +'<u><b>'+esc(slotName(p,sl))+'</b><s>'+esc(name(held(p,sl)))+'</s></u>'
-        +'<i>&#9656;</i></button>';});
+
+/* The lanes. Each slot's rect grown to meet its neighbours halfway, so
+   the gutters the glass can afford to leave dead - forty units between
+   two cells, nothing at all on a 1080px screen under a 44mm target -
+   belong to somebody by the time they are a third the size.
+   On the dial the halfway point lands exactly on the rules the glass
+   draws, so the boundary you can see is the boundary you feel. */
+function lanes(G){
+  var sl, k, out={}, box=G.box||{};
+  var ks=Object.keys(box);
+  /* Rows first: slots whose boxes overlap vertically share a band. */
+  var rows=[];
+  ks.forEach(function(k){
+    var b=box[k], mid=b[1]+b[3]/2, r=null;
+    rows.forEach(function(x){ if(mid>=x.t && mid<=x.b) r=x; });
+    if(!r){ r={t:b[1], b:b[1]+b[3], ks:[]}; rows.push(r); }
+    r.t=Math.min(r.t,b[1]); r.b=Math.max(r.b,b[1]+b[3]); r.ks.push(k);
+  });
+  rows.sort(function(x,y){return x.t-y.t;});
+  /* Vertical: meet the next row halfway, and the glass at the ends. */
+  for(var i=0;i<rows.length;i++){
+    var t = i ? (rows[i-1].b+rows[i].t)/2 : Math.max(0, rows[i].t-60);
+    var bm= i<rows.length-1 ? (rows[i].b+rows[i+1].t)/2
+                            : Math.min(1080, rows[i].b+60);
+    rows[i].T=t; rows[i].B=bm;
   }
-  h+='<h1>THEME</h1><div class="th">';
-  S.themes.forEach(function(t){
-    h+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
-      +esc(t.toUpperCase())+'</button>';});
-  h+='</div>';
+  /* A band thinner than MINH cannot be hit. The strip is 60 units - 20
+     pixels on a 362px face - and no amount of care finds it. It takes
+     what it needs from whichever neighbour is taller, which on the dial
+     is the big number and which has it to give. */
+  var MINH=88;
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i], need=MINH-(r.B-r.T);
+    if(need<=0) continue;
+    var up=i?rows[i-1]:null, dn=i<rows.length-1?rows[i+1]:null;
+    var fromUp = up && (up.B-up.T)>=(dn?(dn.B-dn.T):0) ? up : dn;
+    if(fromUp===up && up){ up.B-=need; r.T-=need; }
+    else if(dn){ dn.T+=need; r.B+=need; }
+  }
+  rows.forEach(function(r){
+    r.ks.sort(function(x,y){return box[x][0]-box[y][0];});
+    for(var j=0;j<r.ks.length;j++){
+      var k=r.ks[j], b=box[k];
+      var L = j ? (box[r.ks[j-1]][0]+box[r.ks[j-1]][2]+b[0])/2
+                : Math.max(0, b[0]-40);
+      var R = j<r.ks.length-1 ? (b[0]+b[2]+box[r.ks[j+1]][0])/2
+                              : Math.min(1080, b[0]+b[2]+40);
+      out[k]=[L, r.T, R-L, r.B-r.T];
+    }
+  });
+  return out;
+}
+
+/* A tag has to fit the lane it is in. WIND ANGLE AUTO in a 220-unit
+   cell at the label size is a word and a half past the hairline, and
+   the glass never has to solve this because the glass prints a number
+   there. Shrunk to fit rather than clipped: a tag you can read small
+   says which reading it is, and half a tag does not. */
+function fit(txt, w, base){
+  var est=0.60*txt.length+0.08*(txt.length-1);
+  return Math.max(20, Math.min(base, (w*0.88)/est));
+}
+
+function face(pg){
+  var G=(S.geom||{})[pg];
+  if(!G||!G.box||!Object.keys(G.box).length) return '';
+  var A=ART[pg]||{}, L=lanes(G), h='';
+  h+='<svg class="fv" viewBox="0 0 1080 1080">';
+  /* The glass is round and so is this: without the clip the watermark
+     is a 1320-unit numeral on a square canvas and the corners of it
+     show outside the rim. */
+  h+='<defs><clipPath id="rnd"><circle cx="540" cy="540" r="537"/>'
+    +'</clipPath></defs>';
+  h+='<circle class="rim" cx="540" cy="540" r="537"/>';
+  if(A.ticks){
+    /* Twelve spokes, not the glass's hundred and twenty ticks: at a
+       third the size they close into a grey band and the face loses
+       its edge instead of gaining one. */
+    for(var d=0; d<360; d+=30){
+      var a=(d-90)*Math.PI/180;
+      h+='<line class="spoke" x1="'+(540+474*Math.cos(a)).toFixed(1)
+        +'" y1="'+(540+474*Math.sin(a)).toFixed(1)
+        +'" x2="'+(540+516*Math.cos(a)).toFixed(1)
+        +'" y2="'+(540+516*Math.sin(a)).toFixed(1)+'"/>';
+    }
+  }
+  if(A.mark){
+    /* The glass's own: 1320 units at x488 y672, which is so much
+       bigger than the face that it bleeds off every edge and reads as
+       texture rather than as a number. Drawn smaller it becomes a
+       legible grey 45 sitting in the middle of everything, which is
+       the first thing I did and the loudest thing on the face.
+       The opacity is the theme's, because .032 of near-black on a day
+       panel and .07 of near-white on a night one are the same whisper
+       and no single number is. */
+    var op={day:.032, dusk:.055, night:.07}[(S.now||{}).eff] || .055;
+    h+='<text class="mk" x="488" y="672" font-size="1320" opacity="'+op
+      +'" clip-path="url(#rnd)">'+esc(A.mark)+'</text>';
+  }
+  /* The album art, at the box the panel measured. Nothing on this
+     page carries a coordinate of its own - the moment one did, it
+     would be a second place that knows where the glass puts things. */
+  if(G.art) h+='<rect class="art" x="'+G.art[0]+'" y="'+G.art[1]+'" width="'
+    +G.art[2]+'" height="'+G.art[3]+'" rx="18"/>';
+  (G.cut||[]).forEach(function(c){
+    h+='<line class="cut" x1="'+c[0]+'" y1="'+c[1]+'" x2="'+c[2]+'" y2="'+c[3]+'"/>';
+  });
+  Object.keys(G.box).forEach(function(sl){
+    var ln=L[sl]||G.box[sl], an=(G.a||{})[sl]
+      || [G.box[sl][0]+G.box[sl][2]/2, G.box[sl][1]+G.box[sl][3]/2];
+    var t=tag(held(pg,sl));
+    /* The big one gets a size and a half - the smallest step that reads
+       as a step rather than as a rendering difference. */
+    var big=G.box[sl][3]>=240, sz=fit(t, ln[2], big?48:32);
+    h+='<g class="z'+(OPEN&&OPEN.p===pg&&OPEN.s===sl?' on':'')
+      +'" data-p="'+esc(pg)+'" data-s="'+esc(sl)+'">'
+      +'<rect class="cl" x="'+ln[0]+'" y="'+ln[1]+'" width="'+ln[2]
+      +'" height="'+ln[3]+'" rx="16"/>'
+      +'<text class="tg" x="'+an[0]+'" y="'+an[1]+'" font-size="'+sz.toFixed(1)
+      +'" letter-spacing="'+(sz*0.08).toFixed(2)
+      +'" dominant-baseline="middle">'+esc(t)+'</text></g>';
+  });
+  h+='</svg>';
+  return h;
+}
+
+/* Most slots first. The dial has five of the eight, and a remote that
+   opens on the other page makes you tap twice for the readings you
+   came for. */
+function pages(){
+  return Object.keys(S.slots).sort(function(a,b){
+    return (S.slots[b]||[]).length-(S.slots[a]||[]).length; });
+}
+
+function draw(){
+  /* Busiest page first, which is the same rule that chooses the one
+     to open on - otherwise the switch and the opening page disagree
+     and the live button is the second one. */
+  var h='<div class="pg">';
+  pages().forEach(function(p){
+    h+='<button data-f="'+esc(p)+'"'+(p===PG?' class="on"':'')
+      +'>'+esc((S.pages||{})[p]||p.toUpperCase())+'</button>'; });
+  h+='</div>'+face(PG)
+    +'<div class="hint">TAP A COMPLICATION TO CHANGE IT</div>';
   document.getElementById('main').innerHTML=h;
+  var f='<h1>THEME</h1><div class="th">';
+  S.themes.forEach(function(t){
+    f+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
+      +esc(t.toUpperCase())+'</button>';});
+  document.getElementById('foot').innerHTML=f+'</div>';
+  if(OPEN) place();
 }
+
+function place(){
+  var sv=document.querySelector('.fv'), L=document.getElementById('list');
+  if(!sv) return;
+  /* Measured at open time rather than computed from the stack: every
+     number above the face is a line box the system font decides, and a
+     card that assumes them is a card that covers the mirror on one
+     phone in five. */
+  var b=sv.getBoundingClientRect();
+  L.style.top=Math.round(b.bottom+8)+'px';
+  L.style.bottom='calc(10px + env(safe-area-inset-bottom))';
+}
+
 function pick(p,sl){
-  /* A way out that is not a choice. Without it the only way off this
-     list is to set something, and opening it by accident means changing
-     a cell you did not mean to touch. */
-  var cur=held(p,sl), last='';
-  var h='<button class="row back" data-back="1"><u><s>&#8592; BACK</s></u></button>'
-       +'<h1>'+esc(slotName(p,sl))+'</h1>';
+  OPEN={p:p, s:sl};
+  var cur=held(p,sl), last='', G=S.sens||{};
+  var h='<div class="hd"><b>'+esc(slotName(p,sl))+'</b>'
+       +'<button data-back="1">CLOSE</button></div><div id="roll">';
   S.readings.forEach(function(r){
-    if(r.sen!==last){last=r.sen;h+='<div class="grp">'+esc(GRP[r.sen]||r.sen)+'</div>';}
+    if(r.sen!==last){last=r.sen;
+      h+='<div class="grp">'+esc(G[r.sen]||r.sen)+'</div>';}
     h+='<button class="row'+(r.k===cur?' sel':'')+'" data-k="'+esc(r.k)+'">'
-      +'<u><s>'+esc(r.name)+'</s></u>'
-      +(r.k===cur?'<i>&#10003;</i>':'')+'</button>';});
+      +'<s>'+esc(r.name)+'</s>'+(r.k===cur?'<i>&#10003;</i>':'')+'</button>';});
   var L=document.getElementById('list');
-  L.innerHTML=h;L.className='on';
-  /* Open ON what is set, not at the top. The list is longer than the
-     screen, so a picker that starts at GPS hides the answer to the
-     question you opened it to ask. */
+  L.innerHTML=h+'</div>';
+  L.className='on';
+  draw();                       /* so the zone lights while you choose */
+  place();
   var at=L.querySelector('.sel');
-  if(at) at.scrollIntoView({block:'center'}); else L.scrollTop=0;
+  if(at) at.scrollIntoView({block:'center'});
   L.onclick=function(e){
-    if(e.target.closest('[data-back]')){L.className='';return;}
-    var b=e.target.closest('[data-k]');if(!b)return;
+    if(e.target.closest('[data-back]')) return void shut();
+    var b=e.target.closest('[data-k]'); if(!b) return;
     post({kind:'slot',page:p,slot:sl,reading:b.dataset.k},function(){
-      S.now.slots=S.now.slots||{};S.now.slots[p+':'+sl]=b.dataset.k;
-      L.className='';draw();});};
+      S.now.slots=S.now.slots||{}; S.now.slots[p+':'+sl]=b.dataset.k;
+      shut();});
+  };
 }
+function shut(){ OPEN=null;
+  document.getElementById('list').className=''; draw(); }
+
 document.getElementById('main').onclick=function(e){
-  var r=e.target.closest('[data-s]');
-  if(r){pick(r.dataset.p,r.dataset.s);return;}
-  var t=e.target.closest('[data-t]');
-  if(t)post({kind:'theme',theme:t.dataset.t},function(){
-    S.now.theme=t.dataset.t;draw();});
+  var f=e.target.closest('[data-f]');
+  if(f){ PG=f.dataset.f; shut(); return; }
+  var z=e.target.closest('[data-s]');
+  if(z){ if(OPEN && OPEN.p===z.dataset.p && OPEN.s===z.dataset.s) shut();
+         else pick(z.dataset.p, z.dataset.s); }
 };
-get('/r/state?t='+encodeURIComponent(T),function(j){
-  if(!j.ok){say(j.error||'NOT ARMED');return}S=j;S.now=S.now||{};draw();});
+document.getElementById('foot').onclick=function(e){
+  var t=e.target.closest('[data-t]'); if(!t) return;
+  post({kind:'theme',theme:t.dataset.t},function(){
+    S.now.theme=t.dataset.t; draw();
+    /* The theme is the one command that changes what the mirror should
+       LOOK like, and only the panel knows what auto resolves to. One
+       refetch, just past a poll, rather than a guess here. */
+    setTimeout(load, 1800); });
+};
+
+function paint(){
+  var p=(S.now||{}).pal||{}, r=document.documentElement;
+  for(var k in p) r.style.setProperty('--'+k, p[k]);
+  var m=document.querySelector('meta[name=theme-color]');
+  if(m && p.bg) m.setAttribute('content', p.bg);
+}
+
+function load(){
+  get('/r/state?t='+encodeURIComponent(T),function(j){
+    if(!j.ok){ say(j.error||'NOT ARMED'); return; }
+    S=j; S.now=S.now||{};
+    /* Open on the page with the most to change: the dial has five of
+       the eight, and a remote that opens on the other one makes you tap
+       twice for the readings you came for. */
+    if(!PG||!S.slots[PG]) PG=pages()[0]||'';
+    paint(); draw();
+  });
+}
+load();
+/* A stale row was a wrong word; a stale picture is a lying mirror. */
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden) load(); });
 </script></body></html>"""
 
 
@@ -3192,6 +3461,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
                                'themes': r['themes'],
                                'pages': r.get('pages') or {},
                                'names': r.get('names') or {},
+                               'tags': r.get('tags') or {},
+                               'sens': r.get('sens') or {},
+                               'geom': r.get('geom') or {},
                                'now': r.get('now') or {}})
         return self._send({'ok': False, 'error': 'NO'}, 404)
 
