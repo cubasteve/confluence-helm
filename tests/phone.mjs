@@ -30,6 +30,18 @@ const p0=await b0.newPage({viewport:{width:1080,height:1080}});
 await p0.goto('http://localhost:8080/confluence_helm.html');
 await p0.waitForTimeout(1400);
 const cat=await p0.evaluate(()=>remoteCat());
+/* Where the GLASS actually draws its hull number, in panel units.
+   Not 672: that is the y, and dominant-baseline:middle centres on the
+   x-height while a digit sits above it, so the ink lands well north of
+   it. The number that matters is not the one in the markup, it is
+   where the thing ends up - and the only way to know is to measure the
+   panel and then measure the mirror. */
+const glassMark=await p0.evaluate(()=>{
+  const e=document.getElementById('mark'), st=document.getElementById('stage');
+  const r=e.getBoundingClientRect(), s=st.getBoundingClientRect();
+  const k=1080/s.width;
+  return {mid:((r.top+r.bottom)/2-s.top)*k, h:r.height*k};
+});
 await b0.close();
 /* One name and one tag doctored. Everything this page draws arrived
    over a network from a panel that is trusted - and the page builds its
@@ -61,11 +73,19 @@ const open=async(q='?t=T0KEN')=>{ await p.goto(base+'/r'+q);
 /* Every zone on the face as the browser has laid it out: which slot, the
    tag's rendered centre, and the lane that takes the tap. */
 const cells=()=>p.$$eval('#main .fv g.z',gs=>gs.map(g=>{
-  const tx=g.querySelector('text').getBoundingClientRect();
+  /* A tag too long for its lane is broken onto two lines, so a zone
+     holds one text element or two - WIND SPEED / · AUTO. Read as one
+     word again here, and measured over the pair, because what the
+     assertions below are about is where the TAG sits and the pair
+     straddles the anchor the single line would have sat on. */
+  const ts=[...g.querySelectorAll('text')];
+  const bs=ts.map(t=>t.getBoundingClientRect());
+  const L=Math.min(...bs.map(r=>r.left)), R=Math.max(...bs.map(r=>r.right));
+  const T=Math.min(...bs.map(r=>r.top)), B=Math.max(...bs.map(r=>r.bottom));
   const r=g.querySelector('rect').getBoundingClientRect();
   return {p:g.dataset.p, s:g.dataset.s,
-          tag:g.querySelector('text').textContent,
-          cx:tx.left+tx.width/2, cy:tx.top+tx.height/2,
+          tag:ts.map(t=>t.textContent).join(' '), lines:ts.length,
+          cx:(L+R)/2, cy:(T+B)/2,
           lane:{x:r.left, y:r.top, w:r.width, h:r.height},
           on:g.classList.contains('on')};
 }));
@@ -138,6 +158,88 @@ t.ok(overlap===0, 'and no two lanes overlap', String(overlap));
 t.ok(cs.find(c=>c.s==='c4').lane.h>=28,
      'the strip\'s lane is grown to something a thumb can hit',
      String(Math.round(cs.find(c=>c.s==='c4').lane.h)));
+
+t.head('the app does not draw under the status bar');
+/* black-translucent makes a saved app extend behind the clock, and on
+   a phone with a notch the first line of it is simply gone - the
+   owner's words were "the top gets cut off". default keeps the bar
+   opaque and starts the page below it. */
+/* Read off the element, not out of the page text: the first version of
+   this grepped the source and tripped over the comment explaining why
+   the value is not the one it was grepping for. */
+const bar=await p.getAttribute(
+  'meta[name="apple-mobile-web-app-status-bar-style"]','content');
+t.ok(bar==='default', 'the status bar is left to the system', String(bar));
+const topPad=await p.evaluate(()=>getComputedStyle(document.body).paddingTop);
+t.ok(parseFloat(topPad)>=10,
+     'and the page keeps its own margin above the name even where the '
+     +'browser reports no inset at all', topPad);
+
+t.head('nothing claims the album art, and nothing runs off its lane');
+await p.click('[data-f="mus"]'); await p.waitForTimeout(350);
+const art=cat.geom.mus.art;
+const fm2=await faceBox(), k2=fm2.w/1080;
+const box=r=>({x:fm2.x+r[0]*k2, y:fm2.y+r[1]*k2, w:r[2]*k2, h:r[3]*k2});
+const A=box(art);
+/* The two flanks grow toward each other across a page with nothing
+   between them, so each took half the gap and both ran through the
+   middle of the square: a tap on the artwork set the port or starboard
+   reading depending on which side of centre it landed on. */
+for(const c of await cells()){
+  const L=c.lane;
+  const over = L.x < A.x+A.w-1 && A.x < L.x+L.w-1 &&
+               L.y < A.y+A.h-1 && A.y < L.y+L.h-1;
+  t.ok(!over, c.s+"'s lane stops at the artwork",
+       JSON.stringify([Math.round(L.x),Math.round(L.x+L.w)])
+       +' vs art '+JSON.stringify([Math.round(A.x),Math.round(A.x+A.w)]));
+}
+
+t.head('a tag too long for its lane goes onto two lines');
+/* WIND SPEED · AUTO in a cell the glass only ever prints four
+   characters into. Shrinking alone ran out of room; shrinking
+   everything to fit the worst one would have cost the short tags. */
+await p.evaluate(()=>{ S.now.slots['mus:p']='ws'; draw(); });
+await p.waitForTimeout(250);
+const long=(await cells()).find(c=>c.s==='p');
+t.ok(long.lines===2, 'it is two lines', String(long.lines));
+t.ok(long.tag==='WIND SPEED · AUTO', 'and still the whole name', long.tag);
+const wide=await p.$$eval('#main .fv g.z[data-s="p"] text',
+  es=>Math.max(...es.map(e=>e.getBoundingClientRect().width)));
+t.ok(wide <= long.lane.w+1, 'and inside its lane',
+     Math.round(wide)+' in '+Math.round(long.lane.w));
+/* And one that FITS is left on one line, even though it is two words
+   - a single-word tag could not tell "wraps when it must" from "wraps
+   whenever it sees a space". MARK RANGE in the big number's lane has
+   room to spare. */
+await p.click('[data-f="dial"]'); await p.waitForTimeout(300);
+await p.evaluate(()=>{ S.now.slots['dial:c0']='mkd'; draw(); });
+await p.waitForTimeout(250);
+const roomy=(await cells()).find(c=>c.s==='c0');
+t.ok(roomy.tag==='MARK RANGE' && roomy.lines===1,
+     'while two words that fit stay on one line',
+     roomy.tag+' / '+roomy.lines);
+await p.evaluate(()=>{ S.now.slots['dial:c0']='sog'; draw(); });
+await p.click('[data-f="mus"]'); await p.waitForTimeout(300);
+await p.evaluate(()=>{ S.now.slots['mus:p']='aws'; draw(); });
+await p.click('[data-f="dial"]'); await p.waitForTimeout(350);
+
+t.head('the hull number sits where the glass puts it');
+/* The glass sets dominant-baseline:middle on every text it draws, so
+   its y=672 is a MIDDLE. Taken as a baseline here it rode most of a
+   line high - which on a numeral 1320 units tall is not a nudge. */
+const mk=await p.$eval('#main .fv .mk',e=>{
+  const r=e.getBoundingClientRect(); return {mid:(r.top+r.bottom)/2}; });
+const f3=await faceBox();
+const mine=(mk.mid-f3.y)/(f3.w/1080);
+/* A generous tolerance on purpose: the glass sets this in Poppins and
+   the phone has no Poppins to set it in, so the two fonts put the ink
+   of a 1320-unit numeral in slightly different places. Forty units is
+   three percent of the face - close enough to be the same picture,
+   tight enough to catch a baseline read as a middle, which was most of
+   a line out. */
+t.ok(Math.abs(mine-glassMark.mid) < 40,
+     'the mirror puts it where the panel does',
+     Math.round(mine)+' vs the glass at '+Math.round(glassMark.mid));
 
 t.head('tapping a zone drops a card that never covers the face');
 await p.click('g.z[data-s="c0"]'); await p.waitForTimeout(400);

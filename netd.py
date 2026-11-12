@@ -2980,7 +2980,11 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
      give an app with no browser chrome rather than a bookmark. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- NOT black-translucent. That makes a saved app draw under the
+     status bar, and on a phone with a notch the first line of it is
+     simply gone: the clock sits on top of the app's own name. default
+     keeps the bar opaque and starts the page below it. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Confluence">
 <meta name="theme-color" content="#0B0C0E">
 <style>
@@ -2994,7 +2998,12 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--ink);
  font:600 17px/1.3 -apple-system,'Segoe UI',Roboto,sans-serif;
- padding:env(safe-area-inset-top) var(--pad) env(safe-area-inset-bottom);
+ /* A floor under the inset as well as the inset itself: a browser
+    that reports none - any Android, and iOS in a tab - still owes the
+    top of the page a little room, and 10px is the difference between
+    the name sitting ON the edge and sitting below it. */
+ padding:calc(env(safe-area-inset-top) + 10px) var(--pad)
+         env(safe-area-inset-bottom);
  min-height:100dvh;display:flex;flex-direction:column}
 .top{display:flex;align-items:baseline;gap:10px;padding:14px 2px 2px;
  font-size:15px;letter-spacing:.26em;color:var(--ink)}
@@ -3018,7 +3027,8 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .spoke{stroke:var(--label);stroke-width:6;stroke-linecap:round;opacity:.55}
 .cut{stroke:var(--hairline);stroke-width:4}
 .art{fill:none;stroke:var(--hairline);stroke-width:5}
-.mk{fill:var(--ink);font-weight:700;text-anchor:middle;letter-spacing:-.06em}
+.mk{fill:var(--ink);font-weight:700;text-anchor:middle;letter-spacing:-.06em;
+ dominant-baseline:middle}
 /* The lane is the touch target and the box is the glass's own rect.
    They are not the same shape on purpose: the rect is where the ink
    goes, the lane is everything up to the hairline you can see, because
@@ -3026,6 +3036,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
    nothing. */
 .cl{fill:transparent}
 .tg{fill:var(--ink);text-anchor:middle;font-weight:600;
+ dominant-baseline:middle;
  font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
 g.z.on .cl{fill:var(--accent);fill-opacity:.14}
 g.z.on .tg{fill:var(--accent)}
@@ -3113,6 +3124,21 @@ function slotName(p,sl){return (S.names||{})[p+':'+sl]||sl.toUpperCase();}
    belong to somebody by the time they are a third the size.
    On the dial the halfway point lands exactly on the rules the glass
    draws, so the boundary you can see is the boundary you feel. */
+/* Nothing may claim the album art. The two flanks grow toward each
+   other across a page with nothing between them, so each took half the
+   gap and both ran through the middle of the square - a tap anywhere on
+   the artwork set the port or starboard reading depending on which side
+   of centre it landed. They stop at its edge now. */
+function keepOff(ln, art){
+  if(!art) return ln;
+  const ax=art[0], ay=art[1], aw=art[2], ah=art[3];
+  const x0=ln[0], x1=ln[0]+ln[2], y0=ln[1], y1=ln[1]+ln[3];
+  if(y1<=ay || y0>=ay+ah || x1<=ax || x0>=ax+aw) return ln;
+  return ((x0+x1)/2 < ax+aw/2)
+    ? [x0, ln[1], Math.max(24, ax-x0), ln[3]]
+    : [ax+aw, ln[1], Math.max(24, x1-(ax+aw)), ln[3]];
+}
+
 function lanes(G){
   var sl, k, out={}, box=G.box||{};
   var ks=Object.keys(box);
@@ -3153,20 +3179,41 @@ function lanes(G){
                 : Math.max(0, b[0]-40);
       var R = j<r.ks.length-1 ? (b[0]+b[2]+box[r.ks[j+1]][0])/2
                               : Math.min(1080, b[0]+b[2]+40);
-      out[k]=[L, r.T, R-L, r.B-r.T];
+      out[k]=keepOff([L, r.T, R-L, r.B-r.T], G.art);
     }
   });
   return out;
 }
 
-/* A tag has to fit the lane it is in. WIND ANGLE AUTO in a 220-unit
-   cell at the label size is a word and a half past the hairline, and
-   the glass never has to solve this because the glass prints a number
-   there. Shrunk to fit rather than clipped: a tag you can read small
-   says which reading it is, and half a tag does not. */
+/* A tag has to fit the lane it is in. WIND SPEED · AUTO in a 220-unit
+   cell is a word and a half past the hairline, and the glass never has
+   to solve this because the glass prints a NUMBER there - four
+   characters, by construction.
+
+   Shrunk to fit was the first answer and it only went so far: at the
+   floor the longest names still crossed the rules, and shrinking
+   everything to the width of the worst one would have made the short
+   tags unreadable to save the long ones. So a tag that will not fit on
+   one line is broken onto two, at the space nearest its middle - WIND
+   SPEED / · AUTO rather than WIND / SPEED · AUTO - and only then
+   shrunk if the longer half still needs it. */
+function est(txt, z){
+  return z*(0.60*txt.length+0.08*Math.max(0,txt.length-1));
+}
 function fit(txt, w, base){
-  var est=0.60*txt.length+0.08*(txt.length-1);
-  return Math.max(20, Math.min(base, (w*0.88)/est));
+  if(est(txt,base)<=w*0.88) return {ls:[txt], z:base};
+  var p=txt.split(' ');
+  if(p.length>1){
+    var cut=1, best=1e9;
+    for(var i=1;i<p.length;i++){
+      var d=Math.abs(p.slice(0,i).join(' ').length-p.slice(i).join(' ').length);
+      if(d<best){ best=d; cut=i; }
+    }
+    var ls=[p.slice(0,cut).join(' '), p.slice(cut).join(' ')];
+    var need=Math.max(est(ls[0],1), est(ls[1],1));
+    return {ls:ls, z:Math.max(17, Math.min(base, w*0.88/need))};
+  }
+  return {ls:[txt], z:Math.max(17, w*0.88/est(txt,1))};
 }
 
 /* A page the panel could not measure still has to be reachable. The
@@ -3214,6 +3261,10 @@ function face(pg){
        texture rather than as a number. Drawn smaller it becomes a
        legible grey 45 sitting in the middle of everything, which is
        the first thing I did and the loudest thing on the face.
+       y is a MIDDLE and not a baseline: the glass sets
+       dominant-baseline:middle on every text it draws, so the same 672
+       that centres it there put it most of a line high here. On a
+       numeral 1320 units tall that is not a nudge.
        The opacity is the theme's, because .032 of near-black on a day
        panel and .07 of near-white on a night one are the same whisper
        and no single number is. */
@@ -3235,14 +3286,20 @@ function face(pg){
     var t=tag(held(pg,sl));
     /* The big one gets a size and a half - the smallest step that reads
        as a step rather than as a rendering difference. */
-    var big=G.box[sl][3]>=240, sz=fit(t, ln[2], big?48:32);
+    var big=G.box[sl][3]>=240, f=fit(t, ln[2], big?48:32);
+    /* Two lines straddle the anchor rather than hanging off it: the
+       anchor is where the glass prints the number, and the pair should
+       sit where the one would have. */
+    var n=f.ls.length, y0=an[1]-(n-1)*f.z*0.56;
+    var tx='';
+    for(var i=0;i<n;i++)
+      tx+='<text class="tg" x="'+an[0]+'" y="'+(y0+i*f.z*1.12).toFixed(1)
+        +'" font-size="'+f.z.toFixed(1)
+        +'" letter-spacing="'+(f.z*0.08).toFixed(2)+'">'+esc(f.ls[i])+'</text>';
     h+='<g class="z'+(OPEN&&OPEN.p===pg&&OPEN.s===sl?' on':'')
       +'" data-p="'+esc(pg)+'" data-s="'+esc(sl)+'">'
       +'<rect class="cl" x="'+ln[0]+'" y="'+ln[1]+'" width="'+ln[2]
-      +'" height="'+ln[3]+'" rx="16"/>'
-      +'<text class="tg" x="'+an[0]+'" y="'+an[1]+'" font-size="'+sz.toFixed(1)
-      +'" letter-spacing="'+(sz*0.08).toFixed(2)
-      +'" dominant-baseline="middle">'+esc(t)+'</text></g>';
+      +'" height="'+ln[3]+'" rx="16"/>'+tx+'</g>';
   });
   h+='</svg>';
   return h;
