@@ -2630,6 +2630,12 @@ REMOTE_DEV = os.environ.get('HELM_REMOTE_DEV', 'wlan1')
 REMOTE_PORT = int(os.environ.get('HELM_REMOTE_PORT', PORT + 2))
 REMOTE_CFG = os.environ.get('HELM_REMOTE_CFG') or os.path.expanduser(
     '~/.config/confluence-remote.json')
+# The home screen icon, as a file rather than a base64 blob in the
+# middle of a stdlib service: it is a picture, you should be able to
+# look at it. Missing is survivable - the manifest simply has no
+# icons and the phone falls back to a screenshot of the page.
+REMOTE_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'boot', 'remote-icon.png')
 # Commands older than this are dropped rather than applied. A panel that
 # was asleep, or reloading, should not come back and replay a tap from
 # ten minutes ago.
@@ -2742,6 +2748,17 @@ def remote_register(body):
         return {'ok': False, 'error': 'NO SLOTS'}
     if not isinstance(readings, list) or not readings:
         return {'ok': False, 'error': 'NO READINGS'}
+    # Objects, not keys. The phone draws a NAME under a GROUP heading
+    # and sends back a key; the first version of this took whatever the
+    # panel sent and the two halves disagreed - remote_cmd validated
+    # `reading in readings`, which only works on a list of keys, while
+    # /r/state handed the page objects and read .name and .sen off
+    # them. Both halves passed their own probes. Checked here, once, so
+    # a panel that sends the wrong shape is told so instead of half
+    # working.
+    if not all(isinstance(x, dict) and x.get('k') and x.get('name')
+               for x in readings):
+        return {'ok': False, 'error': 'BAD READINGS'}
     if not all(isinstance(v, list) and v for v in slots.values()):
         return {'ok': False, 'error': 'BAD SLOTS'}
     themes = body.get('themes')
@@ -2864,7 +2881,13 @@ def _remote_drain():
         _remote['pend'] = {}
         if at and time.time() - at > REMOTE_STALE:
             pend = {}                      # the panel was away; do not replay
-    return {'ok': True, 'armed': _remote['armed'], 'cmds': pend}
+    # `have` is netd admitting it has forgotten. The catalogue lives in
+    # memory, so a netd restart - a crash, an upgrade, systemd - leaves
+    # the door open and the phone with nothing to show and every command
+    # refused. The panel polls anyway, so the poll is where it should
+    # find that out and register again.
+    return {'ok': True, 'armed': _remote['armed'], 'cmds': pend,
+            'have': bool(_remote['readings'] and _remote['slots'])}
 
 
 def remote_cmd(body, token):
@@ -2882,7 +2905,7 @@ def remote_cmd(body, token):
             reading = body.get('reading')
             if page not in r['slots'] or slot not in r['slots'].get(page, []):
                 return {'ok': False, 'error': 'NO SUCH SLOT'}, 400
-            if reading not in r['readings']:
+            if not any(x.get('k') == reading for x in r['readings']):
                 return {'ok': False, 'error': 'NO SUCH READING'}, 400
             # Latest wins, per slot. Two taps on the same cell before the
             # panel polls should be one change, not a queue of them.
@@ -2901,7 +2924,19 @@ def remote_cmd(body, token):
 
 REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Confluence</title><style>
+<title>Confluence</title>
+<link rel="manifest" href="/r/manifest.webmanifest?t=%T%">
+<link rel="apple-touch-icon" href="/r/icon.png">
+<!-- Both spellings: the apple- one is what iOS has always read, the
+     bare one is the standard that replaced it, and Android reads the
+     manifest instead. Together they are what makes Add to Home Screen
+     give an app with no browser chrome rather than a bookmark. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Confluence">
+<meta name="theme-color" content="#0B0C0E">
+<style>
 :root{color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#0B0C0E;color:#F2F4F6;
@@ -2987,6 +3022,35 @@ get('/r/state?t='+encodeURIComponent(T),function(j){
 </script></body></html>"""
 
 
+def html_q(s):
+    """Enough quoting for an attribute. The token is base64url and the
+    port is an int, so nothing here can carry a quote - which is exactly
+    why it should be escaped rather than trusted to stay that way."""
+    return (str(s).replace('&', '&amp;').replace('<', '&lt;')
+            .replace('>', '&gt;').replace('"', '&quot;'))
+
+
+def remote_manifest(token):
+    """What makes the saved link an app rather than a bookmark.
+
+    start_url carries the token, which is the whole reason the manifest
+    needs one to fetch: it is the credential, written down on the phone
+    where the home screen can relaunch with it."""
+    return {
+        'name': 'Confluence', 'short_name': 'Confluence',
+        'start_url': '/r?t=' + token,
+        'scope': '/r',
+        'display': 'standalone',
+        'orientation': 'portrait',
+        'background_color': '#0B0C0E', 'theme_color': '#0B0C0E',
+        # One icon, 512, declared maskable as well: the artwork sits
+        # inside the 80% safe circle, so Android can mask it to whatever
+        # shape the launcher uses without taking a bite out of the ring.
+        'icons': [{'src': '/r/icon.png', 'sizes': '512x512',
+                   'type': 'image/png', 'purpose': 'any maskable'}],
+    }
+
+
 class RemoteHandler(BaseHTTPRequestHandler):
     """The phone's door, and the whole of it.
 
@@ -3021,12 +3085,16 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return True
         return _same_subnet(self.client_address[0], _remote.get('cidr', ''))
 
-    def _send(self, obj, code=200, ctype='application/json'):
+    def _send(self, obj, code=200, ctype='application/json', cache=None):
         payload = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
         self.send_response(code)
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(payload)))
-        self.send_header('Cache-Control', 'no-store')
+        # Everything here is state and none of it should be cached. The
+        # icon is the exception and says so for itself: it is twenty
+        # kilobytes that never change, and re-fetching it at every
+        # launch is twenty kilobytes over a phone hotspot for nothing.
+        self.send_header('Cache-Control', cache or 'no-store')
         # No Access-Control-* at all, ever. The token is only a defence
         # against another page on the phone if a browser will not send
         # the request in the first place.
@@ -3048,8 +3116,25 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return self._send({'ok': False, 'error': 'NOT HERE'}, 403)
         path = urlparse_path(self.path)
         if path == '/r':
-            return self._send(REMOTE_PAGE.encode(), 200,
-                              'text/html; charset=utf-8')
+            # The token goes into the page so the manifest link carries
+            # it: a manifest fetched without one would have to be public,
+            # and a public manifest holding start_url would hand the
+            # token to anything else on the hotspot.
+            page = REMOTE_PAGE.replace('%T%', html_q(self._token()))
+            return self._send(page.encode(), 200, 'text/html; charset=utf-8')
+        if path == '/r/icon.png':
+            # No token. It is a picture of the number 45.
+            try:
+                with open(REMOTE_ICON, 'rb') as fh:
+                    png = fh.read()
+            except OSError:
+                return self._send({'ok': False, 'error': 'NO ICON'}, 404)
+            return self._send(png, 200, 'image/png', 'max-age=604800')
+        if path == '/r/manifest.webmanifest':
+            if not secrets.compare_digest(self._token(), _remote['token']):
+                return self._send({'ok': False, 'error': 'BAD TOKEN'}, 403)
+            return self._send(remote_manifest(_remote['token']), 200,
+                              'application/manifest+json')
         if path == '/r/state':
             r = _remote
             if not r['armed']:
@@ -3122,7 +3207,8 @@ MUTATING = {'/wifi/power', '/wifi/connect', '/wifi/disconnect', '/wifi/forget',
 # /power/do, /gpx/delete or /score. A guard built on it would look
 # complete and leave three of the five live. This way a route added
 # later is POST-only until someone decides otherwise.
-GET_OK = {'/status', '/bt/list', '/wifi/list', '/display/status', '/gpx/list'}
+GET_OK = {'/status', '/bt/list', '/wifi/list', '/display/status',
+          '/gpx/list', '/remote/status'}
 
 
 class Handler(BaseHTTPRequestHandler):

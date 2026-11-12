@@ -728,3 +728,131 @@ the three cases:
 
 `/tmp/cage-session.log` says which, and names the fix
 (`python3 ~/helm/spotify-auth.py`) when there are no credentials.
+
+## The phone remote
+
+A second screen for the settings you would otherwise walk to the glass
+for: what is in each complication, and the theme. It runs on a phone,
+over the boat's wifi, as an app on the home screen.
+
+**It carries no live data.** The phone shows *what is in* each slot and
+never what the slot reads. A second set of numbers to keep in step, on a
+screen nobody is looking at while sailing, buys nothing — and the thing
+it would cost is the one reason to have the remote at all, which is
+changing a complication without taking a hand off the tiller.
+
+### Installing it, once
+
+```bash
+bash boot/remote-url.sh
+```
+
+It prints a URL. Open it on the phone, then **Add to Home Screen** — the
+page carries a manifest and the apple-mobile-web-app tags, so it
+installs as an app with no browser chrome rather than a bookmark.
+
+Save the **name**, not the number:
+
+```
+http://openplotter.local:8093/r?t=…      ← this one
+http://192.168.43.17:8093/r?t=…          ← only if .local will not resolve
+```
+
+The phone is the access point and the Pi is a DHCP client on it, so the
+number changes every time they reconnect. The name does not. (Some
+Android hotspots will not resolve `.local`; that is what the number is
+there for, and you will have to redo this when the lease moves.)
+
+The token in the URL is minted once and kept in
+`~/.config/confluence-remote.json`, mode 0600. It survives reboots,
+which is what makes a saved home-screen link permanent. Delete that file
+and every installed app stops working until you redo the above.
+
+### No tile, always on
+
+There is nothing on the glass for this: no tile, no arming, no QR. A
+remote you have to walk to the panel and switch on is a remote you would
+not have bothered installing. netd opens the door at startup and a
+thirty-second watcher follows the dongle's lease, moving it when the
+address changes.
+
+The panel is the half that knows things. On load it hands netd the
+catalogue — which slots exist, what may go in them, which themes — and
+netd validates every command against *that*, keeping no list of its own.
+A second copy of the catalogue in `netd.py` would drift the first time a
+reading was added to the HTML. It has already drifted once: netd
+validated `reading in readings`, which works on a list of keys, while
+the phone page read `.name` and `.sen` off the same field. Both halves
+passed their own probes. The register now refuses anything that is not a
+list of objects, and `tests/remote.mjs` asserts the panel sends them.
+
+### Three things in the way
+
+1. **The socket.** `SO_BINDTODEVICE` on the dongle, so the kernel drops
+   anything that did not arrive on it. Where that is not permitted it
+   falls back to checking the caller is on the dongle's subnet — which
+   is a check, not a guarantee, and `/remote/status` says which is in
+   force as `how`.
+2. **The token.** `secrets.compare_digest`, on every command and on the
+   manifest (which carries the token in `start_url`, so it cannot be
+   public). The icon needs none: it is a picture of the number 45.
+3. **The catalogue.** A slot or reading the panel never declared is
+   refused, so the worst a stranger on the hotspot can do with a valid
+   token is change a complication.
+
+`RemoteHandler` is a different class from `Handler` and **has no call
+path to `route()`**. netd's twenty-seven endpoints are not reachable
+from the phone's socket because the code to reach them is not there — a
+route added next year inherits that for free. There is no
+`Access-Control-*` header anywhere on it and `OPTIONS` is refused rather
+than answered: an obliging preflight would let any page on the phone try
+its luck with the token as the only thing in the way.
+
+### Over ssh, if something is wrong
+
+```bash
+curl -s localhost:8091/remote/status
+curl -sX POST localhost:8091/remote/disarm
+```
+
+Disarm **latches**. The first version only closed the socket and the
+watcher reopened it within thirty seconds, which is not an escape hatch
+— it is a thirty-second pause with a reassuring name. The latch lives in
+memory, so restarting netd opens the door again, and so does the panel
+reloading: a reload is the move you would make anyway when the remote
+has stopped working, and it should be the move that fixes it rather than
+leaving you with a dead remote and no idea that an ssh session weeks ago
+is why.
+
+### The poll, and no flash
+
+The panel polls `/remote/poll` every 1.5 s, sending what it is currently
+showing so the phone can draw it, and backing off to 15 s when netd does
+not answer. The drain is a dict swap under a lock the radios never take,
+which is what makes a poll at that rate cost nothing. Commands are
+latest-wins per slot — two taps on one cell before the panel polls are
+one change, not a queue — and anything older than 30 s with no panel
+collecting it is dropped rather than replayed.
+
+netd keeps the catalogue in memory, so its restart leaves the phone with
+nothing to show and every command refused. The poll's reply says `have:
+false` and the panel registers again. That is the only conversation
+these two reliably have, so it is where that is noticed.
+
+A command arriving from the phone **marks** the cells and lets the next
+frame paint them. It does not paint them itself, the way a tap on the
+glass does. `paintDialCells` runs before `paintRace` inside a frame,
+deliberately, so a repaint from outside the loop puts slot text under a
+race override for one frame and the override takes it back on the next.
+One frame is still a flash.
+
+### Ports
+
+| | |
+|---|---|
+| `127.0.0.1:8091` | netd, loopback only — the panel's 27 endpoints |
+| `0.0.0.0:8093` | the remote, filtered to the dongle — `/r`, `/r/state`, `/r/cmd`, `/r/icon.png`, `/r/manifest.webmanifest` |
+
+`HELM_REMOTE_PORT` moves the second one. `boot/remote-url.sh` reads the
+port back from netd rather than writing it in, so moving it does not
+send you to a door that is not there.

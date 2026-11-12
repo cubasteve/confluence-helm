@@ -63,8 +63,10 @@ class Phone:
                                    method=method or ('POST' if data else 'GET'))
         try:
             with urllib.request.urlopen(r, timeout=5) as f:
+                self.hdr = dict(f.headers)
                 return f.status, f.read()
         except urllib.error.HTTPError as e:
+            self.hdr = dict(e.headers)
             return e.code, e.read()
 
     def js(self, *a, **k):
@@ -79,12 +81,92 @@ class Phone:
         self.srv.server_close()
 
 
+class App(unittest.TestCase):
+    """What turns the saved link into an app on the home screen."""
+
+    def test_the_page_carries_the_token_into_the_manifest(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                code, raw = p.req('/r?t=T0KEN')
+                self.assertEqual(code, 200)
+                page = raw.decode()
+                self.assertIn('href="/r/manifest.webmanifest?t=T0KEN"', page)
+                self.assertIn('rel="apple-touch-icon"', page)
+                # Without these the home screen gives a bookmark that
+                # opens in the browser, chrome and all.
+                self.assertIn('name="apple-mobile-web-app-capable"', page)
+                self.assertIn('name="mobile-web-app-capable"', page)
+                self.assertNotIn('%T%', page)
+            finally:
+                p.close()
+
+    def test_the_manifest_needs_the_token_because_it_holds_one(self):
+        """start_url carries the token - that is the point of it, the
+        credential written down where the home screen can relaunch with
+        it. So the manifest cannot be public, or anything else on the
+        hotspot could simply read it."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for bad in ('', '?t=', '?t=wrong'):
+                    code, j = p.js('/r/manifest.webmanifest' + bad)
+                    self.assertEqual(code, 403, j)
+                code, j = p.js('/r/manifest.webmanifest?t=T0KEN')
+                self.assertEqual(code, 200, j)
+                self.assertEqual(j['start_url'], '/r?t=T0KEN', j)
+                self.assertEqual(j['display'], 'standalone', j)
+                self.assertEqual(j['icons'][0]['src'], '/r/icon.png', j)
+                self.assertIn('maskable', j['icons'][0]['purpose'], j)
+                self.assertEqual(p.hdr['Content-Type'],
+                                 'application/manifest+json')
+            finally:
+                p.close()
+
+    def test_the_icon_is_a_picture_and_is_allowed_to_be_cached(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                # No token: it is a picture of the number 45, and the
+                # manifest's own icon fetch does not carry one.
+                code, raw = p.req('/r/icon.png')
+                self.assertEqual(code, 200)
+                self.assertTrue(raw.startswith(b'\x89PNG'), raw[:8])
+                self.assertEqual(p.hdr['Content-Type'], 'image/png')
+                # Everything else here is state and must not be cached;
+                # this is twenty kilobytes that never change.
+                self.assertIn('max-age', p.hdr['Cache-Control'])
+                code, j = p.js('/r/state?t=T0KEN')
+                self.assertEqual(p.hdr['Cache-Control'], 'no-store')
+            finally:
+                p.close()
+
+    def test_a_missing_icon_is_a_404_and_not_a_stack_trace(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            keep = netd.REMOTE_ICON
+            netd.REMOTE_ICON = '/nonexistent/remote-icon.png'
+            try:
+                code, j = p.js('/r/icon.png')
+                self.assertEqual(code, 404, j)
+                # and the app still works without it
+                code, j = p.js('/r/manifest.webmanifest?t=T0KEN')
+                self.assertEqual(code, 200, j)
+            finally:
+                netd.REMOTE_ICON = keep
+                p.close()
+
+
 def armed(netd):
     """Arm without opening a real socket - the socket is the one thing
     that cannot be exercised in a container with no wlan1."""
     netd._remote.update(
         armed=True, token='T0KEN', how='device', pend={}, at=0.0,
-        slots=SLOTS, readings=[r['k'] for r in READINGS],
+        slots=SLOTS, readings=[dict(r) for r in READINGS],
         themes=['day', 'dusk', 'night', 'auto'],
         cidr='172.20.10.3/28', now={'slots': {'dial:c1': 'dpt'}, 'theme': 'dusk'})
 
@@ -294,17 +376,44 @@ class Door(unittest.TestCase):
                 code, j = p.js('/r/state?t=T0KEN')
                 self.assertEqual(code, 200, j)
                 self.assertEqual(j['slots'], SLOTS)
-                self.assertIn('dpt', j['readings'])
                 self.assertEqual(j['now']['slots']['dial:c1'], 'dpt')
+                # What the PAGE needs off each reading, not merely that
+                # the key is in there somewhere. This probe asserted
+                # `'dpt' in readings` and passed on a list of bare keys
+                # that the page cannot draw: it reads .name for the row
+                # and .sen for the group heading, and would have put
+                # every reading under a heading called undefined.
+                for r in j['readings']:
+                    self.assertIsInstance(r, dict, j['readings'])
+                    for want in ('k', 'name', 'sen'):
+                        self.assertTrue(r.get(want), r)
+                    # and no numbers: the phone shows what is in a slot,
+                    # never what it reads.
+                    self.assertEqual(set(r) - {'k', 'name', 'sen'}, set(), r)
+                self.assertIn('dpt', [r['k'] for r in j['readings']])
                 code, j = p.js('/r/state?t=wrong')
                 self.assertEqual(code, 403, j)
             finally:
                 p.close()
 
+    def test_the_drain_says_when_netd_has_forgotten(self):
+        """The catalogue is in memory, so a netd restart leaves the door
+        open, the phone with nothing to show and every command refused.
+        The panel polls anyway, so the poll is where it finds out."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            self.assertFalse(netd.remote_poll({})['have'])
+            armed(netd)
+            self.assertTrue(netd.remote_poll({})['have'])
+
     def test_register_refuses_a_catalogue_it_cannot_validate_against(self):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
             for bad in ({}, {'slots': {}}, {'slots': SLOTS},
                         {'slots': SLOTS, 'readings': []},
+                        # bare keys: the shape the two halves disagreed
+                        # over. remote_cmd could validate against it and
+                        # the page could not draw it.
+                        {'slots': SLOTS, 'readings': ['sog', 'dpt']},
+                        {'slots': SLOTS, 'readings': [{'k': 'sog'}]},
                         {'slots': {'dial': 'c0'}, 'readings': ['sog']}):
                 r = netd.remote_register(bad)
                 self.assertFalse(r['ok'], '%s -> %s' % (bad, r))
@@ -406,7 +515,7 @@ class AlwaysOn(unittest.TestCase):
             try:
                 netd.remote_disarm()
                 r = netd.remote_register({'slots': SLOTS,
-                                          'readings': [x['k'] for x in READINGS]})
+                                          'readings': [dict(x) for x in READINGS]})
                 self.assertTrue(r['armed'], r)
             finally:
                 netd._remote['held'] = False
@@ -416,7 +525,7 @@ class AlwaysOn(unittest.TestCase):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
             try:
                 r = netd.remote_register({'slots': SLOTS,
-                                          'readings': [x['k'] for x in READINGS]})
+                                          'readings': [dict(x) for x in READINGS]})
                 self.assertTrue(r['ok'], r)
                 self.assertTrue(r['armed'], r)
             finally:

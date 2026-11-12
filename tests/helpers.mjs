@@ -59,13 +59,23 @@ export async function open(t, opts={}){
      is a race nobody wants in a test. */
   await p.route('**/signalk/**', r=>r.abort());
 
+  /* Paths that are nobody's gesture: see `posts` below. */
+  const QUIET=new Set(['/status', '/remote/poll', '/remote/register']);
   /* The helper. `netd:false` is a phone - nothing is listening. */
   const posts=[]; p.__posts=posts;
   await p.route('http://127.0.0.1:8091/**', async r=>{
     if(opts.netd===false) return r.abort('connectionrefused');
     const path=new URL(r.request().url()).pathname;
     let body={}; try{ body=JSON.parse(r.request().postData()||'{}'); }catch(e){}
-    if(path!=='/status') posts.push({path, body});
+    /* `posts` is what a GESTURE asked the helper, which is why /status
+       has never been in it: netStatus() warms the radios at boot and a
+       probe asserting that a tap asked for nothing would have been
+       reading that instead. The remote's poll is the same kind of
+       background chatter - it goes out every second and a half for as
+       long as the panel is up, on nobody's instruction - so it is
+       excluded on the same grounds. The probe that cares about the
+       remote stubs netApi itself and counts there. */
+    if(!QUIET.has(path)) posts.push({path, body});
     const json=o=>r.fulfill({status:200, contentType:'application/json',
                              body:JSON.stringify(o)});
     const st=Object.assign({ok:true,
@@ -77,6 +87,16 @@ export async function open(t, opts={}){
     /* Awaited, so a reply can take its time. A pair on the water is
        tens of seconds, and what the panel does while it waits is worth
        being able to test. */
+    /* Nothing is listening for the remote unless a probe says so. The
+       panel polls every second and a half for as long as it is up, and
+       answering that in a probe about swipes means sixty intercepted
+       round trips through the harness during it, for nothing. Refused,
+       the panel backs the poll off to fifteen seconds and stops
+       asking - which is also a true state of the world, since the
+       remote's door is shut whenever the dongle has no address.
+       tests/remote.mjs stubs netApi itself and does not come here. */
+    if(path==='/remote/poll' && !(opts.reply||{})[path])
+      return r.abort('connectionrefused');
     const r2=(opts.reply||{})[path];
     return json(typeof r2==='function' ? await r2(body) : (r2||{ok:true}));
   });

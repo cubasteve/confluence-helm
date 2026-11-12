@@ -6736,12 +6736,15 @@ function fetchT(url, ms){
     .finally(()=>clearTimeout(t));
 }
 
-async function netApi(path, body){
+async function netApi(path, body, ms){
   const ctl=new AbortController();
   /* Joining a network legitimately takes half a minute; reading a list
      never does. One timeout for both would either abandon a connect
-     mid-handshake or leave the panel hanging on a helper that died. */
-  const t=setTimeout(()=>ctl.abort(), body?50000:9000);
+     mid-handshake or leave the panel hanging on a helper that died.
+     The remote's poll passes its own: it runs every second and a half,
+     and a POST default of fifty seconds would have stacked thirty of
+     them up behind one netd that had gone away. */
+  const t=setTimeout(()=>ctl.abort(), ms || (body?50000:9000));
   try{
     const r=await fetch(CFG.netd+path,{ signal:ctl.signal, cache:'no-store',
       method: body?'POST':'GET',
@@ -8945,14 +8948,23 @@ function paintStrip(){
 /* PICK, the open menu, is declared with the menu itself - the spec this
    page hands it carries `g` and `sl` for the three functions below. */
 const PICK_G={
-  mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,
-         save:musSave,     after:()=>{ stripKey=''; paintStrip(); }},
+  /* `stale` marks the cells for the next frame; `after` also paints
+     them now. The panel's own menu wants the second - you have just
+     watched it close over that cell. Anything arriving from the phone
+     wants the FIRST: paintDialCells runs before paintRace inside a
+     frame, deliberately, so a repaint from outside the loop would put
+     slot text under a race override for one frame and the override
+     would take it back on the next. One frame is still a flash. */
+  mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,  save:musSave,
+         stale:()=>{ stripKey=''; },
+         after:()=>{ stripKey=''; paintStrip(); }},
   /* Repaint the three cells rather than the whole dial: the dial is
      redrawn on its own schedule anyway, and this is the one thing that
      has to be right before the next frame. The race override cannot be
      up here - the picker refuses to open while it is. */
-  dial: {slots:DIAL_SLOTS, map:()=>DIAL.slot,
-         save:dialSave,    after:()=>{ dialCellKey=''; paintDialCells(); }},
+  dial: {slots:DIAL_SLOTS, map:()=>DIAL.slot, save:dialSave,
+         stale:()=>{ dialCellKey=''; },
+         after:()=>{ dialCellKey=''; paintDialCells(); }},
 };
 
 function musPickRows(){
@@ -8995,13 +9007,124 @@ function musPickOpen(group, slot, el){
 }
 function musPickChoose(k){
   if(!PICK) return;
-  const g=PICK_G[PICK.g], map=g.map();
-  const from=g.slots.find(sl=>sl!==PICK.sl && map[sl]===k);
-  if(from) map[from]=map[PICK.sl];              /* swap, never duplicate */
-  map[PICK.sl]=k;
-  g.save();
+  const g=PICK.g, sl=PICK.sl;
   pickClose();
-  g.after();
+  slotSet(g, sl, k);
+}
+
+/* One slot, set. The menu on the glass and the phone both land here,
+   because a reading arriving over wifi should take exactly the path a
+   tap takes - including the swap, which is the part you would forget,
+   and the save, which is the part you would forget second.
+   Everything is checked rather than assumed: this is reachable from the
+   network now, and netd validating a command does not entitle the panel
+   to skip validating it too. */
+function slotSet(group, slot, k, quiet){
+  /* hasOwnProperty, not PICK_G[group]: a page called __proto__ hands
+     you Object.prototype, which is an object and passes a truthy test,
+     and then .slots is undefined and this throws instead of refusing.
+     The probe found it by sending the word down the wire. netd refuses
+     that page too - its catalogue is a dict with no prototype - but
+     this function claims to check its own arguments and that claim
+     should be true at the point it is made. */
+  const g=Object.prototype.hasOwnProperty.call(PICK_G, group)
+            ? PICK_G[group] : null;
+  if(!g || g.slots.indexOf(slot)<0) return false;
+  if(!MUS_CELLS.some(c=>c.k===k)) return false;
+  const map=g.map();
+  if(map[slot]===k) return true;        /* already so: no save, no repaint */
+  const from=g.slots.find(sl=>sl!==slot && map[sl]===k);
+  if(from) map[from]=map[slot];                /* swap, never duplicate */
+  map[slot]=k;
+  g.save();
+  (quiet ? g.stale : g.after)();
+  return true;
+}
+
+/* ---------------- the phone remote ----------------
+   The complications and the theme, from a phone on the boat's wifi.
+
+   There is no tile and nothing to arm. There is one phone, with the app
+   saved to its home screen: a remote you have to walk to the glass and
+   switch on is a remote you would not have bothered installing.
+
+   The panel is the half that knows things. It hands netd the catalogue
+   - which slots exist, what may go in them, which themes - and netd
+   validates the phone against that and keeps no list of its own,
+   because a second copy of the catalogue in netd.py would drift the
+   first time a reading was added here.
+
+   No live data crosses this. The phone shows WHAT IS IN each slot and
+   never what it reads: a second set of numbers to keep in step, on a
+   screen nobody is looking at while sailing, in exchange for nothing.
+   What it saves you is the thing it is actually for - changing a
+   complication without taking a hand off the tiller to reach the
+   glass, or dropping the panel to night as the sun goes. */
+const REM={ FAST:1500, SLOW:15000, ms:1500, on:false, t:0 };
+
+/* What the panel is showing, flat, so the phone can draw a row per slot
+   without being told what any of them read. */
+function remoteNow(){
+  const slots={};
+  for(const g in PICK_G){
+    const m=PICK_G[g].map();
+    for(const sl of PICK_G[g].slots) slots[g+':'+sl]=m[sl];
+  }
+  return { slots:slots, theme:CFG.theme };
+}
+
+function remoteCat(){
+  const slots={};
+  for(const g in PICK_G) slots[g]=PICK_G[g].slots.slice();
+  /* Key, name, group. The name is for the row, the group for the
+     heading above it, and there is deliberately no value. */
+  return { slots:slots,
+           readings:MUS_CELLS.map(c=>({k:c.k, name:c.name, sen:c.sen})),
+           themes:THEMES, now:remoteNow() };
+}
+
+function remoteDo(c){
+  if(!c) return;
+  if(c.kind==='slot'){
+    /* A menu standing open on the very slot the phone just set is
+       asking a question that has been answered. Close it rather than
+       leave it showing the old tick. */
+    if(PICK && PICK.g===c.page && PICK.sl===c.slot) pickClose();
+    slotSet(c.page, c.slot, c.reading, true);
+  }else if(c.kind==='theme'){
+    if(THEMES.indexOf(c.theme)<0) return;
+    CFG.theme=c.theme; applyTheme(); prefsSave();
+  }
+}
+
+async function remoteTick(){
+  const r=await netApi('/remote/poll', {now:remoteNow()}, 4000);
+  /* No helper, or it is busy holding a lock for nmcli. Back off rather
+     than keep a failing request going out every second and a half for
+     as long as the panel is on. */
+  if(!r){ REM.ms=REM.SLOW; return; }
+  REM.ms=REM.FAST;
+  /* netd holds the catalogue in memory, so its restart - a crash, an
+     upgrade, systemd - leaves the phone with nothing to show and every
+     command refused. It says so here, because the poll is the one
+     conversation these two reliably have. */
+  if(!r.have){ await netApi('/remote/register', remoteCat(), 4000); return; }
+  const cmds=r.cmds||{};
+  for(const k in cmds) remoteDo(cmds[k]);
+}
+
+function remoteStart(){
+  if(REM.on) return;
+  REM.on=true;
+  netApi('/remote/register', remoteCat(), 4000);
+  /* The handle is kept because a loop you cannot stop is a loop you
+     cannot test around either - the probe clears it before it stubs
+     netApi, so a real tick cannot land in the middle of a stubbed one. */
+  const loop=async()=>{
+    try{ await remoteTick(); }catch(e){}   /* a poll is never worth a stop */
+    REM.t=setTimeout(loop, REM.ms);
+  };
+  REM.t=setTimeout(loop, REM.ms);
 }
 
 /* gClaim on every one of these: a tap on a reading is not a page swipe,
@@ -14880,6 +15003,7 @@ netStatus();
 })();
 
 drawDepth(); paintTrack(); applyTheme(); connect(); render(); tick();
+remoteStart();
 
 </script>
 </body>
