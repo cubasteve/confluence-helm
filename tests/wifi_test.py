@@ -65,10 +65,14 @@ if 'general' in argv and 'STATE' in fields:
 elif 'radio' in argv and 'WIFI' in fields:
     emit('enabled')
 elif 'device' in argv and 'show' in argv:
+    only = argv[-1] if argv[-1] not in ('show',) and '-f' in argv else ''
     for d in spec['devices']:
+        if only and d['dev'] != only:
+            continue
         emit('GENERAL.DEVICE:' + d['dev'])
         emit('GENERAL.TYPE:wifi')
         emit('GENERAL.STATE:' + d['state'])
+        emit('GENERAL.AUTOCONNECT:' + d.get('auto', 'yes'))
         emit('GENERAL.CONNECTION:' + (show(d['con']) or '--'))
 elif 'connection' in argv and 'show' in argv and 'NAME,UUID,TYPE' in fields:
     for c in spec['profiles']:
@@ -95,11 +99,26 @@ elif 'connection' in argv and 'delete' in argv and 'uuid' in argv:
 elif 'connection' in argv and 'delete' in argv and 'id' in argv:
     die("Error: unknown connection '%s'." % argv[-1])
 elif 'device' in argv and 'set' in argv:
+    if 'autoconnect' in argv:
+        want = argv[argv.index('autoconnect') + 1]
+        dev = argv[argv.index('set') + 1]
+        for d in spec['devices']:
+            # `noset` is a device whose autoconnect write is DROPPED
+            # while nmcli still exits 0 - which is what a polkit refusal,
+            # or NM busy mid-scan, looks like from here: libnm's setter
+            # ignores the return value and gives up after two seconds.
+            if d['dev'] == dev and not d.get('noset'):
+                d['auto'] = want
+        json.dump(spec, open(os.environ['FAKE_SPEC'], 'w'))
     sys.exit(0)
 elif 'device' in argv and 'connect' in argv:
     if not spec.get('connectable'):
         die(spec['no_target'], 4)
 elif 'device' in argv and 'disconnect' in argv:
+    dev = argv[argv.index('disconnect') + 1]
+    for d in spec['devices']:
+        if d['dev'] == dev and int(d['state'].split()[0]) <= 30:
+            die('Error: not active device. This device is not active', 6)
     sys.exit(0)
 sys.exit(0)
 """
@@ -245,6 +264,190 @@ class Forget(unittest.TestCase):
         self.assertFalse(r['ok'])
         self.assertEqual(r['error'], 'NOT SAVED')
         self.assertEqual(deletes(), [])
+
+
+class SwitchMeansOn(unittest.TestCase):
+    """"I can see the dongle, but I cannot turn it on, it just clicks off
+    automatically."
+
+    One field was answering two questions. The SWITCH asks "is this radio
+    on"; `up` answered "am I connected", as the substring '(connected)'.
+    So a radio that was powered and idle read as OFF: tap the switch,
+    netd turns the radio on exactly as asked, the next poll says
+    `disconnected`, and the switch flicks itself back. The sheet hides
+    the network list behind the same flag, so there was then no way to
+    join anything by hand either - the adapter was unreachable from the
+    panel entirely.
+
+    The action was fixed in 84d56bd, "the wifi switch turns the radio on;
+    it does not join anything". The indicator was left behind, and no
+    probe here asserted that a powered idle radio reads as on - only that
+    an unmanaged one reads as off. That gap is why it survived.
+    """
+
+    IDLE = {'dev': 'wlan1', 'bus': 'usb', 'mac': MAC_USB,
+            'state': '30 (disconnected)', 'con': '', 'auto': 'yes'}
+
+    def row(self, netd, dev='wlan1'):
+        return [x for x in netd.wifi_devices() if x['dev'] == dev][0]
+
+    def test_a_powered_idle_radio_reads_as_ON(self):
+        """The bug itself."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            d = self.row(netd)
+        self.assertTrue(d['up'], d)
+        self.assertFalse(d['conn'], d)
+
+    def test_a_radio_switched_off_reads_as_OFF(self):
+        """The mirror, and the half that makes the fix shippable. Fixing
+        the predicate alone would leave a switch that cannot be turned
+        off - which on this box is the control that stops the hotspot."""
+        off = dict(self.IDLE, auto='no')
+        with rig([], devices=[dict(ONBOARD), off]) as netd:
+            d = self.row(netd)
+        self.assertFalse(d['up'], d)
+
+    def test_off_writes_something_nm_remembers(self):
+        """`device disconnect` alone cannot express off: NM refuses it for
+        anything at or below `disconnected` - "this device is not active"
+        - and records nothing, so switching off an idle radio did nothing
+        whatsoever. It only looked like it worked because the tile was
+        already dark."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            r = netd.wifi_power('wlan1', False)
+            self.assertTrue(r['ok'], r)
+            self.assertFalse(self.row(netd)['up'], 'it did not stick')
+        argvs = [c[1] for c in calls()]
+        self.assertTrue(any('device set wlan1' in a and 'autoconnect no' in a
+                            for a in argvs), argvs)
+
+    def test_off_survives_nm_refusing_the_disconnect(self):
+        """rc=6 "not active" is not a failure of the switch - there was
+        simply no link to drop."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            r = netd.wifi_power('wlan1', False)
+        self.assertTrue(r['ok'], r)
+        self.assertEqual(r['error'], '')
+
+    def test_off_that_did_not_take_is_reported(self):
+        """libnm puts the autoconnect write through a legacy setter whose
+        own comment says it "is not cancellable and ignores the return
+        value" - it passes NULL for the error and gives up after two
+        seconds - so a polkit refusal comes back as success. Read it
+        back rather than claim it."""
+        stuck = dict(self.IDLE, noset=True)
+        with rig([], devices=[dict(ONBOARD), stuck]) as netd:
+            r = netd.wifi_power('wlan1', False)
+        self.assertFalse(r['ok'], r)
+        self.assertEqual(r['error'], 'RADIO WOULD NOT STAY OFF')
+
+    def test_an_assumed_access_point_is_not_read_as_down(self):
+        """The substring trap, and the one that could have mattered most.
+        NM renders a device it ASSUMED rather than activated as
+        "connected (externally)" - which '(connected)' does not match,
+        because it needs a close bracket straight after the word. That
+        reads the radio carrying SeaWire, and the ssh session, as off."""
+        ap = {'dev': 'wlan0', 'bus': 'onboard', 'mac': MAC_ON,
+              'state': '100 (connected (externally))', 'con': 'SeaWire'}
+        with rig([{'name': 'SeaWire', 'uuid': UU, 'ap': True}],
+                 devices=[ap]) as netd:
+            d = self.row(netd, 'wlan0')
+        self.assertTrue(d['up'], d)
+        self.assertTrue(d['conn'], d)
+        self.assertTrue(d['ap'], d)
+        self.assertEqual(d['state'], 'connected')
+
+    def test_rfkilled_reads_off_however_autoconnect_reads(self):
+        """20 is where a wifi device sits under rfkill, and NM gets there
+        without touching autoconnect - so a test of `code > 10` would
+        report a dead radio as on."""
+        blocked = dict(self.IDLE, state='20 (unavailable)', auto='yes')
+        with rig([], devices=[dict(ONBOARD), blocked]) as netd:
+            d = self.row(netd)
+        self.assertFalse(d['up'], d)
+
+    def test_teardown_does_not_flick_the_tile_back_on(self):
+        """110 deactivating and 120 failed are >= 100. Reading "in use" as
+        `code >= 100` would light the tile during the OFF tap's own
+        teardown, which is this bug wearing the other shoe."""
+        for st in ('110 (deactivating)', '120 (connection failed)'):
+            d = dict(self.IDLE, state=st, auto='no')
+            with rig([], devices=[dict(ONBOARD), d]) as netd:
+                self.assertFalse(self.row(netd)['up'], st)
+
+    def test_connecting_counts_as_on(self):
+        with rig([], devices=[dict(ONBOARD),
+                              dict(self.IDLE, state='50 (connecting (configuring))',
+                                   auto='no')]) as netd:
+            d = self.row(netd)
+        self.assertTrue(d['up'], d)
+        self.assertFalse(d['conn'], d)
+        self.assertEqual(d['state'], 'connecting')
+
+    def test_a_join_clears_an_earlier_off(self):
+        """Activating a device clears only NM's INTERNAL autoconnect
+        block; the user one survives it. Without this, joining a network
+        after switching the radio off leaves a connected adapter still
+        flagged no, and the switch snaps off the moment the link drops."""
+        with rig([], connectable=True,
+                 devices=[dict(ONBOARD), dict(self.IDLE, auto='no')]) as netd:
+            netd.wifi_connect('wlan1', 'Marina', 'hunter2')
+            self.assertTrue(self.row(netd)['up'], 'the OFF outlived the join')
+
+    def test_signal_is_only_asked_for_when_joined(self):
+        """It costs a SCAN, and an unassociated radio has no IN-USE row,
+        so the answer is guaranteed to be 0. Under the new predicate `up`
+        is true for exactly the idle radios, so leaving the gate on `up`
+        would buy a scan per poll per idle dongle - and on an RTL8188EU
+        repeated scanning is what makes the next join flaky."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            self.row(netd)
+        self.assertFalse([a for _, a in calls() if 'device wifi list' in a],
+                         calls())
+
+    def test_a_missing_autoconnect_field_fails_toward_ON(self):
+        """An nmcli that does not know a field name fails the WHOLE call
+        with empty output, which would blank the panel - access point
+        tile and all - looking exactly like NetworkManager being down.
+        The fallback field set drops AUTOCONNECT, and what is left has
+        to read ON."""
+        with rig([], devices=[dict(ONBOARD),
+                              {k: v for k, v in self.IDLE.items()
+                               if k != 'auto'}]) as netd:
+            netd._fields[0] = netd._FIELDS_SAFE      # as the fallback leaves it
+            d = self.row(netd)
+        self.assertTrue(d['up'], d)
+
+    def test_an_unexpected_autoconnect_value_fails_toward_ON(self):
+        """`!= 'no'` and not `== 'yes'`, and the difference is a value
+        that is neither - an empty field, a locale that translated it,
+        an nmcli that changed its mind. A switch that cannot be turned
+        on is a boat with no helm; one that reads on for an idle radio
+        is a complaint. Fail toward the complaint."""
+        for odd in ('', 'oui', '--'):
+            with rig([], devices=[dict(ONBOARD),
+                                  dict(self.IDLE, auto=odd)]) as netd:
+                self.assertTrue(self.row(netd)['up'], repr(odd))
+
+    def test_the_fallback_does_not_blank_the_panel(self):
+        """The failure mode being insured against: wifi_devices() is
+        `if rc: return []`, so one unrecognised field name empties the
+        list entirely - and an empty list is indistinguishable from
+        NetworkManager being down."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            netd._fields[0] = netd._FIELDS_SAFE
+            devs = netd.wifi_devices()
+        self.assertEqual([d['dev'] for d in devs], ['wlan0', 'wlan1'])
+
+    def test_the_state_label_is_a_word_not_a_fragment(self):
+        """It was state.split('(')[-1], which renders the external case as
+        the bare word "externally"."""
+        with rig([], devices=[dict(ONBOARD), dict(self.IDLE)]) as netd:
+            self.assertEqual(self.row(netd)['state'], 'disconnected')
+            self.assertEqual(netd.state_name('100 (connected (externally))'),
+                             'connected')
+            self.assertEqual(netd.state_code('30 (disconnected)'), 30)
+            self.assertEqual(netd.state_code('nonsense'), 30)
 
 
 class Radio(unittest.TestCase):

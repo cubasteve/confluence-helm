@@ -479,6 +479,101 @@ down, whatever the list underneath was offering. Turning it on now does
 `device set <dev> managed yes autoconnect yes` **first**; that is the half
 that actually switches the radio back on, and it was missing.
 
+### …and the indicator was left behind for a year
+
+Reported from the water: *"I can see the dongle, but I cannot turn it on,
+it just clicks off automatically."*
+
+One field was answering two questions. The **switch** asks *is this radio
+on*; `up` answered *am I connected*, as `'(connected)' in GENERAL.STATE`.
+So a radio that was powered and idle read as OFF: tap the switch, netd
+turns the radio on exactly as asked, the next poll says `disconnected`,
+and the switch flicks itself back. Worse, `renderRows()` hides the
+network list behind the same flag and `SCAN` is gated on it — so the
+adapter became unreachable from the panel entirely, with no way to join
+anything by hand either.
+
+The fix above corrected the **action**. The **indicator** was never
+changed to match, and no probe asserted that a powered idle radio reads
+as on — only that an *unmanaged* one reads as off. That gap is why it
+survived.
+
+**Nothing in `device show` reports radio power.** There is no `POWERED`,
+`RADIO`, `RFKILL` or `ENABLED` field. `GENERAL.AUTOCONNECT` is the only
+thing that remembers a user asked — which is why the off path now writes
+it.
+
+Two fields now, from the **numeric** state code:
+
+| field | is | drives |
+|---|---|---|
+| `up` | `code > 20 and (40 <= code <= 100 or auto != 'no')` | the switch, the tile |
+| `conn` | `code == 100` | the signal arcs, the scan |
+
+Each clause is load-bearing:
+
+- **`code > 20`**, not `> 10`. State 20 is where a wifi device sits under
+  rfkill, and NM gets there without touching autoconnect — so `> 10`
+  reports a dead radio as on.
+- **`40 <= code <= 100`**, not `>= 100`. 110 (deactivating) and 120
+  (failed) are also `>= 100`, and would light the tile during the OFF
+  tap's own teardown — this bug wearing the other shoe.
+- **`auto != 'no'`**, not `== 'yes'`. Fails toward ON. A switch that
+  cannot be turned on is a boat with no helm; one that reads on for an
+  idle radio is a complaint.
+
+**The numeric code also fixes a trap nobody had hit yet.** NM renders a
+device it *assumed* rather than activated as `connected (externally)` —
+which `'(connected)'` does not match, because it needs a close bracket
+straight after the word. That reads the radio carrying SeaWire, and the
+SSH session, as **down**.
+
+**And OFF had to change in the same commit, or the fix ships its own
+mirror.** `Device.Disconnect()` refuses any device at or below
+`disconnected` — *"this device is not active"*, rc 6 — and records
+nothing. So switching off an idle radio was a complete no-op in
+NetworkManager; it only ever *looked* like it worked because the tile was
+already dark. Now that the tile means "switched on", off writes
+`device set <dev> autoconnect no` **first**, then drops the link if there
+is one, tolerating "not active" the way the on path tolerates "nothing to
+join".
+
+Three consequences worth knowing:
+
+- **A join must clear an earlier off.** Activating a device clears only
+  NM's *internal* autoconnect block; the user one that `autoconnect no`
+  sets survives it. Without the extra write in `wifi_connect()`, joining
+  a network after switching off leaves a connected adapter still flagged
+  `no`, and the switch snaps off the moment the link drops.
+- **The autoconnect write cannot be trusted to report failure.** libnm
+  routes it through a legacy setter whose own comment says it *"is not
+  cancellable and ignores the return value"* — NULL error, two-second
+  timeout — so a polkit refusal comes back as success. netd reads it back
+  and answers `RADIO WOULD NOT STAY OFF` rather than claiming it.
+- **Off is not persisted by NetworkManager.** The flag is in memory with
+  no write-out path, so a restart, an upgrade or a replug brings every
+  switch back reading on. That is not a regression — off did not stick at
+  all before — but if "off on passage" should survive a power cycle, netd
+  has to keep its own record, keyed by MAC, reasserted at startup,
+  defaulting to **on** for a MAC it has not seen. Not built.
+
+**And off now sticks, which makes the hotspot tile dangerous.** A mis-tap
+takes SeaWire down durably — the only way to SSH in. The panel's two-tap
+confirm already gates on `NET.ap`, so that guard is in place; it matters
+more than it did.
+
+Also fixed while in here: `no_target()`'s second pattern was dead. The
+real 1.42.4 message is `A 'wireless' setting is required…` — with quotes
+— so `'wireless setting is required'` never once matched. Only the
+`'ap path'` test was carrying it.
+
+`tests/wifi_test.py` is 45 tests, up from 30, with the pretend `nmcli`
+taught to model autoconnect, a disconnect that refuses an idle device,
+and a write that is silently dropped. Nine controls run — the old
+predicate, `> 10`, `>= 100`, `== 'yes'`, a bare disconnect, believing the
+write, dropping the join's clear, gating the scan on `up`, and matching
+the state by substring — and each one fails the probe that describes it.
+
 ### A name is not a handle
 
 `nmcli` writes its output in the locale's charset and substitutes `?` for

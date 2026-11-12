@@ -264,15 +264,61 @@ def _dev_signal(dev):
     return 0
 
 
+_STCODE = re.compile(r'\s*(\d+)')
+_STNAME = {0: 'unknown', 10: 'unmanaged', 20: 'unavailable',
+           30: 'disconnected', 100: 'connected', 110: 'deactivating',
+           120: 'failed'}
+
+
+def state_code(s):
+    """The number in front of GENERAL.STATE: "30 (disconnected)" -> 30.
+
+    nmcli always prints "$NUM ($NICK)" for this field, terse mode
+    included. The number is the only part that is stable. The nick gains
+    a suffix when NetworkManager has ASSUMED a device rather than
+    activated it - "connected (externally)" - so the old test, the
+    substring '(connected)', needs a close bracket straight after the
+    word and does not match it. That reads a working access point as
+    DOWN, which on this boat is the one carrying the hotspot."""
+    m = _STCODE.match(s or '')
+    # Unparseable: 30, managed and idle, so the autoconnect flag below
+    # decides rather than a missing number forcing the radio off.
+    return int(m.group(1)) if m else 30
+
+
+def state_name(s):
+    c = state_code(s)
+    if c in _STNAME:
+        return _STNAME[c]
+    return 'connecting' if 40 <= c <= 90 else str(c)
+
+
+# One call for every adapter. AUTOCONNECT is in it because it is the
+# only thing in `device show` that remembers the user asked for the
+# radio to be off - see the comment on `up` below.
+_FIELDS_FULL = ('GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,'
+                'GENERAL.AUTOCONNECT,GENERAL.CONNECTION,IP4.ADDRESS')
+_FIELDS_SAFE = ('GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,'
+                'GENERAL.CONNECTION,IP4.ADDRESS')
+_fields = [_FIELDS_FULL]
+
+
 def wifi_devices():
     """Every managed WiFi adapter and what it is doing.
 
     One `device show` covers the lot - state, profile and address for all
     of them in a single call - because this is polled, and a subprocess
     per adapter per field adds up fast on a Pi."""
-    rc, out, _ = run(['nmcli', '-t', '-f',
-                      'GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,'
-                      'GENERAL.CONNECTION,IP4.ADDRESS', 'device', 'show'], 15)
+    rc, out, _ = run(['nmcli', '-t', '-f', _fields[0], 'device', 'show'], 15)
+    if rc and _fields[0] is _FIELDS_FULL:
+        # An nmcli that does not know ONE of these names fails the whole
+        # call with empty output, and this function then returns [] -
+        # which empties the panel, access point tile and all, looking
+        # exactly like NetworkManager being down. GENERAL.AUTOCONNECT is
+        # valid in 1.42.4 so this is insurance, not a known fault; it
+        # costs one retry once and then stops asking.
+        _fields[0] = _FIELDS_SAFE
+        rc, out, _ = run(['nmcli', '-t', '-f', _fields[0], 'device', 'show'], 15)
     if rc:
         return []
     raw, cur = [], None
@@ -282,7 +328,8 @@ def wifi_devices():
             continue
         k, v = f[0], f[1]
         if k == 'GENERAL.DEVICE':
-            cur = {'dev': v, 'type': '', 'state': '', 'con': '', 'ip': ''}
+            cur = {'dev': v, 'type': '', 'state': '', 'auto': 'yes',
+                   'con': '', 'ip': ''}
             raw.append(cur)
         elif cur is None:
             continue
@@ -290,6 +337,8 @@ def wifi_devices():
             cur['type'] = v
         elif k == 'GENERAL.STATE':
             cur['state'] = v                      # e.g. "100 (connected)"
+        elif k == 'GENERAL.AUTOCONNECT':
+            cur['auto'] = v                       # "yes"/"no", untranslated
         elif k == 'GENERAL.CONNECTION':
             cur['con'] = '' if v in ('', '--') else v
         elif k.startswith('IP4.ADDRESS') and not cur['ip']:
@@ -306,17 +355,55 @@ def wifi_devices():
         # left nothing on the panel to tap, and the one command that adopts
         # it is the one behind the switch you could not see. Show it, down,
         # and let the switch take it over.
-        unmanaged = 'unmanaged' in d['state']
+        code = state_code(d['state'])
+        unmanaged = code == 10
         ap = con_is_ap(d['con']) if d['con'] and not unmanaged else False
+        # TWO QUESTIONS, and conflating them is what put "I cannot turn
+        # it on, it just clicks off automatically" on the water.
+        #
+        #   up   - has the user switched this radio ON? The SWITCH asks
+        #          this, and so does the tile.
+        #   conn - has it actually JOINED something? The signal arcs and
+        #          the scan cost ask this.
+        #
+        # They were one field reading '(connected)', so a radio that was
+        # powered and idle read as OFF: tap the switch, netd turns the
+        # radio on exactly as asked, the next poll says `disconnected`,
+        # the switch flicks itself back - and because the sheet hides the
+        # network list behind that same flag, there was then no way to
+        # join anything by hand either. The ACTION was fixed in 84d56bd,
+        # "the wifi switch turns the radio on; it does not join
+        # anything"; the INDICATOR was left behind.
+        #
+        # Nothing in `device show` reports radio POWER - there is no
+        # POWERED, RADIO or ENABLED field. AUTOCONNECT is the only thing
+        # that remembers a user asked, which is why wifi_power writes it.
+        #
+        #   code > 20      not unknown, unmanaged or unavailable. 20 is
+        #                  where a wifi device sits under rfkill, and NM
+        #                  gets there without touching autoconnect - so
+        #                  `> 10` would report a dead radio as on.
+        #   40..100        in use, from `connecting` through `connected`.
+        #                  NOT `>= 100`: 110 deactivating and 120 failed
+        #                  would make the tile flick ON during the OFF
+        #                  tap's own teardown, which is this bug's mirror.
+        #   auto != 'no'   fails toward ON. A switch that cannot be
+        #                  turned on is a boat with no helm; one that
+        #                  reads on for an idle radio is a complaint.
+        conn = code == 100
         row = {'dev': d['dev'], 'bus': dev_bus(d['dev']),
-               'up': '(connected)' in d['state'] and not unmanaged,
+               'up': code > 20 and (40 <= code <= 100 or d['auto'] != 'no'),
+               'conn': conn,
                'managed': not unmanaged,
                'ssid': '' if unmanaged else d['con'], 'ap': ap,
                'ip': '' if unmanaged else d['ip'], 'signal': 0,
-               'state': d['state'].split('(')[-1].rstrip(')')}
+               'state': state_name(d['state'])}
         # Signal is meaningless for an adapter that is itself the AP, and
-        # costs a scan to ask for, so only clients get asked.
-        if row['up'] and not ap:
+        # costs a SCAN to ask for. Gated on conn and not on up: a radio
+        # that is on but not associated has no IN-USE row, so the scan is
+        # guaranteed to return 0 - and on an RTL8188EU, scanning on a
+        # poll is the thing most likely to make the next join flaky.
+        if conn and not ap:
             row['signal'] = dev_signal(d['dev'])
         devs.append(row)
     # Onboard first, then dongles: a stable order matters when the tiles
@@ -562,13 +649,29 @@ def no_target(err):
     switch the adapter on, and with nothing saved and in range it has
     nothing to pick. What comes back is
 
-        Failed to add/activate new connection: 802-11-wireless setting
-        is required if no AP path was given
+        Failed to add/activate new connection: A 'wireless' setting is
+        required if no AP path was given.
 
     which is seventy characters of NetworkManager internals arriving on a
-    tile that is two words wide, in answer to someone tapping a switch."""
+    tile that is two words wide, in answer to someone tapping a switch.
+
+    Note the quotes around 'wireless' in the real 1.42.4 message: the
+    second pattern here used to read "wireless setting is required",
+    which that string does not contain, so it never once fired. Only the
+    'ap path' test was carrying this."""
     e = (err or '').lower()
-    return 'ap path' in e or 'wireless setting is required' in e
+    return 'ap path' in e or "'wireless' setting is required" in e
+
+
+def not_active(err):
+    """NetworkManager refusing to disconnect something that is not up.
+
+    Device.Disconnect() rejects any device at or below `disconnected`
+    with "This device is not active" and records nothing at all - so on
+    an idle radio the old OFF path was a complete no-op in NM, and
+    nmcli exited 6. Not a failure of the switch: there was simply no
+    link to drop."""
+    return 'not active' in (err or '').lower()
 
 
 def wifi_connect(dev, ssid, psk):
@@ -576,6 +679,13 @@ def wifi_connect(dev, ssid, psk):
     if not d:
         return {'ok': False, 'error': 'NO WIFI ADAPTER'}
     with _lock:
+        # Clear any OFF the switch left behind first. Activating a device
+        # clears only NM's INTERNAL autoconnect block - the user one that
+        # `device set autoconnect no` sets survives it - so without this,
+        # joining a network after switching the radio off leaves a
+        # connected adapter still flagged `AUTOCONNECT:no`, and the
+        # switch snaps back off the moment the link drops.
+        run(['nmcli', 'device', 'set', d['dev'], 'autoconnect', 'yes'], 20)
         # A saved profile carries its own key, and re-supplying one we were
         # never given would overwrite it with nothing. So a saved network
         # with no password typed is a plain `connection up`.
@@ -636,7 +746,34 @@ def wifi_power(dev, on):
             if rc and no_target(err or out):
                 rc, out, err = 0, '', ''
         else:
-            rc, out, err = run(['nmcli', 'device', 'disconnect', d['dev']], 30)
+            # `device disconnect` ALONE cannot express off. NM refuses it
+            # for any device at or below `disconnected` - "this device is
+            # not active" - and records nothing, so switching off an idle
+            # radio did nothing whatsoever. It only ever appeared to work
+            # because `up` meant "connected", so the tile was already
+            # dark. Now that the tile means "switched on", off has to be
+            # a thing NM remembers.
+            #
+            # autoconnect FIRST, because it is the half that sticks. The
+            # disconnect after it is just dropping the link if there is
+            # one, and having none is not a failure.
+            rc, out, err = run(['nmcli', 'device', 'set', d['dev'],
+                                'autoconnect', 'no'], 20)
+            rc2, out2, err2 = run(['nmcli', 'device', 'disconnect',
+                                   d['dev']], 30)
+            if rc2 and not not_active(err2 or out2):
+                rc, out, err = rc2, out2, err2
+            # And do not believe the exit code of the autoconnect write.
+            # libnm puts it through a legacy setter whose own comment
+            # says it "is not cancellable and ignores the return value" -
+            # it passes NULL for the error and gives up after 2 seconds -
+            # so a polkit refusal, or NM busy mid-scan on a Pi, comes
+            # back as success. Read it back instead of claiming it.
+            if rc == 0:
+                _, chk, _ = run(['nmcli', '-t', '-f', 'GENERAL.AUTOCONNECT',
+                                 'device', 'show', d['dev']], 10)
+                if 'no' not in chk.lower():
+                    return {'ok': False, 'error': 'RADIO WOULD NOT STAY OFF'}
     return {'ok': rc == 0, 'error': wifi_error(err or out)}
 
 
