@@ -2963,6 +2963,34 @@ def remote_cmd(body, token):
             if theme not in r['themes']:
                 return {'ok': False, 'error': 'NO SUCH THEME'}, 400
             r['pend']['theme'] = {'kind': 'theme', 'theme': theme}
+        elif kind == 'page':
+            # Turning the glass to the page the phone is looking at.
+            # Validated against the catalogue like a slot is: the panel
+            # said which pages it has, and nothing else is a page.
+            page = body.get('page')
+            if page not in r['slots']:
+                return {'ok': False, 'error': 'NO SUCH PAGE'}, 400
+            r['pend']['page'] = {'kind': 'page', 'page': page}
+        elif kind == 'timer':
+            # A whole minute either way, which is the whole of what the
+            # glass's own two buttons do. Not an arbitrary number: a
+            # start clock is not a thing to let a network set freely,
+            # and every press the panel can receive is a press someone
+            # could have made standing at it.
+            by = body.get('by')
+            if by not in (60, -60):
+                return {'ok': False, 'error': 'NO SUCH NUDGE'}, 400
+            # These ACCUMULATE rather than latest-wins: three taps on +
+            # before the panel polls is three minutes, and keeping only
+            # the last would silently drop two of them. Capped so a
+            # stuck finger cannot wind the clock to the moon.
+            was = r['pend'].get('timer')
+            tot = (was['by'] if was else 0) + by
+            tot = max(-3600, min(3600, tot))
+            if tot:
+                r['pend']['timer'] = {'kind': 'timer', 'by': tot}
+            else:
+                r['pend'].pop('timer', None)
         else:
             return {'ok': False, 'error': 'NO SUCH COMMAND'}, 400
         r['at'] = time.time()
@@ -3028,6 +3056,18 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .art{fill:none;stroke:var(--hairline);stroke-width:5}
 .mk{fill:var(--ink);font-weight:700;text-anchor:middle;letter-spacing:-.06em;
  dominant-baseline:middle}
+/* The start clock, in the glass's own two parts: the numerals, and the
+   two buttons that nudge them a minute either way. */
+.tm{fill:var(--ink);text-anchor:middle;dominant-baseline:middle;
+ font-weight:600;font-variant-numeric:tabular-nums;
+ font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+.tm.idle{fill:var(--label)}
+.tm.hot{fill:#C81E1E}
+.tb circle{fill:none;stroke:var(--hairline);stroke-width:3}
+.tb rect{fill:var(--label)}
+.tb .grab{fill:transparent;stroke:none}
+.tb:active circle{fill:var(--chip)}
+.tb.off{opacity:.2;pointer-events:none}
 /* The lane is the touch target and the box is the glass's own rect.
    They are not the same shape on purpose: the rect is where the ink
    goes, the lane is everything up to the hairline you can see, because
@@ -3094,6 +3134,33 @@ var S=null, PG='', OPEN=null;
    the face arrives on the wire. What is left here is which page wears a
    tick ring and which wears an album square, which is decoration. */
 var ART={dial:{ticks:1, mark:'45'}, mus:{ticks:1}};
+/* Which page index each key IS on the glass. The panel sends its own
+   PAGE_I with `now`, and this is the only way to read it back. */
+var PAGE_OF={dial:1, mus:2};
+/* The buttons are 46 units across, which on a 362px face is thirty-one
+   pixels - drawn right and too small to hit. 68 takes the tap without
+   moving what is drawn, and stops just clear of the big number's box
+   at 322. */
+var TM_GRAB=68;
+/* The clock the phone runs between polls. `at` is when the figure
+   arrived, by the phone's own monotonic clock - the two machines are
+   not assumed to agree about the time of day, only about how long is
+   left. */
+var TM={ms:0, st:'idle', at:0};
+function tmLeft(){
+  var gone=(performance.now()-TM.at);
+  if(TM.st==='countdown') return Math.max(0, TM.ms-gone);
+  if(TM.st==='racing')    return TM.ms+gone;
+  return TM.ms;                       /* idle and finished do not move */
+}
+function tmTxt(ms){
+  var s=Math.floor(ms/1000), h=Math.floor(s/3600), m=Math.floor(s/60)%60;
+  var ss=String(s%60);
+  if(ss.length<2) ss='0'+ss;
+  if(!h) return Math.floor(s/60)+':'+ss;
+  var mm=String(m); if(mm.length<2) mm='0'+mm;
+  return h+':'+mm+':'+ss;
+}
 /* Everything drawn here came over a network from a panel that is
    trusted - and is escaped anyway, because the day it is not is the day
    nobody remembers this file builds its markup as strings. */
@@ -3150,9 +3217,15 @@ function lanes(G){
     r.t=Math.min(r.t,b[1]); r.b=Math.max(r.b,b[1]+b[3]); r.ks.push(k);
   });
   rows.sort(function(x,y){return x.t-y.t;});
+  /* Nothing may sit on the clock. Its two buttons are at the same
+     height as the top of the big number's box, so without this the
+     lane covers them and every press of + opens the picker instead. */
+  var tmBot=0;
+  if(G.btn && G.btn.up) tmBot=G.btn.up[1]+TM_GRAB;
   /* Vertical: meet the next row halfway, and the glass at the ends. */
   for(var i=0;i<rows.length;i++){
-    var t = i ? (rows[i-1].b+rows[i].t)/2 : Math.max(0, rows[i].t-60);
+    var t = i ? (rows[i-1].b+rows[i].t)/2
+              : Math.max(tmBot, Math.max(0, rows[i].t-60));
     var bm= i<rows.length-1 ? (rows[i].b+rows[i+1].t)/2
                             : Math.min(1080, rows[i].b+60);
     rows[i].T=t; rows[i].B=bm;
@@ -3296,6 +3369,7 @@ function face(pg){
   (G.cut||[]).forEach(function(c){
     h+='<line class="cut" x1="'+c[0]+'" y1="'+c[1]+'" x2="'+c[2]+'" y2="'+c[3]+'"/>';
   });
+  if(G.tmr) h+=clockFace(G);
   Object.keys(G.box).forEach(function(sl){
     var ln=L[sl]||G.box[sl], an=(G.a||{})[sl]
       || [G.box[sl][0]+G.box[sl][2]/2, G.box[sl][1]+G.box[sl][3]/2];
@@ -3327,6 +3401,30 @@ function face(pg){
 function pages(){
   return Object.keys(S.slots).sort(function(a,b){
     return (S.slots[b]||[]).length-(S.slots[a]||[]).length; });
+}
+
+/* The clock and its two buttons, where the glass has them. The one
+   reading that crosses to the phone, because it is not really a
+   reading: it is a control you are holding, and the moment you want it
+   is the moment you are on the rail with both hands full. */
+function clockFace(G){
+  var ms=tmLeft(), off=(TM.st==='racing'||TM.st==='finished');
+  var h='<text class="tm'+(TM.st==='idle'?' idle':'')
+       +(TM.st==='countdown'&&ms<60000?' hot':'')+'" x="'+G.tmr[0]
+       +'" y="'+G.tmr[1]+'" font-size="104">'+esc(tmTxt(ms))+'</text>';
+  var b=G.btn||{};
+  [['up',1],['dn',-1]].forEach(function(p){
+    var c=b[p[0]]; if(!c) return;
+    var r=c[2], bar=Math.round(r*1.04), th=Math.round(r*0.22);
+    h+='<g class="tb'+(off?' off':'')+'" data-by="'+(p[1]*60)+'">'
+      +'<circle cx="'+c[0]+'" cy="'+c[1]+'" r="'+r+'"/>'
+      +'<rect x="'+(c[0]-bar/2)+'" y="'+(c[1]-th/2)+'" width="'+bar
+      +'" height="'+th+'" rx="'+(th/2)+'"/>'
+      +(p[1]>0 ? '<rect x="'+(c[0]-th/2)+'" y="'+(c[1]-bar/2)+'" width="'+th
+                 +'" height="'+bar+'" rx="'+(th/2)+'"/>' : '')
+      +'<circle class="grab" cx="'+c[0]+'" cy="'+c[1]+'" r="'+TM_GRAB+'"/></g>';
+  });
+  return h;
 }
 
 function draw(){
@@ -3390,7 +3488,30 @@ function shut(){ OPEN=null;
 
 document.getElementById('main').onclick=function(e){
   var f=e.target.closest('[data-f]');
-  if(f){ PG=f.dataset.f; shut(); return; }
+  if(f){
+    PG=f.dataset.f; shut();
+    /* And turn the glass with it. A phone showing the music page while
+       the panel shows the dial is a mirror of something nobody is
+       looking at. Sent after the switch, not waited on: the tab is the
+       phone's own and should not stutter on the wifi. */
+    post({kind:'page', page:PG});
+    return;
+  }
+  var tb=e.target.closest('[data-by]');
+  if(tb){
+    /* CSS stops a finger landing on a dimmed one; this stops everything
+       else, and is the half that can be checked. netd refuses the nudge
+       as well - three guards for one press, because the press that gets
+       through moves the start of a race that has already started. */
+    if(tb.classList.contains('off')) return;
+    var by=+tb.dataset.by;
+    /* Moved here before the boat has answered, like a slot is: a clock
+       that waits a second and a half to admit a press is a clock you
+       press twice. */
+    TM.ms=Math.max(0, TM.ms+by*1000); tmRun();
+    post({kind:'timer', by:by});
+    return;
+  }
   var z=e.target.closest('[data-s]');
   if(z){ if(OPEN && OPEN.p===z.dataset.p && OPEN.s===z.dataset.s) shut();
          else pick(z.dataset.p, z.dataset.s); }
@@ -3405,6 +3526,17 @@ document.getElementById('foot').onclick=function(e){
     setTimeout(load, 1800); });
 };
 
+/* Redrawn on its own, not through draw(): the whole face is a string
+   and rebuilding it twice a second would throw away the card, the lit
+   zone and any scroll in it. Only the numerals move. */
+var tmTick=0;
+function tmRun(){
+  clearTimeout(tmTick);
+  var el=document.querySelector('.fv .tm');
+  if(el) el.textContent=tmTxt(tmLeft());
+  if(TM.st==='countdown'||TM.st==='racing') tmTick=setTimeout(tmRun, 250);
+}
+
 function paint(){
   var p=(S.now||{}).pal||{}, r=document.documentElement;
   for(var k in p) r.style.setProperty('--'+k, p[k]);
@@ -3412,15 +3544,35 @@ function paint(){
   if(m && p.bg) m.setAttribute('content', p.bg);
 }
 
+/* While the clock is MOVING the phone asks again every four seconds,
+   so its own count cannot drift from the glass's and a nudge made at
+   the panel shows up here. Idle, it asks for nothing: the figure is not
+   going anywhere and the app was deliberately fetch-once. */
+var reTick=0;
+function reSync(){
+  clearTimeout(reTick);
+  if(TM.st!=='countdown' && TM.st!=='racing') return;
+  reTick=setTimeout(function(){ if(!document.hidden) load(); else reSync(); },
+                    4000);
+}
+
 function load(){
   get('/r/state?t='+encodeURIComponent(T),function(j){
     if(!j.ok){ say(j.error||'NOT ARMED'); return; }
     S=j; S.now=S.now||{};
+    var t=S.now.t;
+    if(t){ TM={ms:t.ms, st:t.st, at:performance.now()}; }
+    /* The panel's own page, so the tab agrees with the glass when the
+       app opens - and when someone has swiped the glass since. */
+    if(S.now.page){
+      var byIdx=pages().filter(function(k){ return (S.slots[k]||[]).length; });
+      byIdx.forEach(function(k){ if(PAGE_OF[k]===S.now.page) PG=k; });
+    }
     /* Open on the page with the most to change: the dial has five of
        the eight, and a remote that opens on the other one makes you tap
        twice for the readings you came for. */
     if(!PG||!S.slots[PG]) PG=pages()[0]||'';
-    paint(); draw();
+    paint(); draw(); tmRun(); reSync();
   });
 }
 load();

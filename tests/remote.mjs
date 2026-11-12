@@ -177,6 +177,115 @@ st=await p.evaluate(()=>({c0:DIAL.slot.c0, c2:DIAL.slot.c2}));
 t.ok(st.c2==='sog' && st.c0==='heel', 'the two change places',
      JSON.stringify(st));
 
+t.head('the start clock crosses, as a figure rather than a picture');
+/* The one reading that goes to the phone, and the exception is
+   deliberate: it is a control you are holding, wanted exactly when you
+   are on the rail with both hands full. It crosses as milliseconds and
+   a state, never as the rendered string - a poll every second and a
+   half would otherwise read a second and a half wrong most of the
+   time. */
+let tm=await p.evaluate(()=>remoteNow().t);
+t.ok(tm && typeof tm.ms==='number' && tm.st==='idle',
+     'idle, it is the figure the glass is showing', JSON.stringify(tm));
+t.ok(tm.ms===await p.evaluate(()=>tLeft), 'which is the panel\'s own tLeft',
+     tm.ms+' vs '+await p.evaluate(()=>tLeft));
+/* Remaining, not an absolute end time. This Pi has no clock of its own:
+   it starts at the epoch and jumps when NTP lands, so the two machines
+   cannot be assumed to agree about what time it is - only about how
+   long is left. */
+await p.evaluate(()=>{ tState='countdown'; tEnd=rnow()+90000; });
+tm=await p.evaluate(()=>remoteNow().t);
+t.ok(tm.st==='countdown' && Math.abs(tm.ms-90000)<1500,
+     'counting down, it is what is LEFT and not when it ends',
+     JSON.stringify(tm));
+await p.evaluate(()=>{ tState='racing'; tGun=rnow()-45000; });
+tm=await p.evaluate(()=>remoteNow().t);
+t.ok(tm.st==='racing' && Math.abs(tm.ms-45000)<1500,
+     'and racing it is time SINCE the gun, which counts up',
+     JSON.stringify(tm));
+await p.evaluate(()=>{ tState='idle'; });
+
+t.head('and the phone is told where the glass draws it');
+/* Measured off the markup like every other complication, because the
+   phone draws it where the glass has it and keeps its lanes clear of
+   it - neither of which it can do if it is guessing. */
+const tg=await p.evaluate(()=>remoteCat().geom.dial);
+const tlive=await p.evaluate(()=>{
+  const k=1080/document.getElementById('stage').getBoundingClientRect().width;
+  const b=document.getElementById('t-plus').querySelector('circle')
+            .getBoundingClientRect();
+  const st=document.getElementById('stage').getBoundingClientRect();
+  return {cx:((b.left+b.right)/2-st.left)*k, cy:((b.top+b.bottom)/2-st.top)*k};
+});
+t.ok(tg.tmr && tg.tmr.length===2, 'the numerals have an anchor',
+     JSON.stringify(tg.tmr));
+t.ok(Math.abs(tg.btn.up[0]-tlive.cx)<2 && Math.abs(tg.btn.up[1]-tlive.cy)<2,
+     'and the + is where the browser has really put it',
+     JSON.stringify(tg.btn.up)+' vs '+JSON.stringify(tlive));
+t.ok(tg.btn.up[0]!==tg.btn.dn[0] || tg.btn.up[1]!==tg.btn.dn[1],
+     'and the minus is somewhere else, rather than the same circle twice',
+     JSON.stringify([tg.btn.up, tg.btn.dn]));
+
+t.head('a nudge from the phone moves the clock the glass is showing');
+await p.evaluate(()=>{ tState='idle'; tLeft=300000; });
+await p.evaluate(()=>remoteDo({kind:'timer',by:60}));
+t.ok((await p.evaluate(()=>tLeft))===360000, 'a minute on',
+     String(await p.evaluate(()=>tLeft)));
+await p.evaluate(()=>remoteDo({kind:'timer',by:-60}));
+t.ok((await p.evaluate(()=>tLeft))===300000, 'and a minute off again',
+     String(await p.evaluate(()=>tLeft)));
+/* The glass dims its own two buttons the moment the gun goes, and this
+   is the same rule: a nudge to a race that has started is not a nudge,
+   it is a different race. */
+await p.evaluate(()=>{ tState='racing'; tGun=rnow()-10000; });
+await p.evaluate(()=>remoteDo({kind:'timer',by:60}));
+t.ok((await p.evaluate(()=>tLeft))===300000,
+     'and once the gun has gone it is refused',
+     String(await p.evaluate(()=>tLeft)));
+await p.evaluate(()=>{ tState='idle'; });
+/* A minute is what the glass's buttons do. Anything else arriving here
+   is not a phone this panel knows about. */
+/* A whole minute is what the glass's buttons do - but netd adds up the
+   taps it has not handed over yet, so what arrives is a TOTAL, up to
+   the hour it clamps at. Anything that is not a whole number of
+   minutes within that is not a phone this panel knows about. */
+await p.evaluate(()=>remoteDo({kind:'timer',by:3600}));
+t.ok((await p.evaluate(()=>tLeft))===3900000,
+     'a whole hour of accumulated taps is still a legal total',
+     String(await p.evaluate(()=>tLeft)));
+await p.evaluate(()=>{ tLeft=300000; });
+await p.evaluate(()=>{ remoteDo({kind:'timer',by:30});
+                       remoteDo({kind:'timer',by:3660});
+                       remoteDo({kind:'timer',by:'60'});
+                       remoteDo({kind:'timer',by:NaN});
+                       remoteDo({kind:'timer'}); });
+t.ok((await p.evaluate(()=>tLeft))===300000,
+     'and a part minute, an over-long one, a string or nothing is not done',
+     String(await p.evaluate(()=>tLeft)));
+
+t.head('the phone\'s tab turns the glass with it');
+/* A phone showing the music page while the panel shows the dial is a
+   mirror of something nobody is looking at. */
+await p.evaluate(()=>remoteDo({kind:'page',page:'mus'}));
+t.ok((await p.evaluate(()=>PAGE_I))===2, 'the music page comes up',
+     String(await p.evaluate(()=>PAGE_I)));
+t.ok((await p.evaluate(()=>remoteNow().page))===2,
+     'and the wire says so, so the tab agrees after a swipe at the glass');
+await p.waitForTimeout(250);
+await p.evaluate(()=>remoteDo({kind:'page',page:'dial'}));
+t.ok((await p.evaluate(()=>PAGE_I))===1, 'and back again',
+     String(await p.evaluate(()=>PAGE_I)));
+await p.evaluate(()=>{ remoteDo({kind:'page',page:'nope'});
+                       remoteDo({kind:'page',page:'__proto__'});
+                       remoteDo({kind:'page'}); });
+t.ok((await p.evaluate(()=>PAGE_I))===1,
+     'a page the panel has not got is not a page it turns to',
+     String(await p.evaluate(()=>PAGE_I)));
+/* A page turn hands the compositor a clean 420 ms and the frame paints
+   nothing while it does. Waited out here so the sections below are
+   looking at a panel that is drawing again. */
+await p.waitForTimeout(500);
+
 t.head('nonsense from the network changes nothing');
 const before=await p.evaluate(()=>JSON.stringify(remoteNow()));
 await p.evaluate(()=>{

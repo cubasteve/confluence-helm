@@ -735,11 +735,20 @@ A second screen for the settings you would otherwise walk to the glass
 for: what is in each complication, and the theme. It runs on a phone,
 over the boat's wifi, as an app on the home screen.
 
-**It carries no live data.** The phone shows *what is in* each slot and
-never what the slot reads. A second set of numbers to keep in step, on a
-screen nobody is looking at while sailing, buys nothing — and the thing
-it would cost is the one reason to have the remote at all, which is
-changing a complication without taking a hand off the tiller.
+**It carries no live data, with one stated exception.** The phone shows
+*what is in* each slot and never what the slot reads. A second set of
+numbers to keep in step, on a screen nobody is looking at while sailing,
+buys nothing — and the thing it would cost is the one reason to have the
+remote at all, which is changing a complication without taking a hand
+off the tiller.
+
+The exception is the **start clock**, and it is an exception because the
+clock is not really a reading: it is a control you are holding. The
+moment you want it is the moment you are on the rail with both hands
+full and the sequence running, which is exactly when walking to the
+glass costs the most. It is the only number on the wire, and the rule
+above is otherwise intact — if a second one is ever proposed, this
+paragraph is the bar it has to clear.
 
 ### Installing it, once
 
@@ -832,7 +841,61 @@ from the big number, which has it to give.
 asserts where things are, not what they say — the old probe checked that
 the first row spelled APEX, which tests that the phone can spell.
 
-### No tile, always on### No tile, always on
+### The clock, and the tab
+
+Two things cross both ways rather than one.
+
+**The clock.** The dial's start clock is drawn on the mirror where the
+glass draws it, with its two buttons, and they work: a tap is a whole
+minute either way, the same as the glass's own. It greys while nothing
+is running, turns red under a minute, and once the gun has gone both
+buttons dim and stop answering — a nudge to a race that has already
+started is not a nudge, it is a different race. Racing, it counts *up*.
+
+It crosses as **milliseconds and a state**, never as the rendered
+string, and the phone runs its own clock between polls. A poll arrives
+every second and a half; a clock that only moved then would read a
+second and a half wrong most of the time. Remaining rather than an
+absolute end time, because this Pi has no RTC — it starts at the epoch
+and jumps when NTP lands, so the two machines cannot be assumed to agree
+about what time it is, only about how long is left. While the clock is
+moving the phone re-polls every four seconds so its own count cannot
+drift and a nudge made *at the panel* shows up in your hand; idle, it
+asks for nothing and the app stays fetch-once.
+
+A press moves the numerals before the boat has answered, like a slot
+change paints before the boat has answered. A clock that waits a second
+and a half to admit a press is a clock you press twice — so the taps
+**add up** rather than replacing each other, which is the one place in
+this app where latest-wins is the wrong rule. Three taps before the
+panel polls are three minutes. netd keeps the running total, clamps it
+at an hour either way, and drops the entry entirely when it comes back
+to zero.
+
+Three guards for one press, because the press that gets through moves
+the start of a race: CSS `pointer-events` on the dimmed button, a class
+check in the handler, and netd refusing anything that is not ±60 — then
+the panel refusing anything that is not a whole number of minutes inside
+an hour. The panel's check is the one that matters, since it is the only
+one a phone cannot skip.
+
+**The tab.** Tapping between the two faces on the phone turns the glass
+with it. A phone showing the music page while the panel shows the dial
+is a mirror of something nobody is looking at. It goes the other way
+too: `now.page` carries the panel's own `PAGE_I`, so the tab agrees with
+the glass when the app opens — and when someone has swiped the glass
+since. The command is sent *after* the phone switches, not waited on:
+the tab is the phone's own and should not stutter on the wifi.
+
+The clock's geometry is measured like everything else — `geom.dial.tmr`
+is the numerals' anchor and `geom.dial.btn` the two circles with their
+radii. The phone taps a 68-unit circle over a button it
+draws at the glass's own 46: on a 362px face that is a thirty-one pixel
+target, which is drawn right and impossible to hit. The lanes are held clear of that tap circle, because
+without it the big number's lane covers both buttons and every press of
+**+** opens the picker instead.
+
+### No tile, always on
 
 There is nothing on the glass for this: no tile, no arming, no QR. A
 remote you have to walk to the panel and switch on is a remote you would
@@ -860,9 +923,11 @@ list of objects, and `tests/remote.mjs` asserts the panel sends them.
 2. **The token.** `secrets.compare_digest`, on every command and on the
    manifest (which carries the token in `start_url`, so it cannot be
    public). The icon needs none: it is a picture of the number 45.
-3. **The catalogue.** A slot or reading the panel never declared is
-   refused, so the worst a stranger on the hotspot can do with a valid
-   token is change a complication.
+3. **The catalogue.** A slot, reading or page the panel never declared
+   is refused, so the worst a stranger on the hotspot can do with a
+   valid token is change a complication, turn the page, or move the
+   start clock by whole minutes inside an hour. There is nothing on that
+   socket that starts a race, stops one, or writes a mark.
 
 `RemoteHandler` is a different class from `Handler` and **has no call
 path to `route()`**. netd's twenty-seven endpoints are not reachable
@@ -896,7 +961,8 @@ not answer. The drain is a dict swap under a lock the radios never take,
 which is what makes a poll at that rate cost nothing. Commands are
 latest-wins per slot — two taps on one cell before the panel polls are
 one change, not a queue — and anything older than 30 s with no panel
-collecting it is dropped rather than replayed.
+collecting it is dropped rather than replayed. The start clock is the
+exception and accumulates instead: see **The clock, and the tab**.
 
 netd keeps the catalogue in memory, so its restart leaves the phone with
 nothing to show and every command refused. The poll's reply says `have:

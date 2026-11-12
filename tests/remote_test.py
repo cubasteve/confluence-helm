@@ -357,6 +357,96 @@ class Door(unittest.TestCase):
             finally:
                 p.close()
 
+    def test_a_page_it_was_not_told_about_is_not_a_page(self):
+        """The tab turns the glass as well as the phone, and the only
+        pages there are are the ones the panel registered."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for bad in ('nope', '__proto__', '', 1, None):
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'page', 'page': bad})
+                    self.assertEqual(code, 400, '%r -> %s %s' % (bad, code, j))
+                self.assertEqual(netd._remote['pend'], {})
+                code, j = p.js('/r/cmd?t=T0KEN', {'kind': 'page',
+                                                  'page': 'mus'})
+                self.assertEqual(code, 200, j)
+                self.assertEqual(netd._remote['pend']['page'],
+                                 {'kind': 'page', 'page': 'mus'})
+                # Latest wins, as it does for a slot: the phone is on one
+                # page and the panel is going to that one.
+                p.js('/r/cmd?t=T0KEN', {'kind': 'page', 'page': 'dial'})
+                self.assertEqual(netd._remote['pend']['page']['page'], 'dial')
+            finally:
+                p.close()
+
+    def test_taps_on_the_clock_add_up_rather_than_replacing(self):
+        """The one place latest-wins is the wrong rule. Three taps before
+        the panel polls are three minutes, and dropping two of them loses
+        a start the owner thinks they have set."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for _ in range(3):
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'timer', 'by': 60})
+                    self.assertEqual(code, 200, j)
+                self.assertEqual(netd._remote['pend']['timer'],
+                                 {'kind': 'timer', 'by': 180})
+                p.js('/r/cmd?t=T0KEN', {'kind': 'timer', 'by': -60})
+                self.assertEqual(netd._remote['pend']['timer']['by'], 120)
+                # Back to where it started is nothing to send, not a
+                # nudge of zero - which the panel would refuse anyway,
+                # but a queue that never empties is a queue that keeps
+                # waking the panel.
+                for _ in range(2):
+                    p.js('/r/cmd?t=T0KEN', {'kind': 'timer', 'by': -60})
+                self.assertNotIn('timer', netd._remote['pend'])
+                # And it is handed over once, as one total.
+                p.js('/r/cmd?t=T0KEN', {'kind': 'timer', 'by': 60})
+                drained = netd.remote_poll({})
+                self.assertEqual(drained['cmds']['timer'],
+                                 {'kind': 'timer', 'by': 60})
+                self.assertEqual(netd.remote_poll({})['cmds'], {})
+            finally:
+                p.close()
+
+    def test_the_clock_cannot_be_nudged_past_an_hour(self):
+        """A held finger on a phone that has lost the panel could queue
+        all afternoon. The panel refuses a total over an hour, so netd
+        must not build one - the alternative is a queue that is thrown
+        away whole the moment the panel comes back."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for _ in range(80):
+                    p.js('/r/cmd?t=T0KEN', {'kind': 'timer', 'by': 60})
+                self.assertEqual(netd._remote['pend']['timer']['by'], 3600)
+                for _ in range(160):
+                    p.js('/r/cmd?t=T0KEN', {'kind': 'timer', 'by': -60})
+                self.assertEqual(netd._remote['pend']['timer']['by'], -3600)
+            finally:
+                p.close()
+
+    def test_a_nudge_is_a_whole_minute_either_way(self):
+        """What the glass's own two buttons do, and nothing else. The
+        total netd builds may be any multiple of a minute; a single
+        press is one."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for bad in (30, 61, 3600, 0, '60', True, None, 1e309):
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'timer', 'by': bad})
+                    self.assertEqual(code, 400, '%r -> %s %s' % (bad, code, j))
+                self.assertEqual(netd._remote['pend'], {})
+            finally:
+                p.close()
+
     def test_two_taps_on_one_slot_are_one_change(self):
         with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
             armed(netd)

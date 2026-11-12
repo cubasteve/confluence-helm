@@ -29,6 +29,12 @@ const b0=await pw.chromium.launch();
 const p0=await b0.newPage({viewport:{width:1080,height:1080}});
 await p0.goto('http://localhost:8080/confluence_helm.html');
 await p0.waitForTimeout(1400);
+/* The panel picks its own palette off the clock, so a catalogue taken
+   in the evening carries the dusk one and one taken at noon the day
+   one. Pinned here, because the assertion further down is that the
+   mirror wears whatever the panel sent - which can only be checked
+   against a known answer. */
+await p0.evaluate(()=>{ CFG.theme='day'; applyTheme(); });
 const cat=await p0.evaluate(()=>remoteCat());
 /* Where the GLASS actually draws its hull number, in panel units.
    Not 672: that is the y, and dominant-baseline:middle centres on the
@@ -175,6 +181,122 @@ t.ok(parseFloat(top.rule)>=2,
 const pg=await p.$eval('.pg',e=>e.getBoundingClientRect().top);
 t.ok(pg>=top.bottom-1, 'and nothing crowds it', Math.round(pg)+' vs '
      +Math.round(top.bottom));
+
+t.head('the start clock came over, and it runs on the phone');
+/* The one reading that crosses, and it crosses because it is not
+   really a reading: it is a control you are holding, wanted exactly
+   when you are on the rail with both hands full. */
+const clock=()=>p.$eval('#main .fv .tm',e=>e.textContent);
+const btns=()=>p.$$eval('#main .fv .tb',gs=>gs.map(g=>({
+  by:+g.dataset.by, off:g.classList.contains('off'),
+  grab:+g.querySelector('.grab').getAttribute('r'),
+  r:+g.querySelector('circle').getAttribute('r')})));
+t.ok((await clock())==='5:00', 'it shows what the glass shows', await clock());
+const B0=await btns();
+t.ok(B0.length===2 && B0.map(x=>x.by).sort((a,b)=>a-b).join()==='-60,60',
+     'with a button each way, a minute at a time',
+     JSON.stringify(B0.map(x=>x.by)));
+t.ok(B0.every(x=>x.grab>x.r),
+     'each taking a bigger tap than it draws - 46 units is thirty-one '
+     +'pixels here, which is drawn right and impossible to hit',
+     JSON.stringify(B0.map(x=>[x.r,x.grab])));
+
+t.head('a nudge moves the clock before the boat has answered');
+await p.click('#main .fv .tb[data-by="60"]'); await p.waitForTimeout(350);
+t.ok((await clock())==='6:00', 'the phone shows it at once - a clock that '
+     +'waits a second and a half to admit a press is a clock you press '
+     +'twice', await clock());
+t.ok(JSON.stringify((await peek()).pend['timer'])===
+     JSON.stringify({kind:'timer', by:60}), 'and the boat is told',
+     JSON.stringify((await peek()).pend['timer']));
+/* Three taps before the panel polls are three minutes. Latest-wins
+   would quietly drop two of them, which is the one place in this app
+   where that is the wrong rule. */
+await p.click('#main .fv .tb[data-by="60"]'); await p.waitForTimeout(250);
+await p.click('#main .fv .tb[data-by="60"]'); await p.waitForTimeout(250);
+t.ok((await peek()).pend['timer'].by===180, 'and taps add up rather than '
+     +'replacing each other', String((await peek()).pend['timer'].by));
+t.ok((await clock())==='8:00', 'with the face agreeing', await clock());
+await p.click('#main .fv .tb[data-by="-60"]'); await p.waitForTimeout(250);
+t.ok((await peek()).pend['timer'].by===120 && (await clock())==='7:00',
+     'and the other way takes it back off again',
+     (await peek()).pend['timer'].by+' / '+(await clock()));
+
+t.head('and it counts down between polls rather than stepping');
+/* A poll arrives every second and a half. A clock that only moved then
+   would read a second and a half wrong most of the time, so the phone
+   is given the remaining milliseconds and runs its own. */
+await p.evaluate(()=>{ TM={ms:65000, st:'countdown', at:performance.now()};
+                       draw(); tmRun(); });
+await p.waitForTimeout(150);
+const tk1=await clock();
+await p.waitForTimeout(1300);
+const tk2=await clock();
+t.ok(tk1!==tk2, 'it moves with no poll at all', tk1+' -> '+tk2);
+t.ok(/^1:0[0-5]$/.test(tk2), 'and by about the time that passed', tk2);
+t.ok(await p.$eval('#main .fv .tm',e=>!e.classList.contains('idle')),
+     'and stops being the grey it is while nothing is running');
+
+t.head('once the gun has gone the buttons go with it');
+/* The glass dims them at the same moment: a nudge to a race that has
+   started is not a nudge, it is a different race. */
+await p.evaluate(()=>{ TM={ms:12000, st:'racing', at:performance.now()};
+                       draw(); tmRun(); });
+await p.waitForTimeout(200);
+t.ok((await btns()).every(x=>x.off), 'both are out');
+const wasQ2=JSON.stringify((await peek()).pend['timer']);
+await p.evaluate(()=>{ const g=document.querySelector('.fv .tb');
+                       g && g.dispatchEvent(new MouseEvent('click',{bubbles:true})); });
+await p.waitForTimeout(250);
+t.ok(JSON.stringify((await peek()).pend['timer'])===wasQ2,
+     'and a press on one sends nothing');
+const r1=await clock();
+await p.waitForTimeout(900);
+t.ok(r1!==(await clock()), 'while a race clock counts UP rather than down',
+     r1+' -> '+(await clock()));
+await p.evaluate(()=>{ TM={ms:300000, st:'idle', at:performance.now()};
+                       draw(); tmRun(); });
+await p.waitForTimeout(200);
+
+t.head('the tab turns the glass as well as the phone');
+/* A phone showing the music page while the panel shows the dial is a
+   mirror of something nobody is looking at. */
+await p.click('[data-f="mus"]'); await p.waitForTimeout(350);
+t.ok(JSON.stringify((await peek()).pend['page'])===
+     JSON.stringify({kind:'page', page:'mus'}), 'the boat is told which page',
+     JSON.stringify((await peek()).pend['page']));
+t.ok((await cells()).length===cat.slots.mus.length,
+     'and the phone switched too, without waiting to be told back');
+/* Nothing on the music page has a clock on it, because nothing on the
+   music page has one on the glass. */
+t.ok((await p.$$('#main .fv .tm')).length===0,
+     'the music page carries no clock, because the glass has none there');
+await p.click('[data-f="dial"]'); await p.waitForTimeout(350);
+t.ok((await peek()).pend['page'].page==='dial', 'and back again',
+     JSON.stringify((await peek()).pend['page']));
+
+t.head('and no lane sits on top of the two buttons');
+/* The whole tap circle, not its centre. The buttons sit just ABOVE the
+   top of the big number's box, so a probe that checked the middle
+   passed with no guard at all - and a finger does not land in the
+   middle. What the owner actually does is press the lower half of the +
+   and open the picker instead, which is the half that overlaps. */
+const tfb=await faceBox(), kb=tfb.w/1080;
+const grab=await p.$eval('#main .fv .tb .grab',e=>+e.getAttribute('r'));
+for(const btk of [['up','+'],['dn','minus']]){
+  const bb=cat.geom.dial.btn[btk[0]];
+  const bx=tfb.x+bb[0]*kb, by=tfb.y+bb[1]*kb, br=grab*kb;
+  for(const c of await cells()){
+    const L=c.lane;
+    /* The nearest point of the lane to the button's centre, against the
+       tap radius: a circle overlapping a rectangle. */
+    const dx=Math.max(L.x-bx, 0, bx-(L.x+L.w));
+    const dy=Math.max(L.y-by, 0, by-(L.y+L.h));
+    t.ok(Math.hypot(dx,dy)>=br-1,
+         'nothing you can press on the '+btk[1]+' is in '+c.s+"'s lane",
+         Math.round(Math.hypot(dx,dy))+' of '+Math.round(br));
+  }
+}
 
 t.head('the app does not draw under the status bar');
 /* black-translucent makes a saved app extend behind the clock, and on
@@ -371,6 +493,21 @@ t.ok((await faceBox()).y>=47, 'and the face below the notch',
      String(Math.round((await faceBox()).y)));
 t.ok((await faceBox()).b<=844-34,
      'and the whole face is on the glass', String(Math.round((await faceBox()).b)));
+
+t.head('the app opens on the page the glass is already on');
+/* Someone has swiped the glass to the music page since the app was
+   last open. now.page carries the panel's own PAGE_I, and without
+   reading it the mirror opens on the dial and shows a page nobody is
+   looking at. */
+await fetch(base+'/poke?page=2');
+await open();
+t.ok((await cells()).length===cat.slots.mus.length,
+     'the music page comes up with nothing tapped',
+     String((await cells()).length));
+t.ok(await p.$eval('[data-f="mus"]',e=>e.classList.contains('on')),
+     'and it is the music tab that is lit');
+await fetch(base+'/poke?page=1');
+await open();
 
 t.head('a page the panel could not measure is still reachable');
 /* The music overlay is only measurable on a 1080 glass, so a kiosk

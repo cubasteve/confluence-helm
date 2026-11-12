@@ -8970,7 +8970,7 @@ const PICK_G={
      the ids they name, rather than in netd.py - same reason the
      catalogue does. */
   mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,  save:musSave,
-         title:'THE MUSIC PAGE',
+         title:'THE MUSIC PAGE', page:2,
          names:{a:'APEX', p:'PORT', s:'STARBOARD'},
          stale:()=>{ stripKey=''; },
          after:()=>{ stripKey=''; paintStrip(); }},
@@ -8979,7 +8979,7 @@ const PICK_G={
      has to be right before the next frame. The race override cannot be
      up here - the picker refuses to open while it is. */
   dial: {slots:DIAL_SLOTS, map:()=>DIAL.slot, save:dialSave,
-         title:'THE DIAL',
+         title:'THE DIAL', page:1,
          /* c0 is the big number, c4 the line under it, and c1-c3 the
             three cells across the bottom, left to right. */
          names:{c0:'THE BIG NUMBER', c4:'THE STRIP',
@@ -9095,7 +9095,8 @@ function remoteNow(){
      a worse lie than a list, and because the panel's own theme tracks
      the sun this hands the phone the right brightness at the right
      time for free: bright in your hand by day, dark at 2am. */
-  return { slots:slots, theme:CFG.theme, eff:THEME_EFF, pal:remotePal() };
+  return { slots:slots, theme:CFG.theme, eff:THEME_EFF, pal:remotePal(),
+           t:remoteTimer(), page:PAGE_I };
 }
 
 /* The eight colours the mirror needs, and only those. Recomputed when
@@ -9110,6 +9111,35 @@ function remotePal(){
   for(const k of REM_PAL) o[k]=cs.getPropertyValue('--'+k).trim();
   remPalAt=THEME_EFF; remPal=o;
   return o;
+}
+
+/* The start clock, as two numbers rather than as a picture.
+
+   This is the one reading that crosses to the phone, and it is a
+   deliberate exception to the rule that none of them do. The reason is
+   that it is not really a reading: it is a CONTROL you are holding,
+   and the moment you want it is the moment you are on the rail with
+   both hands full and the sequence running - which is exactly when
+   walking to the glass costs the most.
+
+   ms and a state, not the rendered string. A poll arrives every second
+   and a half and a clock that only moved then would read a second and
+   a half wrong most of the time; given the remaining milliseconds and
+   which way they are going, the phone runs its own clock between polls
+   and the poll only ever re-syncs it. Remaining rather than an absolute
+   end time on purpose: this Pi has no RTC, starts at the epoch and
+   jumps when NTP lands, so the two machines cannot be assumed to agree
+   about what time it is - only about how long is left. */
+function remoteTimer(){
+  const st=(typeof tState==='string') ? tState : 'idle';
+  let ms=0;
+  try{
+    ms = st==='idle'      ? tLeft
+       : st==='countdown' ? tEnd-rnow()
+       : st==='racing'    ? rnow()-tGun
+       :                    tFinal;
+  }catch(e){ ms=0; }
+  return {ms:Math.max(0, Math.round(ms)), st:st};
 }
 
 /* Where every complication SITS, measured off the glass milliseconds
@@ -9143,6 +9173,19 @@ function remoteGeom(){
   }
   document.querySelectorAll('#svg .cut').forEach(l=>
     dial.cut.push([at(l,'x1'), at(l,'y1'), at(l,'x2'), at(l,'y2')]));
+  /* The clock and the two buttons that nudge it, read off their own
+     markup the same way the cells are. The phone draws them where the
+     glass has them and keeps its lanes clear of them, which it can only
+     do if it is told where they are. */
+  const tm=$('timer');
+  if(tm){
+    dial.tmr=[at(tm,'x'), at(tm,'y')];
+    dial.btn={};
+    for(const [k,id] of [['up','t-plus'],['dn','t-minus']]){
+      const c=$(id) && $(id).querySelector('circle');
+      if(c) dial.btn[k]=[at(c,'cx'), at(c,'cy'), at(c,'r')];
+    }
+  }
 
   /* The music page has no static rects to read: paintStrip builds its
      cells and emits nothing at all for a reading with no value, and its
@@ -9240,6 +9283,34 @@ function remoteDo(c){
   }else if(c.kind==='theme'){
     if(THEMES.indexOf(c.theme)<0) return;
     CFG.theme=c.theme; applyTheme(); prefsSave();
+  }else if(c.kind==='page'){
+    /* The phone's two tabs turn the glass as well. Looking at the
+       music page on the phone while the panel shows the dial made the
+       mirror a mirror of something nobody was looking at. */
+    /* `.page` is the check, and it is the whole check. slotSet needed
+       hasOwnProperty because what it read next exists on
+       Object.prototype; nothing here does, so '__proto__' arrives as an
+       object with no .page and is simply not a page this panel has. */
+    const g=PICK_G[c.page];
+    if(g && g.page) goPage(g.page);
+  }else if(c.kind==='timer'){
+    /* Whole minutes, and a NUMBER of them: netd adds up the taps it
+       has not handed over yet, so a total rather than a single press
+       arrives here - up to the hour it clamps at. A string of digits
+       would walk through the modulo and multiply correctly by accident,
+       which is not a thing to leave standing on the one path a phone
+       can reach.
+
+       There is no racing/finished check here, and there was one until a
+       control showed it could not be made to fail: nudge() already
+       writes nothing unless the clock is idle or counting down. A guard
+       whose removal changes no outcome is a guard that reads like the
+       rule while nudge() quietly is the rule, and the next person to
+       change nudge() would trust the wrong one. The phone dims both
+       buttons once the gun has gone, which is what the owner sees. */
+    if(typeof c.by!=='number' || !isFinite(c.by)) return;
+    if(!c.by || c.by%60 || Math.abs(c.by)>3600) return;
+    nudge(c.by);
   }
 }
 
