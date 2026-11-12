@@ -20,6 +20,32 @@ export const ORIGIN=new URL(APP).origin;
 export const KT=1.94384, DEG=180/Math.PI;
 
 /* ---- the scoreboard -------------------------------------------------- */
+/* Bring a mark round to the front of the wheel.
+
+   The marks grid turns instead of scrolling, so a tile below the fold
+   is not off-screen in a way a scroll can fix: overflow is hidden,
+   scrollIntoView has nothing to move, and playwright waits thirty
+   seconds for an element that will never arrive. The only way round is
+   to turn the wheel, which is exactly what a person does - so a probe
+   that wants a tile it cannot see asks for it the same way. */
+export const spinTo=(p,id)=>p.evaluate(mark=>{
+  const el=document.getElementById('course-list');
+  const w=(typeof WHEEL!=='undefined') && WHEEL.get(el);
+  if(!w||!w.on||!w.cyc) return false;
+  const k=el.querySelector('.cv-tile[data-mark="'+mark+'"]');
+  if(!k) return false;
+  /* Only if it is not already on the glass. Centring a tile that was
+     perfectly visible would move the view under assertions that are
+     about where things are, and this is meant to be the thing that does
+     nothing when nothing is wrong. */
+  const kb=k.getBoundingClientRect(), eb=el.getBoundingClientRect();
+  if(kb.top>=eb.top-1 && kb.bottom<=eb.bottom+1) return false;
+  const c=k.offsetTop+k.offsetHeight/2;
+  w.off=(((c-el.clientHeight/2)%w.cyc)+w.cyc)%w.cyc;
+  drumPaint(el); rimDraw(el,true);
+  return true;
+}, id);
+
 export function tally(){
   const t={pass:0, fail:0, errs:[]};
   t.ok=(c,m,x='')=>{ console.log((c?'  PASS  ':'  FAIL  ')+m+(x&&!c?'   '+x:''));

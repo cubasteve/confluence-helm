@@ -1409,6 +1409,15 @@ body.night #cp-svg .wash{opacity:.55}
   flex:1 1 auto;min-height:0;align-content:start;
   overflow-y:auto;overscroll-behavior:contain}
 .cv-grid.edit{grid-template-columns:repeat(3,1fr)}
+/* A turning wheel is driven entirely by transform, so the native scroll
+   underneath it has nothing left to do but fight the finger for the
+   gesture: on a real touchscreen the browser is entitled to decide a
+   drag on a scroll container is a pan of its own and take it.
+   This cannot be probed. Synthetic PointerEvents never go near the
+   touch pipeline, which is the same reason the touch-action rule on
+   #stage carries no probe either - and it is why scrollTop is ALSO
+   pinned in dragScroll rather than trusted to this line. */
+.cv-grid.wheel{overflow-y:hidden}
 .cv-tile{position:relative;height:92px;border-radius:16px;overflow:hidden;
   border:2px solid var(--hairline);background:none;font-family:var(--font);
   display:flex;align-items:center;gap:9px;padding:0 9px;text-align:left}
@@ -9299,17 +9308,54 @@ const PK_SLOP=10, PK_FLICK=0.15;      /* px, and px per ms */
    drag it can actually absorb - and at the end of its travel it hands
    the gesture back, which is how a swipe up from the bottom still
    closes the panel. */
-function dragScroll(list, lazy){
+function dragScroll(list, lazy, wheel){
   const st={drag:null, moved:0, glide:null};
+  /* The one box that turns rather than scrolls answers all of this with
+     its wheel offset instead of its scrollTop. Behind two accessors, so
+     the drag, the coast and the stop do not each have to know which -
+     and so every other caller's path through here is the same code it
+     was: the control panel's dismiss swipe depends on this function and
+     is no part of what was being changed. */
+  const spin=()=>{ const w=wheel&&WHEEL.get(list); return (w&&w.on)?w:null; };
+  const at=()=>{ const w=spin(); return w?w.off:list.scrollTop; };
+  const put=v=>{ const w=spin();
+    if(!w){ list.scrollTop=v; return; }
+    w.off=w.cyc?((v%w.cyc)+w.cyc)%w.cyc:v;
+    drumPaint(list);
+    /* The box no longer scrolls, so no scroll event arrives to draw the
+       arc or to re-arm the beat that drops it. Driven from here, it
+       comes up as the wheel turns and goes out when it stops. */
+    rimDraw(list, true); };
   const stop=()=>{ if(st.glide) cancelAnimationFrame(st.glide); st.glide=null; };
   const coast=v=>{ let last=performance.now();
+    const w=spin(), k=w?WHEEL_DRAG:0.994;
     const step=now=>{ const dt=Math.min(40,now-last); last=now;
-      const was=list.scrollTop; list.scrollTop+=v*dt; v*=Math.pow(0.994,dt);
-      st.glide=(Math.abs(v)>0.02 && list.scrollTop!==was)?requestAnimationFrame(step):null; };
+      const was=at(); put(was+v*dt); v*=Math.pow(k,dt);
+      /* The second test is for a list that has run into its end and is
+         going nowhere. A wheel always moves, and asking it whether it
+         did would stop it the one frame its offset wrapped to the same
+         number it started on. */
+      st.glide=(Math.abs(v)>0.02 && (w || list.scrollTop!==was))
+               ? requestAnimationFrame(step) : null; };
     st.glide=requestAnimationFrame(step); };
+  /* Nothing else on the sheet held the wheel still: stop() is reached
+     only by a finger landing on the list itself, so EDIT, CLEAR, a chip
+     in the route or the cross at the foot all used to be pressed over a
+     grid that was still turning under them. Capture, so it lands before
+     whatever the tap is actually for. */
+  if(wheel) addEventListener('pointerdown', e=>{
+    if(!list.contains(e.target)) stop(); }, true);
+  /* overflow:hidden stops a FINGER scrolling the box and nothing else:
+     scrollTop is still settable, and scrollIntoView, a focus, or a
+     browser restoring a position will all still move it. Any of those
+     slides the picture sideways of the wheel, because the rows are
+     placed about the middle of the box and a box that has scrolled is
+     a different middle. The only way to move this grid is to turn it. */
+  if(wheel) list.addEventListener('scroll',()=>{
+    if(list.scrollTop) list.scrollTop=0; }, {passive:true});
   list.addEventListener('pointerdown',e=>{ if(!lazy) gClaim(); stop(); st.moved=0;
     st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(),
-             top:list.scrollTop, v:0, held:!lazy}; });
+             top:at(), v:0, held:!lazy, s:[]}; });
   addEventListener('pointermove',e=>{ const d=st.drag; if(!d||e.pointerId!==d.id) return;
     if(!d.held){
       const dy=e.clientY-d.y0;
@@ -9321,14 +9367,22 @@ function dragScroll(list, lazy){
       d.held=true; gClaim();
     }
     const now=performance.now(), dt=now-d.t; if(dt>0) d.v=(d.y-e.clientY)/dt;
+    /* One pair of samples is enough to decide a flick from a tap, which
+       is all this number used to be for. It is not enough to set the
+       speed of a wheel that then turns for a second and a half: a
+       finger that slows as it lifts hands over whatever the last two
+       frames happened to say, and the same gesture comes out at half
+       speed or twice it. Averaged over the last 70ms it is the stroke
+       rather than its final twitch. */
+    if(wheel){ d.s.push({t:now, y:e.clientY}); d.v=wheelV(d.s, now, e.clientY); }
     d.y=e.clientY; d.t=now; st.moved=Math.max(st.moved, Math.abs(e.clientY-d.y0));
-    list.scrollTop=d.top-(e.clientY-d.y0); });
+    put(d.top-(e.clientY-d.y0)); });
   ['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,e=>{ const d=st.drag;
     if(!d||e.pointerId!==d.id) return; st.drag=null;
     if(st.moved>PK_SLOP && Math.abs(d.v)>PK_FLICK) coast(d.v); }));
   return ()=>{ const m=st.moved>PK_SLOP; if(m) st.moved=0; return m; };
 }
-const courseDragged=dragScroll($('course-list'));
+const courseDragged=dragScroll($('course-list'), false, true);
 const libDragged=dragScroll($('lib-list'));
 dragScroll($('p-sheet'), true);
 
@@ -9506,8 +9560,14 @@ function scrollFit(el){
   const at   = vy ? el.scrollTop : el.scrollLeft;
   const room = vy ? el.scrollHeight-el.clientHeight
                   : el.scrollWidth -el.clientWidth;
-  el.classList.toggle('over-a', (vy||vx) && at>1);
-  el.classList.toggle('over-z', (vy||vx) && at<room-1);
+  /* A wheel has no ends, so both edges always have something behind
+     them. Asking scrollTop would say otherwise and say it forever: it
+     is pinned at 0 while the wheel turns, so the top would never fade
+     and the bottom always would, which is the picture of a list sitting
+     at its first row. */
+  const w=WHEEL.get(el), spin=!!(w && w.on);
+  el.classList.toggle('over-a', spin || ((vy||vx) && at>1));
+  el.classList.toggle('over-z', spin || ((vy||vx) && at<room-1));
 }
 function sheetFit(){ scrollFit($('p-sheet'));
   setTimeout(()=>rimDraw($('p-sheet')),60); }
@@ -9589,20 +9649,33 @@ function rimDraw(el, moving){
      a hidden element measures 0 and would draw a point at 9 o'clock.
      Clearing is only for the box that owns the arc - a re-render of
      something behind a sheet must not take down the sheet's own. */
+  const wh=WHEEL.get(el), spin=!!(wh && wh.on && wh.cyc);
   if(!el || !el.clientHeight || !el.offsetParent
-       || el.scrollHeight<=el.clientHeight+1){
+       || (!spin && el.scrollHeight<=el.clientHeight+1)){
     if(!el || RIM===el || !RIM || !RIM.offsetParent){
       RIM=null; svg.classList.remove('lit','on'); }
     return; }
   RIM=el;
-  let t0=el.scrollTop/el.scrollHeight,
-      t1=(el.scrollTop+el.clientHeight)/el.scrollHeight;
+  /* A wheel has no absolute position, but it has an ANGLE, and that is
+     what this says: where you are in one turn. The thumb walks down,
+     reaches the foot and comes round the top again - the wheel itself,
+     drawn small, beside the wheel. Taking it away instead was the first
+     answer here and it was the wrong one: rimDraw and drumRib are still
+     live code for two other boxes, and the marks grid is the one place
+     either was ever looked at. */
+  let t0 = spin ? wh.off/wh.cyc : el.scrollTop/el.scrollHeight,
+      t1 = spin ? t0+el.clientHeight/wh.cyc
+                : (el.scrollTop+el.clientHeight)/el.scrollHeight;
   /* A list long enough and the window in it is a dot. Hold the thumb to
      a length you can still see, and keep it inside the track. */
   if(t1-t0<RIM_MIN){ const m=(t0+t1)/2;
     t0=Math.max(0, Math.min(m-RIM_MIN/2, 1-RIM_MIN)); t1=t0+RIM_MIN; }
   wAttr('arc-t','d',drumRib(el,0,1));
-  wAttr('arc-h','d',drumRib(el,t0,t1));
+  /* Past the foot it comes round the top, so it is drawn in two pieces
+     rather than stalling at the bottom once a turn. Two closed subpaths
+     in one d, which is what drumRib returns anyway. */
+  wAttr('arc-h','d', t1<=1 ? drumRib(el,t0,t1)
+                           : drumRib(el,t0,1)+drumRib(el,0,t1-1));
   svg.classList.add('lit');
   if(!moving) return;
   svg.classList.add('on');
@@ -9622,17 +9695,106 @@ function rimDraw(el, moving){
    spacing. What the eye is reading here is the tilt and the taper; the
    missing depth is a pixel or two at the edges. */
 const DRUM_TILT=34, DRUM_SHRINK=.11, DRUM_DIM=.42, DRUM_EDGE=1.4;
+
+/* ---- the free wheel ---------------------------------------------------
+   The marks grid has always been drawn as a drum and has never turned
+   like one. Twelve marks and NEW MARK make four rows in a box that shows
+   three and a half: 47 pixels of travel, so a flick reached the bottom
+   in a seventh of a second and stopped dead against it. What it looked
+   like was a cylinder; what it did was a list with almost nothing in it.
+
+   It goes round now. The rows are the same rows, in the same grid, in
+   the same DOM order - a row that leaves the bottom is MOVED, not
+   copied, by one full turn, so there is still exactly one tile per mark
+   on the glass. That is the whole reason it is done this way rather than
+   by cloning the strip above and below: two tiles carrying
+   data-mark="cb12" would make querySelector a coin toss for the reorder
+   drag, for the delete path, and for every probe in the suite that finds
+   a mark by its id. A wheel is not worth that.
+
+   transform does not disturb layout, so the grid stays a grid and the
+   tiles keep their places in it; what moves is only what you see and
+   what your finger lands on. */
+const WHEEL=new Map();
+/* Slower than the list's own 0.994, which has a time constant of 166ms
+   and dies in about two thirds of a second - on a bounded 47px scroll
+   you never saw it stop because it hit the end first. At 0.9985 the
+   constant is 666ms and a firm flick runs about one and a half turns,
+   which is a wheel let go of rather than a list pushed. */
+const WHEEL_DRAG=0.9985;
+/* How fast the wheel was let go of.
+
+   One pair of samples is enough to tell a flick from a tap, which is
+   all the list's own number ever had to decide. It is not enough to set
+   the speed of something that then turns for a second and a half: a
+   finger that slows as it lifts hands over whatever the last two frames
+   happened to say, and the same stroke comes out at half speed or twice
+   it. Over the last 70ms it is the stroke rather than its final twitch.
+
+   A function of its arguments and nothing else, because that is the
+   only way this is testable: the probe cannot control the timing of a
+   synthetic gesture closely enough to exercise a window, and an input
+   rule nothing can check is an input rule that quietly rots. */
+const WHEEL_WIN=70;
+function wheelV(s, now, y){
+  while(s.length>1 && now-s[0].t>WHEEL_WIN) s.shift();
+  const f=s[0], gap=now-f.t;
+  return gap>8 ? (f.y-y)/gap : (s.length>1 ? (s[s.length-2].y-y)/
+                  Math.max(1, now-s[s.length-2].t) : 0);
+}
+function wheelOf(el){
+  let w=WHEEL.get(el);
+  if(!w){ w={on:false, off:0, v:0, cyc:0, glide:0}; WHEEL.set(el,w); }
+  return w;
+}
+/* One turn is every row once, so the cycle is the row pitch times the
+   number of rows - and EDIT swaps four columns for three, which changes
+   both. Measured off the laid-out grid on every rebuild rather than
+   remembered, because a remembered cycle is a seam you can see. */
+function wheelFit(el){
+  if(!el) return;
+  const w=wheelOf(el), ks=el.children;
+  w.on=false;
+  if(!ks.length) return;
+  const top=ks[0].offsetTop;
+  let pitch=0;
+  for(const k of ks){ const d=k.offsetTop-top; if(d>0){ pitch=d; break; } }
+  if(!pitch) return;
+  w.cyc=(Math.round((ks[ks.length-1].offsetTop-top)/pitch)+1)*pitch;
+  /* A grid that already fits has nowhere to go, and turning it would be
+     motion for its own sake on a panel with room for none. This is the
+     same rule the fades keep: a box that fits says nothing at all. */
+  w.on=el.scrollHeight>el.clientHeight+1 && w.cyc>el.clientHeight;
+  if(!w.on){ w.off=0; w.v=0; }
+  el.classList.toggle('wheel', w.on);
+  if(w.on && w.cyc) w.off=((w.off%w.cyc)+w.cyc)%w.cyc;
+}
 function drumPaint(el){
   if(!el || !el.clientHeight) return;
-  const H=el.clientHeight, mid=el.scrollTop+H/2, half=H/2;
+  const H=el.clientHeight, half=H/2;
+  const w=WHEEL.get(el), spin=!!(w && w.on && w.cyc);
+  const mid=(spin ? w.off : el.scrollTop)+half;
   for(const k of el.children){
     const c=k.offsetTop+k.offsetHeight/2;
-    let u=(c-mid)/half;
+    let d=c-mid, shift=0;
+    if(spin){
+      /* The nearest place on the drum this row could be: one that has
+         gone off the bottom is the same row coming round the top.
+         Hung about the BOX's middle, not the scroll's - scrollTop is
+         pinned at 0 while the wheel turns and the only band on the
+         glass is 0 to H, so a row placed at mid+q falls outside the
+         clip and simply vanishes. Which is what the first version of
+         this did: it emptied the grid the moment it moved. */
+      const q=((d+w.cyc/2)%w.cyc+w.cyc)%w.cyc-w.cyc/2;
+      shift=(half+q)-c; d=q;
+    }
+    let u=d/half;
     /* Rows well past the edge are not on screen at all. Park them at the
        edge's own values rather than working out a tilt nobody sees. */
     u=Math.max(-DRUM_EDGE,Math.min(DRUM_EDGE,u));
     const a=Math.abs(u);
-    k.style.transform='rotateX('+(-u*DRUM_TILT).toFixed(2)+'deg) scale('
+    k.style.transform=(shift ? 'translateY('+shift.toFixed(1)+'px) ' : '')
+                     +'rotateX('+(-u*DRUM_TILT).toFixed(2)+'deg) scale('
                      +(1-a*DRUM_SHRINK).toFixed(3)+')';
     k.style.opacity=(1-a*DRUM_DIM).toFixed(3);
   }
@@ -10850,7 +11012,7 @@ function renderCourse(){
     +'<span class="pl">＋</span><div class="tx"><b>NEW MARK</b>'
     +'<s>'+(courseEdit?'NAME AND POSITION':'ONE OF YOUR OWN')+'</s></div></button>';
   box.innerHTML=MARKS.map(tile).join('')+add;
-  scrollFit(box); drumPaint(box); rimDraw(box);
+  wheelFit(box); scrollFit(box); drumPaint(box); rimDraw(box);
 
   /* The four settings, read at a glance. The corner glyph says what kind
      of control it is: a chevron opens a menu, a plus steps, and the
@@ -11552,8 +11714,8 @@ function courseOpen(host){
   crsTitle(); renderCourse();
   /* Measured after the sheet is up: a box that is display:none has no
      height, and every row would come out at the same angle. */
-  setTimeout(()=>{ scrollFit($('course-list')); drumPaint($('course-list'));
-                   rimDraw($('course-list')); },60);
+  setTimeout(()=>{ wheelFit($('course-list')); scrollFit($('course-list'));
+                   drumPaint($('course-list')); rimDraw($('course-list')); },60);
 }
 function courseClose(){
   prevClose();

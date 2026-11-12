@@ -1,5 +1,6 @@
 /* Correcting a club mark from the boat, and putting the book back. */
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
+import {spinTo} from './helpers.mjs';
 const OUT=process.env.HELM_SHOTS||'/tmp/';
 const b=await pw.chromium.launch({executablePath:process.env.HELM_CHROME});
 const ctx=await b.newContext({viewport:{width:1080,height:1080},
@@ -40,7 +41,7 @@ ok((await row('cb12')).undo===false, 'so there is nothing to put back');
 
 console.log('\n=== a club mark opens in EDIT now ===');
 await p.click('#course-edit'); await p.waitForTimeout(400);
-await p.click('.cv-tile[data-mark="cb12"] b'); await p.waitForTimeout(500);
+await spinTo(p,'cb12'); await p.click('.cv-tile[data-mark="cb12"] b'); await p.waitForTimeout(500);
 let f=await p.evaluate(()=>({open:$('course-add').style.display!=='none',
   title:$('app-name').textContent, id:MK&&MK.id,
   name:$('mk-name').textContent, lat:$('mk-lat').textContent, lon:$('mk-lon').textContent}));
@@ -88,7 +89,7 @@ ok(geo.dist<5, 'and the leg says we are standing on it, so it followed the corre
    JSON.stringify(geo));
 
 console.log('\n=== a mark of your own is still edited, not overridden ===');
-await p.click('.cv-tile[data-mark="u1abc"] b'); await p.waitForTimeout(500);
+await spinTo(p,'u1abc'); await p.click('.cv-tile[data-mark="u1abc"] b'); await p.waitForTimeout(500);
 ok((await p.evaluate(()=>$('app-name').textContent))==='Edit mark',
    'and called what it is');
 await p.evaluate(()=>{ MK.f='lat'; MK.lat='28 50.000'; mkPaint(); });
@@ -103,7 +104,7 @@ console.log('\n=== the book is TWO taps away ===');
    with nothing to put back - markRevert says so itself: "the compiled
    values are not kept anywhere to restore FROM". One tap on a 40 px
    disc, beside a drag handle, on a sheet you scroll with a thumb. */
-await p.click('.cv-tile[data-mark="cb12"] .undo');
+await spinTo(p,'cb12'); await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(400);
 let armed = await p.evaluate(()=>({
   cls: !!document.querySelector('.cv-tile[data-mark="cb12"] .undo.arm'),
@@ -121,9 +122,9 @@ ok(!await p.evaluate(()=>!!document.querySelector('.cv-tile[data-mark="cb12"] .u
    'the arm expires rather than waiting all day');
 ok(await p.evaluate(()=>isMoved('cb12')), 'still corrected');
 
-await p.click('.cv-tile[data-mark="cb12"] .undo');
+await spinTo(p,'cb12'); await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(300);
-await p.click('.cv-tile[data-mark="cb12"] .undo');
+await spinTo(p,'cb12'); await p.click('.cv-tile[data-mark="cb12"] .undo');
 await p.waitForTimeout(2600);                     /* markRevert reloads */
 await p.evaluate(()=>bootSettle());
 await p.evaluate(()=>openCourse());

@@ -869,6 +869,70 @@ is still saying there is more. The right half of the circle is where it
 lives, because `Math.asin` lands in −90…90 and that is the side a helm
 is not reaching across.
 
+### The marks grid turns
+
+The marks grid is the one scroller that does not scroll. It has always
+been *drawn* as a drum, and until now it was a drum with 47 pixels of
+travel: twelve marks and NEW MARK make four rows in a box that shows
+three and a half, so a flick reached the bottom in about a seventh of a
+second and stopped dead against it. It looked like a cylinder and
+behaved like a drawer.
+
+It goes round now. A row that leaves the bottom is the same row coming
+over the top, and there is no end to arrive at.
+
+**The rows are moved, not copied.** `drumPaint()` already placed each
+tile by its distance from the middle of the box; the wheel wraps that
+distance into the nearest equivalent place on the cylinder and shifts
+the tile there with a `translateY` in front of the tilt it already
+carried. `transform` does not disturb layout, so the grid stays a grid
+and the tiles keep their order in it.
+
+That is the whole reason it is not built from a cloned strip above and
+below, which is the usual way to wrap a list. Two tiles carrying
+`data-mark="cb12"` would make `querySelector` a coin toss for the
+reorder drag, for the delete path, and for every probe in the suite
+that finds a mark by its id — and `p.click()` resolves to the *first*
+match without complaining, so the damage would have been silent. There
+is still exactly one tile per mark at every angle, and a probe asserts
+it.
+
+| | |
+|---|---|
+| `WHEEL` | a `Map` of box → `{on, off, v, cyc}`; `#lib-list` keeps its ends |
+| `wheelFit()` | measures row pitch × rows on every rebuild — EDIT's three columns are a longer turn than four |
+| `WHEEL_DRAG` | `0.9985`. The list's own `0.994` has a time constant of 166 ms and dies in two thirds of a second; this one runs about a turn and a half |
+| `wheelV()` | the release speed, averaged over 70 ms |
+
+**A grid that already fits does not turn.** Nine marks fit the box, and
+spinning them would be motion for its own sake on a panel with room for
+none — the same rule the fades keep.
+
+**Both edges fade, always**, because there is no top to be at. A grid
+fading only one way would be the picture of a list sitting on its first
+row, which this is not.
+
+**The arc became a revolution counter.** A wheel has no absolute
+position, but it has an angle, and that is what the thumb now says:
+where you are in one turn. It runs off the foot and comes round the
+top, drawn as two subpaths in one `d` rather than stalling at the
+bottom once a turn. Taking it away was the first answer and the wrong
+one — `rimDraw()` and `drumRib()` are still live code for two other
+boxes, and the marks grid is the one place either was ever looked at.
+
+**Two consequences worth knowing.** Nothing outside the list used to
+hold the wheel still — `stop()` was reached only by a finger landing on
+the grid itself, so EDIT, CLEAR, a chip in the route and the cross at
+the foot were all pressed over a grid still turning under them. A
+capture-phase `pointerdown` anywhere else now stops it.
+
+And a tile below the fold can no longer be scrolled into view, because
+there is nothing to scroll: `scrollTop` is pinned at 0 and any attempt
+to move it is put back. The only way round is to turn the wheel, which
+is what a person does — and what `spinTo()` in `tests/helpers.mjs` does
+for a probe that wants a tile it cannot see. `overflow:hidden` alone
+would not have been enough; it stops a finger and nothing else.
+
 The dock's row scrolls sideways, so its fade runs the other way and it
 gets no arc: the rim is a vertical idea.
 
