@@ -61,6 +61,58 @@ stdlib-only service that shells out to `nmcli` and `bluetoothctl`.
 panel  ->  http://127.0.0.1:8091  ->  nmcli / bluetoothctl
 ```
 
+
+### GET is for reading
+
+`do_GET` used to dispatch the **whole** route table with an empty body.
+Twenty-seven routes, and five of them did their thing with no body at
+all — and because every argument came back `None`, they did the worst
+available version of it:
+
+| bodyless GET | what it did |
+|---|---|
+| `/wifi/power`, `/wifi/disconnect` | `wifi_power('', False)`. `find_dev('')` falls back to `devs[0]`, and `devs` sorts onboard before USB — so the adapter it switched off was **wlan0, which carries SeaWire** |
+| `/bt/power` | `body.get('on')` is `None`, so: off. That is the start horn's speaker |
+| `/display/mode` | `mode != 'kiosk'`, so `go_windowed` — a frameless round panel, un-fullscreened, with no pointer |
+| `/display/fit` | reset the fit to its default |
+| `/buzz` | sounded the horn |
+
+The first one was survivable while `device disconnect` was a no-op on
+an idle radio. Once the switch was fixed to write `autoconnect no` it
+**sticks, and survives a reboot** — so one stray GET permanently takes
+down the only way onto the boat.
+
+Loopback keeps the world out. It does not keep out a link, a prefetch,
+a typo in this repo, or the `file://` page `start-kiosk.sh` falls back
+to when AvNav is slow to come up — all of which are the same browser on
+the same machine, and `null` is an allowed origin precisely because
+that fallback is real.
+
+```python
+GET_OK = {'/status', '/bt/list', '/wifi/list', '/display/status', '/gpx/list'}
+```
+
+An **allowlist**, and deliberately *not* keyed off `MUTATING`. That set
+holds nine radio routes and exists to invalidate caches, so it says
+nothing about `/display/mode`, `/buzz`, `/power/do`, `/gpx/delete` or
+`/score` — a guard built on it looks complete and leaves three of the
+five live. A control run proves exactly that. This way a route added
+next year is POST-only until somebody decides otherwise.
+
+Nothing in the panel breaks: `netApi` sends `method: body?'POST':'GET'`,
+and of its eighteen call sites exactly two are bodyless — `/status` and
+`/bt/list`, both readers. `netd.sh`'s single-instance guard and
+`wifi-report.sh` both `curl` `/status`, which is also a reader.
+
+`tests/netdhttp_test.py` is the first probe to go through netd's HTTP
+door rather than calling `route()` directly, which is why none of the
+others could see this. Seven tests, including one that **enumerates
+every route in the table** and requires each to be either a declared
+reader or refused on `GET` — so a new route cannot become quietly
+reachable. Five controls: no guard, a guard keyed off `MUTATING`, a
+writer added to `GET_OK`, the readers refused, and `GET_OK` naming a
+route that does not exist.
+
 ### The hotspot is load-bearing
 
 Anything that would take a hotspot adapter down needs a second, deliberate

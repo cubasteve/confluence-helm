@@ -1754,7 +1754,11 @@ def uptime_txt():
     """Straight from /proc - a subprocess for this would be silly, and it
     rides along on every /status."""
     try:
-        secs = float(open('/proc/uptime').read().split()[0])
+        # `with`, because this rides along on every /status: an unclosed
+        # handle every few seconds is a slow leak on a box that stays up
+        # for a season, and it is what made the probe output noisy.
+        with open('/proc/uptime') as f:
+            secs = float(f.read().split()[0])
     except Exception:
         return ''
     d, rest = divmod(int(secs), 86400)
@@ -2552,6 +2556,39 @@ def route(path, body):
 MUTATING = {'/wifi/power', '/wifi/connect', '/wifi/disconnect', '/wifi/forget',
             '/bt/power', '/bt/connect', '/bt/disconnect', '/bt/forget', '/bt/scan'}
 
+# GET is for reading, and these five are the only routes that read.
+#
+# do_GET dispatched the WHOLE table with an empty body, so five routes
+# did their thing with no body at all - and because every argument came
+# back None, they did the worst available version of it:
+#
+#   GET /wifi/power       wifi_power('', False). find_dev('') falls back
+#   GET /wifi/disconnect  to devs[0], and devs sorts onboard before usb -
+#                         so the adapter it switches off is wlan0, which
+#                         is SeaWire. Harmless once, because disconnect
+#                         is a no-op on an idle radio; since the switch
+#                         was fixed to write `autoconnect no` it STICKS,
+#                         and survives a reboot. The access point is the
+#                         only way onto this boat.
+#   GET /bt/power         body.get('on') is None, so: off. That is the
+#                         start horn's speaker.
+#   GET /display/mode     mode != 'kiosk', so: go_windowed. A frameless
+#                         round panel, un-fullscreened, with no pointer.
+#   GET /display/fit      resets the fit to its default.
+#   GET /buzz             sounds the horn.
+#
+# Loopback keeps the world out, but not a link, a prefetch, a typo in
+# this repo, or the file:// fallback page start-kiosk.sh loads when
+# AvNav is slow - all of which are the same browser on the same machine.
+#
+# An ALLOWLIST and not a block list, and deliberately not keyed off
+# MUTATING above: that set holds nine radio routes and exists to
+# invalidate caches, so it says nothing about /display/mode, /buzz,
+# /power/do, /gpx/delete or /score. A guard built on it would look
+# complete and leave three of the five live. This way a route added
+# later is POST-only until someone decides otherwise.
+GET_OK = {'/status', '/bt/list', '/wifi/list', '/display/status', '/gpx/list'}
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = 'helm-netd/1.0'
@@ -2582,8 +2619,10 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _handle(self, body):
+    def _handle(self, body, method='POST'):
         path = self.path.split('?')[0].rstrip('/') or '/status'
+        if method == 'GET' and path not in GET_OK:
+            return self._send({'ok': False, 'error': 'POST ONLY'}, 405)
         try:
             res = route(path, body)
             if path in MUTATING:
@@ -2595,7 +2634,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(res)
 
     def do_GET(self):
-        self._handle({})
+        self._handle({}, 'GET')
 
     def do_POST(self):
         try:
@@ -2609,7 +2648,7 @@ class Handler(BaseHTTPRequestHandler):
                 body = {}
         except Exception:
             body = {}
-        self._handle(body)
+        self._handle(body, 'POST')
 
 
 if __name__ == '__main__':
