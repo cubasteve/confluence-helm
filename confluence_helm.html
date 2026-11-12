@@ -8955,7 +8955,14 @@ const PICK_G={
      frame, deliberately, so a repaint from outside the loop would put
      slot text under a race override for one frame and the override
      would take it back on the next. One frame is still a flash. */
+  /* `title` and `names` are for the phone, which is looking at a list
+     and not at the glass: C2 is a perfectly good id and tells you
+     nothing about which cell is about to change. They live here, beside
+     the ids they name, rather than in netd.py - same reason the
+     catalogue does. */
   mus:  {slots:MUS_SLOTS,  map:()=>MUS.slot,  save:musSave,
+         title:'THE MUSIC PAGE',
+         names:{a:'APEX', p:'PORT', s:'STARBOARD'},
          stale:()=>{ stripKey=''; },
          after:()=>{ stripKey=''; paintStrip(); }},
   /* Repaint the three cells rather than the whole dial: the dial is
@@ -8963,6 +8970,11 @@ const PICK_G={
      has to be right before the next frame. The race override cannot be
      up here - the picker refuses to open while it is. */
   dial: {slots:DIAL_SLOTS, map:()=>DIAL.slot, save:dialSave,
+         title:'THE DIAL',
+         /* c0 is the big number, c4 the line under it, and c1-c3 the
+            three cells across the bottom, left to right. */
+         names:{c0:'THE BIG NUMBER', c4:'THE STRIP',
+                c1:'LEFT', c2:'MIDDLE', c3:'RIGHT'},
          stale:()=>{ dialCellKey=''; },
          after:()=>{ dialCellKey=''; paintDialCells(); }},
 };
@@ -9074,11 +9086,15 @@ function remoteNow(){
 }
 
 function remoteCat(){
-  const slots={};
-  for(const g in PICK_G) slots[g]=PICK_G[g].slots.slice();
+  const slots={}, pages={}, names={};
+  for(const g in PICK_G){
+    slots[g]=PICK_G[g].slots.slice();
+    pages[g]=PICK_G[g].title;
+    for(const sl of PICK_G[g].slots) names[g+':'+sl]=PICK_G[g].names[sl];
+  }
   /* Key, name, group. The name is for the row, the group for the
      heading above it, and there is deliberately no value. */
-  return { slots:slots,
+  return { slots:slots, pages:pages, names:names,
            readings:MUS_CELLS.map(c=>({k:c.k, name:c.name, sen:c.sen})),
            themes:THEMES, now:remoteNow() };
 }

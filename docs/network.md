@@ -768,6 +768,23 @@ The token in the URL is minted once and kept in
 which is what makes a saved home-screen link permanent. Delete that file
 and every installed app stops working until you redo the above.
 
+### What the phone shows
+
+A row per slot, named the way you would point at it — **APEX**, **PORT**,
+**STARBOARD** on the music page; **THE BIG NUMBER**, **LEFT**, **MIDDLE**,
+**RIGHT**, **THE STRIP** on the dial — with what is in it underneath, and
+a theme row at the bottom. Tapping a row opens the reading list, grouped
+by instrument, scrolled to what is set and with it ticked; **BACK**
+leaves without choosing, because otherwise opening the list by accident
+means changing a cell you never meant to touch.
+
+Those names come from the panel with the catalogue (`pages` and `names`
+in `PICK_G`), not from `netd.py`. `c2` is a perfectly good id and says
+nothing about which cell is about to change, and a second copy of the
+geometry in the helper would drift the first time a slot moved.
+
+`tests/phone.mjs` drives the real page against the real handler.
+
 ### No tile, always on
 
 There is nothing on the glass for this: no tile, no arming, no QR. A

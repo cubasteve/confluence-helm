@@ -2648,7 +2648,8 @@ _remote = {'armed': False, 'token': '', 'how': '', 'srv': None, 'cidr': '',
            # carrying its own copy of the catalogue - the readings live
            # in the HTML and a second list here would drift the first
            # time one was added.
-           'slots': {}, 'readings': [], 'themes': []}
+           'slots': {}, 'readings': [], 'themes': [],
+           'pages': {}, 'names': {}}
 _rlock = threading.Lock()
 
 
@@ -2764,9 +2765,17 @@ def remote_register(body):
     themes = body.get('themes')
     if not isinstance(themes, list) or not themes:
         themes = ['day', 'dusk', 'night', 'auto']
+    # What each page and each slot is CALLED. Optional, and strings
+    # only: the phone is looking at a list rather than at the glass, and
+    # `c2` names the cell perfectly well without saying which one it is.
+    def _labels(v):
+        return ({str(a): str(b) for a, b in v.items()}
+                if isinstance(v, dict) else {})
     with _rlock:
         _remote.update(slots={k: list(v) for k, v in slots.items()},
-                       readings=list(readings), themes=list(themes))
+                       readings=list(readings), themes=list(themes),
+                       pages=_labels(body.get('pages')),
+                       names=_labels(body.get('names')))
         if isinstance(body.get('now'), dict):
             _remote['now'] = body['now']
         # A register also lifts a hand-shut latch. The panel registers
@@ -2942,14 +2951,29 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
 body{margin:0;background:#0B0C0E;color:#F2F4F6;
  font:600 17px/1.3 -apple-system,'Segoe UI',Roboto,sans-serif;
  padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-h1{font-size:13px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
+/* There is no browser chrome in standalone mode, so the app has to say
+   what it is itself. */
+.top{display:flex;align-items:baseline;gap:10px;padding:16px 2px 2px;
+ font-size:15px;letter-spacing:.26em}
+.top i{font-style:normal;color:#6C757C;font-size:12px;letter-spacing:.2em}
+h1{font-size:12px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
 .row{display:flex;align-items:center;gap:12px;width:100%;
  background:#15181B;border:0;color:inherit;border-radius:14px;
- padding:14px 16px;margin-bottom:8px;font:inherit;text-align:left}
-.row b{flex:none;width:34px;color:#6C757C;font-size:13px;letter-spacing:.1em}
-.row s{flex:1;text-decoration:none;color:#F2F4F6}
-.row i{font-style:normal;color:#4A9EFF;font-size:14px}
+ padding:12px 16px;margin-bottom:8px;font:inherit;text-align:left}
+/* Two lines: WHICH CELL, then what is in it. The slot's name does not
+   fit on one line beside the reading - THE BIG NUMBER is not C0 - and
+   the thing you are looking for is the second line anyway. */
+.row u{flex:1;text-decoration:none;min-width:0}
+.row u b{display:block;font:600 11px/1.4 inherit;letter-spacing:.18em;
+ color:#6C757C}
+.row u s{display:block;text-decoration:none;font-size:18px;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row i{font-style:normal;color:#4A9EFF;font-size:15px;flex:none}
 .row:active{background:#22272B}
+.row.sel{background:#1B2531}
+.row.sel i{color:#4A9EFF}
+.back{background:none;padding:12px 2px;margin:0}
+.back u s{font-size:14px;letter-spacing:.14em;color:#9AA2A9}
 .th{display:flex;gap:8px}
 .th button{flex:1;background:#15181B;border:0;color:#9AA2A9;border-radius:14px;
  padding:14px 0;font:inherit;font-size:14px;letter-spacing:.1em}
@@ -2957,7 +2981,7 @@ h1{font-size:13px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
 #list{position:fixed;inset:0;background:#0B0C0E;overflow:auto;
  padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:none}
 #list.on{display:block}
-#list h1{margin-top:env(safe-area-inset-top)}
+#list .back{margin-top:env(safe-area-inset-top)}
 .grp{font-size:11px;letter-spacing:.2em;color:#4A9EFF;margin:16px 0 6px}
 #msg{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
@@ -2970,6 +2994,12 @@ h1{font-size:13px;letter-spacing:.22em;color:#6C757C;margin:18px 0 10px}
 var T=new URLSearchParams(location.search).get('t')||'';
 var S=null, GRP={gps:'GPS',dpt:'DEPTH',wnd:'WIND',mot:'MOTION',
                  crs:'COURSE',perf:'PERFORMANCE'};
+/* Everything drawn here came over a network, from a panel that is
+   trusted - and is escaped anyway, because the day it is not is the day
+   nobody remembers this file builds its rows as strings. */
+function esc(s){return String(s===undefined||s===null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;');}
 function say(m){var e=document.getElementById('msg');e.textContent=m;
   e.style.display='block';setTimeout(function(){e.style.display='none'},2500);}
 function get(u,cb){var x=new XMLHttpRequest();x.open('GET',u);
@@ -2981,31 +3011,47 @@ function post(b,cb){var x=new XMLHttpRequest();x.open('POST','/r/cmd?t='+T);
     if(x.status!==200){say(j.error||('HTTP '+x.status));return}cb&&cb()};
   x.onerror=function(){say('NO ANSWER FROM THE BOAT')};x.send(JSON.stringify(b));}
 function name(k){for(var i=0;i<S.readings.length;i++)
-  if(S.readings[i].k===k)return S.readings[i].name;return k;}
+  if(S.readings[i].k===k)return S.readings[i].name;return k||'—';}
+function slotName(p,sl){return (S.names||{})[p+':'+sl]||sl.toUpperCase();}
+function held(p,sl){return (S.now.slots||{})[p+':'+sl];}
 function draw(){
-  var h='',p;
+  var h='<div class="top">CONFLUENCE<i>45</i></div>',p;
   for(p in S.slots){
-    h+='<h1>'+(p==='dial'?'THE DIAL':'THE MUSIC PAGE')+'</h1>';
+    h+='<h1>'+esc((S.pages||{})[p]||p.toUpperCase())+'</h1>';
     S.slots[p].forEach(function(sl){
-      h+='<button class="row" data-p="'+p+'" data-s="'+sl+'">'
-        +'<b>'+sl.toUpperCase()+'</b><s>'+name((S.now.slots||{})[p+':'+sl])
-        +'</s><i>&#9656;</i></button>';});
+      h+='<button class="row" data-p="'+esc(p)+'" data-s="'+esc(sl)+'">'
+        +'<u><b>'+esc(slotName(p,sl))+'</b><s>'+esc(name(held(p,sl)))+'</s></u>'
+        +'<i>&#9656;</i></button>';});
   }
   h+='<h1>THEME</h1><div class="th">';
   S.themes.forEach(function(t){
-    h+='<button data-t="'+t+'"'+((S.now.theme===t)?' class="on"':'')+'>'
-      +t.toUpperCase()+'</button>';});
+    h+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
+      +esc(t.toUpperCase())+'</button>';});
   h+='</div>';
   document.getElementById('main').innerHTML=h;
 }
 function pick(p,sl){
-  var h='<h1>'+sl.toUpperCase()+' &mdash; PICK A READING</h1>',last='';
+  /* A way out that is not a choice. Without it the only way off this
+     list is to set something, and opening it by accident means changing
+     a cell you did not mean to touch. */
+  var cur=held(p,sl), last='';
+  var h='<button class="row back" data-back="1"><u><s>&#8592; BACK</s></u></button>'
+       +'<h1>'+esc(slotName(p,sl))+'</h1>';
   S.readings.forEach(function(r){
-    if(r.sen!==last){last=r.sen;h+='<div class="grp">'+(GRP[r.sen]||r.sen)+'</div>';}
-    h+='<button class="row" data-k="'+r.k+'"><s>'+r.name+'</s></button>';});
+    if(r.sen!==last){last=r.sen;h+='<div class="grp">'+esc(GRP[r.sen]||r.sen)+'</div>';}
+    h+='<button class="row'+(r.k===cur?' sel':'')+'" data-k="'+esc(r.k)+'">'
+      +'<u><s>'+esc(r.name)+'</s></u>'
+      +(r.k===cur?'<i>&#10003;</i>':'')+'</button>';});
   var L=document.getElementById('list');
   L.innerHTML=h;L.className='on';
-  L.onclick=function(e){var b=e.target.closest('[data-k]');if(!b)return;
+  /* Open ON what is set, not at the top. The list is longer than the
+     screen, so a picker that starts at GPS hides the answer to the
+     question you opened it to ask. */
+  var at=L.querySelector('.sel');
+  if(at) at.scrollIntoView({block:'center'}); else L.scrollTop=0;
+  L.onclick=function(e){
+    if(e.target.closest('[data-back]')){L.className='';return;}
+    var b=e.target.closest('[data-k]');if(!b)return;
     post({kind:'slot',page:p,slot:sl,reading:b.dataset.k},function(){
       S.now.slots=S.now.slots||{};S.now.slots[p+':'+sl]=b.dataset.k;
       L.className='';draw();});};
@@ -3018,7 +3064,7 @@ document.getElementById('main').onclick=function(e){
     S.now.theme=t.dataset.t;draw();});
 };
 get('/r/state?t='+encodeURIComponent(T),function(j){
-  if(!j.ok){say(j.error||'NOT ARMED');return}S=j;draw();});
+  if(!j.ok){say(j.error||'NOT ARMED');return}S=j;S.now=S.now||{};draw();});
 </script></body></html>"""
 
 
@@ -3144,6 +3190,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return self._send({'ok': True, 'slots': r['slots'],
                                'readings': r['readings'],
                                'themes': r['themes'],
+                               'pages': r.get('pages') or {},
+                               'names': r.get('names') or {},
                                'now': r.get('now') or {}})
         return self._send({'ok': False, 'error': 'NO'}, 404)
 
