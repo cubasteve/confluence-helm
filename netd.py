@@ -3031,6 +3031,10 @@ g.z.on .cl{fill:var(--accent);fill-opacity:.14}
 g.z.on .tg{fill:var(--accent)}
 .hint{text-align:center;color:var(--label);font-size:11px;
  letter-spacing:.16em;margin:10px 0 0}
+.fb p{color:var(--label);font-size:11px;letter-spacing:.14em;
+ text-align:center;margin:18px 0 14px;line-height:1.6}
+.fbr{border:2px solid var(--hairline) !important;margin-bottom:8px}
+.fbr i{color:var(--ink)}
 
 h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
 .th{display:flex;gap:8px;margin-bottom:10px}
@@ -3165,9 +3169,25 @@ function fit(txt, w, base){
   return Math.max(20, Math.min(base, (w*0.88)/est));
 }
 
+/* A page the panel could not measure still has to be reachable. The
+   music overlay is only measurable on a 1080 glass - see remoteGeom -
+   so a kiosk window someone resized would otherwise leave three
+   complications with no way to change them. Rows, which is what this
+   whole app was before, and they say plainly that it is the PICTURE
+   that is missing rather than the page. */
+function rows(pg){
+  var h='<div class="fb"><p>NO PICTURE OF THIS PAGE &mdash; '
+       +'THE PANEL IS NOT AT ITS FULL SIZE</p>';
+  (S.slots[pg]||[]).forEach(function(sl){
+    h+='<button class="row fbr" data-p="'+esc(pg)+'" data-s="'+esc(sl)+'">'
+      +'<s>'+esc(slotName(pg,sl))+'</s><i>'+esc(tag(held(pg,sl)))
+      +'</i></button>';});
+  return h+'</div>';
+}
+
 function face(pg){
   var G=(S.geom||{})[pg];
-  if(!G||!G.box||!Object.keys(G.box).length) return '';
+  if(!G||!G.box||!Object.keys(G.box).length) return rows(pg);
   var A=ART[pg]||{}, L=lanes(G), h='';
   h+='<svg class="fv" viewBox="0 0 1080 1080">';
   /* The glass is round and so is this: without the clip the watermark

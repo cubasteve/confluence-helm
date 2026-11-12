@@ -103,6 +103,29 @@ t.ok(cold.after===0,
 await p.evaluate(()=>{ stripKey=''; paintStrip(); });
 await p.evaluate(()=>goPage(1)); await p.waitForTimeout(400);
 
+t.head('and the measurement holds at a window that is not 1080 wide');
+/* It cannot, and the first two attempts at this both shipped numbers
+   that were wrong by the ratio. #stage is 100vmin with no transform,
+   so a smaller window scales the SVG with its viewBox and leaves this
+   overlay alone - the flanks hold their authored 116px while the apex,
+   at left:50%, moves. They only compose into the drawn layout at 1080.
+   So the answer is to send nothing rather than something crooked. */
+await p.setViewportSize({width:720, height:720});
+await p.waitForTimeout(500);
+const small=await p.evaluate(()=>remoteGeom().mus);
+t.ok(!Object.keys(small.box).length,
+     'no music boxes at all rather than ones that are quietly wrong',
+     JSON.stringify(small.box));
+t.ok(!small.art, 'and no album art either', JSON.stringify(small.art));
+/* The dial is SVG with a viewBox, so its numbers are authored and the
+   window cannot touch them. It keeps working. */
+const smallD=await p.evaluate(()=>remoteGeom().dial);
+t.ok(JSON.stringify(smallD.box)===JSON.stringify(live.box),
+     'while the dial, being authored in a viewBox, is unaffected',
+     JSON.stringify(smallD.box));
+await p.setViewportSize({width:1080, height:1080});
+await p.waitForTimeout(500);
+
 t.head('the tags are the glass\'s words, and they do not move');
 t.ok(cat.tags.sog==='SOG' && cat.tags.tws==='TWS',
      'a reading with a plain header gets that header', JSON.stringify(cat.tags.sog));

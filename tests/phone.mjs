@@ -216,6 +216,24 @@ t.ok((await faceBox()).y>=47, 'and the face below the notch',
 t.ok((await faceBox()).b<=844-34,
      'and the whole face is on the glass', String(Math.round((await faceBox()).b)));
 
+t.head('a page the panel could not measure is still reachable');
+/* The music overlay is only measurable on a 1080 glass, so a kiosk
+   window someone resized leaves it out - and three complications with
+   no picture must not become three complications with no way to
+   change them. */
+await p.evaluate(()=>{ delete S.geom.mus; draw(); });
+await p.waitForTimeout(250);
+await p.click('[data-f="mus"]'); await p.waitForTimeout(350);
+t.ok((await p.$$('#main .fv')).length===0, 'no face is drawn for it');
+const fb=await p.$$eval('#main .fbr',es=>es.map(e=>e.dataset.s));
+t.ok(fb.length===3 && fb.join()==='a,p,s',
+     'but all three slots are there as rows', fb.join());
+t.ok(/NOT AT ITS FULL SIZE/.test(await p.textContent('#main .fb p')),
+     'and it says why the picture is missing');
+await p.click('.fbr[data-s="p"]'); await p.waitForTimeout(350);
+t.ok(await p.isVisible('#list'), 'and they open the same card');
+await p.click('[data-back]'); await p.waitForTimeout(250);
+
 t.head('a wrong token says so rather than sitting blank');
 /* Two more lines stood here - that no face and no zones are drawn -
    and they came out because nothing could make them fail. Every route

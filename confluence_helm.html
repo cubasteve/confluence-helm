@@ -9146,12 +9146,21 @@ function remoteGeom(){
      `em:empty` takes it away again for the two readings that have no
      unit. */
   const mus={box:{}, a:{}, cut:[]};
-  const strip=$('ms-strip'), page=$('music');
-  if(strip && page){
+  const strip=$('ms-strip'), page=$('music'), st=$('stage');
+  /* Only on a glass that is actually 1080 across, and that is not
+     fussiness. #stage is 100vmin with no transform, so in a smaller
+     window the SVG scales with its viewBox while this overlay does
+     not: the flanks hold their authored 116px and the apex, which is
+     left:50%, moves with the page. The two only compose into the
+     layout this app was drawn for at 1080. Measured anywhere else the
+     numbers are real pixels of a real screen and still the wrong
+     answer, and a mirror drawn from them is confidently crooked.
+     Sending nothing leaves the phone with the dial, which is honest;
+     sending this would not be. The Pi is a 1080 square, so what this
+     actually guards is a kiosk window someone resized. */
+  if(strip && page && st && Math.round(st.getBoundingClientRect().width)===1080){
     const pr=page.getBoundingClientRect();
-    /* Into panel units whatever the glass is scaled to. */
-    const k=pr.width ? 1080/pr.width : 1;
-    const U=(px)=>Math.round(px*k);
+    const U=(px)=>Math.round(px);
     const made=[];
     for(const sl of PICK_G.mus.slots){
       let e=strip.querySelector('.mcell[data-slot="'+sl+'"]');
