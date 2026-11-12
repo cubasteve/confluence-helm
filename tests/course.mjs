@@ -102,6 +102,38 @@ t.ok(marks(S).length===12, 'all twelve of the club\'s marks, as tiles - '
      +'eleven surveyed buoys and the committee\'s drop, which is in the '
      +'book all week and only has a position on the day it is laid',
      String(S.length));
+/* A tile with nothing to say about itself says nothing. Every one of
+   these used to read TAP TO ADD - eleven lines of the same instruction
+   for one fact you learn the first time you touch the sheet, and the
+   loudest thing in the grid, so the tiles saying something that
+   mattered had to compete with ten repetitions of how to use a
+   button. */
+t.ok(marks(S).every(r=>r.mark==='rc' || r.sub===''),
+     'and none of them tells you how to use a button',
+     marks(S).map(r=>r.mark+':'+r.sub).filter(x=>!/:$/.test(x)).join(' '));
+t.ok(marks(S).find(r=>r.mark==='rc').sub==='NOT PLACED',
+     "except the committee's, which is saying where it STANDS - the one "
+     +'thing a tile knows that the page cannot say for it');
+
+t.head('a mark in the course says so, and says where');
+/* Which is the whole point of clearing the line: the tiles that are in
+   the course are now the only ones with anything written under them. */
+await p.evaluate(()=>{ COURSE.marks=['rum','cb8','rum']; COURSE.next=0;
+                       renderCourse(); });
+await p.waitForTimeout(300);
+const C0=marks(await sheet());
+const rum=C0.find(r=>r.mark==='rum'), cb8=C0.find(r=>r.mark==='cb8');
+t.ok(rum.sub==='IN COURSE · 1,3' && rum.in,
+     'rounded twice, and it says both places', rum.sub);
+t.ok(cb8.sub==='IN COURSE · 2' && cb8.in, 'and once is once', cb8.sub);
+t.ok(C0.filter(r=>r.sub!=='').length===3,
+     'and only those two and the committee have anything to say at all',
+     C0.filter(r=>r.sub!=='').map(r=>r.mark).join(','));
+await p.evaluate(()=>{ COURSE.marks=[]; COURSE.next=0; renderCourse(); });
+await p.waitForTimeout(250);
+t.ok(marks(await sheet()).every(r=>r.mark==='rc' || r.sub===''),
+     'and clearing the course takes the lines away with it');
+
 let L=await line();
 t.ok(L.inStrip && L.first, 'the line leads the route, in line with it - you '
      +'start on it, and the FINISH at the other end is it come home to',

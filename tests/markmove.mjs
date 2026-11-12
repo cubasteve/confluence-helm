@@ -73,6 +73,20 @@ ok(/16\.440W/.test(r.sub), 'the tile says the new number', r.sub);
 ok(r.moved, 'in the accent, so you know it is not the book any more');
 ok(r.undo && !r.del, 'and offers the way back rather than a bin',
    JSON.stringify(r));
+/* Out of EDIT the tile stops showing the position and says what is TRUE
+   about it in a word. Worth pinning now the sub-line no longer explains
+   how to tap a button: the handful of things that still write on it are
+   the only things written in the grid at all, so each of them is the
+   whole reason that line exists. */
+await p.evaluate(()=>{ courseEdit=false; renderCourse(); });
+await p.waitForTimeout(300);
+ok((await row('cb12')).sub==='CORRECTED',
+   'and out of EDIT the tile says so in a word', (await row('cb12')).sub);
+ok((await row('cb10')).sub==='',
+   'while the one beside it, which nobody has touched, says nothing',
+   (await row('cb10')).sub);
+await p.evaluate(()=>{ courseEdit=true; renderCourse(); });
+await p.waitForTimeout(300);
 await p.screenshot({path:OUT+'mark-moved.png'});
 
 console.log('\n=== everything downstream follows it ===');

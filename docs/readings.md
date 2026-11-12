@@ -472,7 +472,8 @@ the only leg is back to the line — and that is exactly what the strip
 shows: `FLAG – BALL  FINISH`, start here and come back here, nothing
 between. It used to carry `NOTHING YET · TAP A MARK BELOW, OR SYNC THE
 CLUB'S`, a sentence explaining the two things directly under it — a grid
-of marks with `TAP TO ADD` written on every tile, and a readout that
+of marks, which at the time wrote `TAP TO ADD` on every tile, and a
+readout that
 says `SYNC`. An empty route looks like an empty route now.
 
 **A tap on a chip's number takes that one rounding out**, and the rest

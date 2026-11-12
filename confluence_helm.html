@@ -10947,8 +10947,9 @@ function renderCourse(){
      race with no course actually is: start here, come back here. It
      said NOTHING YET · TAP A MARK BELOW, OR SYNC THE CLUB'S, which was
      a sentence telling you about the two things directly under it - the
-     grid of marks with TAP TO ADD on every tile, and a readout that
-     says SYNC. An empty route now looks like an empty route. */
+     grid of marks, which at the time wrote TAP TO ADD on every tile,
+     and a readout that says SYNC. An empty route now looks like an
+     empty route, and the grid no longer repeats itself either. */
   $('cv-route').innerHTML =
     ids.map(chip).join('')+'<div class="cv-chip fin">FINISH</div>';
 
@@ -10982,7 +10983,16 @@ function renderCourse(){
                               +(moved?' · CORRECTED':'')
               : rc          ? 'PLACED '+rcClock()
               : moved       ? 'CORRECTED'
-              :               'TAP TO ADD';
+              /* Nothing. It used to say TAP TO ADD, on every tile that
+                 was not already in the course - eleven lines of the
+                 same instruction, for one fact you learn the first
+                 time you touch the sheet. Worse, it was the loudest
+                 thing in the grid, so the tiles saying something that
+                 MATTERED - in the course, and where - had to compete
+                 with ten repetitions of how to use a button.
+                 Said once by the page it is on, and the sub-line is
+                 free for the things only one tile at a time knows. */
+              :               '';
     /* One badge, never two: a 140 px tile with two 40 px discs on it has
        nothing left to read. ⌖ is on the committee's tile at all times,
        not only in edit mode - you press it standing at the mark with the
