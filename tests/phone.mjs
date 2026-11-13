@@ -1024,9 +1024,22 @@ const bc=await p.evaluate(()=>{
   const z=[...document.querySelectorAll('.srow[data-sk="depthAlarm"] .dbar i')];
   return z.map(e=>getComputedStyle(e).backgroundColor);
 });
-t.ok(bc.length===2 && bc[0]!==bc[1] &&
-     bc.every(c=>c!=='rgba(0, 0, 0, 0)'),
-     'drawn in the two colours the panel sent', JSON.stringify(bc));
+/* Against what came down the WIRE, not merely against each other.
+   The page carries a dusk fallback for both of these now, so two
+   distinct non-transparent colours is a thing the bar has whether the
+   palette crossed or not - which made the stated claim the one thing
+   the assertion could not see. */
+const hex2rgb=h=>{
+  if(typeof h!=='string' || !/^#[0-9a-f]{6}$/i.test(h)) return 'NOT SENT';
+  const n=parseInt(h.slice(1),16);
+  return 'rgb('+((n>>16)&255)+', '+((n>>8)&255)+', '+(n&255)+')';};
+t.ok(bc.length===2 && bc[0]===hex2rgb(cat.now.pal.alarm),
+     'the alarm zone is drawn in the colour the panel sent for it',
+     bc[0]+' vs '+cat.now.pal.alarm);
+t.ok(bc[1]===hex2rgb(cat.now.pal.warn),
+     'and the warning zone in the other one - which pins WHICH is '
+     +'which, not merely that they differ',
+     bc[1]+' vs '+cat.now.pal.warn);
 /* And they have a value before the boat answers, like the other
    eight. One frame, but without it that frame draws the bar in
    nothing at all. */

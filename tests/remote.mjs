@@ -291,6 +291,53 @@ t.ok(SET.every(d=>d.kind==='action' ||
 t.ok(!SET.some(d=>/wifi|bluetooth|^bt$|ssid|hotspot/i.test(d.k+' '+d.name)),
      'and nothing on it is a radio - their content is what they READ');
 
+t.head('having applied a command, the panel says so at once');
+/* The poll carries `now` in the REQUEST and the commands come back in
+   the REPLY, so what netd holds is the state from BEFORE the commands
+   it has just handed over - for up to a tick and a half. A phone
+   re-reading in that window is told its own change did not happen, and
+   puts the old value back under the finger. */
+const told=await p.evaluate(async()=>{
+  const sent=[];
+  const was=window.netApi;
+  clearTimeout(REM.t);                      /* no real tick mid-stub */
+  window.netApi=async(path,body)=>{
+    sent.push({path:path, sog:body && body.now && body.now.set
+                            ? body.now.set.sogAvg : null});
+    return path==='/remote/poll'
+      ? {ok:true, have:true,
+         cmds:{'set:sogAvg':{kind:'set', k:'sogAvg', v:30}}}
+      : {ok:true};
+  };
+  CFG.sogAvg=1;
+  await remoteTick();
+  window.netApi=was;
+  return {sent:sent, cfg:CFG.sogAvg};
+});
+t.ok(told.cfg===30, 'the command is applied', String(told.cfg));
+t.ok(told.sent.length===2 && told.sent[1].path==='/remote/now',
+     'and a report follows it, out of band',
+     JSON.stringify(told.sent.map(x=>x.path)));
+t.ok(told.sent[0].sog===1 && told.sent[1].sog===30,
+     'the poll carried the state from before, and the report carries '
+     +'the state from after', JSON.stringify(told.sent.map(x=>x.sog)));
+/* Only when something was applied: an empty reply is most of them, and
+   a second request every tick and a half for nothing is a second
+   request every tick and a half. */
+const quiet=await p.evaluate(async()=>{
+  const sent=[]; const was=window.netApi;
+  clearTimeout(REM.t);
+  window.netApi=async(path)=>{ sent.push(path);
+    return path==='/remote/poll' ? {ok:true, have:true, cmds:{}} : {ok:true}; };
+  await remoteTick();
+  window.netApi=was;
+  return sent;
+});
+t.ok(quiet.length===1 && quiet[0]==='/remote/poll',
+     'and a poll that brought nothing back says nothing',
+     JSON.stringify(quiet));
+await p.evaluate(()=>{ CFG.sogAvg=3; remoteStart(); });
+
 t.head('the shallow alarm\'s picture crosses, and its marker does not');
 /* The glass draws the alarm over a three-zone bar. Two of those zones
    are the setting; the third is a marker at the depth under the boat

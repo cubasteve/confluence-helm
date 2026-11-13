@@ -2514,6 +2514,8 @@ def route(path, body):
         if 'pct' in body:
             return dict(backlight_set(body['pct']), **backlight_status())
         return dict(backlight_status(), ok=True)
+    if path == '/remote/now':
+        return remote_now(body)
     if path == '/power/do':
         return power_do(str(body.get('action', '')))
     if path == '/display/restart':
@@ -2960,6 +2962,24 @@ def remote_power(action, token):
     # out of the kiosk is offered.
     _remote_power_bust()
     return r, (200 if r.get('ok') else 400)
+
+
+def remote_now(body):
+    """What the panel is showing, reported out of band.
+
+    The poll carries `now` in the REQUEST and the commands come back in
+    the REPLY, so what netd holds is always the state from before the
+    commands it has just handed over - for up to a tick and a half. A
+    phone re-reading in that window is told its own change did not
+    happen, and puts the old value back under the finger.
+
+    Deliberately not a poll: a poll drains, and a command queued in the
+    moment since would be collected by a reply nobody is reading."""
+    if not isinstance(body.get('now'), dict):
+        return {'ok': False, 'error': 'NO NOW'}
+    with _rlock:
+        _remote['now'] = body['now']
+    return {'ok': True}
 
 
 def remote_register(body):

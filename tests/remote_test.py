@@ -475,6 +475,35 @@ class Door(unittest.TestCase):
             finally:
                 netd.wifi_status, netd.bt_status = was
 
+    def test_the_panel_can_report_without_draining(self):
+        """The poll carries `now` in the request and the commands come
+        back in the reply, so what netd holds is the state from before
+        the commands it just handed over. The panel says so again as
+        soon as it has applied them - and that report must NOT drain,
+        or a command queued in the moment since is collected by a reply
+        nobody is reading."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            netd._remote['now'] = {'set': {'sogAvg': 1}}
+            netd._remote['pend'] = {
+                'set:dim': {'kind': 'set', 'k': 'dim', 'v': 40}}
+            # Through the router, which is the door the panel knocks
+            # on - calling the function direct would pass with the
+            # route never wired up.
+            r = netd.route('/remote/now', {'now': {'set': {'sogAvg': 30}}})
+            self.assertTrue(r and r.get('ok'), r)
+            self.assertEqual(netd._remote['now'], {'set': {'sogAvg': 30}})
+            # Still there: the report is not a poll.
+            self.assertIn('set:dim', netd._remote['pend'])
+            drained = netd.remote_poll({})
+            self.assertIn('set:dim', drained['cmds'])
+            # And it refuses what is not a state.
+            for bad in (None, 'now', 42, []):
+                self.assertFalse(netd.route('/remote/now',
+                                            {'now': bad})['ok'], bad)
+            self.assertFalse(netd.route('/remote/now', {})['ok'])
+            self.assertEqual(netd._remote['now'], {'set': {'sogAvg': 30}})
+
     def test_the_settings_arrive_by_registering(self):
         """armed() above writes _remote directly, so every other test
         here would pass with the register throwing the catalogue away.

@@ -9120,7 +9120,7 @@ function remoteNow(){
            t:remoteTimer(), page:PAGE_I, set:remoteSet(), bar:remoteBar() };
 }
 
-/* The eight colours the mirror needs, and only those. Recomputed when
+/* The colours the mirror needs, and only those. Recomputed when
    the resolved theme changes rather than on every poll: this resolves
    style, and the poll runs every second and a half for as long as the
    panel is on. */
@@ -9532,7 +9532,18 @@ async function remoteTick(){
      conversation these two reliably have. */
   if(!r.have){ await netApi('/remote/register', remoteCat(), 4000); return; }
   const cmds=r.cmds||{};
-  for(const k in cmds) remoteDo(cmds[k]);
+  let did=false;
+  for(const k in cmds){ remoteDo(cmds[k]); did=true; }
+  /* Having applied them, say so AT ONCE rather than at the next tick.
+     The `now` in the request above was taken before these ran, so until
+     the next poll netd is holding the state from before the change it
+     has just handed over - and a phone that re-reads in that window is
+     told its own change did not happen, and puts the old value back
+     under the finger.
+     Its own endpoint rather than another poll: a poll DRAINS, and a
+     command queued in the half-second since would be collected by a
+     reply nobody is reading. */
+  if(did) netApi('/remote/now', {now:remoteNow()}, 4000);
 }
 
 function remoteStart(){
