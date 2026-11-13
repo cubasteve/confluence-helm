@@ -129,9 +129,32 @@ The rest only matter if your firmware is not stock:
 ping's own sample count is the depth scale the app draws. At the
 defaults a column reaches **17.8 m / 58 ft**.
 
-The serial path sets the line speed with `stty`, because 250000 is not
-one of termios' named rates and the Python standard library has no way
-to ask for one that is not.
+### 250000 baud, and why `stty` cannot get there
+
+Linux names 230400 and then jumps to 460800. **250000 is exactly in the
+gap** — and it is the rate the Arduino world settled on because on a
+16 MHz AVR it divides exactly: zero baud error, where 230400 comes out
+3.5 % slow and drops bytes.
+
+Reaching an unnamed rate needs the kernel's `BOTHER` flag and the
+`termios2` ioctls. `stty` **cannot** do it — GNU coreutils maps a speed
+through its own table of `Bxxxx` constants and refuses anything else
+before it even opens the device:
+
+```
+$ stty -F /dev/ttyUSB0 250000
+stty: invalid argument '250000'
+```
+
+Which is what this code shelled out to at first, under a comment
+confidently asserting the opposite in both directions. The one
+transport the only board has was the one it could not have opened, and
+nothing would have said so until somebody was standing on a boat with
+it. `netd` does it with `fcntl.ioctl` and a 44-byte struct now — still
+stdlib, which is the rule this file lives by — and `tests/sonar_test.py`
+reads three frames off a real pty to prove it, using sample bytes
+(`0x0A`, `0x0D`, `0x11`, `0x13`) that a line discipline would eat if raw
+mode were ever dropped.
 
 ### Which board have I got?
 

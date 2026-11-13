@@ -23,7 +23,7 @@ when the code is wrong rather than merely different:
 
     python3 tests/sonar_test.py
 """
-import importlib, os, sys, unittest
+import fcntl, importlib, os, pty, struct, sys, threading, time, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -32,7 +32,8 @@ sys.path.insert(0, ROOT)
 def load(**env):
     """netd, imported fresh, with HELM_SONAR* set the way a boat would."""
     for k in ('HELM_SONAR', 'HELM_SONAR_SAMPLES', 'HELM_SONAR_BINS',
-              'HELM_SONAR_KEEP', 'HELM_SONAR_US', 'HELM_SONAR_C'):
+              'HELM_SONAR_KEEP', 'HELM_SONAR_US', 'HELM_SONAR_C',
+              'HELM_SONAR_VTIME', 'HELM_DEV'):
         os.environ.pop(k, None)
     os.environ.update({k: str(v) for k, v in env.items()})
     return importlib.reload(importlib.import_module('netd'))
@@ -292,6 +293,156 @@ class Spec(unittest.TestCase):
                     'serial', 'serial:', 'serial:/dev/x:no', 'tcp:1234',
                     'udp:1:2:3:4'):
             self.assertIsNone(self.n.sonar_spec(bad), bad)
+
+
+class Wire(unittest.TestCase):
+    """The serial path, end to end, over a pty.
+
+    This is the probe that was missing, and the bug it would have
+    caught is the only one on this page that mattered. The first
+    version of _sonar_serial shelled out to
+
+        stty -F /dev/ttyACM0 raw -echo 250000
+
+    with a comment saying stty could reach a speed termios cannot
+    name. It cannot. GNU coreutils maps a speed through its own table
+    of Bxxxx constants and refuses anything else before it opens the
+    device at all - and Linux names 230400 and then jumps to 460800,
+    so 250000 is exactly the gap. The one transport the one board has
+    was the one that could not have opened, and nothing here would
+    have said so until somebody was standing on a boat.
+    """
+
+    def tty(self):
+        """A pty, with the slave closed so it is opened by name the way
+        a real device is."""
+        m, sl = pty.openpty()
+        dev = os.ttyname(sl)
+        os.close(sl)
+        self.addCleanup(lambda: os.close(m))
+        return m, dev
+
+    def test_a_speed_termios_cannot_name(self):
+        n = load()
+        m, dev = self.tty()
+        fd = os.open(dev, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        self.addCleanup(lambda: os.close(fd))
+        n.sonar_baud(fd, 250000)
+        back = struct.unpack(n.TERMIOS2, fcntl.ioctl(
+            fd, n.TCGETS2, b'\0' * struct.calcsize(n.TERMIOS2)))
+        self.assertEqual(back[6], 250000, 'input speed')
+        self.assertEqual(back[7], 250000, 'output speed')
+        self.assertEqual(back[2] & n.CBAUD, n.BOTHER,
+                         'and reached through BOTHER, not a named constant')
+
+    def test_the_struct_and_the_ioctls_agree(self):
+        # The size is encoded in bits 16-29 of the ioctl number itself,
+        # so a struct that drifts from it is a silently wrong read.
+        n = load()
+        for name, num in (('TCGETS2', n.TCGETS2), ('TCSETS2', n.TCSETS2)):
+            self.assertEqual((num >> 16) & 0x3FFF, struct.calcsize(n.TERMIOS2),
+                             name)
+
+    def test_it_is_raw_and_it_times_out(self):
+        n = load()
+        m, dev = self.tty()
+        fd = os.open(dev, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        self.addCleanup(lambda: os.close(fd))
+        n.sonar_baud(fd, 250000)
+        import termios as T
+        i, o, c, l, _line, cc, _, _ = struct.unpack(n.TERMIOS2, fcntl.ioctl(
+            fd, n.TCGETS2, b'\0' * struct.calcsize(n.TERMIOS2)))
+        self.assertEqual((i, o, l), (0, 0, 0),
+                         'nothing translated, nothing echoed, no line discipline')
+        self.assertTrue(c & T.CS8 and c & T.CREAD and c & T.CLOCAL)
+        self.assertFalse(c & T.PARENB or c & T.CSTOPB)
+        self.assertEqual(cc[T.VMIN], 0)
+        self.assertEqual(cc[T.VTIME], n.SONAR_VTIME, 'a read that comes back')
+
+    def test_frames_off_a_real_wire(self):
+        # Samples chosen to be the bytes a line discipline EATS: 0x0A
+        # and 0x0D are what ONLCR and ICRNL rewrite, 0x11 and 0x13 are
+        # XON and XOFF and vanish under IXON. A reader that forgot raw
+        # mode decodes none of these frames, and the checksum is what
+        # says so. 0xAA is in there too, so the resync has a false
+        # header to walk past.
+        n = load(HELM_SONAR_SAMPLES=40, HELM_SONAR_BINS=8, HELM_SONAR_VTIME=1)
+        m, dev = self.tty()
+        err = []
+
+        def read():
+            try:
+                n._sonar_serial(dev, 250000)
+            except Exception as e:      # noqa: BLE001 - it is the assertion
+                err.append(e)
+
+        th = threading.Thread(target=read, daemon=True)
+        th.start()
+        time.sleep(0.4)                       # opened and configured
+        nasty = [0x0A, 0x0D, 0x11, 0x13, 0xAA, 0x00, 0xFF, 0x1A] * 5
+        for k in (1, 2, 3):
+            os.write(m, frame(nasty, idx=k))
+        time.sleep(0.5)
+        got = n.sonar_read(0)
+        self.assertEqual([p['idx'] for p in got['pings']], [1, 2, 3],
+                         'three frames in, three frames out')
+        self.assertEqual(got['bad'], 0)
+        # And then the board stops talking, which is a thing boats do.
+        th.join(4)
+        self.assertFalse(th.is_alive(),
+                         'the reader gives up on a device that has gone quiet')
+        self.assertTrue(err and 'went quiet' in str(err[0]), str(err))
+
+
+class Missing(unittest.TestCase):
+    """The device that is not where the config says.
+
+    Which name a board takes belongs to its USB-serial bridge, not to
+    the board: a CH340 or CP2102 is ttyUSB0 and an ATmega16U2 is
+    ttyACM0. A config carried from one Pi to the next is wrong half
+    the time, and "no such file" is a dead end at a chart table.
+    """
+
+    def dev(self, *names):
+        import tempfile
+        d = tempfile.mkdtemp(prefix='helm-tty-')
+        for n in names:
+            open(os.path.join(d, n), 'w').close()
+        return d
+
+    def test_it_names_what_is_actually_there(self):
+        d = self.dev('ttyUSB0', 'ttyACM0', 'null', 'sda1')
+        n = load(HELM_DEV=d)
+        self.assertEqual([os.path.basename(x) for x in n.sonar_ttys()],
+                         ['ttyACM0', 'ttyUSB0'])
+
+    def test_the_error_hands_you_the_answer(self):
+        d = self.dev('ttyUSB0')
+        n = load(HELM_DEV=d)
+        with self.assertRaises(OSError) as e:
+            n._sonar_serial(os.path.join(d, 'ttyACM0'), 250000)
+        self.assertIn('ttyUSB0', str(e.exception),
+                      'the one it HAS, not just the one it wants')
+
+    def test_and_says_so_plainly_when_there_is_nothing(self):
+        d = self.dev()
+        n = load(HELM_DEV=d)
+        with self.assertRaises(OSError) as e:
+            n._sonar_serial(os.path.join(d, 'ttyUSB0'), 250000)
+        self.assertIn('neither is any other', str(e.exception))
+
+    def test_a_missing_device_does_not_kill_the_supervisor(self):
+        # sonar_run swallows it into the status and tries again, so a
+        # board plugged in after netd started still comes up.
+        d = self.dev()
+        n = load(HELM_DEV=d, HELM_SONAR='serial:%s/ttyUSB0' % d)
+        n._sonar['err'] = ''
+        try:
+            n._sonar_serial(os.path.join(d, 'ttyUSB0'), 250000)
+        except OSError as e:
+            n._sonar['err'] = str(e)[:120]
+        self.assertIn('not there', n.sonar_read(0)['error'])
+        self.assertTrue(n.sonar_read(0)['on'])
 
 
 class Door(unittest.TestCase):

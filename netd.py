@@ -30,8 +30,8 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import array, base64, contextlib, json, math, os, re, secrets, shutil
-import socket
+import array, base64, contextlib, fcntl, json, math, os, re, secrets, shutil
+import socket, struct, termios
 import subprocess, sys
 import tempfile, threading, time, urllib.error, urllib.request, wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -41,6 +41,8 @@ BIND = os.environ.get('HELM_NETD_BIND', '127.0.0.1')
 # Only ever anything else in a test rig: there is no way to fake an adapter
 # on a real Pi, and bus detection is the one thing here that reads hardware.
 SYSFS = os.environ.get('HELM_SYSFS', '/sys')
+# Same reasoning, for the serial devices the sounder might be on.
+DEVDIR = os.environ.get('HELM_DEV', '/dev')
 
 # The kiosk loads the app from AvNav on :8080, and falls back to file:// when
 # AvNav is slow to come up - which arrives here as a null Origin. Both are the
@@ -2636,33 +2638,112 @@ def _sonar_udp(host, port):
                     _sonar['bad'] += 1
 
 
+# ---- the line speed --------------------------------------------------
+#
+# 250000 is not one of termios' named speeds. Linux names 230400 and
+# then jumps to 460800; the Arduino world settled on 250000 because on
+# a 16 MHz AVR it is an exact divisor - zero baud error, where 230400
+# comes out 3.5% slow and drops bytes into the bargain.
+#
+# Reaching an unnamed speed needs the kernel's BOTHER flag and the
+# termios2 ioctls. `stty` CANNOT do it. GNU coreutils maps a speed
+# through its own table of Bxxxx constants and refuses anything that
+# is not in it, before it ever opens the device:
+#
+#     $ stty -F /dev/ttyUSB0 250000
+#     stty: invalid argument '250000'
+#
+# which is what this file shelled out to at first, with a comment
+# confidently saying the opposite - so the one board it was written
+# for was the one board it could not have opened. fcntl.ioctl and a
+# struct do what stty will not, and are stdlib, which is the whole
+# rule this file lives by anyway.
+TCGETS2, TCSETS2 = 0x802C542A, 0x402C542B
+BOTHER, CBAUD = 0o010000, 0o010017
+# struct termios2 { tcflag_t c_iflag, c_oflag, c_cflag, c_lflag;
+#                   cc_t c_line; cc_t c_cc[19];
+#                   speed_t c_ispeed, c_ospeed; }
+# 44 bytes - which is the size the two ioctl numbers above carry in
+# their own encoding, so the two agree or neither is right.
+TERMIOS2 = '=IIIIB19sII'
+# Reads come back after two seconds whether or not a byte arrived. A
+# blocking read cannot notice that the board has gone; a non-blocking
+# one spins. The timeout is the only shape that does neither. In
+# tenths of a second, which is the unit VTIME is in - and a knob only
+# so that a probe can make ten seconds of silence happen in one.
+SONAR_VTIME = int(os.environ.get('HELM_SONAR_VTIME', '20'))
+
+
+def sonar_ttys():
+    """The serial devices this machine has, for when the one in
+    HELM_SONAR is not among them.
+
+    Which name a board takes is a property of its USB-serial BRIDGE
+    and not of the board: a CH340 or CP2102 arrives as ttyUSB0, an
+    ATmega16U2 or a chip doing USB CDC itself arrives as ttyACM0. So
+    the device path that is right on one Pi is wrong on the next, and
+    a config carried between them fails with nothing to go on. Naming
+    what is actually there turns that into a thirty-second fix.
+    """
+    out = []
+    with contextlib.suppress(OSError):
+        for n in sorted(os.listdir(DEVDIR)):
+            if n.startswith(('ttyUSB', 'ttyACM')):
+                out.append(os.path.join(DEVDIR, n))
+    return out
+
+
+def sonar_baud(fd, baud):
+    """Any line speed at all on an open serial fd, and raw while we are
+    here: nothing translated on the way in, nothing echoed back out,
+    and no line discipline holding a binary frame hostage against a
+    newline it is never going to contain."""
+    n = struct.calcsize(TERMIOS2)
+    i, o, c, l, line, cc, _, _ = struct.unpack(
+        TERMIOS2, fcntl.ioctl(fd, TCGETS2, b'\0' * n))
+    c = (c & ~CBAUD) | BOTHER
+    c = (c & ~termios.CSIZE) | termios.CS8
+    c |= termios.CLOCAL | termios.CREAD
+    c &= ~(termios.PARENB | termios.CSTOPB | termios.CRTSCTS)
+    cc = bytearray(cc)
+    cc[termios.VMIN], cc[termios.VTIME] = 0, SONAR_VTIME
+    fcntl.ioctl(fd, TCSETS2,
+                struct.pack(TERMIOS2, 0, 0, c, 0, line, bytes(cc), baud, baud))
+
+
 def _sonar_serial(dev, baud):
-    # 250000 is not one of termios' named speeds, and the stdlib has no
-    # way to ask for one that is not. stty does, through the kernel's
-    # BOTHER, and netd shells out for everything else it cannot reach
-    # from Python anyway.
-    rc, _, err = run(['stty', '-F', dev, 'raw', '-echo', str(baud)], 10)
-    if rc != 0:
-        raise OSError('stty %s %s: %s' % (dev, baud, terse(err) or 'failed'))
-    st, idle = {'buf': b''}, 0
-    with open(dev, 'rb', buffering=0) as f:
+    if not os.path.exists(dev):
+        have = sonar_ttys()
+        raise OSError('%s is not there - %s' % (dev, (
+            'this machine has ' + ', '.join(have)) if have else
+            'and neither is any other ttyUSB or ttyACM'))
+    # O_NONBLOCK to get in - a serial open waits for carrier otherwise,
+    # and the board is not asserting one yet - then cleared, because
+    # from here on the VTIME above is what bounds a read.
+    fd = os.open(dev, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        sonar_baud(fd, baud)
+        fcntl.fcntl(fd, fcntl.F_SETFL,
+                    fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)
+        st, idle = {'buf': b''}, 0
         while True:
-            c = f.read(4096)
+            c = os.read(fd, 4096)
             if not c:
-                # An unplugged board usually makes the read RAISE, and
-                # the supervisor reopens. Sometimes it just goes quiet
-                # at end of file instead, and a loop that only slept
-                # would spin politely for the rest of the day over a
-                # device that is no longer there. Ten seconds of
-                # nothing is longer than any gap between pings.
+                # Two seconds of silence, five times over. An unplugged
+                # board usually makes the read RAISE and the supervisor
+                # reopens; sometimes it just stops talking instead, and
+                # a loop with no patience for that would sit there for
+                # the rest of the afternoon holding a dead device. Ten
+                # seconds is longer than any gap between pings.
                 idle += 1
-                if idle > 50:
+                if idle > 5:
                     raise OSError('%s went quiet' % dev)
-                time.sleep(0.2)
                 continue
             idle = 0
             for p in sonar_feed(st, c):
                 _sonar_push(p, SONAR_SAMPLES)
+    finally:
+        os.close(fd)
 
 
 def sonar_run():
