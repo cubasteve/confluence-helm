@@ -3499,16 +3499,21 @@ svg.gl .f{fill:currentColor;stroke:none}
 /* A setting the glass draws as a tile. Same shape as a radio's, with
    the label where the network goes and the value under it - which is
    what the Display card puts side by side on the panel. */
-.stier{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
- padding:4px 10px 10px}
-.stile{display:flex;flex-direction:column;align-items:center;gap:7px;
- padding:12px 4px;border:2px solid var(--hairline);border-radius:16px;
+/* Not the full half-width each: at 1fr they were slabs wider than they
+   were tall, where the glass's are 104px squares in a card with room
+   to spare. Sized to the content and left where the Display card's row
+   starts, which is where the panel has them. The 44px floor is the
+   thing that must not move - they are still something you press. */
+.stier{display:grid;grid-template-columns:repeat(2,minmax(0,124px));
+ gap:8px;padding:2px 10px 10px}
+.stile{display:flex;flex-direction:column;align-items:center;gap:6px;
+ padding:9px 4px;border:2px solid var(--hairline);border-radius:14px;
  background:none;color:var(--label);font:inherit}
 .stile:active{background:var(--chip)}
-.stile svg{width:26px;height:26px;flex:none}
-.stile svg[viewBox="0 0 40 40"]{width:28px;height:28px}
-.stile u{text-decoration:none;font-size:10px;letter-spacing:.18em}
-.stile b{font-size:13px;font-weight:600;letter-spacing:.08em;
+.stile svg{width:22px;height:22px;flex:none}
+.stile svg[viewBox="0 0 40 40"]{width:24px;height:24px}
+.stile u{text-decoration:none;font-size:9px;letter-spacing:.16em}
+.stile b{font-size:12px;font-weight:600;letter-spacing:.08em;
  color:var(--accent)}
 .prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
  border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;

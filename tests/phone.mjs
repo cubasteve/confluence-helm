@@ -931,11 +931,13 @@ t.ok(R.find(x=>x.k==='dim').slider && R.find(x=>x.k==='depthAlarm').slider,
 /* The panel draws these two as tiles side by side in its Display
    card, and says so in the catalogue rather than leaving the phone to
    decide which of its settings is a tile. */
-const tl=await p.$$eval('#sheet .stile',gs=>gs.map(g=>({
-  k:g.dataset.sk, svg:g.querySelectorAll('svg').length,
-  lbl:(g.querySelector('u')||{}).textContent||'',
-  val:(g.querySelector('b')||{}).textContent||'',
-  tier:g.parentElement.className})));
+const tl=await p.$$eval('#sheet .stile',gs=>gs.map(g=>{
+  const r=g.getBoundingClientRect();
+  return {k:g.dataset.sk, svg:g.querySelectorAll('svg').length,
+    lbl:(g.querySelector('u')||{}).textContent||'',
+    val:(g.querySelector('b')||{}).textContent||'',
+    w:r.width, h:r.height,
+    tier:g.parentElement.className};}));
 t.ok(tl.map(x=>x.k).join()===
      cat.settings.filter(d=>d.tile).map(d=>d.k).join(),
      'the ones the panel calls tiles are drawn as tiles',
@@ -947,6 +949,14 @@ t.ok(tl.length>1 && tl.every(x=>/\bstier\b/.test(x.tier)
                               && x.tier===tl[0].tier),
      'side by side in one row of their own, the way the Display card '
      +'has them', JSON.stringify(tl.map(x=>x.tier)));
+/* They were sized down to stop being slabs, and the width is the
+   dimension that can keep going: an icon over two lines of text is
+   taller than 44 whatever the padding says, so a floor on the height
+   is a floor nothing can cross - this one asks about the width, which
+   a narrower column really does take under it. */
+t.ok(tl.every(x=>x.w>=44),
+     'and still wide enough to hit without looking',
+     JSON.stringify(tl.map(x=>Math.round(x.w)+'x'+Math.round(x.h))));
 t.ok(R.find(x=>x.k==='keepAwake').on===true,
      'a toggle is a switch that is on when the setting is');
 /* Its unit is the OTHER setting's value. A second unit field would say
