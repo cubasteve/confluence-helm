@@ -2760,6 +2760,98 @@ def _geom(v, d=0):
     raise ValueError('BAD GEOM')
 
 
+def _power_sheet(v):
+    """The panel's own POWER_ACTIONS, kept only as the fields the phone
+    draws with. Validated rather than filtered: a sheet that arrived
+    half-formed would show a button whose words say one thing and whose
+    action does another, and two of these shut the boat down."""
+    out = []
+    if not isinstance(v, list):
+        return out
+    for a in v[:12]:
+        if not isinstance(a, dict):
+            continue
+        act, name = a.get('a'), a.get('name')
+        if not isinstance(act, str) or not isinstance(name, str):
+            continue
+        if not act or len(act) > 24 or not act.isalpha():
+            continue
+        out.append({'a': act, 'name': name[:40],
+                    'verb': str(a.get('verb') or name)[:40],
+                    'danger': 1 if a.get('danger') else 0,
+                    'need': str(a.get('need') or '')[:40]})
+    return out
+
+
+_pw_at, _pw_st = 0.0, None
+
+
+def _remote_power_status():
+    """power_status(), but not once every four seconds.
+
+    The phone re-polls /r/state every 4 s while the start clock is
+    running, and power_status() shells out to `systemctl is-active` -
+    which would be a subprocess every four seconds on a Pi 4, during a
+    start sequence, for an answer that changes when somebody leaves the
+    kiosk and at no other time. Twenty seconds is far inside the time it
+    takes to notice a Desktop tile that should have appeared, and well
+    outside the poll."""
+    global _pw_at, _pw_st
+    now = time.monotonic()
+    if _pw_st is None or now - _pw_at > 20:
+        _pw_st, _pw_at = power_status(), now
+    return _pw_st
+
+
+def remote_available_power():
+    """The sheet, minus what this Pi cannot do right now.
+
+    `need` is the panel's own dotted path into /status, and every one of
+    them is under power, so it resolves here against power_status()
+    alone - the same filter the glass applies, made by the half that
+    knows the answer. The phone asks nothing: it is handed the list it
+    should draw."""
+    st = _remote_power_status()
+    out = []
+    for a in (_remote.get('power') or []):
+        need = a.get('need') or ''
+        if need:
+            part = need.split('.')
+            if len(part) != 2 or part[0] != 'power' or not st.get(part[1]):
+                continue
+        out.append(a)
+    return out
+
+
+def remote_power(action, token):
+    """One of the glass's own power actions, asked for from the phone.
+
+    Straight through to power_do rather than queued for the panel,
+    because the reason you reach for this is usually that the glass has
+    stopped answering - and a command the panel has to collect is a
+    command that never arrives exactly then. 'reload' is the one
+    exception and is queued, because the thing being reloaded is the
+    panel's page and netd cannot reload a browser without killing it."""
+    if not _remote['armed']:
+        return {'ok': False, 'error': 'NOT ARMED'}, 403
+    if not secrets.compare_digest(token, _remote['token']):
+        return {'ok': False, 'error': 'BAD TOKEN'}, 403
+    if not isinstance(action, str):
+        return {'ok': False, 'error': 'NO SUCH ACTION'}, 400
+    # Against what the PANEL registered and this Pi can currently do,
+    # which is the same gate the glass's own tiles are behind. Nothing
+    # here is a list netd wrote: an action the sheet does not offer is
+    # not an action, however well spelled.
+    if action not in [a['a'] for a in remote_available_power()]:
+        return {'ok': False, 'error': 'NO SUCH ACTION'}, 400
+    if action == 'reload':
+        with _rlock:
+            _remote['pend']['power'] = {'kind': 'power', 'action': 'reload'}
+        return {'ok': True, 'queued': True}, 200
+    r = power_do(action)
+    return r, (200 if r.get('ok') else 400)
+
+
 def remote_register(body):
     """The panel saying what it has. Not an arm - there is nothing to
     arm, and no tile to arm it from.
@@ -2813,6 +2905,11 @@ def remote_register(body):
                        # either is a copy that drifts.
                        tags=_labels(body.get('tags')),
                        sens=_labels(body.get('sens')),
+                       # The power sheet as the GLASS has it, so the
+                       # phone draws the same words in the same order
+                       # with the same two marked dangerous. netd
+                       # decides which are available and nothing else.
+                       power=_power_sheet(body.get('power')),
                        geom=geom)
         if isinstance(body.get('now'), dict):
             _remote['now'] = body['now']
@@ -3092,6 +3189,69 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
  color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
  font-size:13px;letter-spacing:.1em}
 .th button.on{border-color:var(--accent);color:var(--accent)}
+/* The way to the power sheet. Outlined like the theme row above it and
+   full width, because a device button crowded in beside DAY/DUSK/NIGHT
+   is a device button somebody hits while changing the theme. */
+#pwb{width:100%;background:none;border:2px solid var(--hairline);
+ color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
+ font-size:13px;letter-spacing:.1em;display:flex;align-items:center;
+ justify-content:center;gap:9px}
+#pwb svg{width:17px;height:17px;flex:none}
+svg.gl{fill:none;stroke:currentColor;stroke-width:2;
+ stroke-linecap:round;stroke-linejoin:round}
+svg.gl .f{fill:currentColor;stroke:none}
+
+/* The power sheet. The same panel as the card, anchored to the bottom
+   of the glass rather than to the face: it is about the device, not
+   about a complication, so there is nothing for it to hang from. */
+#pw{position:fixed;left:var(--pad);right:var(--pad);
+ bottom:calc(10px + env(safe-area-inset-bottom));display:none;
+ flex-direction:column;background:var(--panel);border-radius:18px;
+ border:2px solid var(--hairline);overflow:hidden;z-index:8;
+ /* Six actions fit a phone with room over. The guard is for the day
+    somebody adds a seventh on a glass held in landscape, where the
+    sheet would otherwise grow off the top and take its first row - the
+    least destructive one - with it. */
+ max-height:calc(100dvh - 80px)}
+#pw.on{display:flex}
+#pw .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;
+ border-bottom:2px solid var(--hairline)}
+#pw .hd b{flex:1;font-size:11px;letter-spacing:.18em;color:var(--label);
+ font-weight:600}
+#pw .hd button{background:none;border:0;color:var(--accent);font:inherit;
+ font-size:12px;letter-spacing:.14em;padding:4px 2px}
+#pwr{padding:8px;overflow:auto;-webkit-overflow-scrolling:touch}
+.prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
+ border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;
+ text-align:left}
+.prow s{flex:1;text-decoration:none;font-size:17px}
+.prow svg{width:21px;height:21px;flex:none;color:var(--label)}
+.prow:active{background:var(--chip)}
+/* Lit, the way the glass lights an armed tile - and the way this app
+   already lights the zone whose card is open. One idiom for "this is
+   the thing you are about to do". */
+.prow.arm{background:var(--chip);color:var(--accent)}
+.prow.arm svg{color:var(--accent)}
+.prow.dgr.arm{color:#C81E1E}
+.prow.dgr.arm svg{color:#C81E1E}
+/* The bar that does it. The glass asks for a full slide, because a
+   round panel at speed produces touches nobody offered - a sleeve on
+   the rim, a knuckle passing through. A phone in a hand does not do
+   that and a phone in a pocket is locked, so this asks for a HOLD
+   instead: still a gesture no stray contact completes, and one your
+   thumb can do without looking, which a drag across a 390px glass in a
+   seaway is not. */
+#hold{position:relative;margin:4px 8px 10px;border-radius:14px;
+ overflow:hidden;background:var(--chip);border:2px solid var(--accent);
+ padding:15px 0;text-align:center;touch-action:none;display:none}
+#hold.on{display:block}
+#hold.dgr{border-color:#C81E1E}
+#hold i{position:absolute;left:0;top:0;bottom:0;width:0;
+ background:var(--accent);opacity:.3}
+#hold.dgr i{background:#C81E1E;opacity:.45}
+#hold b{position:relative;font-size:13px;letter-spacing:.14em;
+ color:var(--accent)}
+#hold.dgr b{color:#C81E1E}
 
 /* The card. It drops from the face's FEET and never covers it, so the
    zone it belongs to stays lit while you choose - which is the signal
@@ -3126,6 +3286,7 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
 <div id="main"></div>
 <div id="foot"></div>
 <div id="list"></div>
+<div id="pw"></div>
 <div id="msg"></div>
 <script>
 var T=new URLSearchParams(location.search).get('t')||'';
@@ -3134,6 +3295,27 @@ var S=null, PG='', OPEN=null;
    the face arrives on the wire. What is left here is which page wears a
    tick ring and which wears an album square, which is decoration. */
 var ART={dial:{ticks:1, mark:'45'}, mus:{ticks:1}};
+/* The power sheet's glyphs, keyed by action and local for the same
+   reason the tick ring is: a picture is decoration, and everything on
+   this wire that is not decoration is escaped on arrival. The words,
+   the order and which two are dangerous all come from the glass. An
+   action it grows later shows up here with no glyph and reads fine. */
+var PICO={
+ reload:'<path d="M20.5 11A8.5 8.5 0 0 0 6.3 6.3L3.5 9"/>'
+       +'<path d="M3.5 4.5V9h4.5"/>'
+       +'<path d="M3.5 13a8.5 8.5 0 0 0 14.2 4.7l2.8-2.7"/>'
+       +'<path d="M20.5 19.5V15H16"/>',
+ helper:'<rect x="5" y="5" width="14" height="14" rx="3"/>'
+       +'<circle class="f" cx="12" cy="12" r="2.2"/>',
+ desktop:'<rect x="3" y="4" width="18" height="13" rx="2"/>'
+        +'<path d="M8 21h8M12 17v4"/>',
+ cage:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>',
+ reboot:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
+ poweroff:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>'};
+function gly(k,cls){
+  return PICO[k] ? '<svg class="gl '+(cls||'')+'" viewBox="0 0 24 24">'
+                   +PICO[k]+'</svg>' : '';
+}
 /* Which page index each key IS on the glass. The panel sends its own
    PAGE_I with `now`, and this is the only way to read it back. */
 var PAGE_OF={dial:1, mus:2};
@@ -3442,7 +3624,13 @@ function draw(){
   S.themes.forEach(function(t){
     f+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
       +esc(t.toUpperCase())+'</button>';});
-  document.getElementById('foot').innerHTML=f+'</div>';
+  f+='</div>';
+  /* Only when there is something on it. A Pi with no systemctl offers
+     nothing here, and a button that opens an empty sheet is worse than
+     no button. */
+  if((S.power||[]).length)
+    f+='<h1>DEVICE</h1><button id="pwb">'+gly('poweroff')+'POWER</button>';
+  document.getElementById('foot').innerHTML=f;
   if(OPEN) place();
 }
 
@@ -3486,6 +3674,106 @@ function pick(p,sl){
 function shut(){ OPEN=null;
   document.getElementById('list').className=''; draw(); }
 
+/* ---- the power sheet ---------------------------------------------------
+   The glass's own sheet: same words, same order, same two in red, and
+   the same two-step - arm the thing, then do a gesture that a stray
+   touch does not complete. Least destructive first, which is the
+   glass's rule and matters more here: the top of a list is where a
+   hurried thumb lands and that should not be the shutdown. */
+var ARM=null, HOLD_MS=900, HT=null;
+function pwOpen(on){
+  var e=document.getElementById('pw');
+  if(!on){ ARM=null; e.className=''; e.innerHTML=''; return; }
+  pwPaint();
+  e.className='on';
+}
+function pwPaint(){
+  var h='<div class="hd"><b>'+esc(S.uptime ? 'DEVICE RUNTIME: '+S.uptime
+                                           : 'DEVICE')+'</b>'
+       +'<button data-pwx="1">CLOSE</button></div><div id="pwr">';
+  (S.power||[]).forEach(function(a){
+    h+='<button class="prow'+(a.danger?' dgr':'')
+      +(ARM&&ARM.a===a.a?' arm':'')+'" data-pa="'+esc(a.a)+'">'
+      +gly(a.a)+'<s>'+esc(a.name)+'</s></button>';
+  });
+  h+='</div><div id="hold"'+(ARM?(' class="on'+(ARM.danger?' dgr':'')+'"')
+                                :'')+'>'
+    +'<i></i><b>'+esc(ARM?('HOLD TO '+(ARM.verb||'CONFIRM')):'')+'</b></div>';
+  document.getElementById('pw').innerHTML=h;
+}
+/* Tapping the armed one again disarms it, which is the way out without
+   doing anything - the same way the glass's armed tile works, and the
+   reason neither needs a caption saying so. */
+function pwArm(a){ ARM=(ARM&&ARM.a===a.a)?null:a; pwPaint(); }
+
+function holdStop(ok){
+  clearTimeout(HT); HT=null;
+  var h=document.getElementById('hold'); if(!h) return;
+  var bar=h.querySelector('i');
+  if(bar){ bar.style.transition='none'; bar.style.width=ok?'100%':'0'; }
+}
+function holdGo(){
+  var a=ARM; if(!a) return;
+  var h=document.getElementById('hold'), bar=h&&h.querySelector('i');
+  if(!bar) return;
+  bar.style.transition='width '+HOLD_MS+'ms linear';
+  bar.style.width='100%';
+  HT=setTimeout(function(){
+    HT=null;
+    /* A shutdown takes netd down with everything else, so no answer is
+       the success case for those two - saying NO ANSWER FROM THE BOAT
+       there would read as a failure at the exact moment it worked. */
+    var heavy=(a.a==='poweroff'||a.a==='reboot');
+    say(a.name.toUpperCase()+'…');
+    pwPost(a, heavy);
+  }, HOLD_MS);
+}
+function pwPost(a,heavy){
+  var x=new XMLHttpRequest();
+  x.open('POST','/r/power?t='+T);
+  x.setRequestHeader('Content-Type','application/json');
+  x.onload=function(){
+    var j={}; try{ j=JSON.parse(x.responseText); }catch(e){}
+    if(x.status!==200 || !j.ok){
+      holdStop(false);
+      return say(j.error||('HTTP '+x.status));
+    }
+    say(a.a==='poweroff' ? 'SHUTTING DOWN…'
+      : a.a==='reboot'   ? 'REBOOTING…'
+      : a.a==='reload'   ? 'RELOADING THE PANEL…' : 'DONE');
+    if(!heavy) setTimeout(function(){ pwOpen(false); }, 1400);
+  };
+  x.onerror=function(){
+    if(heavy) return say('GOING DOWN…');
+    holdStop(false); say('NO ANSWER FROM THE BOAT');
+  };
+  x.send(JSON.stringify({action:a.a}));
+}
+
+document.getElementById('pw').addEventListener('click',function(e){
+  if(e.target.closest('[data-pwx]')) return void pwOpen(false);
+  var r=e.target.closest('[data-pa]');
+  if(!r) return;
+  var a=(S.power||[]).filter(function(x){ return x.a===r.dataset.pa; })[0];
+  if(a) pwArm(a);
+});
+/* pointerdown rather than touchstart: one path for a finger and for the
+   mouse a probe uses, and pointercancel is what a scroll or an incoming
+   call looks like - both have to let go of the bar. */
+['pointerdown'].forEach(function(ev){
+  document.getElementById('pw').addEventListener(ev,function(e){
+    if(!e.target.closest('#hold.on')) return;
+    e.preventDefault(); holdStop(false); holdGo();
+  });
+});
+['pointerup','pointercancel','pointerleave'].forEach(function(ev){
+  document.getElementById('pw').addEventListener(ev,function(e){
+    if(HT) holdStop(false);
+  });
+});
+
+
+
 document.getElementById('main').onclick=function(e){
   var f=e.target.closest('[data-f]');
   if(f){
@@ -3517,6 +3805,7 @@ document.getElementById('main').onclick=function(e){
          else pick(z.dataset.p, z.dataset.s); }
 };
 document.getElementById('foot').onclick=function(e){
+  if(e.target.closest('#pwb')) return void pwOpen(true);
   var t=e.target.closest('[data-t]'); if(!t) return;
   post({kind:'theme',theme:t.dataset.t},function(){
     S.now.theme=t.dataset.t; draw();
@@ -3741,13 +4030,28 @@ class RemoteHandler(BaseHTTPRequestHandler):
                                'tags': r.get('tags') or {},
                                'sens': r.get('sens') or {},
                                'geom': r.get('geom') or {},
+                               # What this Pi can actually do right now,
+                               # and how long it has been up - the same
+                               # two things the glass's sheet shows.
+                               'power': remote_available_power(),
+                               # Off the cached read, like the list
+                               # itself. It is a runtime to the minute,
+                               # not a clock.
+                               'uptime': _remote_power_status()
+                                         .get('uptime') or '',
                                'now': r.get('now') or {}})
         return self._send({'ok': False, 'error': 'NO'}, 404)
 
     def do_POST(self):
         if not self._ok_here():
             return self._send({'ok': False, 'error': 'NOT HERE'}, 403)
-        if urlparse_path(self.path) != '/r/cmd':
+        path = urlparse_path(self.path)
+        # Its own route rather than another `kind` on /r/cmd, because a
+        # kind is QUEUED for the panel to collect and this is run here
+        # and now. Filing a shutdown behind the same door as a slot
+        # change would also mean a shutdown inheriting the 30-second
+        # replay the queue has, which is not a property you want on it.
+        if path not in ('/r/cmd', '/r/power'):
             return self._send({'ok': False, 'error': 'NO'}, 404)
         if 'json' not in (self.headers.get('Content-Type') or ''):
             # Stops a cross-origin text/plain POST, which a browser will
@@ -3760,7 +4064,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
             body = {}
         if not isinstance(body, dict):
             body = {}
-        res, code = remote_cmd(body, self._token())
+        if path == '/r/power':
+            res, code = remote_power(body.get('action'), self._token())
+        else:
+            res, code = remote_cmd(body, self._token())
         self._send(res, code)
 
 

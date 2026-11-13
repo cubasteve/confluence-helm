@@ -9269,6 +9269,27 @@ function remoteCat(){
              o[c.k]= typeof c.hdr==='string' ? c.hdr : c.name, o), {}),
            /* The instrument headings, so netd's copy of them can go. */
            sens:SENSORS.reduce((o,p)=>(o[p[0]]=p[1], o), {}),
+           /* The power sheet, as the glass has it: same order, same
+              words, same two that are dangerous. The phone keeps no
+              copy and netd keeps no copy - netd only decides which of
+              them are AVAILABLE, exactly as the glass does by resolving
+              `need` against /status. A third list of these in either
+              half would drift the first time one was added, and the
+              thing it would drift about is which button shuts the boat
+              down.
+
+              No glyphs. The phone keeps its own, keyed by action, for
+              the same reason it keeps which page wears a tick ring:
+              that is decoration, and everything on this wire that is
+              not decoration is escaped on arrival. An icon has to be
+              injected as markup to be an icon, and the one field on
+              this remote that must be markup is not going to be the
+              one next to SHUT DOWN. An action added to the glass
+              later arrives here with its words, its place in the order
+              and its danger flag right, and no picture. */
+           power:POWER_ACTIONS.map(a=>({a:a.a, name:a.name, verb:a.verb,
+                                        danger:a.danger?1:0,
+                                        need:a.need||''})),
            themes:THEMES, now:remoteNow() };
 }
 
@@ -9293,6 +9314,16 @@ function remoteDo(c){
        object with no .page and is simply not a page this panel has. */
     const g=PICK_G[c.page];
     if(g && g.page) goPage(g.page);
+  }else if(c.kind==='power'){
+    /* Only ever this one. Everything else on that sheet netd runs
+       itself, because the reason you reach for the phone's power sheet
+       is usually that the glass has stopped answering - and a route
+       through this function is a route that fails exactly then. A
+       reload is the exception because the thing being reloaded is this
+       page: netd cannot reload a browser without killing it, which is
+       the one thing POWER_ACTIONS deliberately does not do. */
+    if(c.action!=='reload') return;
+    setTimeout(()=>location.reload(), 150);
   }else if(c.kind==='timer'){
     /* Whole minutes, and a NUMBER of them: netd adds up the taps it
        has not handed over yet, so a total rather than a single press
