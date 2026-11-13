@@ -935,6 +935,59 @@ target, which is drawn right and impossible to hit. The lanes are held clear of 
 without it the big number's lane covers both buttons and every press of
 **+** opens the picker instead.
 
+### The power sheet
+
+A power glyph in the top right corner of the header — the glyph and
+nothing else, in the corner a thumb reaches last, because everything
+below it is the face and this is not another setting. It opens the
+glass's own power sheet: Reload the app, Restart helper, Desktop or
+Back to the kiosk, Reboot, Shut down. Least destructive first, which is
+the glass's rule and matters more on a phone: the top of a list is where
+a hurried thumb lands, and that should not be the shutdown.
+
+It goes **straight through netd**, not queued for the panel. The reason
+you reach for this is usually that the glass has stopped answering, and
+a command the panel has to collect is a command that never arrives
+exactly then. `RemoteHandler` calls `power_do()` by name and still has
+no call path to `route()`. `reload` is the one exception and is queued,
+because the thing being reloaded is the panel's page and netd cannot
+reload a browser without killing it — which is what `POWER_ACTIONS`
+deliberately does not do.
+
+**The list is the glass's.** `POWER_ACTIONS` crosses with its words, its
+order, its `need` and its two danger flags; netd decides which are
+available by resolving `need` against `power_status()` exactly as the
+glass resolves it against `/status`; the phone draws what it is handed.
+No third list in either half — the thing it would drift about is which
+button shuts the boat down.
+
+**No glyphs on the wire.** The phone keeps its own, keyed by action, for
+the same reason it keeps which page wears a tick ring: that is
+decoration, and everything on this wire that is not decoration is
+escaped on arrival. An icon has to be injected as markup to be an icon,
+and the one field on this remote that must be markup is not going to be
+the one next to SHUT DOWN. An action the glass grows later arrives with
+its words, its place in the order and its danger flag right, and no
+picture.
+
+Two steps, like the glass: arm the row, then a gesture a stray touch
+does not finish. A **hold** rather than the glass's slide — the slide is
+there because a round panel at speed produces touches nobody offered, a
+sleeve on the rim or a knuckle passing through, which a phone in a hand
+does not do and a phone in a pocket is locked against. A hold is also
+something a thumb does without looking, which a drag across a 390px
+glass in a seaway is not. Tapping the armed row again puts it away,
+which is the way out without doing anything — the same as the glass's
+armed tile, and why neither needs a caption saying so.
+
+`power_status()` is cached for twenty seconds, because the phone
+re-polls every four while the start clock runs and that call shells out
+to `systemctl`. Going to the desktop or back to the kiosk busts it,
+since that is the one thing that changes the answer and it is something
+this code has just done. The cache also makes the sheet you were *shown*
+the sheet that is honoured when your finger lands, which a control found
+by removing it.
+
 ### No tile, always on
 
 There is nothing on the glass for this: no tile, no arming, no QR. A

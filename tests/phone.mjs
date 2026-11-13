@@ -559,6 +559,90 @@ t.ok(!(await p.isVisible('#list')), 'CLOSE leaves without choosing');
 t.ok(JSON.stringify((await peek()).pend)===wasQ,
      'having asked the boat for nothing', JSON.stringify((await peek()).pend));
 
+t.head('the power sheet is a glyph in the corner, and the glass\'s own list');
+/* The owner asked for a power button that looks like one and nothing
+   else. It is in the corner a thumb reaches last, because everything
+   below it is the face and this is not another setting. */
+const pb=await p.$eval('#pwb',e=>{const r=e.getBoundingClientRect();
+  return {x:r.left,y:r.top,w:r.width,h:r.height,
+          txt:e.textContent.trim(), svg:e.querySelectorAll('svg').length};});
+t.ok(pb.txt==='' && pb.svg===1, 'the glyph and no word beside it',
+     JSON.stringify([pb.txt, pb.svg]));
+t.ok(pb.x+pb.w > 390-40 && pb.y < 120,
+     'in the top right, above the face rather than under it',
+     Math.round(pb.x)+','+Math.round(pb.y));
+t.ok(pb.w>=40 && pb.h>=40,
+     'with a target bigger than the glyph - 21px of ink is not something '
+     +'you press on a moving boat',
+     Math.round(pb.w)+'x'+Math.round(pb.h));
+await p.click('#pwb'); await p.waitForTimeout(300);
+/* The list is the GLASS's, filtered by what this Pi can do. netd
+   resolves `need` against power_status() exactly as the glass resolves
+   it against /status, and the rig says a desktop is startable and the
+   kiosk is not - so one of that pair is here and the other is not. */
+const prows=await p.$$eval('.prow',gs=>gs.map(g=>g.dataset.pa));
+t.ok(prows.join()==='reload,helper,desktop,reboot,poweroff',
+     'the glass\'s own actions, in the glass\'s own order - least '
+     +'destructive first, because the top of a list is where a hurried '
+     +'thumb lands', prows.join());
+t.ok(!prows.includes('cage'),
+     'and the one this device cannot do is simply not on it');
+t.ok(/3d 4h/.test(await p.textContent('#pw .hd b')),
+     'with how long it has been up', await p.textContent('#pw .hd b'));
+
+t.head('and nothing on it happens because you touched it once');
+/* Two steps, like the glass: arm the row, then a gesture a stray touch
+   does not finish. */
+const did=async()=>(await peek()).did;
+t.ok((await did()).length===0, 'nothing has been asked for yet',
+     JSON.stringify(await did()));
+await p.click('.prow[data-pa="poweroff"]'); await p.waitForTimeout(250);
+t.ok((await did()).length===0, 'and arming it is not doing it',
+     JSON.stringify(await did()));
+t.ok(await p.$eval('.prow[data-pa="poweroff"]',e=>e.classList.contains('arm')),
+     'the row is lit, the way the glass lights an armed tile');
+t.ok(/HOLD TO SHUT DOWN/.test(await p.textContent('#hold b')),
+     'and the bar says what it would do, in the glass\'s own words',
+     await p.textContent('#hold b'));
+/* Tapping the armed one again is the way out without doing anything -
+   which is why neither this nor the glass needs a caption saying so. */
+await p.click('.prow[data-pa="poweroff"]'); await p.waitForTimeout(250);
+t.ok(!(await p.isVisible('#hold.on')), 'touching it again puts it away');
+t.ok((await did()).length===0, 'having asked the device for nothing',
+     JSON.stringify(await did()));
+
+t.head('and a hold you let go of early is a hold you changed your mind about');
+await p.click('.prow[data-pa="reboot"]'); await p.waitForTimeout(250);
+const hb=await p.$eval('#hold',e=>{const r=e.getBoundingClientRect();
+  return {x:r.left+r.width/2, y:r.top+r.height/2};});
+await p.mouse.move(hb.x,hb.y); await p.mouse.down();
+await p.waitForTimeout(400); await p.mouse.up();
+await p.waitForTimeout(250);
+t.ok((await did()).length===0, 'four hundred milliseconds is not a hold',
+     JSON.stringify(await did()));
+await p.mouse.move(hb.x,hb.y); await p.mouse.down();
+await p.waitForTimeout(1100); await p.mouse.up();
+await p.waitForTimeout(300);
+t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
+     'and a full one is', JSON.stringify(await did()));
+/* reload is the one that does NOT go to the device: the thing being
+   reloaded is the panel's page, and netd cannot reload a browser
+   without killing it. */
+await p.waitForTimeout(1500);
+await p.click('#pwb'); await p.waitForTimeout(300);
+await p.click('.prow[data-pa="reload"]'); await p.waitForTimeout(250);
+await p.mouse.move(hb.x,hb.y); await p.mouse.down();
+await p.waitForTimeout(1100); await p.mouse.up();
+await p.waitForTimeout(300);
+t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
+     'a reload is not asked of the device', JSON.stringify(await did()));
+t.ok(JSON.stringify((await peek()).pend['power'])===
+     JSON.stringify({kind:'power', action:'reload'}),
+     'it is queued for the panel, which is the thing being reloaded',
+     JSON.stringify((await peek()).pend['power']));
+await p.click('[data-pwx]'); await p.waitForTimeout(250);
+t.ok(!(await p.isVisible('#pw.on')), 'and CLOSE leaves the sheet');
+
 t.head('the theme row still works, and the mirror wears the panel\'s colours');
 const bg=await p.evaluate(()=>getComputedStyle(document.body).backgroundColor);
 t.ok(bg==='rgb(244, 246, 247)',

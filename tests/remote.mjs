@@ -263,6 +263,56 @@ t.ok((await p.evaluate(()=>tLeft))===300000,
      'and a part minute, an over-long one, a string or nothing is not done',
      String(await p.evaluate(()=>tLeft)));
 
+t.head('the power sheet that crosses is the glass\'s own');
+/* netd keeps no list of these and the phone keeps no list of these:
+   netd decides which are AVAILABLE and the phone draws what it is
+   handed. The thing a third copy would drift about is which button
+   shuts the boat down, so this is asserted against POWER_ACTIONS
+   itself rather than against a list written out here. */
+const pwr=await p.evaluate(()=>({
+  sent:remoteCat().power,
+  real:POWER_ACTIONS.map(a=>({a:a.a, name:a.name, danger:a.danger?1:0,
+                              need:a.need||''}))}));
+t.ok(pwr.sent.length===pwr.real.length,
+     'every action on it goes over, and no others',
+     pwr.sent.length+' vs '+pwr.real.length);
+t.ok(pwr.sent.map(x=>x.a).join()===pwr.real.map(x=>x.a).join(),
+     'in the glass\'s own order - least destructive first, because the '
+     +'top of a list is where a hurried finger lands',
+     pwr.sent.map(x=>x.a).join());
+t.ok(pwr.sent.every((x,i)=>x.name===pwr.real[i].name
+                        && x.danger===pwr.real[i].danger
+                        && x.need===pwr.real[i].need),
+     'with its own words, its own danger flag and its own condition',
+     JSON.stringify(pwr.sent.filter((x,i)=>x.name!==pwr.real[i].name)));
+t.ok(pwr.sent.filter(x=>x.danger).map(x=>x.a).join()==='reboot,poweroff',
+     'and the two that are dangerous are the two that take the boat down',
+     pwr.sent.filter(x=>x.danger).map(x=>x.a).join());
+/* No glyphs. An icon has to be injected as markup to be an icon, and
+   the one field on this wire that must be markup is not going to be
+   the one next to SHUT DOWN. */
+t.ok(pwr.sent.every(x=>!('ico' in x)),
+     'no markup crosses with them - the phone keeps its own glyphs',
+     JSON.stringify(Object.keys(pwr.sent[0])));
+
+t.head('and a reload is the only one the panel is asked to do itself');
+/* Everything else netd runs. The reason you reach for the phone's
+   power sheet is usually that the glass has stopped answering, and a
+   command the panel has to collect is a command that never arrives
+   exactly then. */
+await p.evaluate(()=>{ window.__alive='yes'; });
+await p.evaluate(()=>{
+  for(const a of ['reboot','poweroff','desktop','cage','helper','',null])
+    remoteDo({kind:'power', action:a});
+});
+await p.waitForTimeout(400);
+t.ok((await p.evaluate(()=>window.__alive))==='yes',
+     'and none of the others reloads the glass on its way past',
+     String(await p.evaluate(()=>window.__alive)));
+/* That a reload really does reload is asserted at the very end of this
+   file, because it throws away everything the sections below set up -
+   which is the point of it. */
+
 t.head('the clock\'s three gestures mean what the glass says they mean');
 /* The phone sends the GESTURE, never the transition: its idea of
    tState is up to four seconds old, and from a stale state it would
@@ -488,6 +538,21 @@ t.ok(loop.applied==='vmg' && loop.theme==='dusk',
 t.ok(loop.extraStarts===0,
      'remoteStart is idempotent: a second call is not a second loop',
      String(loop.extraStarts));
+
+t.head('and a reload from the phone really does reload the glass');
+/* Last, because it takes the page with it. A mark set on the window
+   and then gone is the only honest way to see this: a flag the page
+   sets for itself would survive anything short of a real navigation,
+   which is exactly what is being claimed. */
+await p.evaluate(()=>{ window.__alive='still here'; });
+const gone=p.waitForEvent('framenavigated',{timeout:4000})
+            .then(()=>true).catch(()=>false);
+await p.evaluate(()=>remoteDo({kind:'power', action:'reload'}));
+t.ok(await gone, 'the page navigates');
+await p.waitForTimeout(600);
+t.ok((await p.evaluate(()=>window.__alive))===undefined,
+     'and it is a new one, not the same one carrying on',
+     String(await p.evaluate(()=>window.__alive)));
 
 await b.close();
 t.done();

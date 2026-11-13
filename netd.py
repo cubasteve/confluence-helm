@@ -2795,12 +2795,28 @@ def _remote_power_status():
     start sequence, for an answer that changes when somebody leaves the
     kiosk and at no other time. Twenty seconds is far inside the time it
     takes to notice a Desktop tile that should have appeared, and well
-    outside the poll."""
+    outside the poll.
+
+    It also makes the sheet you were SHOWN the sheet that is honoured
+    when your finger lands: remote_power checks the action against this
+    same read, so without it a Desktop row drawn a second ago could be
+    refused as NO SUCH ACTION because the kiosk state moved in between.
+    A control found that, by taking the cache out."""
     global _pw_at, _pw_st
     now = time.monotonic()
     if _pw_st is None or now - _pw_at > 20:
         _pw_st, _pw_at = power_status(), now
     return _pw_st
+
+
+def _remote_power_bust():
+    """Forget it. Going to the desktop or back to the kiosk is the one
+    thing that changes the answer, and it is a thing this file has just
+    done - so the sheet is right on the next fetch rather than up to
+    twenty seconds later, which is long enough to press the tile again
+    because nothing appeared to happen."""
+    global _pw_st
+    _pw_st = None
 
 
 def remote_available_power():
@@ -2849,6 +2865,9 @@ def remote_power(action, token):
             _remote['pend']['power'] = {'kind': 'power', 'action': 'reload'}
         return {'ok': True, 'queued': True}, 200
     r = power_do(action)
+    # Whatever it was, it may have been the one that changes which way
+    # out of the kiosk is offered.
+    _remote_power_bust()
     return r, (200 if r.get('ok') else 400)
 
 
@@ -3144,7 +3163,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
          env(safe-area-inset-bottom);
  min-height:100dvh;display:flex;flex-direction:column}
 .top{padding:14px 2px 12px;font-size:15px;letter-spacing:.26em;
- color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px}
+ color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px;
+ display:flex;align-items:center;gap:10px}
+.top b{flex:1;font-weight:inherit;letter-spacing:inherit}
 #main{flex:1}
 
 /* The switch. Outlined rather than filled: hairline-to-accent is how
@@ -3207,14 +3228,17 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
  color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
  font-size:13px;letter-spacing:.1em}
 .th button.on{border-color:var(--accent);color:var(--accent)}
-/* The way to the power sheet. Outlined like the theme row above it and
-   full width, because a device button crowded in beside DAY/DUSK/NIGHT
-   is a device button somebody hits while changing the theme. */
-#pwb{width:100%;background:none;border:2px solid var(--hairline);
- color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
- font-size:13px;letter-spacing:.1em;display:flex;align-items:center;
- justify-content:center;gap:9px}
-#pwb svg{width:17px;height:17px;flex:none}
+/* The way to the power sheet: the glyph and nothing else, in the corner
+   a thumb reaches last. Everything below it is the face, which is what
+   this app is for - a full-width button under the theme row read as
+   another setting, and this is not one.
+   The padding is the target: 21px of glyph is not something you press
+   on a moving boat, and the negative margin keeps the ink on the same
+   line as the name while the tap area runs past it. */
+#pwb{background:none;border:0;padding:11px;margin:-11px 0;
+ color:var(--label);display:flex;line-height:0;border-radius:50%}
+#pwb svg{width:21px;height:21px;flex:none}
+#pwb:active{color:var(--accent);background:var(--chip)}
 svg.gl{fill:none;stroke:currentColor;stroke-width:2;
  stroke-linecap:round;stroke-linejoin:round}
 svg.gl .f{fill:currentColor;stroke:none}
@@ -3300,7 +3324,7 @@ svg.gl .f{fill:currentColor;stroke:none}
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
  font-size:14px;display:none;z-index:9}
 </style></head><body>
-<div class="top">CONFLUENCE HELM</div>
+<div class="top"><b>CONFLUENCE HELM</b><span id="pwslot"></span></div>
 <div id="main"></div>
 <div id="foot"></div>
 <div id="list"></div>
@@ -3663,13 +3687,15 @@ function draw(){
   S.themes.forEach(function(t){
     f+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
       +esc(t.toUpperCase())+'</button>';});
-  f+='</div>';
+  document.getElementById('foot').innerHTML=f+'</div>';
   /* Only when there is something on it. A Pi with no systemctl offers
      nothing here, and a button that opens an empty sheet is worse than
-     no button. */
-  if((S.power||[]).length)
-    f+='<h1>DEVICE</h1><button id="pwb">'+gly('poweroff')+'POWER</button>';
-  document.getElementById('foot').innerHTML=f;
+     no button. Drawn from here rather than sitting in the page so that
+     it appears with the rest of what the boat said, instead of being
+     there from the first frame and then possibly not meaning anything. */
+  document.getElementById('pwslot').innerHTML =
+    (S.power||[]).length ? '<button id="pwb" aria-label="Power">'
+                           +gly('poweroff')+'</button>' : '';
   if(OPEN) place();
 }
 
@@ -3853,8 +3879,10 @@ document.getElementById('main').onclick=function(e){
   if(z){ if(OPEN && OPEN.p===z.dataset.p && OPEN.s===z.dataset.s) shut();
          else pick(z.dataset.p, z.dataset.s); }
 };
+document.querySelector('.top').onclick=function(e){
+  if(e.target.closest('#pwb')) pwOpen(true);
+};
 document.getElementById('foot').onclick=function(e){
-  if(e.target.closest('#pwb')) return void pwOpen(true);
   var t=e.target.closest('[data-t]'); if(!t) return;
   post({kind:'theme',theme:t.dataset.t},function(){
     S.now.theme=t.dataset.t; draw();

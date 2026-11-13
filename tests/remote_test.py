@@ -251,12 +251,32 @@ class Icon(unittest.TestCase):
                 self.assertLess(r, 205, (x, y, w, h))
 
 
+# The shape of the glass's power sheet, as a fixture - like SLOTS and
+# READINGS above it, and for the same reason: what is tested here is
+# netd's filtering and validation, not the glass's list. That the PANEL
+# really sends its own POWER_ACTIONS is tests/remote.mjs's assertion,
+# made against POWER_ACTIONS itself, where it cannot drift.
+POWER = [{'a': 'reload', 'name': 'Reload the app', 'verb': 'RELOAD',
+          'danger': 0, 'need': ''},
+         {'a': 'helper', 'name': 'Restart helper', 'verb': 'RESTART',
+          'danger': 0, 'need': ''},
+         {'a': 'desktop', 'name': 'Desktop', 'verb': 'START THE DESKTOP',
+          'danger': 0, 'need': 'power.desktop'},
+         {'a': 'cage', 'name': 'Back to the kiosk', 'verb': 'GO BACK',
+          'danger': 0, 'need': 'power.cage'},
+         {'a': 'reboot', 'name': 'Reboot', 'verb': 'REBOOT',
+          'danger': 1, 'need': ''},
+         {'a': 'poweroff', 'name': 'Shut down', 'verb': 'SHUT DOWN',
+          'danger': 1, 'need': ''}]
+
+
 def armed(netd):
     """Arm without opening a real socket - the socket is the one thing
     that cannot be exercised in a container with no wlan1."""
     netd._remote.update(
         armed=True, token='T0KEN', how='device', pend={}, at=0.0,
         slots=SLOTS, readings=[dict(r) for r in READINGS],
+        power=[dict(a) for a in POWER],
         themes=['day', 'dusk', 'night', 'auto'],
         cidr='172.20.10.3/28', now={'slots': {'dial:c1': 'dpt'}, 'theme': 'dusk'})
 
@@ -378,6 +398,169 @@ class Door(unittest.TestCase):
                 # page and the panel is going to that one.
                 p.js('/r/cmd?t=T0KEN', {'kind': 'page', 'page': 'dial'})
                 self.assertEqual(netd._remote['pend']['page']['page'], 'dial')
+            finally:
+                p.close()
+
+    def test_the_power_sheet_is_the_panels_and_netd_keeps_no_list(self):
+        """netd decides which actions are AVAILABLE and nothing else.
+        A list of these in this file would drift the first time one was
+        added to the glass, and the thing it would drift about is which
+        button shuts the boat down."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            was_st = netd.power_status
+            netd.power_status = lambda: {'available': True, 'uptime': '1d',
+                                         'desktop': True, 'cage': False}
+            try:
+                armed(netd)
+                got = [a['a'] for a in netd.remote_available_power()]
+                self.assertEqual(got, ['reload', 'helper', 'desktop',
+                                       'reboot', 'poweroff'], got)
+                # Its mirror: the two are offered one at a time, by
+                # construction, so the sheet always shows one way out of
+                # wherever you are and never both.
+                netd.power_status = lambda: {'available': True, 'uptime': '1d',
+                                             'desktop': False, 'cage': True}
+                # The read is cached for twenty seconds, because the
+                # phone re-polls every four while the start clock runs
+                # and power_status shells out. Going either way between
+                # the desktop and the kiosk busts it, since that is the
+                # one thing that changes the answer.
+                netd._remote_power_bust()
+                got = [a['a'] for a in netd.remote_available_power()]
+                self.assertIn('cage', got)
+                self.assertNotIn('desktop', got)
+            finally:
+                netd.power_status = was_st
+
+    def test_leaving_the_kiosk_is_noticed_without_waiting_for_the_cache(self):
+        """The read is cached for twenty seconds, because the phone
+        re-polls every four while the start clock runs and power_status
+        shells out. Going to the desktop or back to the kiosk is the one
+        thing that changes the answer, and it is a thing this file has
+        just done - so it must not be twenty seconds before the sheet
+        agrees, which is long enough to press the tile again because
+        nothing appeared to happen."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            was_do, was_st = netd.power_do, netd.power_status
+            st = {'available': True, 'uptime': '1d',
+                  'desktop': True, 'cage': False}
+            netd.power_status = lambda: dict(st)
+            netd.power_do = lambda a: {'ok': True}
+            try:
+                armed(netd)
+                netd._remote_power_bust()
+                p = Phone(netd)
+                try:
+                    got = [a['a'] for a in netd.remote_available_power()]
+                    self.assertIn('desktop', got)       # and now cached
+                    # The helper has done its work: there is a desktop
+                    # running, so the way out is the kiosk now.
+                    st.update(desktop=False, cage=True)
+                    code, j = p.js('/r/power?t=T0KEN', {'action': 'desktop'})
+                    self.assertEqual(code, 200, j)
+                    got = [a['a'] for a in netd.remote_available_power()]
+                    self.assertIn('cage', got)
+                    self.assertNotIn('desktop', got)
+                finally:
+                    p.close()
+            finally:
+                netd.power_do, netd.power_status = was_do, was_st
+
+    def test_a_half_formed_sheet_is_not_drawn(self):
+        """A row whose words say one thing and whose action does another
+        is the worst shape this can arrive in, and two of them shut the
+        boat down."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            out = netd._power_sheet([
+                {'a': 'reboot', 'name': 'Reboot', 'verb': 'REBOOT',
+                 'danger': 1},
+                {'a': 'poweroff'},            # no name
+                {'name': 'Nameless'},         # no action
+                {'a': 'rm -rf /', 'name': 'Tidy up'},   # not a word
+                {'a': 'x' * 40, 'name': 'Long'},
+                'not a dict', None, 42,
+            ])
+            self.assertEqual([a['a'] for a in out], ['reboot'], out)
+            self.assertEqual(out[0]['verb'], 'REBOOT')
+            # A verb is optional and falls back to the name, so a row
+            # can never arm a bar that says nothing.
+            one = netd._power_sheet([{'a': 'cage', 'name': 'Kiosk'}])
+            self.assertEqual(one[0]['verb'], 'Kiosk')
+            self.assertEqual(one[0]['danger'], 0)
+            self.assertEqual(netd._power_sheet('reboot'), [])
+            self.assertEqual(netd._power_sheet(None), [])
+
+    def test_an_action_the_sheet_does_not_offer_is_not_an_action(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            was_do, was_st = netd.power_do, netd.power_status
+            did = []
+            netd.power_do = lambda a: (did.append(a), {'ok': True})[1]
+            netd.power_status = lambda: {'available': True, 'uptime': '1d',
+                                         'desktop': False, 'cage': False}
+            try:
+                armed(netd)
+                p = Phone(netd)
+                try:
+                    for bad in ('cage', 'desktop', 'display', 'rm -rf',
+                                '', None, 42, ['reboot']):
+                        code, j = p.js('/r/power?t=T0KEN', {'action': bad})
+                        self.assertEqual(code, 400,
+                                         '%r -> %s %s' % (bad, code, j))
+                    self.assertEqual(did, [])
+                    # Wrong token, no token, disarmed: the same three
+                    # gates /r/cmd is behind.
+                    for q in ('', '?t=', '?t=wrong'):
+                        code, j = p.js('/r/power' + q, {'action': 'reboot'})
+                        self.assertEqual(code, 403, j)
+                    netd._remote['armed'] = False
+                    code, j = p.js('/r/power?t=T0KEN', {'action': 'reboot'})
+                    self.assertEqual(code, 403, j)
+                    self.assertEqual(j.get('error'), 'NOT ARMED')
+                    self.assertEqual(did, [])
+                    # And the one it does offer goes straight through,
+                    # rather than being queued for a panel that may be
+                    # the reason you are reaching for this at all.
+                    netd._remote['armed'] = True
+                    code, j = p.js('/r/power?t=T0KEN', {'action': 'reboot'})
+                    self.assertEqual(code, 200, j)
+                    self.assertEqual(did, ['reboot'])
+                    self.assertEqual(netd._remote['pend'], {})
+                finally:
+                    p.close()
+            finally:
+                netd.power_do, netd.power_status = was_do, was_st
+
+    def test_a_reload_is_queued_because_netd_cannot_reload_a_browser(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            was_do = netd.power_do
+            did = []
+            netd.power_do = lambda a: (did.append(a), {'ok': True})[1]
+            try:
+                armed(netd)
+                p = Phone(netd)
+                try:
+                    code, j = p.js('/r/power?t=T0KEN', {'action': 'reload'})
+                    self.assertEqual(code, 200, j)
+                    self.assertEqual(did, [])
+                    self.assertEqual(netd._remote['pend']['power'],
+                                     {'kind': 'power', 'action': 'reload'})
+                finally:
+                    p.close()
+            finally:
+                netd.power_do = was_do
+
+    def test_the_power_route_does_not_reach_the_panels_own_endpoints(self):
+        """RemoteHandler has no call path to route(). /r/power calls one
+        function by name - it is not a way to ask for any of the other
+        twenty-seven."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for path in ('/power/do', '/status', '/wifi/power',
+                             '/r/power/../power/do', '/r/cmd/../power/do'):
+                    code, j = p.js(path + '?t=T0KEN', {'action': 'reboot'})
+                    self.assertEqual(code, 404, '%s -> %s %s' % (path, code, j))
             finally:
                 p.close()
 
