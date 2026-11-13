@@ -138,6 +138,7 @@ docs/                     everything below
 | [The display](docs/display.md) | pages, gestures, the panel and dock, brightness, touch lock, alerts, golden hour |
 | [Radar](docs/radar.md) | two rain services, the metered forecast, the wind layer, the memory budget |
 | [Tracks](docs/tracks.md) | recording a sail, the library, and getting one onto a phone |
+| [Sonar](docs/sonar.md) | Open Echo, why the depth needed no code, and why the echogram needed its own wire |
 | [Music](docs/music.md) | Spotify without a Connect daemon — what polls, and what it will not do |
 | [Network](docs/network.md) | WiFi, the hotspot, and `netd.py` |
 | [Kiosk, boot and power](docs/kiosk.md) | the session, autostart, cage mode, recovery |

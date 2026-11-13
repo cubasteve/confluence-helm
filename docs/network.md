@@ -1233,8 +1233,16 @@ One frame is still a flash.
 
 | | |
 |---|---|
-| `127.0.0.1:8091` | netd, loopback only — the panel's 27 endpoints |
+| `127.0.0.1:8091` | netd, loopback only — the panel's 33 endpoints |
 | `0.0.0.0:8093` | the remote, filtered to the dongle — `/r`, `/r/state`, `/r/cmd`, `/r/icon.png`, `/r/manifest.webmanifest` |
+| `0.0.0.0:5005` UDP | **only if `HELM_SONAR=udp:…`** — the sounder's frames. Read-only and not a server: see [Sonar](sonar.md) |
+
+The sonar port is the second thing here that is not loopback. A
+datagram arriving on it can draw a false picture and nothing else — it
+cannot reach `route()`, cannot change a setting, and cannot move the
+shallow alarm, which rings on the depth Signal K publishes down a
+different wire. `HELM_SONAR=udp:192.168.8.1:5005` pins it to one
+interface if that is still more than you want from a marina network.
 
 `HELM_REMOTE_PORT` moves the second one. `boot/remote-url.sh` reads the
 port back from netd rather than writing it in, so moving it does not

@@ -9,6 +9,21 @@
 #
 # Started from ~/.config/autostart/confluence-netd.desktop.
 
+# Settings that belong to this BOAT rather than to the repo - which
+# today means HELM_SONAR, and tomorrow whatever else is wired to one
+# particular hull. They live outside the checkout on purpose: autopull
+# replaces every tracked file, so a value edited into this script would
+# be gone at the next push, most likely without anybody noticing until
+# the sounder was wanted.
+#
+#   ~/.config/confluence-helm.env
+#   HELM_SONAR=udp:5005
+#
+# set -a so what it assigns reaches python, which is a child process and
+# does not inherit a plain shell variable.
+HELM_ENV="$HOME/.config/confluence-helm.env"
+if [ -r "$HELM_ENV" ]; then set -a; . "$HELM_ENV"; set +a; fi
+
 # In cage mode this loop is started by cage-session.sh, and the desktop's
 # autostart entry starts another one the moment you tap Desktop. Two
 # pythons cannot both hold 127.0.0.1:8091, and the loser would respawn

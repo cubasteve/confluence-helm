@@ -1926,6 +1926,16 @@ instead of fifteen times.
 
 **The dock tiles were a fixed 136 px.** Four fitted 600; the fifth made
 it 676 and the dock began to scroll, which is a poor thing for a menu of
-five to do. The tiles share the row now, with a 104 px floor — five come
-out at 108 each, and a sixth would hit the floor and scroll, which by
-then is the honest answer.
+five to do. The tiles share the row now — five came out at 108 each.
+
+The floor under that sharing was 104, with a comment claiming the names
+stopped fitting below 112. Neither number had been measured, and Sonar
+made six: six at 104 is 657 in a row of 600, so the dock scrolled, which
+chops RADAR to **AR** at one end and GOLDEN HOUR to **GOI HO** at the
+other — both of them where your eye lands first.
+
+So it was measured. The widest *line* any label draws is **81 px**
+(COURSE, TRACKS and ENERGY tie); six tiles come to exactly 600 at a
+floor of 84 and settle at 85, which is four pixels of air with the 18 px
+gap doing the separating. Seven apps would want 68 each, under the ink —
+and that is where sharing stops and scrolling is the honest answer.

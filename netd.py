@@ -30,7 +30,8 @@
 # Stdlib only. This runs on a boat computer that must come up without a
 # network, so it has no business needing pip.
 
-import array, contextlib, json, math, os, re, secrets, shutil, socket
+import array, base64, contextlib, json, math, os, re, secrets, shutil
+import socket
 import subprocess, sys
 import tempfile, threading, time, urllib.error, urllib.request, wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2377,6 +2378,318 @@ def gpx_status():
     return {'available': gpx_dir() is not None, 'count': len(gpx_list())}
 
 
+# --------------------------------------------------------------- sonar
+#
+# Open Echo (Neumi/open_echo): a TUSS4470 transducer board on an
+# Arduino, which sends one frame per ping -
+#
+#     0xAA | idx u16 | temp i16 | vdrv u16 | <N> sample bytes | xor
+#
+# little-endian, and the XOR covers every byte after the 0xAA.
+#
+# What the frame does NOT carry matters as much as what it does. There
+# is no length, no timestamp, no sequence number, and nothing naming
+# the firmware build it came from. A reader has to already know N, and
+# N is a #define somebody flashed. Over UDP the datagram's own edge
+# stands in for the field the frame lacks - a frame IS a datagram, so N
+# is its length less the eight bytes of frame around the samples, and
+# the checksum is what says that reading was right. Over serial there
+# is no such edge and N is configuration that has to match the board.
+#
+# Depth is NOT computed here, and the omission is the point. The depth
+# is already on the boat's Signal K bus and the panel already
+# subscribes to it. A second depth, off the same transducer by another
+# route, would disagree with the first by a few centimetres and some
+# fraction of a second - and then there would be two numbers and no
+# telling which one the shallow alarm was ringing about. What this
+# serves is the PICTURE: the strength of the echo down the water
+# column, the scale to label it by, and the firmware's own bottom pick
+# left as a sample index. That index is the one depth-ish number that
+# belongs here, because it is in the same coordinate system as the
+# samples it is drawn over, and Signal K's metres are not.
+
+# 'udp:5005', 'udp:192.168.8.1:5005', 'serial:/dev/ttyACM0:250000', or
+# empty for a boat with no sounder - which is every boat until one is
+# wired, so off is the default and nothing is opened.
+#
+# The UDP form opens a socket on every interface unless an address is
+# given, which is the second thing in this file that is not loopback -
+# the remote's door being the first - so it is worth saying what it
+# does and does not let in. A datagram on this port can draw a FALSE
+# PICTURE and nothing else. It cannot reach route(), it cannot change
+# a setting, and it cannot move the shallow alarm, which rings on the
+# depth Signal K publishes down a different wire entirely. If that is
+# still more than you want from a marina network, name the sounder's
+# own interface: 'udp:192.168.8.1:5005' binds there and nowhere else.
+SONAR = os.environ.get('HELM_SONAR', '')
+# Samples per ping: the firmware's NUM_SAMPLES. Only consulted on the
+# serial path; a datagram says its own length.
+SONAR_SAMPLES = int(os.environ.get('HELM_SONAR_SAMPLES', '1800'))
+# Columns the picture is squeezed to before it crosses the wire. The
+# round glass gives an echogram some 700 px of height, so 256 is a
+# shade finer than the panel can draw and 1800 is six times more bytes
+# than it can use.
+SONAR_BINS = int(os.environ.get('HELM_SONAR_BINS', '256'))
+# Pings kept. At the ~10 Hz the board pings, 600 is a minute of water
+# behind you, which is what makes the waterfall worth opening: an app
+# that started its history when you looked at it would show a blank
+# screen for the first minute every time.
+SONAR_KEEP = int(os.environ.get('HELM_SONAR_KEEP', '600'))
+# Microseconds per sample - the ADC period the firmware was built with,
+# 13.2 on both the UNO R3 and the R4, which is about a centimetre of
+# water there and back.
+SONAR_US = float(os.environ.get('HELM_SONAR_US', '13.2'))
+# Metres per second through the water. It moves a percent or two with
+# temperature and salinity, and the frame carries a temperature, so
+# this is the number to refine on the day that a percent matters.
+SONAR_C = float(os.environ.get('HELM_SONAR_C', '1500'))
+
+_sonar = {'seq': 0, 'pings': [], 'at': 0, 'err': '', 'good': 0, 'bad': 0}
+_sonar_lk = threading.Lock()
+
+
+def sonar_spec(spec):
+    """What HELM_SONAR says, or None if it says nothing usable.
+
+    Parsed here rather than where the socket is opened so that a typo
+    in the unit file is a thing this file can be asked about, instead
+    of something only a boat with a transducer could discover.
+    """
+    parts = str(spec or '').strip().split(':')
+    if parts[0] == 'udp' and len(parts) in (2, 3):
+        host = parts[1] if len(parts) == 3 else '0.0.0.0'
+        try:
+            port = int(parts[-1])
+        except ValueError:
+            return None
+        return {'kind': 'udp', 'host': host, 'port': port} if 0 < port < 65536 else None
+    if parts[0] == 'serial' and len(parts) in (2, 3):
+        dev = parts[1]
+        try:
+            baud = int(parts[2]) if len(parts) == 3 else 250000
+        except ValueError:
+            return None
+        return {'kind': 'serial', 'dev': dev, 'baud': baud} if dev and baud > 0 else None
+    return None
+
+
+def sonar_parse(buf):
+    """One whole frame to a ping, or None if that is not what it is.
+
+    `buf` runs from the 0xAA through the checksum inclusive. The sum
+    covers everything after the header byte and not the byte itself,
+    which is the project's own convention and not a guess worth
+    second-guessing: a checksum that included a constant would say
+    nothing more about the bytes that vary than one that left it out.
+    """
+    # Eight bits of sum over eighteen hundred bytes, which is worth
+    # being honest about: it catches a bit flip and it catches a frame
+    # read at the wrong offset, and roughly one bad frame in 256 walks
+    # through it. That is the format's arithmetic and not a choice made
+    # here. It is enough because of what it guards - a WRONG PICTURE
+    # for one ping out of a scrolling minute of them, which the next
+    # ping paints over. The shallow alarm does not run on this; it runs
+    # on the depth Signal K publishes, down a different wire.
+    if len(buf) < 9 or buf[0] != 0xAA:
+        return None
+    x = 0
+    for b in buf[1:-1]:
+        x ^= b
+    if x != buf[-1]:
+        return None
+    temp = buf[3] | (buf[4] << 8)
+    if temp >= 0x8000:
+        temp -= 0x10000          # i16: the water is sometimes below zero
+    return {'idx': buf[1] | (buf[2] << 8), 'temp': temp / 100.0,
+            'vdrv': buf[5] | (buf[6] << 8), 'samples': buf[7:-1]}
+
+
+def sonar_bins(samples, n):
+    """`samples` squeezed to `n` columns, by the LOUDEST in each bucket
+    rather than the average of it.
+
+    An echo is a spike a few samples wide sitting in noise. Average a
+    bucket of seven and a real bottom return in one of them comes back
+    a seventh as bright - so the harder the squeeze, the fainter the
+    only thing the picture is for. The max keeps it, and keeps a weed
+    line and a fish arch with it.
+    """
+    m = len(samples)
+    if n <= 0 or m == 0:
+        return b''
+    if m <= n:
+        return bytes(samples)
+    out = bytearray(n)
+    for i in range(n):
+        a, b = i * m // n, (i + 1) * m // n
+        out[i] = max(samples[a:b]) if b > a else samples[a]
+    return bytes(out)
+
+
+def sonar_feed(st, chunk):
+    """Bytes off a serial port to whole frames.
+
+    A resync and not a parse, because a stream has no edges: 0xAA is a
+    perfectly ordinary loud echo, so the first one in the buffer is a
+    CANDIDATE header and the checksum is the only thing that can tell a
+    real one from a bottom return. A candidate that fails moves the
+    window on by a single byte - stepping a whole frame instead would
+    walk straight over the true header sitting two bytes further in,
+    and the stream would never resynchronise at all.
+    """
+    buf = st.get('buf', b'') + chunk
+    need = SONAR_SAMPLES + 8
+    out, i = [], 0
+    while True:
+        j = buf.find(b'\xaa', i)
+        if j < 0:
+            i = len(buf)             # no candidate: none of this can start one
+            break
+        if len(buf) - j < need:
+            i = j                    # a candidate, but the rest is still coming
+            break
+        p = sonar_parse(buf[j:j + need])
+        if p:
+            out.append(p)
+            i = j + need
+        else:
+            i = j + 1
+    st['buf'] = buf[i:]
+    return out
+
+
+def _sonar_push(p, ns):
+    row = {'n': 0, 't': int(time.time() * 1000), 'idx': p['idx'], 'ns': ns,
+           'temp': p['temp'],
+           'b': base64.b64encode(sonar_bins(p['samples'], SONAR_BINS)).decode()}
+    with _sonar_lk:
+        _sonar['seq'] += 1
+        row['n'] = _sonar['seq']
+        _sonar['pings'].append(row)
+        if len(_sonar['pings']) > SONAR_KEEP:
+            del _sonar['pings'][:-SONAR_KEEP]
+        _sonar['at'] = time.time()
+        _sonar['good'] += 1
+
+
+def sonar_read(after=0, limit=None):
+    """Every ping since `after`, and the scale to draw them by.
+
+    `after` is the sequence number the asker already has, so a panel
+    that polls twice a second asks for the five pings it has not seen
+    rather than the six hundred it has. A fresh app sends 0 and gets
+    the whole ring, because the history IS the picture.
+    """
+    now = time.time()
+    with _sonar_lk:
+        seq, at = _sonar['seq'], _sonar['at']
+        good, bad, err = _sonar['good'], _sonar['bad'], _sonar['err']
+        try:
+            a = int(after)
+        except (TypeError, ValueError):
+            a = 0
+        # A sequence AHEAD of ours means netd restarted under the app
+        # and the numbers began again. Hand back the ring rather than
+        # nothing, or the waterfall would sit empty for as long as it
+        # took the count to climb back past where it used to be.
+        ps = list(_sonar['pings']) if a > seq else [p for p in _sonar['pings'] if p['n'] > a]
+        # The whole ring by default, because a cold start asks with 0
+        # and the history IS the picture: an app that opened on the
+        # last 150 pings would show a quarter of a screen and fill the
+        # rest over the following minute.
+        ps = ps[-int(limit or SONAR_KEEP):]
+    return {'ok': True, 'on': bool(sonar_spec(SONAR)), 'seq': seq,
+            'bins': SONAR_BINS,
+            # Metres of water per SAMPLE, there and back halved. The
+            # panel multiplies by a ping's own `ns` for the range of
+            # the column it is drawing.
+            'mps': SONAR_US * 1e-6 * SONAR_C / 2,
+            'age': round(now - at, 1) if at else None,
+            'good': good, 'bad': bad, 'error': err, 'pings': ps}
+
+
+def _sonar_udp(host, port):
+    # Closed on the way out however this ends, because the way it ends
+    # is usually a bind that failed and a supervisor about to try the
+    # same port again in three seconds - and a descriptor a second for
+    # the rest of the afternoon is how a helper that only reads a
+    # socket manages to run a Pi out of them.
+    with contextlib.closing(socket.socket(socket.AF_INET,
+                                          socket.SOCK_DGRAM)) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, port))
+        # Not blocking for ever: a thread parked in recvfrom cannot
+        # notice that netd is shutting down, and a timeout costs one
+        # wakeup every ten seconds.
+        s.settimeout(10)
+        while True:
+            try:
+                d = s.recvfrom(65535)[0]
+            except socket.timeout:
+                continue
+            # The datagram's edge is the length the frame does not carry.
+            p = sonar_parse(d)
+            if p:
+                _sonar_push(p, len(p['samples']))
+            else:
+                with _sonar_lk:
+                    _sonar['bad'] += 1
+
+
+def _sonar_serial(dev, baud):
+    # 250000 is not one of termios' named speeds, and the stdlib has no
+    # way to ask for one that is not. stty does, through the kernel's
+    # BOTHER, and netd shells out for everything else it cannot reach
+    # from Python anyway.
+    rc, _, err = run(['stty', '-F', dev, 'raw', '-echo', str(baud)], 10)
+    if rc != 0:
+        raise OSError('stty %s %s: %s' % (dev, baud, terse(err) or 'failed'))
+    st, idle = {'buf': b''}, 0
+    with open(dev, 'rb', buffering=0) as f:
+        while True:
+            c = f.read(4096)
+            if not c:
+                # An unplugged board usually makes the read RAISE, and
+                # the supervisor reopens. Sometimes it just goes quiet
+                # at end of file instead, and a loop that only slept
+                # would spin politely for the rest of the day over a
+                # device that is no longer there. Ten seconds of
+                # nothing is longer than any gap between pings.
+                idle += 1
+                if idle > 50:
+                    raise OSError('%s went quiet' % dev)
+                time.sleep(0.2)
+                continue
+            idle = 0
+            for p in sonar_feed(st, c):
+                _sonar_push(p, SONAR_SAMPLES)
+
+
+def sonar_run():
+    """One reader, restarted for as long as netd lives.
+
+    The board is a USB device on a boat: it gets unplugged, it browns
+    out when the engine turns over, the Pi renumbers it at ttyACM1. A
+    thread that died on the first of those would leave the panel
+    showing a picture frozen at the moment of the knock, with nothing
+    short of restarting netd to bring it back.
+    """
+    sp = sonar_spec(SONAR)
+    if not sp:
+        return
+    while True:
+        try:
+            if sp['kind'] == 'udp':
+                _sonar_udp(sp['host'], sp['port'])
+            else:
+                _sonar_serial(sp['dev'], sp['baud'])
+        except Exception as e:
+            with _sonar_lk:
+                _sonar['err'] = str(e)[:120]
+        time.sleep(3)
+
+
+
 # --------------------------------------------------------------- http
 
 def spotify_status():
@@ -2477,6 +2790,13 @@ def route(path, body):
         return remote_disarm()
     if path == '/remote/poll':
         return remote_poll(body)
+
+    # POST, and not in GET_OK, for the reason that list gives: a route
+    # added later is POST-only until someone decides otherwise. The
+    # panel's sonar app polls it twice a second with the sequence
+    # number it already holds.
+    if path == '/sonar':
+        return sonar_read(body.get('after', 0))
 
     if path == '/spotify/like':
         return spotify_like(body.get('id'), body.get('want'))
@@ -5064,6 +5384,24 @@ if __name__ == '__main__':
     buzz_quiet()
     if _bz.get('mode') == 'audio':
         threading.Thread(target=audio_warm, daemon=True).start()
+    _sp = sonar_spec(SONAR)
+    if not SONAR:
+        print('[netd] sonar: off - set HELM_SONAR to udp:PORT or '
+              'serial:DEV:BAUD', flush=True)
+    elif not _sp:
+        # Said badly rather than not at all: an unreadable HELM_SONAR
+        # and an unset one would otherwise look identical from here,
+        # and the first is a typo somebody wants to hear about.
+        print('[netd] sonar: HELM_SONAR=%r is not udp:PORT or '
+              'serial:DEV:BAUD' % SONAR[:60], flush=True)
+    else:
+        print('[netd] sonar: %s, %d bins of %s'
+              % ('udp %s:%d' % (_sp['host'], _sp['port']) if _sp['kind'] == 'udp'
+                 else 'serial %s at %d' % (_sp['dev'], _sp['baud']),
+                 SONAR_BINS,
+                 'a datagram' if _sp['kind'] == 'udp' else '%d samples' % SONAR_SAMPLES),
+              flush=True)
+        threading.Thread(target=sonar_run, daemon=True).start()
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     # Fill the caches before anyone asks. The kiosk often comes up at the
     # same moment this does, and the first /status is the one that decides

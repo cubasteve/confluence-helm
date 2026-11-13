@@ -56,6 +56,7 @@ probes count on.
 | `click` | the noise the glass makes under a finger: which controls make one, which gestures do not, the cycle that chooses it, and that it is remembered |
 | `scroll` | no native scrollbar anywhere, the fade on the edge that has something behind it, and the arc on the rim |
 | `pick` | the menu the dial's readings and the course sheet's settings share: where it opens, what a tap on a row does, and the veil |
+| `sonar` | the echogram: that the gain measures the transmit pulse instead of assuming it, that now is at the right-hand edge, that night is a red ramp which repaints what is already drawn, and that the big number is the dial's number rather than one worked out from the picture |
 
 ## The helper
 
@@ -66,6 +67,7 @@ is the only way to test a machine you are not sitting at.
 | test | what it holds to account |
 |---|---|
 | `sound_test` | which sounder this Pi has, the tone itself, the pattern, and the pin never left high |
+| `sonar_test` | Open Echo's frames, which carry no length and no sequence number: the little-endian read, the checksum, the resync that steps ONE byte past a bad candidate because 0xAA is also a loud echo, the squeeze that takes the loudest sample rather than the average, and the ring |
 | `backlight_test` | the only thing that changes how much light a panel puts out: the slider's 5% floor, the scaling, and a device that is there but not writable |
 | `score_test` | the times the club's form takes, what goes over the wire, and the limits pointed at somebody else's server |
 | `dongle_test` | the rescue for a USB wifi adapter whose driver did not initialise it: that an interface existing is not success, and that a working one is never yanked |

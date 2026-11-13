@@ -293,10 +293,23 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
    apps 136 was 544 of 600 and fitted; the fifth made it 676 and the
    dock started scrolling, which is a poor thing for a menu of five to
    do. Sharing means the next app costs every tile a few pixels instead
-   of pushing one off the end - and the floor is what says enough: below
-   112 the names stop fitting, and at that point scrolling is the honest
-   answer rather than a squeeze nobody can read. */
-.approw .tile{flex:1 1 0;min-width:104px;width:auto}
+   of pushing one off the end - and the floor is what says enough: past
+   it, scrolling is the honest answer rather than a squeeze nobody can
+   read.
+
+   The floor used to be 104, with a comment claiming the names stopped
+   fitting below 112. Neither was measured. Sonar made six, six at 104
+   is 657 of 600, and the dock scrolled - which chops RADAR to AR at
+   one end and GOLDEN HOUR to GOI HO at the other, both of them the
+   ends your eye lands on first.
+
+   So it was measured. The widest LINE any label draws is 81 px
+   (COURSE, TRACKS and ENERGY tie), 84 is where six tiles come to
+   exactly 600, and 85 is what they settle at - four pixels of air,
+   with the gap of 18 between them doing the separating. Seven apps
+   want 68 each, which is under the ink, and that is where this stops
+   and scrolling starts. */
+.approw .tile{flex:1 1 0;min-width:84px;width:auto}
 .approw .tile span{white-space:pre-line}
 /* A launched app. */
 #app-run{position:absolute;inset:0;background:var(--bg);z-index:25;display:none}
@@ -1031,6 +1044,26 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   text-transform:uppercase}
 .a-h2{margin-top:7px;font-size:17px;font-weight:600;letter-spacing:.1em;
   line-height:1.2;text-transform:uppercase}
+/* Sonar. The depth is the biggest thing on the page because it is the
+   thing you look up, and it is TEXT over the picture rather than drawn
+   into it: it comes from Signal K and the picture comes from netd, and
+   two sources that update at different rates have no business sharing
+   a paint. */
+#snr-d{position:absolute;top:96px;left:0;right:0;text-align:center;
+  font-size:92px;font-weight:var(--w-val);color:var(--ink);line-height:1;
+  pointer-events:none}
+#snr-u{font-size:34px;font-weight:600;color:var(--label);margin-left:12px;
+  letter-spacing:.06em}
+#snr-sub{position:absolute;top:202px;left:0;right:0;text-align:center;
+  font-size:19px;font-weight:600;letter-spacing:.14em;color:var(--label);
+  text-transform:uppercase;pointer-events:none}
+/* The empty states sit over the middle of the picture, which is where
+   the water would be if there were any. */
+#snr-msg{position:absolute;top:500px;left:170px;right:170px;text-align:center;
+  font-size:26px;font-weight:600;letter-spacing:.12em;color:var(--label);
+  text-transform:uppercase;line-height:1.5;pointer-events:none;display:none}
+#snr-msg.on{display:block}
+
 /* The library's, which is a sheet over the map rather than an app of
    its own, and keeps the old pinned position. */
 .t-title{position:absolute;top:112px;left:0;right:0;text-align:center;
@@ -14874,6 +14907,350 @@ function radClose(){
 function radarOpen(host){ radOpen(host); }
 function radarClose(){ radClose(); }
 
+
+/* ---- Sonar ---------------------------------------------------------
+   The echo down the water column, scrolling. Open Echo's board pings
+   about ten times a second and reports how loud the water was all the
+   way down; netd checks each frame, squeezes 1800 samples to 256 and
+   keeps a minute of them. This draws them.
+
+   The NUMBER on this page is NOT read off that picture. It is the
+   depth from Signal K - the same one the dial shows and the same one
+   the shallow alarm rings on - because the only thing worse than no
+   depth is two of them, disagreeing by a few centimetres, with nothing
+   to say which one the alarm meant. What comes from netd is the
+   picture, the scale to read it by, and the firmware's own bottom
+   pick, which is drawn as a line ON the picture rather than printed as
+   a second number.                                                    */
+const SNR={
+  /* The board pings at ~10 Hz. Asking every 420 ms collects four or
+     five at a time, which is four fewer round trips a second than
+     asking for each as it lands - and the picture scrolls by four
+     columns instead of one, which at this scale is a pixel and a
+     half. */
+  POLL:420,
+  COLS:600,                        /* columns held: netd's whole ring */
+  RECT:{x:150, y:240, w:780, h:660},
+  /* Every column opens with the transmit pulse: the receiver is still
+     ringing from the ping it just sent and reads near full scale
+     whatever the water is doing. It is DRAWN - a board that has
+     stopped pinging should not look like one in deep water - but it is
+     kept out of the GAIN, because a peak pinned at 255 for ever leaves
+     the real bottom down in the dark end of the ramp.
+     How long it lasts belongs to the board and the transducer, not to
+     this file, so it is measured rather than guessed at: walk down
+     while the samples are still hot, then start a little after that
+     run gives out. A fixed fraction was the first attempt and it is
+     the wrong shape - too short and the gain stays pinned, too long
+     and a sounder blinds itself in the shallows it is most wanted
+     in. */
+  HOT:200,                         /* still ringing, on a 0-255 scale */
+  PAD:0.01,                        /* and a little clear water after it */
+  /* There is deliberately no ceiling on that walk. A ceiling is the
+     first thing that suggests itself - the column saturated end to end
+     by a transducer out of the water - and it puts the bug straight
+     back: a board whose pulse rings for a fifth of the column would
+     have the walk cut short and the peak pinned again. The runaway it
+     would prevent costs nothing anyway, because a column that is hot
+     all the way down draws as a bright screen under either rule.
+     What none of this can do is separate a bottom return that has
+     MERGED with the transmit pulse, in water shallow enough that the
+     two arrive together. That is the minimum depth of the transducer
+     and it is physics, not arithmetic. */
+  /* A silent column still has noise in it. Without a floor under the
+     peak, the gain would stretch that noise to full brightness and the
+     page would look like a sandstorm the moment the transducer came
+     out of the water. */
+  FLOOR:28,
+  /* How fast the peak gives ground. At four pings a poll this lets the
+     scale halve over about twenty seconds, so crossing from forty feet
+     into eight does not leave the shallows washed out for a minute. */
+  DECAY:0.994,
+};
+/* Day and dusk get a sounder's own ramp - near enough the one every
+   plotter has used since paper, because a skipper already knows how to
+   read it. Night does not: the night theme exists to keep your eyes
+   adapted, and a hard yellow return at two in the morning undoes
+   twenty minutes of that. So night is built from the theme's own red
+   and tops out at a pale rose rather than white. */
+const SNR_RAMP={
+  day:[[0,4,14,28],[.17,11,58,107],[.37,16,129,168],[.56,47,174,107],
+       [.72,216,194,58],[.87,224,99,42],[1,246,233,226]],
+  /* Night stays IN the red channel the whole way up rather than
+     washing out to pink at the top. The reason is visible on the
+     glass: the transmit pulse is a solid bar across the full width of
+     the picture at full scale, so the ramp's top end is not a
+     highlight here, it is an AREA - and area times brightness is what
+     costs you your dark adaptation, not peak alone. A top of
+     (240,165,159) put the brightest, largest thing on the screen at
+     two in the morning; (255,96,86) is hotter in red and carries
+     about half the light. */
+  night:[[0,5,3,3],[.3,42,8,6],[.6,126,26,22],[.85,206,54,46],[1,255,96,86]],
+};
+/* The bottom pick, drawn over the ramp rather than in it. It has to
+   stay legible against the ramp's own bright end, which is why it is
+   not simply "the brightest colour". */
+const SNR_PICK={day:[255,255,255], night:[255,190,180]};
+
+let SNRS=null;
+
+function sRamp(){
+  /* 256 entries built once a theme, because the alternative is
+     interpolating a gradient per pixel and there are a hundred and
+     fifty thousand of them on the glass. */
+  const stops=SNR_RAMP[THEME_EFF==='night'?'night':'day'];
+  const out=new Uint8Array(768);
+  for(let i=0;i<256;i++){
+    const t=i/255;
+    let k=0; while(k<stops.length-2 && t>stops[k+1][0]) k++;
+    const a=stops[k], b=stops[k+1];
+    const f=b[0]===a[0]?0:(t-a[0])/(b[0]-a[0]);
+    out[i*3]  =a[1]+(b[1]-a[1])*f;
+    out[i*3+1]=a[2]+(b[2]-a[2])*f;
+    out[i*3+2]=a[3]+(b[3]-a[3])*f;
+  }
+  return out;
+}
+
+function sonarOpen(host){
+  const cv=document.createElement('canvas');
+  cv.id='snr-cv'; cv.width=1080; cv.height=1080;
+  cv.style.position='absolute'; cv.style.inset='0';
+  host.appendChild(cv);
+  host.insertAdjacentHTML('beforeend',
+    '<div id="snr-d"><span id="snr-dv">—</span><span id="snr-u"></span></div>'
+    +'<div id="snr-sub"></div><div id="snr-msg"></div>');
+  SNRS={ cv:cv, ctx:cv.getContext('2d'),
+         off:null, octx:null, rows:0,       /* built when the first ping says how tall */
+         /* The columns themselves, and not only the picture of them.
+            A theme change has to repaint what is already on the glass:
+            on `auto` it arrives by itself at sunset, which is the one
+            moment the red ramp exists for, and a minute of daylight
+            colours scrolling off afterwards is the harm it is meant to
+            prevent. Six hundred columns of 256 bytes is 154 kB, which
+            is cheaper than the alternative of being wrong. */
+         raw:[],
+         ramp:sRamp(), theme:THEME_EFF, unit:CFG.depthUnit,
+         seq:0, hi:SNR.FLOOR, mps:0, ns:0,
+         /* undefined and not null: null means the helper did not
+            answer, and saying that before anyone has been asked put NO
+            HELPER on the glass for the length of the first poll. */
+         on:undefined, age:null, err:'', busy:false, timer:null };
+  sPaint();
+  sPoll();
+  SNRS.timer=setInterval(sPoll, SNR.POLL);
+  /* The depth text runs off the panel's own clock rather than the
+     poll's: it is Signal K's number and it moves when Signal K moves,
+     which has nothing to do with when the board last pinged. */
+  SNRS.tick=setInterval(sText, 250);
+  sText();
+}
+
+function sonarClose(){
+  const SN=SNRS; if(!SN) return;
+  SNRS=null;
+  clearInterval(SN.timer); clearInterval(SN.tick);
+  /* Both backing stores, and not just the one in the document: the
+     offscreen is 600x256 of pixels that nothing else holds a reference
+     to, and a canvas keeps its memory until its dimensions are set to
+     zero however detached it is. */
+  if(SN.off){ SN.off.width=SN.off.height=0; }
+  if(SN.cv){ SN.cv.width=SN.cv.height=0; }
+  SN.raw.length=0; SN.ramp=null;
+}
+
+async function sPoll(){
+  const SN=SNRS; if(!SN || SN.busy) return;
+  SN.busy=true;
+  /* The poll's own timeout, like the remote's. The default for a POST
+     is fifty seconds, and at two and a half asks a second a netd that
+     had gone away would stack a hundred of them up before the first
+     gave in. */
+  const r=await netApi('/sonar', {after:SN.seq}, 3000);
+  if(SNRS!==SN){ return; }                 /* closed while it was in flight */
+  SN.busy=false;
+  if(!r || !r.ok){ SN.on=null; sPaint(); return; }   /* no helper */
+  SN.on=!!r.on; SN.age=r.age; SN.err=r.error||''; SN.mps=r.mps||0;
+  (r.pings||[]).forEach(p=>sPush(SN,p));
+  /* netd's count, always, and not the larger of the two: when netd has
+     restarted its sequence begins again, and a phone holding the old
+     high number would ask for pings after a point the new count will
+     not reach for another minute. */
+  SN.seq=r.seq;
+  sPaint();
+}
+
+function sStore(SN,p){
+  /* atob throws on anything that is not base64, and it would throw
+     INSIDE the poll - which drops the rest of that round's pings on
+     the floor, not just the bad one. A board or a proxy that had
+     started sending rubbish would then cost every ping behind it as
+     well. One ping is the right price. */
+  let b; try{ b=atob(p.b||''); }catch(e){ return null; }
+  const n=b.length;
+  if(!n) return null;
+  if(!SN.off || SN.rows!==n){
+    /* The first ping says how tall the picture is, and netd is allowed
+       to change its mind - a board reflashed with a different build
+       sends a different column. Rebuilding beats drawing the new one
+       stretched over the old one's rows, and the kept columns go with
+       it because they are the old height. */
+    if(SN.off){ SN.off.width=SN.off.height=0; }
+    SN.off=document.createElement('canvas');
+    SN.off.width=SNR.COLS; SN.off.height=n;
+    SN.octx=SN.off.getContext('2d');
+    SN.rows=n; SN.raw.length=0;
+  }
+  const a=new Uint8Array(n);
+  for(let i=0;i<n;i++) a[i]=b.charCodeAt(i);
+  SN.raw.push({b:a, idx:p.idx|0, ns:p.ns|0});
+  if(SN.raw.length>SNR.COLS) SN.raw.shift();
+  SN.ns=p.ns;
+  return SN.raw[SN.raw.length-1];
+}
+
+/* One column's worth of pixels, at the gain and in the ramp that are
+   in force RIGHT NOW. Which is why a repaint recolours the whole
+   minute rather than only what arrives after it: a picture whose left
+   half was gained differently from its right is harder to read than
+   one that moves all at once. */
+function sCol(SN, rec){
+  const a=rec.b, n=a.length;
+  const id=SN.octx.createImageData(1,n), d=id.data, R=SN.ramp;
+  for(let i=0;i<n;i++){
+    let lv=Math.round(a[i]*255/SN.hi);
+    if(lv>255) lv=255;
+    const t=lv*3;
+    d[i*4]=R[t]; d[i*4+1]=R[t+1]; d[i*4+2]=R[t+2]; d[i*4+3]=255;
+  }
+  /* The firmware's own bottom pick, two rows of it so it survives
+     being squeezed into 660 px of glass. Guarded on idx>0 because a
+     board that has not found a bottom reports zero, and drawing that
+     would paint a confident line along the surface. */
+  if(rec.idx>0 && rec.ns>0){
+    const row=Math.round(rec.idx/rec.ns*(n-1));
+    const pk=SNR_PICK[SN.theme==='night'?'night':'day'];
+    for(let k=0;k<2;k++){
+      const y=row+k; if(y<0||y>=n) continue;
+      d[y*4]=pk[0]; d[y*4+1]=pk[1]; d[y*4+2]=pk[2]; d[y*4+3]=255;
+    }
+  }
+  return id;
+}
+
+function sPush(SN,p){
+  const rec=sStore(SN,p);
+  if(!rec) return;
+  const a=rec.b, n=a.length;
+  let b0=0;
+  while(b0<n && a[b0]>=SNR.HOT) b0++;
+  b0=Math.min(b0+Math.ceil(n*SNR.PAD), n);
+  let mx=0;
+  for(let i=b0;i<n;i++) if(a[i]>mx) mx=a[i];
+  SN.hi=Math.max(mx, SN.hi*SNR.DECAY, SNR.FLOOR);
+  /* Everything left one column, then the new one at the right edge.
+     A canvas may be its own source - the spec has it snapshot first.
+     This does touch the whole offscreen, so it is not the saving it
+     first looks like; what it saves is WHERE. The scroll is one blit
+     the browser does beneath us, against six hundred ImageData
+     objects built and filled in a JS loop, which is what sRedraw
+     costs and why only a theme change pays it. */
+  SN.octx.drawImage(SN.off,-1,0);
+  SN.octx.putImageData(sCol(SN,rec), SNR.COLS-1, 0);
+}
+
+/* The whole minute again, which only a theme change asks for. */
+function sRedraw(SN){
+  if(!SN.off || !SN.raw.length) return;
+  SN.octx.clearRect(0,0,SNR.COLS,SN.rows);
+  const k=SN.raw.length;
+  for(let i=0;i<k;i++) SN.octx.putImageData(sCol(SN,SN.raw[i]), SNR.COLS-k+i, 0);
+}
+
+/* A nice round step near x: 1, 2, 5 or 10 of whatever size x is. */
+function sNice(x){
+  if(!(x>0)) return 1;
+  const p=Math.pow(10,Math.floor(Math.log10(x))), f=x/p;
+  return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p;
+}
+
+function sPaint(){
+  const SN=SNRS; if(!SN||!SN.ctx) return;
+  if(SN.theme!==THEME_EFF){ SN.theme=THEME_EFF; SN.ramp=sRamp(); sRedraw(SN); }
+  const R=SNR.RECT, c=SN.ctx;
+  c.clearRect(0,0,1080,1080);
+  const css=getComputedStyle(document.body);
+  /* The water, where there is any. Only the columns that have actually
+     arrived are drawn, anchored at the RIGHT edge: a minute of history
+     growing leftward from now, rather than a picture that starts full
+     of blank and shunts it off. */
+  const cols=SN.raw.length;
+  if(SN.off && cols){
+    const w=R.w*cols/SNR.COLS;
+    c.imageSmoothingEnabled=true;
+    c.drawImage(SN.off, SNR.COLS-cols, 0, cols, SN.rows,
+                R.x+R.w-w, R.y, w, R.h);
+  }
+  c.strokeStyle=css.getPropertyValue('--label').trim()||'#6C757C';
+  c.fillStyle=c.strokeStyle;
+  c.lineWidth=1;
+  c.strokeRect(R.x+.5, R.y+.5, R.w-1, R.h-1);
+  /* The depth scale, in the unit the rest of the panel is set to and
+     derived from what netd sent rather than from anything assumed
+     here: a board flashed with a different sample time has a different
+     column and this has to say so. */
+  const rngM=SN.ns*SN.mps;
+  if(rngM>0){
+    const rng=metric()?rngM:rngM*M_TO_FT;
+    const step=sNice(rng/6);
+    c.font='600 22px Poppins, sans-serif';
+    c.textAlign='right'; c.textBaseline='middle';
+    for(let v=step; v<rng-step*0.35; v+=step){
+      const y=Math.round(R.y+R.h*v/rng)+.5;
+      c.globalAlpha=.3;
+      c.beginPath(); c.moveTo(R.x+1,y); c.lineTo(R.x+R.w-96,y); c.stroke();
+      c.globalAlpha=.85;
+      c.fillText(Math.round(v*10)/10+'', R.x+R.w-12, y);
+    }
+    c.globalAlpha=1;
+  }
+  /* What it is doing, when it is not simply working. Four states and
+     not one, because "nothing on the screen" has four quite different
+     cures and only one of them is yours to apply from the cockpit. */
+  let msg='';
+  if(SN.on===undefined) msg='';     /* nobody has been asked yet */
+  else if(SN.on===null) msg='NO HELPER<br>netd is not answering';
+  else if(!SN.on)  msg='NO SOUNDER<br>set HELM_SONAR and restart netd';
+  else if(SN.err)  msg='SOUNDER ERROR<br>'+esc(SN.err);
+  else if(!cols)  msg='WAITING FOR THE BOARD';
+  else if(SN.age!==null && SN.age>6) msg='SILENT FOR '+Math.round(SN.age)+' SN';
+  wCls('snr-msg','on',!!msg);
+  if(msg) $('snr-msg').innerHTML=msg;
+}
+
+function sText(){
+  const SN=SNRS; if(!SN) return;
+  if(SN.unit!==CFG.depthUnit){ SN.unit=CFG.depthUnit; sPaint(); }
+  /* Read the way the dial reads it, keel first and the transducer
+     after, so the big number here and the big number there are the
+     same number. */
+  let d=get('environment.depth.belowKeel');
+  if(d===null)d=get('environment.depth.belowTransducer');
+  const v=d===null?null:(metric()?d:d*M_TO_FT);
+  /* Through the cache, like everything else on the glass: this runs
+     four times a second and the number it writes changes rather less
+     often than that. */
+  wText('snr-dv', v===null?'—':v.toFixed(1));
+  wText('snr-u', metric()?'M':'FT');
+  const bits=[];
+  if(SN.ns&&SN.mps){
+    const r=SN.ns*SN.mps;
+    bits.push('RANGE '+Math.round(metric()?r:r*M_TO_FT)+(metric()?' M':' FT'));
+  }
+  if(SN.raw.length) bits.push(SN.raw.length+' PINGS');
+  wText('snr-sub', bits.join('   ·   '));
+}
+
 /* ==================================================================
    THE APP DRAWER
 
@@ -15389,6 +15766,16 @@ const APPS=[
       +'<path fill="currentColor" stroke="none"'
       +' d="M11.9 8.7L7.7 12.9h2.9l-.5 2.6 4.2-4.2h-2.9z"/>',
    open:energyOpen, close:energyClose},
+  /* A hull, the cone under it and the bottom it is looking for. The
+     only wavy line on the dock, which is what makes it readable at
+     42 px beside the radar's ring and the course's two circles - and
+     the seabed is the half of it that says SOUNDER rather than
+     "something pointing down". */
+  {id:'sonar', name:'Sonar',
+   ico:'<path d="M4.6 3.4h14.8"/>'
+      +'<path d="M12 3.4L7.4 14.2"/><path d="M12 3.4l4.6 10.8"/>'
+      +'<path d="M2.8 19.4q3-2.6 6 0t6 0t6 0"/>',
+   open:sonarOpen, close:sonarClose},
   {id:'golden', name:'Golden Hour',
    ico:'<path d="M3.5 17.5h17"/><path d="M7.4 17.5a4.6 4.6 0 0 1 9.2 0"/>'
       +'<path d="M12 5.6v2"/><path d="M5.2 8.4l1.4 1.4"/>'
