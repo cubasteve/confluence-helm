@@ -940,9 +940,15 @@ without it the big number's lane covers both buttons and every press of
 Two ringed glyphs in the top right of the header: a **gear** for the
 display, and a **power button** beside it, in its own red. Circled,
 because a bare glyph on a header reads as a label rather than something
-you press; 44px of target on a 38px ring, which is the smallest thing a
-thumb finds without looking. They are in the corner a thumb reaches
-last, because everything below them is the face and these are not
+you press — and the ring sits close in around the glyph, since it is
+there to say *button* rather than to be the button; at 38 it read as a
+tile with something in the middle of it.
+
+The ring is not the target either. The padding outside it carries the
+tap to 46px, past the 44 a thumb wants, while the glyph stays at 19 —
+shrinking both together is the easy mistake, and a probe says the glyph
+is the size it was. They are in the corner a thumb reaches last,
+because everything below them is the face and these are not
 complications.
 
 They share **one sheet**, which wears whichever header has been

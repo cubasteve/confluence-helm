@@ -3234,14 +3234,20 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
    row under it read as another setting, and these are not settings,
    they are the device.
    Circled, because a bare glyph on a header reads as a label rather
-   than a thing you press. 38px of circle is smaller than a tap wants,
-   so the padding outside it carries the target to 44 and the negative
-   margin keeps both rings on the name's own line. */
+   than a thing you press. The ring is close in around the glyph: it
+   is there to say "button", not to be the button, and at 38 it read
+   as a tile with something in the middle of it.
+   The ring is not the target either. The padding outside it carries
+   the tap to 46 - more than the 44 a thumb wants - and the negative
+   margin keeps both of them on the name's own line while the tap area
+   runs past it. */
 .hb{background:none;padding:6px;margin:-6px 0;border-radius:50%;
  display:flex;line-height:0;
  border:2px solid var(--hairline);color:var(--label);
- width:38px;height:38px;align-items:center;justify-content:center;
+ width:30px;height:30px;align-items:center;justify-content:center;
  box-sizing:content-box;background-clip:content-box}
+/* Unchanged while the ring came in: the glyph is what you are looking
+   for and the circle is only what says it can be pressed. */
 .hb svg{width:19px;height:19px;flex:none}
 .hb:active{background:var(--chip)}
 /* The power one wears its own colour, because it is the one on this

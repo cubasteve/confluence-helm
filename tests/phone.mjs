@@ -560,21 +560,8 @@ t.ok(JSON.stringify((await peek()).pend)===wasQ,
      'having asked the boat for nothing', JSON.stringify((await peek()).pend));
 
 t.head('the power sheet is a glyph in the corner, and the glass\'s own list');
-/* The owner asked for a power button that looks like one and nothing
-   else. It is in the corner a thumb reaches last, because everything
-   below it is the face and this is not another setting. */
-const pb=await p.$eval('#pwb',e=>{const r=e.getBoundingClientRect();
-  return {x:r.left,y:r.top,w:r.width,h:r.height,
-          txt:e.textContent.trim(), svg:e.querySelectorAll('svg').length};});
-t.ok(pb.txt==='' && pb.svg===1, 'the glyph and no word beside it',
-     JSON.stringify([pb.txt, pb.svg]));
-t.ok(pb.x+pb.w > 390-40 && pb.y < 120,
-     'in the top right, above the face rather than under it',
-     Math.round(pb.x)+','+Math.round(pb.y));
-t.ok(pb.w>=40 && pb.h>=40,
-     'with a target bigger than the glyph - 21px of ink is not something '
-     +'you press on a moving boat',
-     Math.round(pb.w)+'x'+Math.round(pb.h));
+/* What the two buttons LOOK like is asserted further down, where both
+   of them are. This section is about the sheet behind this one. */
 await p.click('#pwb'); await p.waitForTimeout(300);
 /* The list is the GLASS's, filtered by what this Pi can do. netd
    resolves `need` against power_status() exactly as the glass resolves
@@ -676,9 +663,12 @@ t.head('the theme is behind the gear, beside the power button');
    which is the thing this app is. */
 const hdb=await p.$$eval('.top .hb',gs=>gs.map(g=>{
   const r=g.getBoundingClientRect();
-  return {id:g.id, x:r.left, w:r.width, h:r.height,
+  return {id:g.id, x:r.left, y:r.top, w:r.width, h:r.height,
           txt:g.textContent.trim(), svg:g.querySelectorAll('svg').length,
           ring:getComputedStyle(g).borderTopColor,
+          ink:(g.querySelector('svg')||{getBoundingClientRect:()=>({width:0})})
+                .getBoundingClientRect().width,
+          dia:r.width-2*(parseFloat(getComputedStyle(g).paddingLeft)||0),
           /* The colour on its own is not the ring: a zero-width border
              still reports one, so a button with no ring at all read as
              ringed. The width is the ring. */
@@ -686,6 +676,9 @@ const hdb=await p.$$eval('.top .hb',gs=>gs.map(g=>{
 t.ok(hdb.length===2 && hdb.map(x=>x.id).join()==='thb,pwb',
      'two of them, the gear to the LEFT of the power button',
      hdb.map(x=>x.id).join());
+t.ok(hdb.length===2 && hdb[1].x+hdb[1].w > 390-40 && hdb.every(x=>x.y<120),
+     'in the top right, above the face rather than under it',
+     JSON.stringify(hdb.map(x=>Math.round(x.x)+','+Math.round(x.y))));
 t.ok(hdb.every(x=>x.txt==='' && x.svg===1),
      'a glyph each and no word beside either');
 t.ok(hdb.length===2 && hdb.every(x=>x.w>=44 && x.h>=44),
@@ -702,6 +695,16 @@ t.ok(hdb.length===2 && hdb.every(x=>x.ringW>=1
 t.ok(hdb.length===2 && hdb[1].ring!==hdb[0].ring,
      'and the power one wears a colour of its own',
      JSON.stringify(hdb.map(x=>x.ring)));
+/* The ring came in around the glyph and the glyph stayed where it
+   was. Shrinking both together is the easy mistake, and it undoes the
+   thing the owner asked for: the glyph is what you are looking for and
+   the circle is only what says it can be pressed. */
+t.ok(hdb.every(x=>Math.abs(x.ink-19)<1),
+     'the glyph is the size it was before the ring came in',
+     JSON.stringify(hdb.map(x=>Math.round(x.ink))));
+t.ok(hdb.every(x=>x.dia<=36 && x.dia-x.ink<=18),
+     'and the ring sits close around it rather than enclosing a tile',
+     JSON.stringify(hdb.map(x=>Math.round(x.dia))));
 t.ok((await p.$$('#foot .th')).length===0,
      'and nothing is left of the row along the bottom');
 
