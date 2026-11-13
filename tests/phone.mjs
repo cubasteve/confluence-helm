@@ -100,6 +100,14 @@ const faceBox=()=>p.$eval('#main .fv',e=>{
   return {x:r.left, y:r.top, w:r.width, h:r.height, b:r.bottom};
 });
 const cellOf=async s=>(await cells()).find(c=>c.s===s);
+/* The header fades under the dim with the rest of the page, so the way
+   to the other sheet is out of this one first. */
+const sheet=async id=>{
+  if(await p.isVisible('#sheet.on')){
+    await p.click('[data-shx]'); await p.waitForTimeout(350);
+  }
+  await p.click(id); await p.waitForTimeout(400);
+};
 
 await open();
 
@@ -562,7 +570,7 @@ t.ok(JSON.stringify((await peek()).pend)===wasQ,
 t.head('the power sheet is a glyph in the corner, and the glass\'s own list');
 /* What the two buttons LOOK like is asserted further down, where both
    of them are. This section is about the sheet behind this one. */
-await p.click('#pwb'); await p.waitForTimeout(300);
+await sheet('#pwb');
 /* The list is the GLASS's, filtered by what this Pi can do. netd
    resolves `need` against power_status() exactly as the glass resolves
    it against /status, and the rig says a desktop is startable and the
@@ -623,7 +631,7 @@ await p.waitForTimeout(1500);
    say so - pressing it here would put the sheet away rather than
    bring it back. */
 if(!(await p.isVisible('#sheet.on'))){
-  await p.click('#pwb'); await p.waitForTimeout(300); }
+  await sheet('#pwb'); }
 await p.click('.prow[data-pa="reload"]'); await p.waitForTimeout(250);
 await holdFor(1100);
 t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
@@ -651,7 +659,7 @@ t.ok(!(await p.isVisible('#sheet.on')), 'and CLOSE leaves the sheet');
    outlives the sheet. Close it yourself and open the other one inside
    the second and a half and the old timer shut the new one in your
    face - which is exactly what a hurried hand does. */
-await p.click('#thb'); await p.waitForTimeout(200);
+await sheet('#thb');
 await p.waitForTimeout(1600);
 t.ok(await p.isVisible('#sheet.on'),
      'and a sheet opened straight after one is not shut by its timer');
@@ -713,7 +721,7 @@ t.head('a sheet comes to the middle, over a dim, not up from the edge');
    everything and the box in the centre of it - and the owner asked for
    the mirror to match. The middle is also where you are looking, and
    not under your own thumb. */
-await p.click('#thb'); await p.waitForTimeout(400);
+await sheet('#thb');
 const ctr=await p.evaluate(()=>{
   const sc=document.getElementById('scrim');
   const sh=document.getElementById('sheet');
@@ -752,32 +760,31 @@ const dimOf=async()=>await p.$eval('#scrim',
 const dimTh=await dimOf();
 /* The owner asked for the power one to stand further forward, which is
    right: what is on it is further-reaching than a palette. */
-await p.click('#pwb'); await p.waitForTimeout(400);
+await sheet('#pwb');
 const dimPw=await dimOf();
 t.ok(dimPw>dimTh, 'and the power sheet stands further forward than the theme',
      dimTh+' -> '+dimPw);
 
-t.head('and the header stays in front of the dim, lit on the one that is up');
-/* A modal that puts its own way out behind the dim is a modal you have
-   to dismiss before you can change your mind - and swapping between
-   the two is the thing a header of buttons is for. */
-t.ok(await p.$eval('#pwb',e=>e.classList.contains('on')),
-     'the button whose sheet is up is lit');
-t.ok(await p.$eval('#thb',e=>!e.classList.contains('on')),
-     'and the other one is not');
-const zs=await p.evaluate(()=>({
-  top:+getComputedStyle(document.querySelector('.top')).zIndex,
-  scrim:+getComputedStyle(document.getElementById('scrim')).zIndex}));
-t.ok(zs.top>zs.scrim, 'the header is in front of the dim',
-     JSON.stringify(zs));
-/* Not just painted in front - reachable. Playwright refuses to click
-   something another element covers, so this is the real check. */
-await p.click('#thb'); await p.waitForTimeout(400);
-t.ok(/DISPLAY/.test(await p.textContent('#sheet .hd b')),
-     'and pressing it through the dim swaps the sheet',
-     await p.textContent('#sheet .hd b'));
-t.ok(await p.$eval('#thb',e=>e.classList.contains('on')),
-     'with the light moving to it');
+t.head('and the header goes back with the rest of the page');
+/* It stood in front of the dim for a while so the two buttons stayed
+   pressable - the owner wants the whole page to go back, so the way
+   out of a sheet is CLOSE or a tap on the dim, and the way to the
+   other one is through there. */
+const zs=await p.evaluate(()=>{
+  const t=document.querySelector('.top'), sc=document.getElementById('scrim');
+  const z=getComputedStyle(t).zIndex;
+  const r=t.getBoundingClientRect(), b=sc.getBoundingClientRect();
+  return {z:z, covered:(b.top<=r.top && b.bottom>=r.bottom)};
+});
+t.ok(zs.z==='auto' || +zs.z < 8,
+     'it does not stand in front of the dim', String(zs.z));
+t.ok(zs.covered, 'and the dim reaches over it');
+/* Playwright refuses to click what another element covers, so a
+   timeout here IS the assertion. */
+let through=false;
+try{ await p.click('#thb',{timeout:1200}); through=true; }catch(e){}
+t.ok(!through, 'so the header cannot be pressed through it',
+     String(through));
 
 t.head('and a tap on the dim puts it away');
 /* The gesture a thumb makes before it finds CLOSE. Only on the dim
@@ -786,7 +793,7 @@ await p.mouse.click(195, 800); await p.waitForTimeout(400);
 t.ok(!(await p.isVisible('#sheet.on')), 'it closes');
 t.ok(await p.$$eval('.top .hb',gs=>gs.every(g=>!g.classList.contains('on'))),
      'and the header goes dark with it');
-await p.click('#thb'); await p.waitForTimeout(400);
+await sheet('#thb');
 const inBox=await p.$eval('#sheet .hd b',e=>{const r=e.getBoundingClientRect();
   return {x:r.left+2, y:(r.top+r.bottom)/2};});
 await p.mouse.click(inBox.x, inBox.y); await p.waitForTimeout(350);
@@ -794,45 +801,108 @@ t.ok(await p.isVisible('#sheet.on'),
      'while a tap inside the box leaves it alone');
 await p.click('[data-shx]'); await p.waitForTimeout(400);
 
-t.head('and it is the panel\'s own four, with what AUTO resolved to');
-await p.click('#thb'); await p.waitForTimeout(350);
-const th=await p.$$eval('.prow[data-th]',gs=>gs.map(g=>({
-  k:g.dataset.th, on:g.classList.contains('arm'),
-  sub:(g.querySelector('em')||{}).textContent||'',
-  tick:!!g.querySelector('i')})));
-t.ok(th.map(x=>x.k).join()===cat.themes.join(),
-     'the themes the panel registered, in its order',
-     th.map(x=>x.k).join());
-t.ok(th.filter(x=>x.tick).length===1 && th.find(x=>x.tick).k===cat.now.theme,
-     'with a tick on the one the glass is set to',
-     JSON.stringify(th.filter(x=>x.tick).map(x=>x.k)));
-/* On auto the mode and the outcome are two different facts and you
-   want both: the row says AUTO and beside it is what the clock has
-   chosen. The glass puts the same pair on its own theme tile. */
-t.ok(th.find(x=>x.k==='auto').sub===String(cat.now.eff).toUpperCase(),
-     'and AUTO says what the clock has actually chosen right now',
-     th.find(x=>x.k==='auto').sub+' vs '+cat.now.eff);
+t.head('the gear is the glass\'s own settings, in the glass\'s own cards');
+await sheet('#thb');
+const rows=()=>p.$$eval('#sheet .sgrp,#sheet .srow',gs=>gs.map(g=>
+  g.classList.contains('sgrp')
+    ? {grp:g.textContent}
+    : {k:g.dataset.sk, kind:g.className,
+       val:(g.querySelector('b')||{}).textContent||'',
+       on:g.classList.contains('on'),
+       slider:!!g.querySelector('input[type=range]')}));
+const R=await rows();
+t.ok(R.filter(x=>x.grp).map(x=>x.grp).join()===
+     [...new Set(cat.settings.map(x=>x.g))].join(),
+     'a heading per card, in the panel\'s order',
+     R.filter(x=>x.grp).map(x=>x.grp).join());
+t.ok(R.filter(x=>x.k).map(x=>x.k).join()===cat.settings.map(x=>x.k).join(),
+     'and every setting the panel registered, in its order, and no others',
+     R.filter(x=>x.k).map(x=>x.k).join());
+/* The phone writes down no settings of its own. Add one to the glass
+   and it shows up here with its words, its card and its values. */
+t.ok(cat.settings.every(d=>['range','cycle','toggle','action']
+                           .indexOf(d.kind)>=0),
+     'each one says what SHAPE it is, so the phone draws it without a list');
+t.ok(R.find(x=>x.k==='dim').slider && R.find(x=>x.k==='depthAlarm').slider,
+     'a range is a slider');
+t.ok(R.find(x=>x.k==='keepAwake').on===true,
+     'a toggle is a switch that is on when the setting is');
+/* Its unit is the OTHER setting's value. A second unit field would say
+   FT while the glass said M, and the alarm would be silently
+   redefined - the threshold is held in whatever is showing. */
+t.ok(/\s(FT|M)$/.test(R.find(x=>x.k==='depthAlarm').val),
+     'and the alarm carries the unit the units row is set to',
+     R.find(x=>x.k==='depthAlarm').val);
 const bg=await p.evaluate(()=>getComputedStyle(document.body).backgroundColor);
 t.ok(bg==='rgb(244, 246, 247)',
      'the day palette came down the wire and was applied', bg);
-/* One tap, not two: nothing on this sheet is destructive, and a theme
-   you did not mean is undone by picking the one you did. */
-await p.click('.prow[data-th="night"]'); await p.waitForTimeout(400);
+
+t.head('and a tap on one sends it, showing it before the boat answers');
+/* A cycle goes round the panel's own list and back to the start. */
+const themeRow=()=>p.$eval('.srow[data-sk="theme"] b',e=>e.textContent);
+const was=await themeRow();
+await p.click('.srow[data-sk="theme"]'); await p.waitForTimeout(400);
+t.ok((await themeRow())!==was, 'the value moves at once',
+     was+' -> '+(await themeRow()));
 t.ok(JSON.stringify((await peek()).pend['theme'])===
-     JSON.stringify({kind:'theme',theme:'night'}), 'and one tap sends it',
+     JSON.stringify({kind:'theme',
+       theme:cat.themes[(cat.themes.indexOf(cat.now.theme)+1)%cat.themes.length]}),
+     'and the boat is told - the theme keeps its own command kind, '
+     +'which netd checks against the themes the panel registered',
      JSON.stringify((await peek()).pend['theme']));
-t.ok(await p.$eval('.prow[data-th="night"]',e=>!!e.querySelector('i')),
-     'with the tick moving before the boat has answered');
+/* On auto the mode and the outcome are two different facts and you
+   want both; only the panel knows what the clock has chosen. */
+await p.evaluate(()=>{ S.now.set.theme='auto'; S.now.eff='dusk'; shPaint(); });
+t.ok(/AUTO \u00b7 DUSK/.test(await themeRow()),
+     'and AUTO says what the clock has actually chosen right now',
+     await themeRow());
+/* Everything else goes as one command kind, checked against the
+   catalogue the panel itself registered. */
+await p.click('.srow[data-sk="keepAwake"]'); await p.waitForTimeout(400);
+t.ok(JSON.stringify((await peek()).pend['set:keepAwake'])===
+     JSON.stringify({kind:'set', k:'keepAwake', v:!cat.now.set.keepAwake}),
+     'a switch sends the other way round',
+     JSON.stringify((await peek()).pend['set:keepAwake']));
+t.ok(await p.$eval('.srow[data-sk="keepAwake"]',
+                   e=>e.classList.contains('on'))!==cat.now.set.keepAwake,
+     'and flips under the finger rather than waiting');
+await p.click('.srow[data-sk="horn"]'); await p.waitForTimeout(400);
+t.ok(JSON.stringify((await peek()).pend['set:horn'])===
+     JSON.stringify({kind:'set', k:'horn', v:null}),
+     'and an action carries no value at all',
+     JSON.stringify((await peek()).pend['set:horn']));
+/* The slider reports all the way along and that would be a command a
+   frame, so only the value you let go of is sent. */
+const slid=await p.$eval('.srow[data-sk="dim"] input',e=>{
+  const r=e.getBoundingClientRect(); return {x:r.left, y:r.top+r.height/2,
+                                             w:r.width};});
+const dimTxt=()=>p.$eval('.srow[data-sk="dim"] b',e=>e.textContent);
+const dim0=await dimTxt();
+await p.mouse.move(slid.x+slid.w*0.5, slid.y);
+await p.mouse.down(); await p.mouse.move(slid.x+slid.w*0.2, slid.y);
+await p.waitForTimeout(150);
+t.ok((await peek()).pend['set:dim']===undefined,
+     'nothing is sent while the thumb is still down',
+     JSON.stringify((await peek()).pend['set:dim']));
+const dim1=await dimTxt();
+t.ok(dim1!==dim0 && /^\d+%$/.test(dim1) && +dim1.slice(0,-1)<+dim0.slice(0,-1),
+     'while the number follows the thumb, because a slider whose '
+     +'readout waits for the boat is one you cannot aim',
+     dim0+' -> '+dim1);
+await p.mouse.up(); await p.waitForTimeout(400);
+t.ok((await peek()).pend['set:dim'] &&
+     (await peek()).pend['set:dim'].v>=25 &&
+     (await peek()).pend['set:dim'].v<=100,
+     'and the one you let go of is', JSON.stringify((await peek()).pend['set:dim']));
 /* Pressing the OTHER one swaps the sheet rather than closing it,
    which is what a header of buttons should do. */
-await p.click('#pwb'); await p.waitForTimeout(350);
+await sheet('#pwb');
 t.ok(/DEVICE/.test(await p.textContent('#sheet .hd b')),
      'the power button swaps the sheet rather than stacking a second one',
      await p.textContent('#sheet .hd b'));
 t.ok((await p.$$('.prow[data-th]')).length===0, 'with the themes gone');
-await p.click('#pwb'); await p.waitForTimeout(300);
-t.ok(!(await p.isVisible('#sheet.on')),
-     'and pressing the one already up puts it away');
+await p.click('[data-shx]'); await p.waitForTimeout(400);
+t.ok(!(await p.isVisible('#sheet.on')), 'and CLOSE puts it away');
 
 t.head('everything clears the glass of a real phone');
 /* Headless reports no safe-area insets at all, so measuring here

@@ -963,12 +963,11 @@ into place rather than appearing in it; a tap on the dim puts it away,
 the gesture a thumb makes before it finds CLOSE. The power sheet's dim
 is heavier, because what is on it is further-reaching than a palette.
 
-The header stays **in front of the dim**, carrying the page's own
-background so it reads as a bar rather than a hole in one, and the
-button whose sheet is up is lit. A modal that puts its own way out
-behind the dim is a modal you have to dismiss before you can change
-your mind — and swapping between the two is what a header of buttons is
-for.
+**The header fades with the rest of the page.** It stood in front of
+the dim for a while so the two buttons stayed pressable and one could
+swap straight to the other, but the whole page going back reads better
+— and closing a sheet before opening the other is what every modal
+does. The way out is CLOSE or a tap on the dim.
 
 That header being opaque and in front turned up a bug in something
 else: on the page with no face to hang from — the one that draws rows
@@ -977,14 +976,55 @@ kept whatever the last face measured, which is underneath the header
 now. It was up there with a CLOSE nobody could press. `place()` has a
 case for a page with no face.
 
-The **gear** holds the theme, which used to be four buttons along the
-bottom — the room that frees goes to the face, which is the thing this
-app is. It needs no arming: nothing on it is destructive, and a theme
-you did not mean is undone by picking the one you did. The tick moves
-before the boat has answered, and `AUTO` carries what the clock has
-actually chosen beside it — the mode and the outcome are two different
-facts and you want both, which is the same pair the glass puts on its
-own theme tile.
+The **gear** holds the settings, in the glass's own cards and the
+glass's own order: DISPLAY (brightness, theme, screen saver), SHALLOW
+ALARM, GPS AVERAGING, SOUND — a label on the left and its value on the
+right, which lets you read the whole sheet down its right-hand edge
+without reading a word of it. The room the old four-button theme row
+freed goes to the face, which is the thing this app is.
+
+**Every one of them is a thing that is SET, not a thing that is read.**
+That is the rule this remote has always had, and it is why the radios
+are not on the sheet: WiFi and Bluetooth have no fixed catalogue to
+ship — their content *is* live data, what is in range and how strong
+and which adapter is up. Strip the readings and four verbs are left
+with no subjects.
+
+The catalogue is the panel's, the same way the power sheet's is.
+`REM_SET()` names each setting's card, its words, its **shape**
+(`range` · `cycle` · `toggle` · `action`) and the values it may take;
+`now.set` says what each one is right now; one `set` command carries a
+change. netd writes down no settings of its own — an entry's own kind
+is what a value is checked against, so a setting added to the glass
+needs no change in `netd.py` and none on the phone.
+
+| | |
+|---|---|
+| `range` | a slider, the number following the thumb, only the value you let go of sent |
+| `cycle` | a tap goes round the panel's own list and back to the start |
+| `toggle` | a switch, because on and off is the one value you should not have to read |
+| `action` | a press carrying no value — TEST on the horn |
+
+Three of them earn their own note:
+
+- **The alarm's unit is another setting's value.** `unitOf: 'depthUnit'`
+  rather than a second unit field, which would read FT while the glass
+  read M. The threshold is held in whatever is showing and is never
+  metres underneath, so the number and the word have to move together.
+- **Flipping the units converts the threshold, it does not relabel it.**
+  The phone sends a *value*, not a press, so the apply is `if (v !==
+  CFG.depthUnit) unitsFlip()` — saying `m` twice must not convert
+  twice. Carrying the raw number across would redefine a 6 ft alarm as
+  6 m, or a 2 m one as 2 ft, which is under a metre.
+- **The theme keeps its own command kind.** netd checks it against the
+  themes the panel registered, which is a tighter check than the
+  catalogue's, and the panel delegates both doors to one apply rather
+  than keeping a second copy of the body.
+
+A tap shows before the boat has answered, and `AUTO` carries what the
+clock has actually chosen beside it — the mode and the outcome are two
+different facts and you want both, which is the same pair the glass
+puts on its own theme tile.
 
 ### The power sheet
 

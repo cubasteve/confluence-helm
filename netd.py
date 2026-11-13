@@ -2819,6 +2819,57 @@ def _remote_power_bust():
     _pw_st = None
 
 
+def _settings(v):
+    """The panel's settings catalogue, kept as the fields the phone draws
+    with and the fields a value is checked against.
+
+    Validated rather than filtered for the same reason the power sheet
+    is: a half-formed entry is a row whose words say one thing and whose
+    value does another. A `range` with no bounds and a `cycle` with no
+    options are both dropped, because either would mean accepting
+    anything."""
+    out = []
+    if not isinstance(v, list):
+        return out
+    for a in v[:40]:
+        if not isinstance(a, dict):
+            continue
+        k, kind = a.get('k'), a.get('kind')
+        if not isinstance(k, str) or not k or len(k) > 24:
+            continue
+        if kind not in ('range', 'cycle', 'toggle', 'action'):
+            continue
+        e = {'k': k, 'kind': kind, 'g': str(a.get('g') or '')[:40],
+             'name': str(a.get('name') or k)[:48],
+             'unit': str(a.get('unit') or '')[:8],
+             # "my unit is the value of that other setting" - the depth
+             # alarm's is FT or M depending on the units row above it.
+             'unitOf': str(a.get('unitOf') or '')[:24]}
+        if kind == 'range':
+            lo, hi, st = a.get('min'), a.get('max'), a.get('step')
+            if not all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                       for x in (lo, hi)):
+                continue
+            if not lo < hi:
+                continue
+            e['min'], e['max'] = lo, hi
+            e['step'] = st if isinstance(st, (int, float)) and st > 0 else 1
+        elif kind == 'cycle':
+            o = a.get('opts')
+            if not isinstance(o, list) or not o or len(o) > 24:
+                continue
+            if not all(isinstance(x, (str, int, float))
+                       and not isinstance(x, bool) for x in o):
+                continue
+            e['opts'] = list(o)
+            lb = a.get('labels')
+            e['labels'] = ([str(x)[:24] for x in lb]
+                           if isinstance(lb, list) and len(lb) == len(o)
+                           else None)
+        out.append(e)
+    return out
+
+
 def remote_available_power():
     """The sheet, minus what this Pi cannot do right now.
 
@@ -2929,6 +2980,13 @@ def remote_register(body):
                        # with the same two marked dangerous. netd
                        # decides which are available and nothing else.
                        power=_power_sheet(body.get('power')),
+                       # Every setting the phone may reach, and what a
+                       # legal value for it is. netd writes down no
+                       # list of its own here either: an entry's own
+                       # kind is what a value is checked against, so a
+                       # setting added to the glass needs no change in
+                       # this file.
+                       settings=_settings(body.get('settings')),
                        geom=geom)
         if isinstance(body.get('now'), dict):
             _remote['now'] = body['now']
@@ -3087,6 +3145,37 @@ def remote_cmd(body, token):
             if page not in r['slots']:
                 return {'ok': False, 'error': 'NO SUCH PAGE'}, 400
             r['pend']['page'] = {'kind': 'page', 'page': page}
+        elif kind == 'set':
+            k = body.get('k')
+            d = None
+            for e in (r.get('settings') or []):
+                if e['k'] == k:
+                    d = e
+                    break
+            if d is None:
+                return {'ok': False, 'error': 'NO SUCH SETTING'}, 400
+            v = body.get('v')
+            if d['kind'] == 'action':
+                v = None
+            elif d['kind'] == 'toggle':
+                if not isinstance(v, bool):
+                    return {'ok': False, 'error': 'NOT A SWITCH'}, 400
+            elif d['kind'] == 'cycle':
+                # `is True` first: True == 1 in Python, so a bool would
+                # pass an `in [1, 2, 3]` test and arrive at the panel as
+                # a number it never offered.
+                if isinstance(v, bool) or v not in d['opts']:
+                    return {'ok': False, 'error': 'NO SUCH VALUE'}, 400
+            else:
+                if isinstance(v, bool) or not isinstance(v, (int, float)):
+                    return {'ok': False, 'error': 'NO SUCH VALUE'}, 400
+                if v < d['min'] or v > d['max']:
+                    return {'ok': False, 'error': 'OUT OF RANGE'}, 400
+            # Latest-wins per setting, like a slot: two taps on one
+            # before the panel polls are one change. An action is the
+            # exception in spirit but not in effect - pressing TEST
+            # twice inside 1.5 s is one horn either way.
+            r['pend']['set:' + k] = {'kind': 'set', 'k': k, 'v': v}
         elif kind == 'clock':
             # Queued as a SEQUENCE, not latest-wins. These are events:
             # a hold then a tap means reset and then start, and keeping
@@ -3162,23 +3251,14 @@ body{margin:0;background:var(--bg);color:var(--ink);
  padding:calc(env(safe-area-inset-top) + 10px) var(--pad)
          env(safe-area-inset-bottom);
  min-height:100dvh;display:flex;flex-direction:column}
-/* Above the dim, and carrying the page's own background so it reads as
-   a bar rather than as a hole in it. The two buttons have to stay
-   reachable while a sheet is up: pressing the other one swaps the
-   sheet, and a modal that puts its own way out behind the dim is a
-   modal you have to dismiss before you can change your mind. */
-.top{font-size:15px;letter-spacing:.26em;
- color:var(--ink);border-bottom:2px solid var(--hairline);
- display:flex;align-items:center;gap:10px;
- position:relative;z-index:9;background:var(--bg);
- /* Pulled out to the edges of the glass and up to the top of it, then
-    given that room back as its own padding. Above the dim it has to be
-    a BAR: inset by the body's own padding it read as a card floating
-    on the dim, with a strip of dimmed page showing either side of it
-    and above it. */
- margin:calc(-1 * (env(safe-area-inset-top) + 10px))
-        calc(-1 * var(--pad)) 4px;
- padding:calc(env(safe-area-inset-top) + 24px) calc(var(--pad) + 2px) 12px}
+/* Under the dim with everything else. It stood in front of it for a
+   while so the two buttons stayed pressable and one could swap
+   straight to the other - but the owner wants the whole page to go
+   back, and a sheet you close before opening the other is what every
+   modal does anyway. */
+.top{padding:14px 2px 12px;font-size:15px;letter-spacing:.26em;
+ color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px;
+ display:flex;align-items:center;gap:10px}
 .top b{flex:1;font-weight:inherit;letter-spacing:inherit}
 #pwslot{display:flex;align-items:center;gap:10px;flex:none}
 #main{flex:1}
@@ -3264,10 +3344,6 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
    for and the circle is only what says it can be pressed. */
 .hb svg{width:19px;height:19px;flex:none}
 .hb:active{background:var(--chip)}
-/* Lit while its own sheet is up, so the header says which one you are
-   looking at - and says that pressing it again is the way out. */
-.hb.on{border-color:var(--accent);color:var(--accent);background:var(--chip)}
-#pwb.on{border-color:#C81E1E;color:#C81E1E}
 /* The power one wears its own colour, because it is the one on this
    header that can take the boat's instruments down. The same red the
    sheet marks Reboot and Shut down in, and the glass marks its own
@@ -3320,6 +3396,34 @@ svg.gl .f{fill:currentColor;stroke:none}
 .prow em{font-style:normal;color:var(--label);font-size:11px;
  letter-spacing:.16em;flex:none}
 .prow svg[viewBox="0 0 40 40"]{width:23px;height:23px}
+/* The settings rows. A label on the left and its value on the right,
+   which is the shape every settings list on every phone has - and the
+   shape that lets you read the whole sheet down the right-hand edge
+   without reading a word of it. */
+.srow{display:flex;align-items:center;gap:12px;width:100%;background:none;
+ border:0;color:inherit;border-radius:12px;padding:12px;font:inherit;
+ text-align:left}
+.srow:active{background:var(--chip)}
+.srow s{flex:1;text-decoration:none;font-size:16px}
+.srow b{font-size:14px;letter-spacing:.1em;color:var(--accent);
+ font-weight:600;flex:none;font-variant-numeric:tabular-nums}
+.srow.act b{color:var(--label)}
+/* The group headings, the same ones the glass puts on its cards. */
+.sgrp{font-size:10px;letter-spacing:.2em;color:var(--label);
+ margin:14px 0 2px 12px}
+.sgrp:first-child{margin-top:2px}
+/* A switch rather than a word, because on and off is the one value you
+   should not have to read. */
+.sw{width:46px;height:28px;border-radius:14px;flex:none;position:relative;
+ background:var(--chip);border:2px solid var(--hairline);transition:.15s}
+.sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;
+ border-radius:50%;background:var(--label);transition:.15s}
+.srow.on .sw{background:var(--accent);border-color:var(--accent)}
+.srow.on .sw i{left:21px;background:#fff}
+/* The slider. Its own row under the label, because 46px of thumb and a
+   readable label do not both fit across a 358px sheet. */
+.srow.rng{flex-wrap:wrap}
+.srow.rng input{width:100%;margin:10px 2px 0;accent-color:var(--accent)}
 .prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
  border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;
  text-align:left}
@@ -3865,26 +3969,16 @@ function shOpen(which){
        thing you watched leave is a line rather than a sheet. */
     clearTimeout(shWipe);
     shWipe=setTimeout(function(){ if(!SHEET) e.innerHTML=''; }, 260);
-    shLit();
     return;
   }
   clearTimeout(shWipe);
   shPaint();
   e.className='on';
   sc.className='on'+(SHEET==='power'?' pw':'');
-  shLit();
-}
-/* Which header button is lit. Set from here rather than inside draw(),
-   because draw() rebuilds the whole face and a sheet opening must not
-   throw away a card or a scroll that is already up. */
-function shLit(){
-  var g=document.getElementById('thb'), p=document.getElementById('pwb');
-  if(g) g.classList.toggle('on', SHEET==='theme');
-  if(p) p.classList.toggle('on', SHEET==='power');
 }
 function shPaint(){
   document.getElementById('sheet').innerHTML =
-    SHEET==='power' ? pwRows() : thRows();
+    SHEET==='power' ? pwRows() : stRows();
 }
 function shHead(title){
   return '<div class="hd"><b>'+esc(title)+'</b>'
@@ -3901,22 +3995,58 @@ function pwRows(){
     +(ARM?(' class="on'+(ARM.danger?' dgr':'')+'"'):'')+'>'
     +'<i></i><b>'+esc(ARM?('HOLD TO '+(ARM.verb||'CONFIRM')):'')+'</b></div>';
 }
-function thRows(){
-  var h=shHead('DISPLAY');
-  (S.themes||[]).forEach(function(t){
-    var on=(S.now||{}).theme===t;
-    h+='<button class="prow'+(on?' arm':'')+'" data-th="'+esc(t)+'">'
-      +tly(t)+'<s>'+esc(t.toUpperCase())+'</s>'
-      /* On auto the mode and the outcome are two different facts and
-         you want both: the row says AUTO, and beside it is what the
-         clock has actually chosen right now. The glass puts the same
-         pair on its own theme tile. */
-      +(t==='auto' && (S.now||{}).eff
-        ? '<em>'+esc(String(S.now.eff).toUpperCase())+'</em>' : '')
-      +(on?'<i>&#10003;</i>':'')+'</button>';
+/* What a setting reads as. The value, in the words the panel gave it:
+   a cycle's own label if it has one, otherwise the value and its unit. */
+function sVal(d,v){
+  if(d.kind==='cycle'){
+    var i=d.opts.indexOf(v);
+    if(i<0) return '—';
+    var w=(d.labels ? d.labels[i] : String(d.opts[i]))+(d.unit||'');
+    /* On auto the mode and the outcome are two different facts and you
+       want both - the glass puts the same pair on its own theme tile,
+       and only the panel knows what the clock has chosen. */
+    if(d.k==='theme' && v==='auto' && (S.now||{}).eff)
+      w+=' · '+String(S.now.eff).toUpperCase();
+    return w;
+  }
+  if(d.kind==='range'){
+    var u=d.unit||'';
+    if(d.unitOf){
+      var o=((S.now||{}).set||{})[d.unitOf];
+      if(o!=null) u=' '+String(o).toUpperCase();
+    }
+    return String(v)+u;
+  }
+  return '';
+}
+function stRows(){
+  var h=shHead('SETTINGS'), set=(S.now||{}).set||{}, last='';
+  (S.settings||[]).forEach(function(d){
+    if(d.g && d.g!==last){ last=d.g; h+='<div class="sgrp">'+esc(d.g)+'</div>'; }
+    var v=set[d.k];
+    if(d.kind==='toggle'){
+      h+='<button class="srow'+(v?' on':'')+'" data-sk="'+esc(d.k)+'">'
+        +'<s>'+esc(d.name)+'</s><span class="sw"><i></i></span></button>';
+    }else if(d.kind==='action'){
+      h+='<button class="srow act" data-sk="'+esc(d.k)+'">'
+        +'<s>'+esc(d.name)+'</s><b>TEST</b></button>';
+    }else if(d.kind==='range'){
+      /* A slider, not a stepper. The glass has a + and a - because a
+         capacitive panel at sea wants discrete targets; a thumb on
+         glass you are holding does not, and the alarm you want is two
+         or three steps away, not fifteen. */
+      h+='<div class="srow rng" data-sk="'+esc(d.k)+'">'
+        +'<s>'+esc(d.name)+'</s><b>'+esc(sVal(d,v))+'</b>'
+        +'<input type="range" min="'+d.min+'" max="'+d.max+'" step="'
+        +(d.step||1)+'" value="'+(v==null?d.min:v)+'"></div>';
+    }else{
+      h+='<button class="srow" data-sk="'+esc(d.k)+'">'
+        +'<s>'+esc(d.name)+'</s><b>'+esc(sVal(d,v))+'</b></button>';
+    }
   });
   return h+'</div>';
 }
+
 /* Tapping the armed one again disarms it, which is the way out without
    doing anything - the same way the glass's armed tile works, and the
    reason neither needs a caption saying so. */
@@ -3987,11 +4117,58 @@ document.getElementById('sheet').addEventListener('click',function(e){
     });
     return;
   }
+  var sr=e.target.closest('[data-sk]');
+  if(sr && !e.target.closest('input')){
+    var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
+    if(!d || d.kind==='range') return;
+    var cur=((S.now||{}).set||{})[d.k], nv;
+    if(d.kind==='toggle')      nv=!cur;
+    else if(d.kind==='action') nv=null;
+    else nv=d.opts[(d.opts.indexOf(cur)+1)%d.opts.length];   /* round */
+    return void sSend(d, nv);
+  }
   var r=e.target.closest('[data-pa]');
   if(!r) return;
   var a=(S.power||[]).filter(function(x){ return x.a===r.dataset.pa; })[0];
   if(a) pwArm(a);
 });
+
+/* The slider reports continuously while a thumb is on it and that is a
+   command each time, so only the value you let go of is sent. The
+   number beside the label follows the thumb, because a slider whose
+   readout waits for the boat is a slider you cannot aim. */
+document.getElementById('sheet').addEventListener('input',function(e){
+  var sr=e.target.closest('[data-sk]'); if(!sr) return;
+  var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
+  var b=sr.querySelector('b');
+  if(b && d) b.textContent=sVal(d, +e.target.value);
+});
+document.getElementById('sheet').addEventListener('change',function(e){
+  var sr=e.target.closest('[data-sk]'); if(!sr) return;
+  var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
+  if(d) sSend(d, +e.target.value);
+});
+
+/* Shown before the boat has answered, like a slot and like the clock.
+   An action has nothing to show, so it says it went instead. */
+function sSend(d,v){
+  if(d.kind!=='action'){
+    S.now=S.now||{}; S.now.set=S.now.set||{};
+    S.now.set[d.k]=v;
+    shPaint();
+  }
+  /* The theme keeps its own command kind: netd checks it against the
+     themes the panel registered, which is a tighter check than the
+     catalogue's, and the panel delegates both to one apply. */
+  post(d.k==='theme' ? {kind:'theme', theme:v} : {kind:'set', k:d.k, v:v},
+       function(){
+    if(d.kind==='action') say(d.name.toUpperCase());
+    /* The panel is the one that knows what a setting turned into -
+       flipping FEET to METRES converts the alarm with it, and the
+       phone must not be left showing the number from before. */
+    setTimeout(load, 1800);
+  });
+}
 /* pointerdown rather than touchstart: one path for a finger and for the
    mouse a probe uses, and pointercancel is what a scroll or an incoming
    call looks like - both have to let go of the bar. */
@@ -4050,11 +4227,12 @@ document.getElementById('main').onclick=function(e){
          else pick(z.dataset.p, z.dataset.s); }
 };
 document.querySelector('.top').onclick=function(e){
-  /* Pressing the other one swaps the sheet rather than closing it,
-     which is what a header of buttons should do. Pressing the one that
-     is already up puts it away. */
-  if(e.target.closest('#pwb')) return void shOpen(SHEET==='power'?null:'power');
-  if(e.target.closest('#thb')) return void shOpen(SHEET==='theme'?null:'theme');
+  /* Only reachable with nothing up: the header fades under the dim
+     with the rest of the page, so the way out of a sheet is CLOSE or a
+     tap on the dim, and the way to the other one is through there. */
+  if(SHEET) return;
+  if(e.target.closest('#pwb')) return void shOpen('power');
+  if(e.target.closest('#thb')) return void shOpen('set');
 };
 
 /* ---- the clock's three gestures --------------------------------------
@@ -4325,6 +4503,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                                # What this Pi can actually do right now,
                                # and how long it has been up - the same
                                # two things the glass's sheet shows.
+                               'settings': r.get('settings') or [],
                                'power': remote_available_power(),
                                # Off the cached read, like the list
                                # itself. It is a runtime to the minute,

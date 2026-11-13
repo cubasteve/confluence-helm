@@ -270,6 +270,24 @@ POWER = [{'a': 'reload', 'name': 'Reload the app', 'verb': 'RELOAD',
           'danger': 1, 'need': ''}]
 
 
+# The shape of the glass's settings catalogue, as a fixture like the
+# two above it. That the PANEL really sends its own REM_SET is
+# tests/remote.mjs's assertion, made where it cannot drift.
+SETTINGS = [{'k': 'dim', 'kind': 'range', 'g': 'DISPLAY',
+             'name': 'Brightness', 'min': 25, 'max': 100, 'step': 5,
+             'unit': '%', 'unitOf': ''},
+            {'k': 'sogAvg', 'kind': 'cycle', 'g': 'GPS AVERAGING',
+             'name': 'Speed', 'opts': [1, 2, 3, 5, 10, 30],
+             'labels': None, 'unit': ' SEC', 'unitOf': ''},
+            {'k': 'click', 'kind': 'cycle', 'g': 'SOUND', 'name': 'Touch',
+             'opts': ['off', 'tick', 'glass', 'bell'],
+             'labels': None, 'unit': '', 'unitOf': ''},
+            {'k': 'keepAwake', 'kind': 'toggle', 'g': 'SOUND',
+             'name': 'Hold the speaker awake', 'unit': '', 'unitOf': ''},
+            {'k': 'horn', 'kind': 'action', 'g': 'SOUND',
+             'name': 'Test the horn', 'unit': '', 'unitOf': ''}]
+
+
 def armed(netd):
     """Arm without opening a real socket - the socket is the one thing
     that cannot be exercised in a container with no wlan1."""
@@ -277,6 +295,7 @@ def armed(netd):
         armed=True, token='T0KEN', how='device', pend={}, at=0.0,
         slots=SLOTS, readings=[dict(r) for r in READINGS],
         power=[dict(a) for a in POWER],
+        settings=[dict(x) for x in SETTINGS],
         themes=['day', 'dusk', 'night', 'auto'],
         cidr='172.20.10.3/28', now={'slots': {'dial:c1': 'dpt'}, 'theme': 'dusk'})
 
@@ -400,6 +419,138 @@ class Door(unittest.TestCase):
                 self.assertEqual(netd._remote['pend']['page']['page'], 'dial')
             finally:
                 p.close()
+
+    def test_the_settings_arrive_by_registering(self):
+        """armed() above writes _remote directly, so every other test
+        here would pass with the register throwing the catalogue away.
+        This is the one that goes in the front door."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            netd._remote.update(armed=True, token='T0KEN', how='device',
+                                cidr='', settings=[], pend={})
+            r = netd.remote_register({
+                'slots': SLOTS, 'readings': [dict(x) for x in READINGS],
+                'themes': ['day', 'night'],
+                'settings': [dict(x) for x in SETTINGS]})
+            self.assertTrue(r['ok'], r)
+            self.assertEqual([a['k'] for a in netd._remote['settings']],
+                             [a['k'] for a in SETTINGS])
+            netd._remote.update(armed=True, how='device')
+            p = Phone(netd)
+            try:
+                code, j = p.js('/r/cmd?t=T0KEN',
+                               {'kind': 'set', 'k': 'dim', 'v': 40})
+                self.assertEqual(code, 200, j)
+                code, j = p.js('/r/cmd?t=T0KEN',
+                               {'kind': 'set', 'k': 'nope', 'v': 1})
+                self.assertEqual(code, 400, j)
+                # And it goes down the wire, so the phone can draw it.
+                code, j = p.js('/r/state?t=T0KEN')
+                self.assertEqual(code, 200, j)
+                self.assertEqual([a['k'] for a in j['settings']],
+                                 [a['k'] for a in SETTINGS])
+            finally:
+                p.close()
+
+    def test_a_setting_is_checked_against_its_own_entry(self):
+        """netd writes down no settings of its own. An entry's kind is
+        what a value is checked against, so a setting added to the
+        glass needs no change in this file - and a value the glass
+        never offered cannot be the one that arrives."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                ok = [('dim', 40), ('dim', 25), ('dim', 100),
+                      ('sogAvg', 10), ('click', 'bell'),
+                      ('keepAwake', False), ('horn', None)]
+                for k, v in ok:
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'set', 'k': k, 'v': v})
+                    self.assertEqual(code, 200, '%s=%r -> %s' % (k, v, j))
+                    self.assertEqual(netd._remote['pend']['set:' + k],
+                                     {'kind': 'set', 'k': k, 'v': v})
+                bad = [('dim', 24), ('dim', 101), ('dim', 'bright'),
+                       ('dim', None), ('dim', True),
+                       ('sogAvg', 4), ('sogAvg', '10'), ('sogAvg', True),
+                       ('click', 'kazoo'), ('click', 1),
+                       ('keepAwake', 1), ('keepAwake', 'yes'),
+                       ('nope', 1), ('__proto__', 1), ('', 1)]
+                netd._remote['pend'] = {}
+                for k, v in bad:
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'set', 'k': k, 'v': v})
+                    self.assertEqual(code, 400, '%s=%r -> %s %s'
+                                     % (k, v, code, j))
+                self.assertEqual(netd._remote['pend'], {})
+            finally:
+                p.close()
+
+    def test_true_is_not_a_number_on_a_cycle(self):
+        """True == 1 in Python, so a bool walks through an `in [1,2,3]`
+        test and arrives at the panel as a number the glass never
+        offered. The same trap _geom() was written around."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            netd._remote['settings'] = netd._settings(
+                [{'k': 'avg', 'kind': 'cycle', 'opts': [1, 2, 3],
+                  'g': 'GPS', 'name': 'Speed'}])
+            p = Phone(netd)
+            try:
+                code, j = p.js('/r/cmd?t=T0KEN',
+                               {'kind': 'set', 'k': 'avg', 'v': True})
+                self.assertEqual(code, 400, j)
+                code, j = p.js('/r/cmd?t=T0KEN',
+                               {'kind': 'set', 'k': 'avg', 'v': 2})
+                self.assertEqual(code, 200, j)
+            finally:
+                p.close()
+
+    def test_two_taps_on_one_setting_are_one_change(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for v in (30, 40, 50):
+                    p.js('/r/cmd?t=T0KEN',
+                         {'kind': 'set', 'k': 'dim', 'v': v})
+                drained = netd.remote_poll({})
+                self.assertEqual(len(drained['cmds']), 1, drained)
+                self.assertEqual(drained['cmds']['set:dim']['v'], 50)
+                self.assertEqual(netd.remote_poll({})['cmds'], {})
+            finally:
+                p.close()
+
+    def test_a_half_formed_setting_is_not_drawn(self):
+        """A range with no ends and a cycle with no options both mean
+        accepting anything, which is the opposite of what this list is
+        for."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            out = netd._settings([
+                {'k': 'dim', 'kind': 'range', 'min': 25, 'max': 100,
+                 'step': 5, 'g': 'DISPLAY', 'name': 'Brightness'},
+                {'k': 'a', 'kind': 'range'},                  # no ends
+                {'k': 'b', 'kind': 'range', 'min': 9, 'max': 1},
+                {'k': 'c', 'kind': 'range', 'min': True, 'max': 9},
+                {'k': 'd', 'kind': 'cycle'},                  # no options
+                {'k': 'e', 'kind': 'cycle', 'opts': []},
+                {'k': 'f', 'kind': 'cycle', 'opts': [{'a': 1}]},
+                {'k': 'g', 'kind': 'slider'},                 # no such kind
+                {'kind': 'toggle', 'name': 'Nameless'},       # no key
+                'not a dict', None, 42,
+            ])
+            self.assertEqual([a['k'] for a in out], ['dim'], out)
+            self.assertEqual(out[0]['min'], 25)
+            self.assertEqual(out[0]['step'], 5)
+            # A missing step is one, not nothing: a range with step 0
+            # is a range you cannot move.
+            one = netd._settings([{'k': 'x', 'kind': 'range',
+                                   'min': 0, 'max': 9}])
+            self.assertEqual(one[0]['step'], 1)
+            # Labels only count when there is one per option.
+            lab = netd._settings([{'k': 'y', 'kind': 'cycle',
+                                   'opts': [1, 2], 'labels': ['ONE']}])
+            self.assertIsNone(lab[0]['labels'])
+            self.assertEqual(netd._settings('dim'), [])
 
     def test_the_power_sheet_is_the_panels_and_netd_keeps_no_list(self):
         """netd decides which actions are AVAILABLE and nothing else.

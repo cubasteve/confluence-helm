@@ -6638,13 +6638,18 @@ $('theme-btn').addEventListener('click',()=>{
    number across silently redefined the alarm by 3.28x, and in the
    dangerous direction one way round: a 6 M alarm became a 6 FT one -
    under two metres - with the panel still showing the figure you set. */
-$('r-units').addEventListener('click',()=>{
+/* Its own function because the phone flips it too, and the conversion
+   is the whole point: carrying the raw number across silently redefined
+   the alarm by 3.28x. Two callers, one place. */
+function unitsFlip(){
   const toM = CFG.depthUnit==='ft';
   CFG.depthUnit = toM?'m':'ft';
   CFG.depthAlarm = Math.max(1, Math.min(60,
     Math.round(toM ? CFG.depthAlarm/M_TO_FT : CFG.depthAlarm*M_TO_FT)));
   CFG.depthWarn = CFG.depthAlarm*2;
-  drawDepth(); prefsSave();});
+  drawDepth(); prefsSave();
+}
+$('r-units').addEventListener('click',unitsFlip);
 
 /* ---- brightness ----
    Two mechanisms, and only one of them is real dimming. The veil is a
@@ -9112,7 +9117,7 @@ function remoteNow(){
      the sun this hands the phone the right brightness at the right
      time for free: bright in your hand by day, dark at 2am. */
   return { slots:slots, theme:CFG.theme, eff:THEME_EFF, pal:remotePal(),
-           t:remoteTimer(), page:PAGE_I };
+           t:remoteTimer(), page:PAGE_I, set:remoteSet() };
 }
 
 /* The eight colours the mirror needs, and only those. Recomputed when
@@ -9128,6 +9133,88 @@ function remotePal(){
   remPalAt=THEME_EFF; remPal=o;
   return o;
 }
+
+/* The settings the phone can reach, as a catalogue in the same way the
+   power sheet is one: the panel owns the list, netd validates against
+   what it was told, and the phone draws what it is handed. Nothing here
+   is a reading - every one of them is a thing that is SET, which is
+   what this remote has always carried. The radios are deliberately not
+   on it: their content IS live data (what is in range, how strong,
+   which adapter is up), and that is the one thing this wire does not
+   do.
+
+   `now.set` carries the current value of each. The phone needs it to
+   draw a tick or a number, exactly as it needs now.slots to draw which
+   reading is in a cell. */
+/* Built on first use rather than standing as a const. Half of what it
+   names - SS_DELAYS, CLICK_KEYS, the averaging lists - is declared
+   further down the file than this is, and a top-level const would read
+   them in the dead zone before they exist. Nothing calls this until
+   the page has finished loading, so by then they all do. */
+let REM_SET_MEMO=null;
+const REM_SET=()=>REM_SET_MEMO||(REM_SET_MEMO=[
+ {g:'DISPLAY', k:'dim', name:'Brightness', kind:'range',
+  min:25, max:100, step:5, unit:'%'},
+ /* The theme is a DISPLAY control on the glass and is one here, in the
+    glass's own card, rather than standing on its own somewhere. */
+ {g:'DISPLAY', k:'theme', name:'Theme', kind:'cycle',
+  opts:THEMES.slice(), labels:THEMES.map(t=>t.toUpperCase())},
+ {g:'DISPLAY', k:'saver', name:'Screen saver', kind:'cycle',
+  opts:SS_DELAYS.map((_,i)=>i), labels:SS_TEXT},
+ /* Its unit is the OTHER setting's value, which is why unitOf exists
+    rather than a second unit field that would say FT while the glass
+    said M. The threshold is held in whatever is showing - it is never
+    metres underneath - so the number and the word have to move
+    together or the alarm is silently redefined. */
+ {g:'SHALLOW ALARM', k:'depthAlarm', name:'Alarm at', kind:'range',
+  min:1, max:60, step:1, unitOf:'depthUnit'},
+ {g:'SHALLOW ALARM', k:'depthUnit', name:'Units', kind:'cycle',
+  opts:['ft','m'], labels:['FEET','METRES']},
+ {g:'GPS AVERAGING', k:'sogAvg', name:'Speed', kind:'cycle',
+  opts:SOG_AVGS, unit:' SEC'},
+ {g:'GPS AVERAGING', k:'cogAvg', name:'Course', kind:'cycle',
+  opts:COG_AVGS, unit:' SEC'},
+ {g:'SOUND', k:'click', name:'Touch', kind:'cycle',
+  opts:CLICK_KEYS, labels:CLICK_KEYS.map(k=>CLICK_LBL[k]||k.toUpperCase())},
+ {g:'SOUND', k:'keepAwake', name:'Hold the speaker awake', kind:'toggle'},
+ {g:'SOUND', k:'horn', name:'Test the horn', kind:'action'},
+]);
+
+/* What each one IS right now. The same shape as remoteNow().slots: a
+   flat map the phone reads a value out of. */
+function remoteSet(){
+  return {dim:CFG.dim, theme:CFG.theme, saver:ssStep,
+          depthAlarm:CFG.depthAlarm, depthUnit:CFG.depthUnit,
+          sogAvg:CFG.sogAvg, cogAvg:CFG.cogAvg,
+          click:CFG.click, keepAwake:!!CFG.keepAwake, horn:null};
+}
+
+/* And what setting it does. Every one of these is the SAME call the
+   glass's own control makes - not a second path to the same state,
+   which is how the two ends of a setting drift until one of them is
+   lying. */
+const REM_DO_SET={
+  dim:        v=>{ applyDim(v, true); prefsSave(); },
+  theme:      v=>{ CFG.theme=v; applyTheme(); prefsSave(); },
+  saver:      v=>{ ssStep=v; drawAmbient(); },
+  depthAlarm: v=>{ CFG.depthAlarm=v; CFG.depthWarn=v*2;
+                   drawDepth(); prefsSave(); },
+  /* Not an assignment: flipping the unit CONVERTS the threshold, and a
+     phone that wrote the letter without the conversion would redefine
+     a 6 ft alarm as 6 m, or a 2 m one as 2 ft - under a metre. */
+  depthUnit:  v=>{ if(v!==CFG.depthUnit) unitsFlip(); },
+  sogAvg:     v=>{ CFG.sogAvg=v; avgPaint(); prefsSave(); gpsDisplay(); },
+  cogAvg:     v=>{ CFG.cogAvg=v; avgPaint(); prefsSave(); gpsDisplay(); },
+  click:      v=>{ CFG.click=v; clkPaint(); prefsSave(); },
+  keepAwake:  v=>{ CFG.keepAwake=v; prefsSave();
+                   wCls('snd-awake','on', v);
+                   /* On, and with a start in hand, the next tick sends
+                      one rather than waiting out the three minutes. */
+                   if(v) keepAt=0; },
+  /* The real thing, flash and all - signal() is what the gun calls. A
+     test that took a different path would be testing the test. */
+  horn:       ()=>{ signal('gun'); },
+};
 
 /* The start clock, as two numbers rather than as a picture.
 
@@ -9306,6 +9393,13 @@ function remoteCat(){
            power:POWER_ACTIONS.map(a=>({a:a.a, name:a.name, verb:a.verb,
                                         danger:a.danger?1:0,
                                         need:a.need||''})),
+           settings:REM_SET().map(x=>({g:x.g, k:x.k, name:x.name,
+                                     kind:x.kind,
+                                     min:x.min, max:x.max, step:x.step,
+                                     unit:x.unit||'',
+                                     unitOf:x.unitOf||'',
+                                     opts:x.opts ? x.opts.slice() : null,
+                                     labels:x.labels ? x.labels.slice() : null})),
            themes:THEMES, now:remoteNow() };
 }
 
@@ -9318,8 +9412,13 @@ function remoteDo(c){
     if(PICK && PICK.g===c.page && PICK.sl===c.slot) pickClose();
     slotSet(c.page, c.slot, c.reading, true);
   }else if(c.kind==='theme'){
+    /* The older door to the same setting. The theme is a row in the
+       settings catalogue now and the phone sends it as one, but this
+       kind is what netd validates against its own themes list and what
+       the probes have always used - so it stays, delegating, rather
+       than keeping a second copy of the body to drift against. */
     if(THEMES.indexOf(c.theme)<0) return;
-    CFG.theme=c.theme; applyTheme(); prefsSave();
+    REM_DO_SET.theme(c.theme);
   }else if(c.kind==='page'){
     /* The phone's two tabs turn the glass as well. Looking at the
        music page on the phone while the panel shows the dial made the
@@ -9340,6 +9439,23 @@ function remoteDo(c){
     for(const g of (Array.isArray(c.seq) ? c.seq : []).slice(0,4)){
       if(g==='tap' || g==='double' || g==='hold') timerGesture(g);
     }
+  }else if(c.kind==='set'){
+    /* One command for all of them, validated against the catalogue the
+       panel itself registered rather than against a second list. An
+       entry's own kind says what a legal value is, so adding a setting
+       adds no validation anywhere. */
+    const d=REM_SET().filter(x=>x.k===c.k)[0];
+    if(!d || !Object.prototype.hasOwnProperty.call(REM_DO_SET, c.k)) return;
+    let v=c.v;
+    if(d.kind==='action')      v=null;
+    else if(d.kind==='toggle'){ if(typeof v!=='boolean') return; }
+    else if(d.kind==='cycle'){  if(d.opts.indexOf(v)<0) return; }
+    else if(d.kind==='range'){
+      if(typeof v!=='number' || !isFinite(v)) return;
+      v=Math.round(v);
+      if(v<d.min || v>d.max) return;
+    }else return;
+    REM_DO_SET[c.k](v);
   }else if(c.kind==='power'){
     /* Only ever this one. Everything else on that sheet netd runs
        itself, because the reason you reach for the phone's power sheet

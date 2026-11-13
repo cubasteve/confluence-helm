@@ -263,6 +263,89 @@ t.ok((await p.evaluate(()=>tLeft))===300000,
      'and a part minute, an over-long one, a string or nothing is not done',
      String(await p.evaluate(()=>tLeft)));
 
+t.head('every setting that crosses is a thing that is SET');
+/* The rule this remote has always had: it carries what is IN a
+   control, never what the control reads. The radios are the reason
+   that matters here - their content IS live data, what is in range and
+   how strong, which is why they are not on this list. */
+const SET=await p.evaluate(()=>remoteCat().settings);
+const SETV=await p.evaluate(()=>remoteNow().set);
+t.ok(SET.length>=9, 'there is a catalogue of them', String(SET.length));
+t.ok(SET.every(d=>d.k && d.name && d.g &&
+                  ['range','cycle','toggle','action'].indexOf(d.kind)>=0),
+     'each says what it is CALLED, which card it is on and what shape '
+     +'it is - so the phone draws it without a list of its own',
+     JSON.stringify(SET.filter(d=>!d.kind||!d.g).map(d=>d.k)));
+t.ok(SET.every(d=>d.kind!=='cycle' ||
+                  (Array.isArray(d.opts) && d.opts.length)),
+     'a cycle carries the values it may take');
+t.ok(SET.every(d=>d.kind!=='range' ||
+                  (typeof d.min==='number' && d.max>d.min)),
+     'and a range carries its ends');
+t.ok(SET.every(d=>d.kind==='action' ||
+                  Object.prototype.hasOwnProperty.call(SETV, d.k)),
+     'and now.set says what every one of them is right now',
+     JSON.stringify(SET.filter(d=>d.kind!=='action'
+       && !Object.prototype.hasOwnProperty.call(SETV,d.k)).map(d=>d.k)));
+/* No radios, and this is the assertion that says so out loud. */
+t.ok(!SET.some(d=>/wifi|bluetooth|^bt$|ssid|hotspot/i.test(d.k+' '+d.name)),
+     'and nothing on it is a radio - their content is what they READ');
+
+t.head('and setting one is the same call the glass\'s own control makes');
+const setv=async k=>await p.evaluate(k=>remoteNow().set[k], k);
+await p.evaluate(()=>remoteDo({kind:'set', k:'sogAvg', v:10}));
+t.ok((await setv('sogAvg'))===10, 'a cycle takes one of its own values',
+     String(await setv('sogAvg')));
+t.ok((await p.evaluate(()=>CFG.sogAvg))===10,
+     'writing the panel\'s own CFG, not a copy beside it');
+t.ok((await p.evaluate(()=>JSON.parse(
+       localStorage.getItem(PREFS_KEY)||'{}').sogAvg))===10,
+     'and written down, so a reboot keeps it');
+await p.evaluate(()=>remoteDo({kind:'set', k:'dim', v:55}));
+t.ok((await setv('dim'))===55, 'a range takes a number inside its ends',
+     String(await setv('dim')));
+await p.evaluate(()=>remoteDo({kind:'set', k:'keepAwake', v:false}));
+t.ok((await setv('keepAwake'))===false, 'a toggle takes a boolean');
+/* The one that is not an assignment. Flipping the unit CONVERTS the
+   threshold: carrying the raw number across would redefine a 6 ft
+   alarm as 6 m, or a 2 m one as 2 ft, which is under a metre. */
+await p.evaluate(()=>{ CFG.depthUnit='ft'; CFG.depthAlarm=6; });
+await p.evaluate(()=>remoteDo({kind:'set', k:'depthUnit', v:'m'}));
+const conv=await p.evaluate(()=>({u:CFG.depthUnit, a:CFG.depthAlarm,
+                                  w:CFG.depthWarn}));
+t.ok(conv.u==='m' && conv.a===2,
+     'the units row converts the threshold rather than relabelling it',
+     JSON.stringify(conv));
+t.ok(conv.w===conv.a*2, 'and the warning follows it', String(conv.w));
+/* Setting it to what it already is must not convert it AGAIN - the
+   phone sends a value, not a press, and the same value twice is one
+   state. */
+await p.evaluate(()=>remoteDo({kind:'set', k:'depthUnit', v:'m'}));
+t.ok((await p.evaluate(()=>CFG.depthAlarm))===2,
+     'and saying it twice does not convert it twice',
+     String(await p.evaluate(()=>CFG.depthAlarm)));
+
+t.head('and nothing it was not given is a setting');
+await p.evaluate(()=>{ CFG.depthUnit='ft'; CFG.depthAlarm=6; CFG.sogAvg=3;
+                       CFG.dim=100; CFG.click='glass'; });
+const wasSet=await p.evaluate(()=>JSON.stringify(remoteNow().set));
+await p.evaluate(()=>{
+  remoteDo({kind:'set', k:'sogAvg', v:4});        /* not on its list */
+  remoteDo({kind:'set', k:'dim', v:5});           /* under the floor */
+  remoteDo({kind:'set', k:'dim', v:500});         /* over the ceiling */
+  remoteDo({kind:'set', k:'dim', v:'bright'});
+  remoteDo({kind:'set', k:'keepAwake', v:1});     /* 1 is not true */
+  remoteDo({kind:'set', k:'click', v:'kazoo'});
+  remoteDo({kind:'set', k:'depthUnit', v:'fathoms'});
+  remoteDo({kind:'set', k:'nope', v:1});
+  remoteDo({kind:'set', k:'__proto__', v:1});
+  remoteDo({kind:'set', k:'constructor', v:1});
+  remoteDo({kind:'set'});
+});
+t.ok((await p.evaluate(()=>JSON.stringify(remoteNow().set)))===wasSet,
+     'a key it has not got, or a value that key cannot take, is not done',
+     await p.evaluate(()=>JSON.stringify(remoteNow().set)));
+
 t.head('the power sheet that crosses is the glass\'s own');
 /* netd keeps no list of these and the phone keeps no list of these:
    netd decides which are AVAILABLE and the phone draws what it is
