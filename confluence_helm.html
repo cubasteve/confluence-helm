@@ -9117,14 +9117,20 @@ function remoteNow(){
      the sun this hands the phone the right brightness at the right
      time for free: bright in your hand by day, dark at 2am. */
   return { slots:slots, theme:CFG.theme, eff:THEME_EFF, pal:remotePal(),
-           t:remoteTimer(), page:PAGE_I, set:remoteSet() };
+           t:remoteTimer(), page:PAGE_I, set:remoteSet(), bar:remoteBar() };
 }
 
 /* The eight colours the mirror needs, and only those. Recomputed when
    the resolved theme changes rather than on every poll: this resolves
    style, and the poll runs every second and a half for as long as the
    panel is on. */
-const REM_PAL=['bg','ink','ink-dim','label','hairline','accent','panel','chip'];
+const REM_PAL=['bg','ink','ink-dim','label','hairline','accent','panel',
+               'chip',
+               /* The shallow alarm's two zones. Night is a single red
+                  hue and these two move with it, so a mirror holding
+                  its own copy would draw the boat's alarm in a colour
+                  the glass had stopped using hours ago. */
+               'warn','alarm'];
 let remPalAt=null, remPal={};
 function remotePal(){
   if(remPalAt===THEME_EFF) return remPal;
@@ -9169,8 +9175,13 @@ const REM_SET=()=>REM_SET_MEMO||(REM_SET_MEMO=[
     said M. The threshold is held in whatever is showing - it is never
     metres underneath - so the number and the word have to move
     together or the alarm is silently redefined. */
+ /* `bar` says this one is drawn over the glass's own picture of it -
+    the three-zone bar and its scale. What the zones ARE is computed by
+    the panel into now.bar, because the bar's full scale is 40 feet or
+    12 metres and that is the panel's arithmetic, not a thing the phone
+    should be holding a second copy of. */
  {g:'SHALLOW ALARM', k:'depthAlarm', name:'Alarm at', kind:'range',
-  min:1, max:60, step:1, unitOf:'depthUnit'},
+  min:1, max:60, step:1, unitOf:'depthUnit', bar:1},
  {g:'SHALLOW ALARM', k:'depthUnit', name:'Units', kind:'cycle',
   opts:['ft','m'], labels:['FEET','METRES']},
  {g:'GPS AVERAGING', k:'sogAvg', name:'Speed', kind:'cycle',
@@ -9185,6 +9196,17 @@ const REM_SET=()=>REM_SET_MEMO||(REM_SET_MEMO=[
 
 /* What each one IS right now. The same shape as remoteNow().slots: a
    flat map the phone reads a value out of. */
+/* The alarm bar's picture, in the panel's own numbers: the full scale,
+   and where the two zones end on it. Derived from two settings and
+   nothing else - there is no reading in here. The glass's bar also
+   carries a marker at the depth under the boat RIGHT NOW, and that one
+   does not cross: it is a reading, and the exception this wire makes
+   for the start clock is for a control you are holding, not for a
+   number you are watching. */
+function remoteBar(){
+  return {max:BAR_MAX(), alarm:CFG.depthAlarm, warn:CFG.depthWarn};
+}
+
 function remoteSet(){
   return {dim:CFG.dim, theme:CFG.theme, saver:ssStep,
           depthAlarm:CFG.depthAlarm, depthUnit:CFG.depthUnit,
@@ -9407,6 +9429,7 @@ function remoteCat(){
                                      unit:x.unit||'',
                                      unitOf:x.unitOf||'',
                                      tile:x.tile?1:0,
+                                     bar:x.bar?1:0,
                                      opts:x.opts ? x.opts.slice() : null,
                                      labels:x.labels ? x.labels.slice() : null})),
            themes:THEMES, now:remoteNow() };

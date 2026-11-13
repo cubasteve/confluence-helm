@@ -990,6 +990,162 @@ const bg=await p.evaluate(()=>getComputedStyle(document.body).backgroundColor);
 t.ok(bg==='rgb(244, 246, 247)',
      'the day palette came down the wire and was applied', bg);
 
+t.head('the shallow alarm wears the glass\'s own bar, in miniature');
+await p.evaluate(()=>{ window.__bar0=JSON.parse(JSON.stringify(S.now.bar)); });
+const dbr=await p.evaluate(()=>{
+  const row=document.querySelector('.srow[data-sk="depthAlarm"]');
+  const b=row && row.querySelector('.dbar');
+  const sc=row && row.querySelector('.dscale');
+  if(!b || !sc) return null;
+  const w=b.getBoundingClientRect().width;
+  const z=[...b.children].map(e=>({
+    cls:e.className, l:e.getBoundingClientRect().left-b.getBoundingClientRect().left,
+    w:e.getBoundingClientRect().width}));
+  return {w:w, zones:z, scale:[...sc.children].map(e=>e.textContent)};
+});
+t.ok(dbr && dbr.zones.length===2,
+     'two zones on it - the alarm, and the warning above it',
+     JSON.stringify(dbr && dbr.zones.map(z=>z.cls)));
+/* The third zone on the glass's bar is a marker at the depth under
+   the boat, and it does not cross. */
+t.ok(dbr.scale.join()==='0,'+(cat.now.bar.max/2)+','+cat.now.bar.max,
+     'and a scale of nothing, half and the whole of it',
+     dbr.scale.join());
+const pc=n=>n/cat.now.bar.max*dbr.w;
+t.ok(Math.abs(dbr.zones[0].w-pc(cat.now.bar.alarm))<=1.5,
+     'the alarm zone runs from nothing to the threshold',
+     Math.round(dbr.zones[0].w)+' of '+Math.round(pc(cat.now.bar.alarm)));
+t.ok(Math.abs(dbr.zones[1].l-pc(cat.now.bar.alarm))<=1.5 &&
+     Math.abs(dbr.zones[1].w-pc(cat.now.bar.warn-cat.now.bar.alarm))<=1.5,
+     'and the warning from there to twice it',
+     JSON.stringify([Math.round(dbr.zones[1].l), Math.round(dbr.zones[1].w)]));
+/* The two colours come down the wire with the rest of the palette. */
+const bc=await p.evaluate(()=>{
+  const z=[...document.querySelectorAll('.srow[data-sk="depthAlarm"] .dbar i')];
+  return z.map(e=>getComputedStyle(e).backgroundColor);
+});
+t.ok(bc.length===2 && bc[0]!==bc[1] &&
+     bc.every(c=>c!=='rgba(0, 0, 0, 0)'),
+     'drawn in the two colours the panel sent', JSON.stringify(bc));
+/* And they have a value before the boat answers, like the other
+   eight. One frame, but without it that frame draws the bar in
+   nothing at all. */
+const root=await p.evaluate(()=>{
+  for(const sh of document.styleSheets)
+    for(const r of sh.cssRules)
+      if(r.selectorText===':root') return r.style.cssText;
+  return '';
+});
+t.ok(/--alarm:/.test(root) && /--warn:/.test(root),
+     'with a dusk value to fall back on before it lands',
+     root.replace(/.*(--warn[^;]*;)/,'$1').slice(0,60));
+/* And only on the setting the panel marked. */
+t.ok((await p.$$('.srow[data-sk="dim"] .dbar')).length===0,
+     'and nothing else on the sheet has one');
+/* On a scale the panel has changed. Feet is 40 and metres is 12, and
+   with the boat in feet a phone drawing its own 40 is indistinguishable
+   from one drawing the panel's - so the probe moves it. A 2 m alarm on
+   a 12 m bar is a sixth of it; off a hard-coded 40 it is a twentieth. */
+await p.evaluate(()=>{ S.now.bar={max:12, alarm:2, warn:4}; shPaint(); });
+await p.waitForTimeout(250);
+const mtr=await p.evaluate(()=>{
+  const b=document.querySelector('.srow[data-sk="depthAlarm"] .dbar');
+  const sc=document.querySelector('.srow[data-sk="depthAlarm"] .dscale');
+  return {w:b.getBoundingClientRect().width,
+          al:b.querySelector('.al').getBoundingClientRect().width,
+          scale:[...sc.children].map(e=>e.textContent).join()};
+});
+t.ok(Math.abs(mtr.al/mtr.w - 2/12) < 0.02,
+     'the zones are drawn off the scale the PANEL sent, not a 40 of '
+     +'the phone\'s own',
+     (mtr.al/mtr.w).toFixed(3)+' want '+(2/12).toFixed(3));
+t.ok(mtr.scale==='0,6,12', 'and the scale reads it too', mtr.scale);
+await p.evaluate(()=>{ S.now.bar=JSON.parse(JSON.stringify(window.__bar0));
+                       shPaint(); });
+await p.waitForTimeout(200);
+
+t.head('and a sheet left open is repainted when the boat answers');
+/* It used to keep whatever it was drawn with. Flip FEET to METRES and
+   the panel converts the alarm, the next poll brings back 2 M on a
+   12 M scale - and the sheet still said 3 FT over a 40 FT bar, which
+   is a lying mirror of the setting you just changed. */
+const scaleNow=()=>p.$eval('.srow[data-sk="depthAlarm"] .dscale',
+                           e=>[...e.children].map(c=>c.textContent).join());
+const was40=await scaleNow();
+await fetch(base+'/poke?max=12&alarm=2&warn=4');
+await p.evaluate(()=>load()); await p.waitForTimeout(600);
+t.ok((await scaleNow())==='0,6,12',
+     'the open sheet takes the new scale', was40+' -> '+(await scaleNow()));
+/* Not while a thumb is on it, though: the repaint lands 1.8 s after
+   the last change, which is well inside a slow drag, and rebuilding
+   the row under the finger takes the thumb with it. */
+const sl0=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
+  const r=e.getBoundingClientRect();
+  return {x:r.left, y:r.top+r.height/2, w:r.width};});
+await p.mouse.move(sl0.x+sl0.w*0.1, sl0.y); await p.mouse.down();
+await p.mouse.move(sl0.x+sl0.w*0.7, sl0.y); await p.waitForTimeout(120);
+const held=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value);
+await fetch(base+'/poke?max=40&alarm=3&warn=6');
+await p.evaluate(()=>load()); await p.waitForTimeout(500);
+t.ok((await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value))===held,
+     'so a poll landing mid-drag does not snatch the thumb back',
+     held+' / '+(await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value)));
+await p.mouse.up(); await p.waitForTimeout(500);
+
+t.head('and a drag writes nothing down until the boat has answered');
+/* The preview is an argument to the drawing, not a write into the
+   state. A drag let go of somewhere no change fires used to leave the
+   bar drawing one number under a label that said another, with nothing
+   to correct it. */
+await fetch(base+'/poke?max=40&alarm=4&warn=16');
+await p.evaluate(()=>load()); await p.waitForTimeout(600);
+const sl1=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
+  const r=e.getBoundingClientRect();
+  return {x:r.left, y:r.top+r.height/2, w:r.width};});
+/* Low on the track on purpose: the zones are clamped to the bar, so
+   a four-to-one boat dragged past a quarter of the scale has its
+   warning zone pinned at the end and the ratio stops being the thing
+   under test. */
+await p.mouse.move(sl1.x+sl1.w*0.2, sl1.y); await p.mouse.down();
+await p.mouse.move(sl1.x+sl1.w*0.08, sl1.y); await p.waitForTimeout(150);
+t.ok(JSON.stringify(await p.evaluate(()=>S.now.bar))===
+     JSON.stringify({max:40, alarm:4, warn:16}),
+     'the state still says what the boat said',
+     JSON.stringify(await p.evaluate(()=>S.now.bar)));
+/* And the preview is scaled by the ratio the PANEL sent. warn is twice
+   alarm on the glass today; a phone holding its own 2 would draw this
+   four-to-one boat a zone it does not have. */
+const zz=await p.evaluate(()=>{
+  const b=document.querySelector('.srow[data-sk="depthAlarm"] .dbar');
+  return {al:b.querySelector('.al').getBoundingClientRect().width,
+          wa:b.querySelector('.wa').getBoundingClientRect().width};
+});
+t.ok(Math.abs(zz.wa/zz.al - 3) < 0.25,
+     'so a boat whose warning is four times its alarm draws one three '
+     +'times as wide beside it, not one', (zz.wa/zz.al).toFixed(2));
+await p.mouse.up(); await p.waitForTimeout(400);
+await fetch(base+'/poke?max=40&alarm=3&warn=6');
+await p.evaluate(()=>load()); await p.waitForTimeout(600);
+
+t.head('and the picture follows the thumb, not the boat');
+/* One that waited for the boat would be a picture of the number you
+   had before you moved it. */
+const sl=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
+  const r=e.getBoundingClientRect();
+  return {x:r.left, y:r.top+r.height/2, w:r.width};});
+const zoneW=()=>p.$eval('.srow[data-sk="depthAlarm"] .dbar .al',
+                        e=>e.getBoundingClientRect().width);
+const z0=await zoneW();
+await p.mouse.move(sl.x+sl.w*0.1, sl.y); await p.mouse.down();
+await p.mouse.move(sl.x+sl.w*0.6, sl.y); await p.waitForTimeout(150);
+const z1=await zoneW();
+t.ok(z1>z0+2, 'the alarm zone grows under the thumb',
+     Math.round(z0)+' -> '+Math.round(z1));
+await p.mouse.up(); await p.waitForTimeout(300);
+t.ok((await peek()).pend['set:depthAlarm'],
+     'and letting go sends the number',
+     JSON.stringify((await peek()).pend['set:depthAlarm']));
+
 t.head('and a tap on one sends it, showing it before the boat answers');
 /* A cycle goes round the panel's own list and back to the start. */
 const themeRow=()=>p.$eval('.stile[data-sk="theme"] b',e=>e.textContent);

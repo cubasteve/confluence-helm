@@ -39,8 +39,18 @@ class Rig(netd.RemoteHandler):
         if self.path.split('?')[0] == '/poke':
             q = urllib.parse.parse_qs(self.path.partition('?')[2])
             now = netd._remote.get('now') or {}
-            now['page'] = int(q['page'][0])
-            return self._send({'ok': True, 'page': now['page']})
+            if 'page' in q:
+                now['page'] = int(q['page'][0])
+            # The shallow alarm's scale, which on a real boat moves when
+            # somebody flips FEET to METRES and the panel converts. There
+            # is no panel here to convert it.
+            if 'max' in q:
+                now.setdefault('bar', {})
+                now['bar'] = {'max': int(q['max'][0]),
+                              'alarm': int(q.get('alarm', ['2'])[0]),
+                              'warn': int(q.get('warn', ['4'])[0])}
+            return self._send({'ok': True, 'now': {'page': now.get('page'),
+                                                   'bar': now.get('bar')}})
         return netd.RemoteHandler.do_GET(self)
 
 

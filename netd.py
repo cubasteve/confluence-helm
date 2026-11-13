@@ -2846,8 +2846,10 @@ def _settings(v):
              # "my unit is the value of that other setting" - the depth
              # alarm's is FT or M depending on the units row above it.
              'unitOf': str(a.get('unitOf') or '')[:24],
-             # Whether the glass draws it as a tile rather than a row.
-             'tile': 1 if a.get('tile') else 0}
+             # Whether the glass draws it as a tile rather than a row,
+             # and whether it draws its own picture of it above.
+             'tile': 1 if a.get('tile') else 0,
+             'bar': 1 if a.get('bar') else 0}
         if kind == 'range':
             lo, hi, st = a.get('min'), a.get('max'), a.get('step')
             if not all(isinstance(x, (int, float)) and not isinstance(x, bool)
@@ -3278,6 +3280,10 @@ REMOTE_PAGE = """<!doctype html><html><head><meta charset="utf-8">
     one frame before the boat answers. */
  --bg:#0B0C0E; --ink:#F2F4F6; --ink-dim:#9AA2A9; --label:#6C757C;
  --hairline:#242A2F; --accent:#4A9EFF; --panel:#15181B; --chip:#1B2531;
+ /* The shallow alarm's two zones. Dusk's, like the rest, and on screen
+    only for the frame before the boat answers - but without them that
+    frame draws the bar in nothing at all. */
+ --warn:#FFB020; --alarm:#FF3B30;
  --pad:14px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -3462,6 +3468,22 @@ svg.gl .f{fill:currentColor;stroke:none}
    readable label do not both fit across a 358px sheet. */
 .srow.rng{flex-wrap:wrap}
 .srow.rng input{width:100%;margin:10px 2px 0;accent-color:var(--accent)}
+/* The glass's own picture of the shallow alarm, shrunk: the alarm zone
+   from nothing to the threshold, the warning zone to twice it, and the
+   scale under them. The bar the panel draws also carries a marker at
+   the depth under the boat right now; that one is a reading and stays
+   on the glass. */
+/* width:100% on both, because the row they sit in is the wrapping
+   flex the slider needs - without it the bar is a flex item beside the
+   value and the scale's three numbers run together as 02040. */
+.dbar{position:relative;height:16px;border-radius:6px;width:100%;
+ background:var(--chip);overflow:hidden;margin:9px 2px 0}
+.dbar i{position:absolute;top:0;bottom:0;display:block}
+.dbar .al{left:0;background:var(--alarm);opacity:.55}
+.dbar .wa{background:var(--warn);opacity:.35}
+.dscale{display:flex;justify-content:space-between;margin:3px 4px 0;
+ width:100%;box-sizing:border-box;
+ font-size:9.5px;font-weight:600;letter-spacing:.1em;color:var(--label)}
 /* A status, not a control. No :active, no button, and the value in the
    label's own colour rather than the accent - accent on this sheet
    means "you can change this", and on these two you cannot.
@@ -4109,11 +4131,24 @@ function shut(){ OPEN=null;
    bottom. It needs no arming: nothing on it is destructive, and a
    theme you did not mean is undone by picking the one you did. */
 var SHEET=null, ARM=null, HOLD_MS=900, HT=null;
+/* True between a slider's first move and letting go. `input` fires all
+   the way along and `change` at the release, so the two bracket the
+   drag; pointerup clears it for a drag that ends where no change
+   fires. */
+var DRAG=false;
 /* A finished action puts the sheet away after a beat, and that beat
    outlives the sheet: close it yourself and open the other one inside
    the second and a half, and the old timer shuts the new one in your
    face. Opening anything cancels it. */
 var shAuto=null, shWipe=null;
+/* One pending re-read, not one per change. Every setting asks the boat
+   again just past its next poll, and with a timer each, changing two
+   things inside a second and a half let the FIRST one's answer land
+   after the second's - putting the old value back under your finger
+   until the second's own answer caught up. */
+var reloadT=null;
+function reloadSoon(){ clearTimeout(reloadT);
+                       reloadT=setTimeout(load, 1800); }
 function shOpen(which){
   var e=document.getElementById('sheet'),
       sc=document.getElementById('scrim');
@@ -4230,6 +4265,30 @@ function radRows(){
            : '';
 }
 
+/* The alarm's two zones as the panel computes them, drawn as widths.
+   Nothing here decides where a zone ENDS - the bar's full scale is 40
+   feet or 12 metres and that is the panel's arithmetic. */
+function dBar(at){
+  var b=(S.now||{}).bar;
+  if(!b || !(b.max>0)) return '';
+  /* `at` previews a thumb still moving. An argument rather than a
+     write into S.now, so the only copy of what the boat is set to
+     stays the one the boat sent - a drag let go of where no change
+     fires used to leave the bar drawing one number under a label that
+     said another, with nothing to correct it.
+     Scaled by the ratio the PANEL sent, not a copy of its rule: warn
+     is twice alarm on the glass today, and the day it stops being
+     twice, a phone holding its own 2 draws a zone the boat has not. */
+  if(at!=null && b.alarm>0)
+    b={max:b.max, alarm:at, warn:at*(b.warn/b.alarm)};
+  var pc=function(n){ return Math.max(0, Math.min(100, n/b.max*100)); };
+  var a=pc(b.alarm), w=pc(b.warn);
+  return '<div class="dbar"><i class="al" style="width:'+a+'%"></i>'
+    +'<i class="wa" style="left:'+a+'%;width:'+Math.max(0,w-a)+'%"></i></div>'
+    +'<div class="dscale"><span>0</span><span>'+esc(String(Math.round(b.max/2)))
+    +'</span><span>'+esc(String(b.max))+'</span></div>';
+}
+
 function stRows(){
   var h=shHead('SETTINGS')+radRows(), set=(S.now||{}).set||{}, last='';
   var tiles='';
@@ -4262,6 +4321,7 @@ function stRows(){
          or three steps away, not fifteen. */
       h+='<div class="srow rng" data-sk="'+esc(d.k)+'">'
         +'<s>'+esc(d.name)+'</s><b>'+esc(sVal(d,v))+'</b>'
+        +(d.bar ? dBar() : '')
         +'<input type="range" min="'+d.min+'" max="'+d.max+'" step="'
         +(d.step||1)+'" value="'+(v==null?d.min:v)+'"></div>';
     }else{
@@ -4331,18 +4391,6 @@ document.getElementById('scrim').addEventListener('click',function(e){
 });
 document.getElementById('sheet').addEventListener('click',function(e){
   if(e.target.closest('[data-shx]')) return void shOpen(null);
-  var th=e.target.closest('[data-th]');
-  if(th){
-    /* Applied with one tap, like the row it replaced. The theme is the
-       one command that changes what the mirror should LOOK like, and
-       only the panel knows what auto resolves to - so one refetch,
-       just past a poll, rather than a guess here. */
-    post({kind:'theme', theme:th.dataset.th}, function(){
-      S.now.theme=th.dataset.th; shPaint();
-      setTimeout(load, 1800);
-    });
-    return;
-  }
   var sr=e.target.closest('[data-sk]');
   if(sr && !e.target.closest('input')){
     var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
@@ -4365,11 +4413,27 @@ document.getElementById('sheet').addEventListener('click',function(e){
    readout waits for the boat is a slider you cannot aim. */
 document.getElementById('sheet').addEventListener('input',function(e){
   var sr=e.target.closest('[data-sk]'); if(!sr) return;
+  DRAG=true;
   var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
   var b=sr.querySelector('b');
   if(b && d) b.textContent=sVal(d, +e.target.value);
+  /* The picture follows the thumb too. One that waited for the boat
+     would be a picture of the number you had before you moved it. */
+  if(d && d.bar){
+    var old=sr.querySelector('.dbar'), sc=sr.querySelector('.dscale');
+    var tmp=document.createElement('div');
+    tmp.innerHTML=dBar(+e.target.value);
+    /* Both halves or neither: dBar has its own reasons to draw nothing
+       - no bar on the wire yet, a scale of zero - and replaceChild
+       with nothing to put there throws on every move of the thumb. */
+    if(old && sc && tmp.children.length===2){
+      sr.replaceChild(tmp.firstChild, old);
+      sr.replaceChild(tmp.firstChild, sc);
+    }
+  }
 });
 document.getElementById('sheet').addEventListener('change',function(e){
+  DRAG=false;
   var sr=e.target.closest('[data-sk]'); if(!sr) return;
   var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
   if(d) sSend(d, +e.target.value);
@@ -4392,7 +4456,7 @@ function sSend(d,v){
     /* The panel is the one that knows what a setting turned into -
        flipping FEET to METRES converts the alarm with it, and the
        phone must not be left showing the number from before. */
-    setTimeout(load, 1800);
+    reloadSoon();
   });
 }
 /* pointerdown rather than touchstart: one path for a finger and for the
@@ -4406,6 +4470,7 @@ function sSend(d,v){
 });
 ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
   document.getElementById('sheet').addEventListener(ev,function(e){
+    DRAG=false;
     if(HT) holdStop(false);
   });
 });
@@ -4558,6 +4623,15 @@ function load(){
        twice for the readings you came for. */
     if(!PG||!S.slots[PG]) PG=pages()[0]||'';
     paint(); draw(); tmRun(); reSync();
+    /* And the sheet, if one is up. Without this it kept whatever it
+       was drawn with: flip FEET to METRES and the panel converts the
+       alarm, the next poll brings back 2 M on a 12 M scale, and the
+       sheet still said 3 FT over a 40 FT bar - a lying mirror of
+       exactly the setting you had just changed.
+       Not while a thumb is on a slider. The repaint lands 1.8 s after
+       the last change, well inside a slow drag, and rebuilding the row
+       under the finger takes the thumb with it. */
+    if(SHEET && !DRAG) shPaint();
   });
 }
 load();

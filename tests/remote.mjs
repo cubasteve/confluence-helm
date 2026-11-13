@@ -291,6 +291,47 @@ t.ok(SET.every(d=>d.kind==='action' ||
 t.ok(!SET.some(d=>/wifi|bluetooth|^bt$|ssid|hotspot/i.test(d.k+' '+d.name)),
      'and nothing on it is a radio - their content is what they READ');
 
+t.head('the shallow alarm\'s picture crosses, and its marker does not');
+/* The glass draws the alarm over a three-zone bar. Two of those zones
+   are the setting; the third is a marker at the depth under the boat
+   RIGHT NOW, and that one is a reading. The exception this wire makes
+   for the start clock is for a control you are holding, not for a
+   number you are watching. */
+await p.evaluate(()=>{ CFG.depthUnit='ft'; CFG.depthAlarm=6;
+                       CFG.depthWarn=12; });
+let bar=await p.evaluate(()=>remoteNow().bar);
+t.ok(bar && bar.max===40 && bar.alarm===6 && bar.warn===12,
+     'the scale and the two zones, in the panel\'s own numbers',
+     JSON.stringify(bar));
+t.ok(Object.keys(bar).sort().join()==='alarm,max,warn',
+     'and nothing else - no marker, because that is the depth under '
+     +'the boat', Object.keys(bar).sort().join());
+/* The full scale is the panel's arithmetic: 40 feet or 12 metres. A
+   phone holding its own copy would draw a 6 m alarm as a sixth of the
+   bar the moment somebody flipped the units. */
+await p.evaluate(()=>remoteDo({kind:'set', k:'depthUnit', v:'m'}));
+bar=await p.evaluate(()=>remoteNow().bar);
+t.ok(bar.max===12, 'and the scale follows the units', String(bar.max));
+t.ok(bar.alarm===2 && bar.warn===4,
+     'with the zones converted, not relabelled', JSON.stringify(bar));
+await p.evaluate(()=>{ CFG.depthUnit='ft'; CFG.depthAlarm=6;
+                       CFG.depthWarn=12; });
+/* The catalogue says WHICH setting the picture belongs to, so the
+   phone draws it over that one and not over the brightness. */
+const withBar=(await p.evaluate(()=>remoteCat().settings))
+                .filter(d=>d.bar).map(d=>d.k);
+t.ok(withBar.join()==='depthAlarm',
+     'and the catalogue says which setting it is drawn over',
+     withBar.join());
+/* The two colours it is drawn in travel with the rest of the palette.
+   Night is a single red hue and these move with it, so a mirror
+   holding its own would draw the boat's alarm in a colour the glass
+   stopped using hours ago. */
+const pal=await p.evaluate(()=>remotePal());
+t.ok(pal.alarm && pal.warn && pal.alarm!==pal.warn,
+     'and the mirror is given the two colours to draw it in',
+     JSON.stringify([pal.alarm, pal.warn]));
+
 t.head('and setting one is the same call the glass\'s own control makes');
 const setv=async k=>await p.evaluate(k=>remoteNow().set[k], k);
 await p.evaluate(()=>remoteDo({kind:'set', k:'sogAvg', v:10}));
