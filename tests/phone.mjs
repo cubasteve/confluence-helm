@@ -708,6 +708,92 @@ t.ok(hdb.every(x=>x.dia<=36 && x.dia-x.ink<=18),
 t.ok((await p.$$('#foot .th')).length===0,
      'and nothing is left of the row along the bottom');
 
+t.head('a sheet comes to the middle, over a dim, not up from the edge');
+/* The glass does exactly this with its own control panel - a dim over
+   everything and the box in the centre of it - and the owner asked for
+   the mirror to match. The middle is also where you are looking, and
+   not under your own thumb. */
+await p.click('#thb'); await p.waitForTimeout(400);
+const ctr=await p.evaluate(()=>{
+  const sc=document.getElementById('scrim');
+  const sh=document.getElementById('sheet');
+  const r=sh.getBoundingClientRect(), s=getComputedStyle(sc);
+  return {y:(r.top+r.bottom)/2, h:r.height, vis:s.visibility,
+          dim:s.backgroundColor, bottom:r.bottom,
+          scrimTop:sc.getBoundingClientRect().top,
+          scrimBot:sc.getBoundingClientRect().bottom};
+});
+t.ok(Math.abs(ctr.y-844/2) < 90,
+     'the box sits about the middle of the glass, not on its bottom edge',
+     Math.round(ctr.y)+' of 422');
+t.ok(ctr.bottom < 844-60,
+     'with glass under it, so it reads as a window rather than a drawer',
+     Math.round(ctr.bottom));
+t.ok(/^rgba\(0, 0, 0, 0\.\d+\)$/.test(ctr.dim),
+     'and the page behind it is dimmed rather than left lit', ctr.dim);
+/* It arrives from somewhere rather than replacing what you were
+   looking at, which is the whole job of the movement. A transition
+   cannot be caught mid-flight without racing it, but what CAN be
+   checked is that the box is asked to move at all - which is the thing
+   that would be lost. */
+const anim=await p.evaluate(()=>{
+  for(const sh of document.styleSheets)
+    for(const r of sh.cssRules)
+      if(r.selectorText==='#sheet')
+        return {tr:r.style.transition, tf:r.style.transform};
+  return {};
+});
+t.ok(/transform/.test(anim.tr||'') && /translate|scale/.test(anim.tf||''),
+     'and it moves into place rather than appearing in it',
+     JSON.stringify(anim));
+const dimOf=async()=>await p.$eval('#scrim',
+  e=>+(getComputedStyle(e).backgroundColor.match(/[\d.]+\)$/)||[0])[0]
+      .replace(')',''));
+const dimTh=await dimOf();
+/* The owner asked for the power one to stand further forward, which is
+   right: what is on it is further-reaching than a palette. */
+await p.click('#pwb'); await p.waitForTimeout(400);
+const dimPw=await dimOf();
+t.ok(dimPw>dimTh, 'and the power sheet stands further forward than the theme',
+     dimTh+' -> '+dimPw);
+
+t.head('and the header stays in front of the dim, lit on the one that is up');
+/* A modal that puts its own way out behind the dim is a modal you have
+   to dismiss before you can change your mind - and swapping between
+   the two is the thing a header of buttons is for. */
+t.ok(await p.$eval('#pwb',e=>e.classList.contains('on')),
+     'the button whose sheet is up is lit');
+t.ok(await p.$eval('#thb',e=>!e.classList.contains('on')),
+     'and the other one is not');
+const zs=await p.evaluate(()=>({
+  top:+getComputedStyle(document.querySelector('.top')).zIndex,
+  scrim:+getComputedStyle(document.getElementById('scrim')).zIndex}));
+t.ok(zs.top>zs.scrim, 'the header is in front of the dim',
+     JSON.stringify(zs));
+/* Not just painted in front - reachable. Playwright refuses to click
+   something another element covers, so this is the real check. */
+await p.click('#thb'); await p.waitForTimeout(400);
+t.ok(/DISPLAY/.test(await p.textContent('#sheet .hd b')),
+     'and pressing it through the dim swaps the sheet',
+     await p.textContent('#sheet .hd b'));
+t.ok(await p.$eval('#thb',e=>e.classList.contains('on')),
+     'with the light moving to it');
+
+t.head('and a tap on the dim puts it away');
+/* The gesture a thumb makes before it finds CLOSE. Only on the dim
+   ITSELF - a tap that lands on the box is a tap on the box. */
+await p.mouse.click(195, 800); await p.waitForTimeout(400);
+t.ok(!(await p.isVisible('#sheet.on')), 'it closes');
+t.ok(await p.$$eval('.top .hb',gs=>gs.every(g=>!g.classList.contains('on'))),
+     'and the header goes dark with it');
+await p.click('#thb'); await p.waitForTimeout(400);
+const inBox=await p.$eval('#sheet .hd b',e=>{const r=e.getBoundingClientRect();
+  return {x:r.left+2, y:(r.top+r.bottom)/2};});
+await p.mouse.click(inBox.x, inBox.y); await p.waitForTimeout(350);
+t.ok(await p.isVisible('#sheet.on'),
+     'while a tap inside the box leaves it alone');
+await p.click('[data-shx]'); await p.waitForTimeout(400);
+
 t.head('and it is the panel\'s own four, with what AUTO resolved to');
 await p.click('#thb'); await p.waitForTimeout(350);
 const th=await p.$$eval('.prow[data-th]',gs=>gs.map(g=>({
@@ -769,11 +855,13 @@ t.ok(hbt>=47, 'the header buttons are below the notch',
 const shRule=await p.evaluate(()=>{
   for(const sh of document.styleSheets)
     for(const r of sh.cssRules)
-      if(r.selectorText==='#sheet') return r.style.bottom;
+      if(r.selectorText==='#scrim') return r.style.padding;
   return '';
 });
-t.ok(/safe-area-inset-bottom/.test(shRule),
-     'and a sheet is held off the home indicator by the inset', shRule);
+t.ok(/safe-area-inset-bottom/.test(shRule) &&
+     /safe-area-inset-top/.test(shRule),
+     'and the dim keeps its sheet off the notch and the home indicator',
+     shRule);
 t.ok((await faceBox()).y>=47, 'and the face below the notch',
      String(Math.round((await faceBox()).y)));
 t.ok((await faceBox()).b<=844-34,
@@ -810,6 +898,15 @@ t.ok(/NOT AT ITS FULL SIZE/.test(await p.textContent('#main .fb p')),
      'and it says why the picture is missing');
 await p.click('.fbr[data-s="p"]'); await p.waitForTimeout(350);
 t.ok(await p.isVisible('#list'), 'and they open the same card');
+/* This page has no face for the card to drop from, so it kept
+   whatever the last face measured - and the header is an opaque bar in
+   front of the page now, so the card was up there underneath it with a
+   CLOSE nobody could press. */
+const cardTop=await p.$eval('#list',e=>e.getBoundingClientRect().top);
+const hedBot=await p.$eval('.top',e=>e.getBoundingClientRect().bottom);
+t.ok(cardTop>=hedBot,
+     'and it hangs below the header rather than under it',
+     Math.round(cardTop)+' vs '+Math.round(hedBot));
 await p.click('[data-back]'); await p.waitForTimeout(250);
 
 t.head('a wrong token says so rather than sitting blank');

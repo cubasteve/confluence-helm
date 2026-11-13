@@ -3162,9 +3162,23 @@ body{margin:0;background:var(--bg);color:var(--ink);
  padding:calc(env(safe-area-inset-top) + 10px) var(--pad)
          env(safe-area-inset-bottom);
  min-height:100dvh;display:flex;flex-direction:column}
-.top{padding:14px 2px 12px;font-size:15px;letter-spacing:.26em;
- color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px;
- display:flex;align-items:center;gap:10px}
+/* Above the dim, and carrying the page's own background so it reads as
+   a bar rather than as a hole in it. The two buttons have to stay
+   reachable while a sheet is up: pressing the other one swaps the
+   sheet, and a modal that puts its own way out behind the dim is a
+   modal you have to dismiss before you can change your mind. */
+.top{font-size:15px;letter-spacing:.26em;
+ color:var(--ink);border-bottom:2px solid var(--hairline);
+ display:flex;align-items:center;gap:10px;
+ position:relative;z-index:9;background:var(--bg);
+ /* Pulled out to the edges of the glass and up to the top of it, then
+    given that room back as its own padding. Above the dim it has to be
+    a BAR: inset by the body's own padding it read as a card floating
+    on the dim, with a strip of dimmed page showing either side of it
+    and above it. */
+ margin:calc(-1 * (env(safe-area-inset-top) + 10px))
+        calc(-1 * var(--pad)) 4px;
+ padding:calc(env(safe-area-inset-top) + 24px) calc(var(--pad) + 2px) 12px}
 .top b{flex:1;font-weight:inherit;letter-spacing:inherit}
 #pwslot{display:flex;align-items:center;gap:10px;flex:none}
 #main{flex:1}
@@ -3250,6 +3264,10 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
    for and the circle is only what says it can be pressed. */
 .hb svg{width:19px;height:19px;flex:none}
 .hb:active{background:var(--chip)}
+/* Lit while its own sheet is up, so the header says which one you are
+   looking at - and says that pressing it again is the way out. */
+.hb.on{border-color:var(--accent);color:var(--accent);background:var(--chip)}
+#pwb.on{border-color:#C81E1E;color:#C81E1E}
 /* The power one wears its own colour, because it is the one on this
    header that can take the boat's instruments down. The same red the
    sheet marks Reboot and Shut down in, and the glass marks its own
@@ -3260,21 +3278,37 @@ svg.gl{fill:none;stroke:currentColor;stroke-width:2;
  stroke-linecap:round;stroke-linejoin:round}
 svg.gl .f{fill:currentColor;stroke:none}
 
-/* The sheet. One of them, wearing whichever of the two headers has
-   been pressed: the same panel as the card, anchored to the bottom of
-   the glass rather than to the face, because it is about the device
-   and not about a complication, so there is nothing for it to hang
-   from. */
-#sheet{position:fixed;left:var(--pad);right:var(--pad);
- bottom:calc(10px + env(safe-area-inset-bottom));display:none;
- flex-direction:column;background:var(--panel);border-radius:18px;
- border:2px solid var(--hairline);overflow:hidden;z-index:8;
- /* Six actions fit a phone with room over. The guard is for the day
-    somebody adds a seventh on a glass held in landscape, where the
-    sheet would otherwise grow off the top and take its first row - the
-    least destructive one - with it. */
- max-height:calc(100dvh - 80px)}
-#sheet.on{display:flex}
+/* The scrim, and the sheet in the middle of it. The glass does exactly
+   this with #netsheet - a dim over everything and the box in the
+   centre of it - and the owner asked for the mirror to match. Dimming
+   rather than sitting on the bottom edge also puts the thing you came
+   for in the middle of the glass, where you are looking, instead of
+   under your own thumb. */
+#scrim{position:fixed;inset:0;z-index:8;
+ background:rgba(0,0,0,.46);opacity:0;visibility:hidden;
+ transition:opacity .2s ease, visibility 0s linear .2s;
+ display:flex;align-items:center;justify-content:center;
+ padding:calc(env(safe-area-inset-top) + 16px) var(--pad)
+         calc(env(safe-area-inset-bottom) + 16px)}
+#scrim.on{opacity:1;visibility:visible;transition-delay:0s}
+/* The power sheet stands further forward, because what is on it is
+   further-reaching than a palette. */
+#scrim.pw{background:rgba(0,0,0,.68)}
+#sheet{width:100%;max-height:100%;display:flex;flex-direction:column;
+ background:var(--panel);border-radius:20px;
+ border:2px solid var(--hairline);overflow:hidden;
+ box-shadow:0 20px 48px rgba(0,0,0,.38);
+ /* Out from under the header it was hanging off, and into the middle.
+    Short enough not to be a wait and long enough to be a movement you
+    can follow, which is the whole job of it: the sheet arrives from
+    somewhere rather than replacing what you were looking at. */
+ transform:translateY(22px) scale(.96);opacity:0;
+ transition:transform .22s cubic-bezier(.2,.9,.3,1), opacity .16s ease}
+#scrim.on #sheet{transform:none;opacity:1}
+@media (prefers-reduced-motion:reduce){
+  #sheet{transition:opacity .16s ease}
+  #sheet,#scrim.on #sheet{transform:none}
+}
 #sheet .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;
  border-bottom:2px solid var(--hairline)}
 #sheet .hd b{flex:1;font-size:11px;letter-spacing:.18em;color:var(--label);
@@ -3322,7 +3356,9 @@ svg.gl .f{fill:currentColor;stroke:none}
    zone it belongs to stays lit while you choose - which is the signal
    the glass gives by turning the open cell accent, and the thing that
    makes this a drop-down rather than a second screen. */
-#list{position:fixed;left:var(--pad);right:var(--pad);display:none;
+/* Under the scrim and over the page: a sheet is in front of the card,
+   and the card is in front of the face it drops from. */
+#list{position:fixed;left:var(--pad);right:var(--pad);display:none;z-index:7;
  flex-direction:column;background:var(--panel);border-radius:18px;
  border:2px solid var(--hairline);overflow:hidden}
 #list.on{display:flex}
@@ -3345,7 +3381,7 @@ svg.gl .f{fill:currentColor;stroke:none}
 #msg{position:fixed;left:var(--pad);right:var(--pad);
  bottom:calc(14px + env(safe-area-inset-bottom));
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
- font-size:14px;display:none;z-index:9}
+ font-size:14px;display:none;z-index:10}
 /* While a sheet is up the message goes to the TOP instead. It is
    fixed to the bottom of the glass and the sheet is too, so a word
    about what just happened sat straight on the bar that does the next
@@ -3357,7 +3393,7 @@ body.shon #msg{bottom:auto;top:calc(env(safe-area-inset-top) + 64px)}
 <div id="main"></div>
 <div id="foot"></div>
 <div id="list"></div>
-<div id="sheet"></div>
+<div id="scrim"><div id="sheet"></div></div>
 <div id="msg"></div>
 <script>
 var T=new URLSearchParams(location.search).get('t')||'';
@@ -3752,7 +3788,17 @@ function draw(){
 
 function place(){
   var sv=document.querySelector('.fv'), L=document.getElementById('list');
-  if(!sv) return;
+  /* Below the HEADER when there is no face. The fallback page draws
+     rows instead of a mirror, and the card was left wherever the last
+     face put it - which, now that the header is an opaque bar in front
+     of the page, is underneath it: the card was there and its CLOSE
+     could not be pressed. */
+  if(!sv){
+    var hd=document.querySelector('.top');
+    L.style.top=Math.round(hd ? hd.getBoundingClientRect().bottom+8 : 8)+'px';
+    L.style.bottom='calc(10px + env(safe-area-inset-bottom))';
+    return;
+  }
   /* Measured at open time rather than computed from the stack: every
      number above the face is a line box the system font decides, and a
      card that assumes them is a card that covers the mirror on one
@@ -3805,15 +3851,36 @@ var SHEET=null, ARM=null, HOLD_MS=900, HT=null;
    outlives the sheet: close it yourself and open the other one inside
    the second and a half, and the old timer shuts the new one in your
    face. Opening anything cancels it. */
-var shAuto=null;
+var shAuto=null, shWipe=null;
 function shOpen(which){
-  var e=document.getElementById('sheet');
+  var e=document.getElementById('sheet'),
+      sc=document.getElementById('scrim');
   clearTimeout(shAuto); shAuto=null;
   SHEET=which||null; ARM=null;
   document.body.classList.toggle('shon', !!SHEET);
-  if(!SHEET){ e.className=''; e.innerHTML=''; return; }
+  if(!SHEET){
+    sc.className=''; e.className='';
+    /* Emptied only once it has finished going away, or the box
+       collapses to nothing on the first frame of the fade and the
+       thing you watched leave is a line rather than a sheet. */
+    clearTimeout(shWipe);
+    shWipe=setTimeout(function(){ if(!SHEET) e.innerHTML=''; }, 260);
+    shLit();
+    return;
+  }
+  clearTimeout(shWipe);
   shPaint();
   e.className='on';
+  sc.className='on'+(SHEET==='power'?' pw':'');
+  shLit();
+}
+/* Which header button is lit. Set from here rather than inside draw(),
+   because draw() rebuilds the whole face and a sheet opening must not
+   throw away a card or a scroll that is already up. */
+function shLit(){
+  var g=document.getElementById('thb'), p=document.getElementById('pwb');
+  if(g) g.classList.toggle('on', SHEET==='theme');
+  if(p) p.classList.toggle('on', SHEET==='power');
 }
 function shPaint(){
   document.getElementById('sheet').innerHTML =
@@ -3899,6 +3966,13 @@ function pwPost(a,heavy){
   x.send(JSON.stringify({action:a.a}));
 }
 
+/* A tap on the dim itself puts it away - the glass's own sheet does
+   the same, and on a phone it is the gesture a thumb makes before it
+   finds CLOSE. Only on the scrim ITSELF: a tap that lands on the box
+   is a tap on the box. */
+document.getElementById('scrim').addEventListener('click',function(e){
+  if(e.target.id==='scrim') shOpen(null);
+});
 document.getElementById('sheet').addEventListener('click',function(e){
   if(e.target.closest('[data-shx]')) return void shOpen(null);
   var th=e.target.closest('[data-th]');

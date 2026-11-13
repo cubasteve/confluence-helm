@@ -955,6 +955,28 @@ They share **one sheet**, which wears whichever header has been
 pressed. Pressing the other one swaps it; pressing the one already up
 puts it away.
 
+It comes to the **middle of the glass over a dim**, the way the glass's
+own control panel does — `#netsheet` is a dim over everything with the
+box centred in it, and this is the mirror matching. The middle is also
+where you are looking, rather than under your own thumb. The box moves
+into place rather than appearing in it; a tap on the dim puts it away,
+the gesture a thumb makes before it finds CLOSE. The power sheet's dim
+is heavier, because what is on it is further-reaching than a palette.
+
+The header stays **in front of the dim**, carrying the page's own
+background so it reads as a bar rather than a hole in one, and the
+button whose sheet is up is lit. A modal that puts its own way out
+behind the dim is a modal you have to dismiss before you can change
+your mind — and swapping between the two is what a header of buttons is
+for.
+
+That header being opaque and in front turned up a bug in something
+else: on the page with no face to hang from — the one that draws rows
+when the music overlay could not be measured — the complication card
+kept whatever the last face measured, which is underneath the header
+now. It was up there with a CLOSE nobody could press. `place()` has a
+case for a page with no face.
+
 The **gear** holds the theme, which used to be four buttons along the
 bottom — the room that frees goes to the face, which is the thing this
 app is. It needs no arming: nothing on it is destructive, and a theme
