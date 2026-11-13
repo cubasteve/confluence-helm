@@ -830,33 +830,53 @@ t.head('the radios are a status and nothing you can do to them');
    included. */
 await sheet('#thb');
 await p.waitForTimeout(500);                 /* the fetch is its own */
-const rad=await p.$$eval('#sheet .srow.ro',gs=>gs.map(g=>({
-  tag:g.tagName, name:g.querySelector('s').textContent,
-  sub:(g.querySelector('s em')||{}).textContent||'',
-  val:g.querySelector('b').textContent,
+const rad=await p.$$eval('#sheet .rtile',gs=>gs.map(g=>({
+  tag:g.tagName, top:g.querySelector('em').textContent,
+  sub:g.querySelector('u').textContent,
+  svg:g.querySelectorAll('svg').length,
+  paths:g.querySelectorAll('svg path,svg circle').length,
+  arcs:g.querySelectorAll('svg path.arc').length,
   off:g.classList.contains('off'),
   sk:g.dataset.sk||'' })));
-t.ok(rad.length===4, 'a row per adapter and one for bluetooth',
+t.ok(rad.length===4, 'a tile per adapter and one for bluetooth',
      String(rad.length));
 t.ok(rad.every(r=>r.tag==='DIV' && !r.sk),
      'none of them is a button, and none carries a setting key',
      JSON.stringify(rad.map(r=>r.tag)));
-t.ok(rad[0].val==='HOTSPOT · CONFLUENCE',
-     'the one running the hotspot says so', rad[0].val);
-t.ok(rad[1].val==='MARINA-GUEST  72%',
-     'the one reaching out says what it is on and how strong',
-     rad[1].val);
-t.ok(rad[2].val==='OFF' && rad[2].off,
+/* An icon with the network under it in small letters, which is what
+   the owner asked for and what the glass's own control row is. */
+t.ok(rad.every(r=>r.svg===1 && r.paths>=1),
+     'each is a glyph - the bluetooth rune is one path, the wifi fans '
+     +'are several', JSON.stringify(rad.map(r=>r.paths)));
+/* The one that is down still draws its dot and its first arc under
+   the slash. A slash over nothing reads as a stray line rather than
+   as a radio that is off. */
+t.ok(rad[2].arcs>=1, 'and the one that is off is a radio with a slash '
+     +'through it, not a slash on its own', String(rad[2].arcs));
+t.ok(rad[1].arcs>rad[2].arcs,
+     'while a strong one draws more arcs than a dead one',
+     rad[1].arcs+' vs '+rad[2].arcs);
+t.ok(rad[0].top==='HOTSPOT' && rad[0].sub==='CONFLUENCE',
+     'the one running the hotspot says so, and names it',
+     rad[0].top+' / '+rad[0].sub);
+t.ok(rad[1].sub==='MARINA-GUEST',
+     'the one reaching out carries the network it is on',
+     rad[1].sub);
+t.ok(rad[2].sub==='OFF' && rad[2].off,
      'an adapter that is down says OFF and is dimmed',
-     rad[2].val+' / '+rad[2].off);
-t.ok(rad[3].val==='JBL FLIP', 'and bluetooth says what is on it',
-     rad[3].val);
-t.ok(rad[0].sub==='wlan0' && rad[1].sub==='wlan1',
-     'with the interface under the name rather than beside it',
-     rad[0].sub+','+rad[1].sub);
+     rad[2].sub+' / '+rad[2].off);
+t.ok(rad[3].top==='BLUETOOTH' && rad[3].sub==='JBL FLIP',
+     'and bluetooth carries what is on it', rad[3].sub);
+/* Whole, not cut off. Four tiles across a 358px sheet is 85px each,
+   and the network is the thing you opened this to read - an SSID
+   ellipsed to five characters and a dot is not it. */
+const subW=await p.$$eval('#sheet .rtile u',gs=>gs.map(g=>
+  g.scrollWidth<=g.clientWidth+1 && g.scrollHeight<=g.clientHeight+1));
+t.ok(subW.every(Boolean), 'and none of them is cut off',
+     JSON.stringify(subW));
 /* Accent on this sheet means "you can change this". */
 const cols=await p.evaluate(()=>{
-  const ro=document.querySelector('#sheet .srow.ro b');
+  const ro=document.querySelector('#sheet .rtile u');
   const rw=document.querySelector('#sheet .srow[data-sk] b');
   return {ro:getComputedStyle(ro).color, rw:getComputedStyle(rw).color};
 });
@@ -865,7 +885,7 @@ t.ok(cols.ro!==cols.rw,
      JSON.stringify(cols));
 /* The whole point: nothing on them does anything. */
 const wasQ3=JSON.stringify((await peek()).pend);
-await p.click('#sheet .srow.ro'); await p.waitForTimeout(350);
+await p.click('#sheet .rtile'); await p.waitForTimeout(350);
 t.ok(JSON.stringify((await peek()).pend)===wasQ3,
      'and pressing one asks the boat for nothing',
      JSON.stringify((await peek()).pend));
@@ -877,7 +897,11 @@ t.ok((await p.evaluate(()=>S.wifi||S.bt||S.radios))===undefined,
 
 t.head('the gear is the glass\'s own settings, in the glass\'s own cards');
 await sheet('#thb');
-const rows=()=>p.$$eval('#sheet .sgrp,#sheet .srow',gs=>gs.map(g=>
+/* Rows AND tiles: the panel says which of its settings it draws as a
+   tile, so a probe that read only the rows would say the sheet had
+   lost the two that are. */
+const rows=()=>p.$$eval('#sheet .sgrp,#sheet .srow,#sheet .stile',
+  gs=>gs.map(g=>
   g.classList.contains('sgrp')
     ? {grp:g.textContent}
     : {k:g.dataset.sk, kind:g.className,
@@ -891,7 +915,7 @@ t.ok(heads.slice(-want.length).join()===want.join(),
      'a heading per card, in the panel\'s order', heads.join());
 /* The radios first, because they are what you open this to check -
    and they are the only cards on it the panel does not register. */
-t.ok(heads.slice(0,heads.length-want.length).join()==='WIFI,BLUETOOTH',
+t.ok(heads.slice(0,heads.length-want.length).join()==='RADIOS',
      'under the radios, which come first and are not settings at all',
      heads.join());
 t.ok(R.filter(x=>x.k).map(x=>x.k).join()===cat.settings.map(x=>x.k).join(),
@@ -904,6 +928,25 @@ t.ok(cat.settings.every(d=>['range','cycle','toggle','action']
      'each one says what SHAPE it is, so the phone draws it without a list');
 t.ok(R.find(x=>x.k==='dim').slider && R.find(x=>x.k==='depthAlarm').slider,
      'a range is a slider');
+/* The panel draws these two as tiles side by side in its Display
+   card, and says so in the catalogue rather than leaving the phone to
+   decide which of its settings is a tile. */
+const tl=await p.$$eval('#sheet .stile',gs=>gs.map(g=>({
+  k:g.dataset.sk, svg:g.querySelectorAll('svg').length,
+  lbl:(g.querySelector('u')||{}).textContent||'',
+  val:(g.querySelector('b')||{}).textContent||'',
+  tier:g.parentElement.className})));
+t.ok(tl.map(x=>x.k).join()===
+     cat.settings.filter(d=>d.tile).map(d=>d.k).join(),
+     'the ones the panel calls tiles are drawn as tiles',
+     tl.map(x=>x.k).join());
+t.ok(tl.every(x=>x.svg===1 && x.lbl && x.val),
+     'each with a glyph, its name and what it is set to',
+     JSON.stringify(tl));
+t.ok(tl.length>1 && tl.every(x=>/\bstier\b/.test(x.tier)
+                              && x.tier===tl[0].tier),
+     'side by side in one row of their own, the way the Display card '
+     +'has them', JSON.stringify(tl.map(x=>x.tier)));
 t.ok(R.find(x=>x.k==='keepAwake').on===true,
      'a toggle is a switch that is on when the setting is');
 /* Its unit is the OTHER setting's value. A second unit field would say
@@ -918,9 +961,9 @@ t.ok(bg==='rgb(244, 246, 247)',
 
 t.head('and a tap on one sends it, showing it before the boat answers');
 /* A cycle goes round the panel's own list and back to the start. */
-const themeRow=()=>p.$eval('.srow[data-sk="theme"] b',e=>e.textContent);
+const themeRow=()=>p.$eval('.stile[data-sk="theme"] b',e=>e.textContent);
 const was=await themeRow();
-await p.click('.srow[data-sk="theme"]'); await p.waitForTimeout(400);
+await p.click('.stile[data-sk="theme"]'); await p.waitForTimeout(400);
 t.ok((await themeRow())!==was, 'the value moves at once',
      was+' -> '+(await themeRow()));
 t.ok(JSON.stringify((await peek()).pend['theme'])===

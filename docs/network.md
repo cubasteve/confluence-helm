@@ -983,14 +983,26 @@ right, which lets you read the whole sheet down its right-hand edge
 without reading a word of it. The room the old four-button theme row
 freed goes to the face, which is the thing this app is.
 
-Above them sit **WIFI** and **BLUETOOTH**, which are a *status and
-nothing else* — the second stated exception to "no live data crosses",
-after the start clock, and a narrower one, because it is read-only.
-Each adapter's row says what it is: `HOTSPOT · CONFLUENCE`,
-`MARINA-GUEST  72%`, or `OFF`. Bluetooth says what is connected to it.
+Above them sits **RADIOS**, which is a *status and nothing else* — the
+second stated exception to "no live data crosses", after the start
+clock, and a narrower one, because it is read-only. It is a row of
+tiles, as the glass's own control row is: a glyph for each adapter and,
+under it in small letters, the thing you opened the sheet to read — the
+network it is on, or what is connected to it.
+
+The glyph carries which adapter and what it is doing, the way the
+glass's does: a base station for the one that *is* the hotspot, a fan
+of arcs by strength for one reaching out, a stub on a USB adapter, a
+slash on one that is down — and that one keeps its dot and its first
+arc under the slash, because a slash over nothing reads as a stray line
+rather than as a radio that is off. The network wraps to two lines
+rather than ellipsing: four tiles across a 358px sheet is 85px each,
+and an SSID cut to five characters and a dot is not the thing you came
+for.
+
 They are drawn in the label's colour rather than the accent, because
-accent on this sheet means "you can change this" and on these two you
-cannot. A press on one asks the boat for nothing.
+accent on this sheet means "you can change this" and on these you
+cannot. A press asks the boat for nothing.
 
 **The picker stays on the glass.** Its content *is* the readings — what
 is in range, how strong, which adapter is up — so there is no fixed
@@ -1030,6 +1042,12 @@ needs no change in `netd.py` and none on the phone.
 | `cycle` | a tap goes round the panel's own list and back to the start |
 | `toggle` | a switch, because on and off is the one value you should not have to read |
 | `action` | a press carrying no value — TEST on the horn |
+
+A `cycle` may also carry **`tile`**, which is how the glass draws it: an
+icon with its name and its value under it, laid side by side at the end
+of its card. The Display card puts THEME and SAVER that way on the
+panel and the phone does the same — the panel says which of its
+settings are tiles, rather than leaving the phone to decide.
 
 Three of them earn their own note:
 

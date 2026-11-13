@@ -2845,7 +2845,9 @@ def _settings(v):
              'unit': str(a.get('unit') or '')[:8],
              # "my unit is the value of that other setting" - the depth
              # alarm's is FT or M depending on the units row above it.
-             'unitOf': str(a.get('unitOf') or '')[:24]}
+             'unitOf': str(a.get('unitOf') or '')[:24],
+             # Whether the glass draws it as a tile rather than a row.
+             'tile': 1 if a.get('tile') else 0}
         if kind == 'range':
             lo, hi, st = a.get('min'), a.get('max'), a.get('step')
             if not all(isinstance(x, (int, float)) and not isinstance(x, bool)
@@ -3468,14 +3470,46 @@ svg.gl .f{fill:currentColor;stroke:none}
    it and the state takes the rest, right-aligned and smaller. Equal
    halves put "Built-in" on two lines to make room for a word nobody
    is reading letter by letter. */
-.srow.ro{padding:11px 12px}
-.srow.ro s{flex:0 0 auto;max-width:42%}
-.srow.ro s em{display:block;font-style:normal;font-size:11px;
- letter-spacing:.14em;color:var(--label);margin-top:2px}
-.srow.ro b{color:var(--ink-dim);font-weight:600;flex:1;text-align:right;
- font-size:12px;letter-spacing:.1em;overflow:hidden;
+/* The radios are tiles, as they are on the glass's own control row:
+   the glyph says which adapter and what it is doing, and under it in
+   small letters is the thing you opened this to read - the network it
+   is on, or what is connected to it. No colour from the accent, and
+   nothing to press: accent on this sheet means "you can change this",
+   and on these you cannot. */
+.rtier{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+ gap:8px;padding:8px 10px 12px}
+.rtile{display:flex;flex-direction:column;align-items:center;gap:7px;
+ padding:4px 2px;min-width:0}
+.rtile svg{width:26px;height:26px;flex:none;color:var(--ink-dim)}
+/* Two lines rather than an ellipsis. Four tiles across a 358px sheet
+   is 85px each, and at a letter-spacing that suits a heading an SSID
+   gets five characters and a dot - which is not the thing the owner
+   opened this to read. Tight spacing and a second line hold
+   CONFLUENCE and MARINA-GUEST whole. */
+.rtile u{text-decoration:none;font-size:9.5px;letter-spacing:.02em;
+ color:var(--label);text-align:center;line-height:1.3;
+ max-width:100%;align-self:stretch;overflow:hidden;
+ word-break:break-word;display:-webkit-box;-webkit-box-orient:vertical;
+ -webkit-line-clamp:2}
+.rtile em{font-style:normal;display:block;font-size:11px;
+ color:var(--ink-dim);letter-spacing:.08em;overflow:hidden;
  text-overflow:ellipsis;white-space:nowrap}
-.srow.ro.off b{color:var(--label)}
+.rtile.off svg, .rtile.off em{color:var(--label);opacity:.5}
+
+/* A setting the glass draws as a tile. Same shape as a radio's, with
+   the label where the network goes and the value under it - which is
+   what the Display card puts side by side on the panel. */
+.stier{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
+ padding:4px 10px 10px}
+.stile{display:flex;flex-direction:column;align-items:center;gap:7px;
+ padding:12px 4px;border:2px solid var(--hairline);border-radius:16px;
+ background:none;color:var(--label);font:inherit}
+.stile:active{background:var(--chip)}
+.stile svg{width:26px;height:26px;flex:none}
+.stile svg[viewBox="0 0 40 40"]{width:28px;height:28px}
+.stile u{text-decoration:none;font-size:10px;letter-spacing:.18em}
+.stile b{font-size:13px;font-weight:600;letter-spacing:.08em;
+ color:var(--accent)}
 .prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
  border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;
  text-align:left}
@@ -3614,6 +3648,46 @@ var TICO={
 function tly(k){
   return TICO[k] ? '<svg viewBox="0 0 40 40">'+TICO[k]+'</svg>' : '';
 }
+/* The radios' own glyphs, drawn from the fields the status carries -
+   a base station for the adapter that IS the hotspot, a fan of arcs
+   for one reaching out, a stub on a USB one and a slash on one that is
+   down. The glass draws the same four distinctions; these are its
+   ideas at a phone's size, kept here because a picture is decoration. */
+function icoWifi(d){
+  var g='';
+  if(d.ap){
+    g='<path d="M12 20v-5"/><circle class="f" cx="12" cy="12" r="2.4"/>'
+     +'<path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>'
+     +'<path d="M5 19a9.5 9.5 0 0 1 0-14M19 5a9.5 9.5 0 0 1 0 14"/>';
+  }else{
+    /* An adapter that is down still draws its dot and first arc: the
+       slash has to cross SOMETHING, or a radio that is off reads as a
+       stray line rather than as a radio. */
+    var n=!d.up ? 1 : d.conn ? (d.signal>=70?3:d.signal>=45?2:1) : 1;
+    g='<circle class="f" cx="12" cy="18.6" r="1.7"/>';
+    /* Named, so a probe can say "this one still has an arc under its
+       slash" rather than counting shapes and hoping. */
+    if(n>=1) g+='<path class="arc" d="M8.6 15.4a4.8 4.8 0 0 1 6.8 0"/>';
+    if(n>=2) g+='<path class="arc" d="M5.6 12.2a9 9 0 0 1 12.8 0"/>';
+    if(n>=3) g+='<path class="arc" d="M2.6 9.1a13.2 13.2 0 0 1 18.8 0"/>';
+  }
+  if(d.bus==='usb') g+='<path d="M20.4 3.2v4.2M18.6 4.6h3.6"/>';
+  if(!d.up) g+='<path d="M4.2 3.6l15.6 16.8"/>';
+  return '<svg class="gl" viewBox="0 0 24 24">'+g+'</svg>';
+}
+var ICO_BT='<path d="M8.4 7.2L15.6 16.8 12 19.8V4.2l3.6 3L8.4 16.8"/>';
+/* A clock face with the delay written in it, which is what the glass's
+   own SAVER tile does - the setting is readable without opening it. */
+function icoSaver(lbl){
+  return '<svg class="gl" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.4"/>'
+    + (lbl && lbl!=='OFF'
+       ? '<text x="12" y="12" text-anchor="middle" dominant-baseline="central"'
+         +' font-size="9" font-weight="700" fill="currentColor"'
+         +' stroke="none">'+esc(lbl)+'</text>'
+       : '<path d="M6.6 6.6l10.8 10.8"/>')
+    + '</svg>';
+}
+
 /* A gear, for the settings the theme is the whole of. */
 var ICO_GEAR='<circle cx="12" cy="12" r="3.3"/>'
  +'<path d="M12 2.6l1.4 2.5 2.8-.5.5 2.8 2.5 1.4-1.6 2.4 1.6 2.4-2.5 1.4'
@@ -4116,48 +4190,57 @@ function radGet(){
   });
 }
 function radName(d){
-  return esc(d.bus==='usb' ? 'USB adapter' : 'Built-in')
-       + (d.dev ? '<em>'+esc(d.dev)+'</em>' : '');
+  return d.ap ? 'HOTSPOT' : d.bus==='usb' ? 'USB' : 'BUILT-IN';
 }
+/* The one line you opened this to read: what it is ON. */
 function radWhat(d){
-  if(!d.up)   return 'OFF';
-  if(d.ap)    return 'HOTSPOT'+(d.ssid ? ' · '+d.ssid : '');
-  if(d.conn)  return (d.ssid||'ON')+(d.signal ? '  '+d.signal+'%' : '');
-  return 'ON · NOT JOINED';
+  if(!d.up)  return 'OFF';
+  if(d.ssid) return d.ssid;
+  return d.conn ? 'ON' : 'NOT JOINED';
+}
+function radTile(ico,top,sub,off){
+  return '<div class="rtile'+(off?' off':'')+'">'+ico
+    +'<em>'+esc(top)+'</em><u>'+esc(sub)+'</u></div>';
 }
 function radRows(){
-  var h='';
   if(!RAD){
-    return '<div class="sgrp">RADIOS</div>'
-         + '<div class="srow ro off"><s>Asking the boat</s><b>…</b></div>';
+    return '<div class="sgrp">RADIOS</div><div class="rtier">'
+      + radTile('<svg class="gl" viewBox="0 0 24 24"></svg>',
+                '…','ASKING THE BOAT',1)+'</div>';
   }
-  var w=RAD.wifi||{};
-  if(w.available && (w.devices||[]).length){
-    h+='<div class="sgrp">WIFI</div>';
-    w.devices.forEach(function(d){
-      /* radName is the one thing on this wire built AS markup, and it
-         is built here out of two escaped pieces - nothing from the
-         boat goes in unescaped. */
-      h+='<div class="srow ro'+(d.up?'':' off')+'">'
-        +'<s>'+radName(d)+'</s><b>'+esc(radWhat(d))+'</b></div>';
-    });
-  }
-  var b=RAD.bt||{};
-  if(b.available){
-    h+='<div class="sgrp">BLUETOOTH</div>'
-      +'<div class="srow ro'+(b.on?'':' off')+'"><s>Adapter</s><b>'
-      +esc(!b.on ? 'OFF'
-           : (b.names||[]).length ? b.names.join(', ') : 'ON · NOTHING ON IT')
-      +'</b></div>';
-  }
-  return h;
+  var t='', w=RAD.wifi||{}, b=RAD.bt||{};
+  (w.available ? (w.devices||[]) : []).forEach(function(d){
+    t+=radTile(icoWifi(d), radName(d), radWhat(d), !d.up);
+  });
+  if(b.available)
+    t+=radTile('<svg class="gl" viewBox="0 0 24 24">'+ICO_BT+'</svg>',
+               'BLUETOOTH',
+               !b.on ? 'OFF'
+                     : (b.names||[]).length ? b.names.join(', ') : 'NOTHING ON IT',
+               !b.on);
+  return t ? '<div class="sgrp">RADIOS</div><div class="rtier">'+t+'</div>'
+           : '';
 }
 
 function stRows(){
   var h=shHead('SETTINGS')+radRows(), set=(S.now||{}).set||{}, last='';
+  var tiles='';
+  var flush=function(){
+    if(tiles){ h+='<div class="stier">'+tiles+'</div>'; tiles=''; }
+  };
   (S.settings||[]).forEach(function(d){
-    if(d.g && d.g!==last){ last=d.g; h+='<div class="sgrp">'+esc(d.g)+'</div>'; }
+    if(d.g && d.g!==last){ flush(); last=d.g;
+                           h+='<div class="sgrp">'+esc(d.g)+'</div>'; }
     var v=set[d.k];
+    if(d.tile){
+      /* Held back and laid out side by side at the end of their card,
+         which is where the Display card puts them on the glass. */
+      tiles+='<button class="stile" data-sk="'+esc(d.k)+'">'
+        +(d.k==='theme' ? tly(v) : icoSaver(sVal(d,v)))
+        +'<u>'+esc(d.name.toUpperCase())+'</u>'
+        +'<b>'+esc(sVal(d,v))+'</b></button>';
+      return;
+    }
     if(d.kind==='toggle'){
       h+='<button class="srow'+(v?' on':'')+'" data-sk="'+esc(d.k)+'">'
         +'<s>'+esc(d.name)+'</s><span class="sw"><i></i></span></button>';
@@ -4178,6 +4261,7 @@ function stRows(){
         +'<s>'+esc(d.name)+'</s><b>'+esc(sVal(d,v))+'</b></button>';
     }
   });
+  flush();
   return h+'</div>';
 }
 

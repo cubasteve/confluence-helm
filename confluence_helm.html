@@ -9157,9 +9157,12 @@ const REM_SET=()=>REM_SET_MEMO||(REM_SET_MEMO=[
   min:25, max:100, step:5, unit:'%'},
  /* The theme is a DISPLAY control on the glass and is one here, in the
     glass's own card, rather than standing on its own somewhere. */
- {g:'DISPLAY', k:'theme', name:'Theme', kind:'cycle',
+ /* `tile` is how the GLASS draws it - an icon with its label under it,
+    side by side in the Display card - and the phone draws it the same
+    way rather than deciding for itself which of these is a tile. */
+ {g:'DISPLAY', k:'theme', name:'Theme', kind:'cycle', tile:1,
   opts:THEMES.slice(), labels:THEMES.map(t=>t.toUpperCase())},
- {g:'DISPLAY', k:'saver', name:'Screen saver', kind:'cycle',
+ {g:'DISPLAY', k:'saver', name:'Screen saver', kind:'cycle', tile:1,
   opts:SS_DELAYS.map((_,i)=>i), labels:SS_TEXT},
  /* Its unit is the OTHER setting's value, which is why unitOf exists
     rather than a second unit field that would say FT while the glass
@@ -9403,6 +9406,7 @@ function remoteCat(){
                                      min:x.min, max:x.max, step:x.step,
                                      unit:x.unit||'',
                                      unitOf:x.unitOf||'',
+                                     tile:x.tile?1:0,
                                      opts:x.opts ? x.opts.slice() : null,
                                      labels:x.labels ? x.labels.slice() : null})),
            themes:THEMES, now:remoteNow() };
