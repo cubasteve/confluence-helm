@@ -2840,7 +2840,7 @@ def _settings(v):
         k, kind = a.get('k'), a.get('kind')
         if not isinstance(k, str) or not k or len(k) > 24:
             continue
-        if kind not in ('range', 'cycle', 'toggle', 'action'):
+        if kind not in ('range', 'step', 'cycle', 'toggle', 'action'):
             continue
         e = {'k': k, 'kind': kind, 'g': str(a.get('g') or '')[:40],
              'name': str(a.get('name') or k)[:48],
@@ -2851,8 +2851,11 @@ def _settings(v):
              # Whether the glass draws it as a tile rather than a row,
              # and whether it draws its own picture of it above.
              'tile': 1 if a.get('tile') else 0,
-             'bar': 1 if a.get('bar') else 0}
-        if kind == 'range':
+             'bar': 1 if a.get('bar') else 0,
+             # Another setting that rides on this one's row, as the
+             # glass's own steprow puts FT / M beside the number.
+             'with': str(a.get('with') or '')[:24]}
+        if kind in ('range', 'step'):
             lo, hi, st = a.get('min'), a.get('max'), a.get('step')
             if not all(isinstance(x, (int, float)) and not isinstance(x, bool)
                        for x in (lo, hi)):
@@ -3226,7 +3229,7 @@ def remote_cmd(body, token):
                 # a number it never offered.
                 if isinstance(v, bool) or v not in d['opts']:
                     return {'ok': False, 'error': 'NO SUCH VALUE'}, 400
-            else:
+            else:                                   # range and step
                 if isinstance(v, bool) or not isinstance(v, (int, float)):
                     return {'ok': False, 'error': 'NO SUCH VALUE'}, 400
                 if v < d['min'] or v > d['max']:
@@ -3488,6 +3491,19 @@ svg.gl .f{fill:currentColor;stroke:none}
    readable label do not both fit across a 358px sheet. */
 .srow.rng{flex-wrap:wrap}
 .srow.rng input{width:100%;margin:10px 2px 0;accent-color:var(--accent)}
+/* The glass's own steprow: minus, the number and its unit, plus, and
+   the swap - one line, because the alarm you want is a whole foot
+   away rather than somewhere on a track. */
+.step{display:flex;align-items:center;gap:8px;width:100%;margin:10px 0 2px}
+.step button{background:none;border:2px solid var(--hairline);
+ color:var(--ink);font:inherit;border-radius:14px;height:46px;flex:none}
+.step button:active{background:var(--chip)}
+.step .mi{width:52px;font-size:24px;line-height:1}
+.step .sw{flex:1;font-size:13px;letter-spacing:.12em;color:var(--label)}
+.step .nv{flex:1;text-align:center;font-size:21px;font-weight:600;
+ color:var(--accent);font-variant-numeric:tabular-nums;
+ letter-spacing:.04em;min-width:0}
+.step button[disabled]{opacity:.3}
 /* The glass's own picture of the shallow alarm, shrunk: the alarm zone
    from nothing to the threshold, the warning zone to twice it, and the
    scale under them. The bar the panel draws also carries a marker at
@@ -4227,7 +4243,7 @@ function sVal(d,v){
       w+=' · '+String(S.now.eff).toUpperCase();
     return w;
   }
-  if(d.kind==='range'){
+  if(d.kind==='range' || d.kind==='step'){
     var u=d.unit||'';
     if(d.unitOf){
       var o=((S.now||{}).set||{})[d.unitOf];
@@ -4288,19 +4304,9 @@ function radRows(){
 /* The alarm's two zones as the panel computes them, drawn as widths.
    Nothing here decides where a zone ENDS - the bar's full scale is 40
    feet or 12 metres and that is the panel's arithmetic. */
-function dBar(at){
+function dBar(){
   var b=(S.now||{}).bar;
   if(!b || !(b.max>0)) return '';
-  /* `at` previews a thumb still moving. An argument rather than a
-     write into S.now, so the only copy of what the boat is set to
-     stays the one the boat sent - a drag let go of where no change
-     fires used to leave the bar drawing one number under a label that
-     said another, with nothing to correct it.
-     Scaled by the ratio the PANEL sent, not a copy of its rule: warn
-     is twice alarm on the glass today, and the day it stops being
-     twice, a phone holding its own 2 draws a zone the boat has not. */
-  if(at!=null && b.alarm>0)
-    b={max:b.max, alarm:at, warn:at*(b.warn/b.alarm)};
   var pc=function(n){ return Math.max(0, Math.min(100, n/b.max*100)); };
   var a=pc(b.alarm), w=pc(b.warn);
   return '<div class="dbar"><i class="al" style="width:'+a+'%"></i>'
@@ -4315,7 +4321,12 @@ function stRows(){
   var flush=function(){
     if(tiles){ h+='<div class="stier">'+tiles+'</div>'; tiles=''; }
   };
+  /* A setting another one carries on its row is not a row of its
+     own. The panel says which: `with` on the one that carries it. */
+  var ride={};
+  (S.settings||[]).forEach(function(d){ if(d['with']) ride[d['with']]=1; });
   (S.settings||[]).forEach(function(d){
+    if(ride[d.k]) return;
     if(d.g && d.g!==last){ flush(); last=d.g;
                            h+='<div class="sgrp">'+esc(d.g)+'</div>'; }
     var v=set[d.k];
@@ -4334,6 +4345,30 @@ function stRows(){
     }else if(d.kind==='action'){
       h+='<button class="srow act" data-sk="'+esc(d.k)+'">'
         +'<s>'+esc(d.name)+'</s><b>TEST</b></button>';
+    }else if(d.kind==='step'){
+      /* Minus, the number and its unit, plus - and whatever rides on
+         the row with it, which on the glass is the FT / M swap. */
+      var w=d['with']
+        ? (S.settings||[]).filter(function(x){ return x.k===d['with']; })[0]
+        : null;
+      h+='<div class="srow rng" data-sk="'+esc(d.k)+'">'
+        +'<s>'+esc(d.name)+'</s>'
+        +(d.bar ? dBar() : '')
+        +'<div class="step">'
+        +'<button class="mi" data-step="-1"'+(v<=d.min?' disabled':'')
+        +'>\u2013</button>'
+        +'<span class="nv">'+esc(sVal(d,v))+'</span>'
+        +'<button class="mi" data-step="1"'+(v>=d.max?' disabled':'')
+        +'>+</button>'
+        /* Both of its options, which for a pair is the glass's own
+           FT / M - the one in force is beside the number already, so
+           the button is the SWAP rather than the state. */
+        +(w && w.opts && w.opts.length===2
+          ? '<button class="sw" data-swap="'+esc(w.k)+'">'
+            +esc(w.opts.map(function(o){ return String(o).toUpperCase(); })
+                  .join(' / '))+'</button>'
+          : '')
+        +'</div></div>';
     }else if(d.kind==='range'){
       /* A slider, not a stepper. The glass has a + and a - because a
          capacitive panel at sea wants discrete targets; a thumb on
@@ -4411,10 +4446,31 @@ document.getElementById('scrim').addEventListener('click',function(e){
 });
 document.getElementById('sheet').addEventListener('click',function(e){
   if(e.target.closest('[data-shx]')) return void shOpen(null);
+  /* The stepper and the swap riding with it. Both are inside a row
+     that carries its own data-sk, so they are read first. */
+  var st=e.target.closest('[data-step]');
+  if(st){
+    var sd=(S.settings||[]).filter(function(x){
+      return x.k===st.closest('[data-sk]').dataset.sk; })[0];
+    if(!sd) return;
+    var cur=((S.now||{}).set||{})[sd.k];
+    var nx=Math.round((typeof cur==='number'?cur:sd.min)
+                      + (+st.dataset.step)*(sd.step||1));
+    if(nx<sd.min || nx>sd.max) return;
+    return void sSend(sd, nx);
+  }
+  var sp=e.target.closest('[data-swap]');
+  if(sp){
+    var wd=(S.settings||[]).filter(function(x){
+      return x.k===sp.dataset.swap; })[0];
+    if(!wd) return;
+    var wc=((S.now||{}).set||{})[wd.k];
+    return void sSend(wd, wd.opts[(wd.opts.indexOf(wc)+1)%wd.opts.length]);
+  }
   var sr=e.target.closest('[data-sk]');
   if(sr && !e.target.closest('input')){
     var d=(S.settings||[]).filter(function(x){ return x.k===sr.dataset.sk; })[0];
-    if(!d || d.kind==='range') return;
+    if(!d || d.kind==='range' || d.kind==='step') return;
     var cur=((S.now||{}).set||{})[d.k], nv;
     if(d.kind==='toggle')      nv=!cur;
     else if(d.kind==='action') nv=null;
@@ -4439,18 +4495,6 @@ document.getElementById('sheet').addEventListener('input',function(e){
   if(b && d) b.textContent=sVal(d, +e.target.value);
   /* The picture follows the thumb too. One that waited for the boat
      would be a picture of the number you had before you moved it. */
-  if(d && d.bar){
-    var old=sr.querySelector('.dbar'), sc=sr.querySelector('.dscale');
-    var tmp=document.createElement('div');
-    tmp.innerHTML=dBar(+e.target.value);
-    /* Both halves or neither: dBar has its own reasons to draw nothing
-       - no bar on the wire yet, a scale of zero - and replaceChild
-       with nothing to put there throws on every move of the thumb. */
-    if(old && sc && tmp.children.length===2){
-      sr.replaceChild(tmp.firstChild, old);
-      sr.replaceChild(tmp.firstChild, sc);
-    }
-  }
 });
 document.getElementById('sheet').addEventListener('change',function(e){
   DRAG=false;
@@ -4465,6 +4509,16 @@ function sSend(d,v){
   if(d.kind!=='action'){
     S.now=S.now||{}; S.now.set=S.now.set||{};
     S.now.set[d.k]=v;
+    /* And the picture of it. A bar that waits for the boat is a bar
+       showing the number you had before you pressed - the whole row
+       would move but the thing it is a picture OF would not.
+       Scaled by the ratio the PANEL sent, not a copy of its rule:
+       warn is twice alarm on the glass today, and the day it stops
+       being twice, a phone holding its own 2 draws a zone the boat
+       does not have. */
+    if(d.bar && (S.now.bar||{}).alarm>0)
+      S.now.bar={max:S.now.bar.max, alarm:v,
+                 warn:v*(S.now.bar.warn/S.now.bar.alarm)};
     shPaint();
   }
   /* The theme keeps its own command kind: netd checks it against the

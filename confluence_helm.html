@@ -9180,8 +9180,13 @@ const REM_SET=()=>REM_SET_MEMO||(REM_SET_MEMO=[
     the panel into now.bar, because the bar's full scale is 40 feet or
     12 metres and that is the panel's arithmetic, not a thing the phone
     should be holding a second copy of. */
- {g:'SHALLOW ALARM', k:'depthAlarm', name:'Alarm at', kind:'range',
-  min:1, max:60, step:1, unitOf:'depthUnit', bar:1},
+ /* A STEP, not a slider: the glass gives this one a plus and a minus
+    because the alarm you want is a whole foot away, not somewhere on a
+    track. `with` says the units ride on the same row, which is where
+    the glass puts them - one line of minus, the number and its unit,
+    plus, and the swap. */
+ {g:'SHALLOW ALARM', k:'depthAlarm', name:'Alarm at', kind:'step',
+  min:1, max:60, step:1, unitOf:'depthUnit', bar:1, with:'depthUnit'},
  {g:'SHALLOW ALARM', k:'depthUnit', name:'Units', kind:'cycle',
   opts:['ft','m'], labels:['FEET','METRES']},
  {g:'GPS AVERAGING', k:'sogAvg', name:'Speed', kind:'cycle',
@@ -9430,6 +9435,7 @@ function remoteCat(){
                                      unitOf:x.unitOf||'',
                                      tile:x.tile?1:0,
                                      bar:x.bar?1:0,
+                                     with:x['with']||'',
                                      opts:x.opts ? x.opts.slice() : null,
                                      labels:x.labels ? x.labels.slice() : null})),
            themes:THEMES, now:remoteNow() };
@@ -9482,7 +9488,7 @@ function remoteDo(c){
     if(d.kind==='action')      v=null;
     else if(d.kind==='toggle'){ if(typeof v!=='boolean') return; }
     else if(d.kind==='cycle'){  if(d.opts.indexOf(v)<0) return; }
-    else if(d.kind==='range'){
+    else if(d.kind==='range' || d.kind==='step'){
       if(typeof v!=='number' || !isFinite(v)) return;
       v=Math.round(v);
       if(v<d.min || v>d.max) return;

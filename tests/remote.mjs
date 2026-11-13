@@ -272,16 +272,26 @@ const SET=await p.evaluate(()=>remoteCat().settings);
 const SETV=await p.evaluate(()=>remoteNow().set);
 t.ok(SET.length>=9, 'there is a catalogue of them', String(SET.length));
 t.ok(SET.every(d=>d.k && d.name && d.g &&
-                  ['range','cycle','toggle','action'].indexOf(d.kind)>=0),
+                  ['range','step','cycle','toggle','action']
+                    .indexOf(d.kind)>=0),
      'each says what it is CALLED, which card it is on and what shape '
      +'it is - so the phone draws it without a list of its own',
      JSON.stringify(SET.filter(d=>!d.kind||!d.g).map(d=>d.k)));
 t.ok(SET.every(d=>d.kind!=='cycle' ||
                   (Array.isArray(d.opts) && d.opts.length)),
      'a cycle carries the values it may take');
-t.ok(SET.every(d=>d.kind!=='range' ||
+t.ok(SET.every(d=>(d.kind!=='range' && d.kind!=='step') ||
                   (typeof d.min==='number' && d.max>d.min)),
-     'and a range carries its ends');
+     'and a range or a step carries its ends');
+/* `with` says another setting rides on this one's row, which is where
+   the glass puts FT / M - on the alarm's own line, not a line of its
+   own. It must name a setting that exists, or the phone draws a row
+   with a hole in it. */
+const rode=SET.map(d=>d['with']).filter(Boolean);
+t.ok(rode.length===1 && rode[0]==='depthUnit' &&
+     SET.some(d=>d.k===rode[0]),
+     'and one that carries another names one the panel has',
+     JSON.stringify(rode));
 t.ok(SET.every(d=>d.kind==='action' ||
                   Object.prototype.hasOwnProperty.call(SETV, d.k)),
      'and now.set says what every one of them is right now',

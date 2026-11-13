@@ -45,10 +45,15 @@ class Rig(netd.RemoteHandler):
             # somebody flips FEET to METRES and the panel converts. There
             # is no panel here to convert it.
             if 'max' in q:
-                now.setdefault('bar', {})
-                now['bar'] = {'max': int(q['max'][0]),
-                              'alarm': int(q.get('alarm', ['2'])[0]),
+                alarm = int(q.get('alarm', ['2'])[0])
+                now['bar'] = {'max': int(q['max'][0]), 'alarm': alarm,
                               'warn': int(q.get('warn', ['4'])[0])}
+                # The picture and the setting are the same number on a
+                # real boat; a rig where they disagree is a rig that
+                # tests a state the panel cannot produce.
+                now.setdefault('set', {})['depthAlarm'] = alarm
+                now['set']['depthUnit'] = (
+                    'm' if int(q['max'][0]) <= 12 else 'ft')
             return self._send({'ok': True, 'now': {'page': now.get('page'),
                                                    'bar': now.get('bar')}})
         return netd.RemoteHandler.do_GET(self)

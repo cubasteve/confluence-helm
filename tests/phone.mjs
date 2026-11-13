@@ -918,16 +918,42 @@ t.ok(heads.slice(-want.length).join()===want.join(),
 t.ok(heads.slice(0,heads.length-want.length).join()==='RADIOS',
      'under the radios, which come first and are not settings at all',
      heads.join());
-t.ok(R.filter(x=>x.k).map(x=>x.k).join()===cat.settings.map(x=>x.k).join(),
+/* All of them but the ones another carries: the panel says which
+   with `with`, and the glass puts FT / M on the alarm's own row
+   rather than giving it a line of its own. */
+const rides=new Set(cat.settings.map(d=>d['with']).filter(Boolean));
+t.ok(R.filter(x=>x.k).map(x=>x.k).join()===
+     cat.settings.filter(d=>!rides.has(d.k)).map(x=>x.k).join(),
      'and every setting the panel registered, in its order, and no others',
      R.filter(x=>x.k).map(x=>x.k).join());
+t.ok(rides.size===1 && rides.has('depthUnit') &&
+     R.every(x=>x.k!=='depthUnit'),
+     'with the one that rides on another drawn there and not twice',
+     JSON.stringify([...rides]));
 /* The phone writes down no settings of its own. Add one to the glass
    and it shows up here with its words, its card and its values. */
-t.ok(cat.settings.every(d=>['range','cycle','toggle','action']
+t.ok(cat.settings.every(d=>['range','step','cycle','toggle','action']
                            .indexOf(d.kind)>=0),
-     'each one says what SHAPE it is, so the phone draws it without a list');
-t.ok(R.find(x=>x.k==='dim').slider && R.find(x=>x.k==='depthAlarm').slider,
-     'a range is a slider');
+     'each one says what SHAPE it is, so the phone draws it without a list',
+     JSON.stringify([...new Set(cat.settings.map(d=>d.kind))]));
+t.ok(R.find(x=>x.k==='dim').slider, 'a range is a slider');
+/* A STEP is a plus and a minus, because the alarm you want is a whole
+   foot away rather than somewhere on a track - which is why the glass
+   gives this one a stepper and the brightness a slider. */
+const sp=await p.$$eval('.srow[data-sk="depthAlarm"] .step > *',
+  gs=>gs.map(g=>({t:g.tagName, cls:g.className, txt:g.textContent.trim(),
+                  step:g.dataset.step||'', swap:g.dataset.swap||''})));
+t.ok(sp.length===4,
+     'a step is four things on one line, the way the glass has it',
+     JSON.stringify(sp.map(x=>x.txt)));
+t.ok(sp[0].step==='-1' && sp[2].step==='1',
+     'a minus and a plus either side of it',
+     JSON.stringify([sp[0].step, sp[2].step]));
+t.ok(/^\d+\s+(FT|M)$/.test(sp[1].txt),
+     'the number and its unit between them', sp[1].txt);
+t.ok(sp[3].swap==='depthUnit' && sp[3].txt==='FT / M',
+     'and the swap beside it, offering both rather than naming one',
+     sp[3].txt);
 /* The panel draws these two as tiles side by side in its Display
    card, and says so in the catalogue rather than leaving the phone to
    decide which of its settings is a tile. */
@@ -983,9 +1009,8 @@ t.ok(R.find(x=>x.k==='keepAwake').on===true,
 /* Its unit is the OTHER setting's value. A second unit field would say
    FT while the glass said M, and the alarm would be silently
    redefined - the threshold is held in whatever is showing. */
-t.ok(/\s(FT|M)$/.test(R.find(x=>x.k==='depthAlarm').val),
-     'and the alarm carries the unit the units row is set to',
-     R.find(x=>x.k==='depthAlarm').val);
+t.ok(/\s(FT|M)$/.test(sp[1].txt),
+     'and the alarm carries the unit the swap is set to', sp[1].txt);
 const bg=await p.evaluate(()=>getComputedStyle(document.body).backgroundColor);
 t.ok(bg==='rgb(244, 246, 247)',
      'the day palette came down the wire and was applied', bg);
@@ -1089,45 +1114,45 @@ await fetch(base+'/poke?max=12&alarm=2&warn=4');
 await p.evaluate(()=>load()); await p.waitForTimeout(600);
 t.ok((await scaleNow())==='0,6,12',
      'the open sheet takes the new scale', was40+' -> '+(await scaleNow()));
-/* Not while a thumb is on it, though: the repaint lands 1.8 s after
-   the last change, which is well inside a slow drag, and rebuilding
-   the row under the finger takes the thumb with it. */
-const sl0=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
+/* Not while a thumb is on a slider, though: the repaint lands 1.8 s
+   after the last change, which is well inside a slow drag, and
+   rebuilding the row under the finger takes the thumb with it. The
+   brightness is the slider left on this sheet - the alarm is a
+   stepper now, the way the glass has it. */
+const sl0=await p.$eval('.srow[data-sk="dim"] input',e=>{
   const r=e.getBoundingClientRect();
   return {x:r.left, y:r.top+r.height/2, w:r.width};});
-await p.mouse.move(sl0.x+sl0.w*0.1, sl0.y); await p.mouse.down();
-await p.mouse.move(sl0.x+sl0.w*0.7, sl0.y); await p.waitForTimeout(120);
-const held=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value);
+await p.mouse.move(sl0.x+sl0.w*0.9, sl0.y); await p.mouse.down();
+await p.mouse.move(sl0.x+sl0.w*0.3, sl0.y); await p.waitForTimeout(120);
+const held=await p.$eval('.srow[data-sk="dim"] input',e=>e.value);
 await fetch(base+'/poke?max=40&alarm=3&warn=6');
 await p.evaluate(()=>load()); await p.waitForTimeout(500);
-t.ok((await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value))===held,
+t.ok((await p.$eval('.srow[data-sk="dim"] input',e=>e.value))===held,
      'so a poll landing mid-drag does not snatch the thumb back',
-     held+' / '+(await p.$eval('.srow[data-sk="depthAlarm"] input',e=>e.value)));
-await p.mouse.up(); await p.waitForTimeout(500);
+     held+' / '+(await p.$eval('.srow[data-sk="dim"] input',e=>e.value)));
+await p.mouse.up(); await p.waitForTimeout(600);
 
-t.head('and a drag writes nothing down until the boat has answered');
-/* The preview is an argument to the drawing, not a write into the
-   state. A drag let go of somewhere no change fires used to leave the
-   bar drawing one number under a label that said another, with nothing
-   to correct it. */
+t.head('the stepper moves the number and the picture together');
+/* A bar that waited for the boat would be a picture of the number you
+   had before you pressed: the row would move and the thing it is a
+   picture OF would not. */
 await fetch(base+'/poke?max=40&alarm=4&warn=16');
 await p.evaluate(()=>load()); await p.waitForTimeout(600);
-const sl1=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
-  const r=e.getBoundingClientRect();
-  return {x:r.left, y:r.top+r.height/2, w:r.width};});
-/* Low on the track on purpose: the zones are clamped to the bar, so
-   a four-to-one boat dragged past a quarter of the scale has its
-   warning zone pinned at the end and the ratio stops being the thing
-   under test. */
-await p.mouse.move(sl1.x+sl1.w*0.2, sl1.y); await p.mouse.down();
-await p.mouse.move(sl1.x+sl1.w*0.08, sl1.y); await p.waitForTimeout(150);
-t.ok(JSON.stringify(await p.evaluate(()=>S.now.bar))===
-     JSON.stringify({max:40, alarm:4, warn:16}),
-     'the state still says what the boat said',
-     JSON.stringify(await p.evaluate(()=>S.now.bar)));
-/* And the preview is scaled by the ratio the PANEL sent. warn is twice
-   alarm on the glass today; a phone holding its own 2 would draw this
-   four-to-one boat a zone it does not have. */
+const nv=()=>p.$eval('.srow[data-sk="depthAlarm"] .nv',e=>e.textContent);
+const alW=()=>p.$eval('.srow[data-sk="depthAlarm"] .dbar .al',
+                      e=>e.getBoundingClientRect().width);
+const n0=await nv(), w0=await alW();
+await p.click('.srow[data-sk="depthAlarm"] [data-step="1"]');
+await p.waitForTimeout(300);
+t.ok((await nv())!==n0, 'the number moves at once', n0+' -> '+(await nv()));
+t.ok((await alW())>w0+1, 'and the zone under it with it',
+     Math.round(w0)+' -> '+Math.round(await alW()));
+t.ok(JSON.stringify((await peek()).pend['set:depthAlarm'])===
+     JSON.stringify({kind:'set', k:'depthAlarm', v:5}),
+     'and the boat is told the number, not the press',
+     JSON.stringify((await peek()).pend['set:depthAlarm']));
+/* Scaled by the ratio the PANEL sent, not a copy of its rule - this
+   rig's boat warns at four times its alarm, not twice. */
 const zz=await p.evaluate(()=>{
   const b=document.querySelector('.srow[data-sk="depthAlarm"] .dbar');
   return {al:b.querySelector('.al').getBoundingClientRect().width,
@@ -1136,28 +1161,45 @@ const zz=await p.evaluate(()=>{
 t.ok(Math.abs(zz.wa/zz.al - 3) < 0.25,
      'so a boat whose warning is four times its alarm draws one three '
      +'times as wide beside it, not one', (zz.wa/zz.al).toFixed(2));
-await p.mouse.up(); await p.waitForTimeout(400);
+/* The two ends are the panel's, and the buttons go out at them. */
+await fetch(base+'/poke?max=40&alarm=1&warn=2');
+await p.evaluate(()=>load()); await p.waitForTimeout(600);
+await p.evaluate(()=>{ S.now.set.depthAlarm=1; shPaint(); });
+t.ok(await p.$eval('.srow[data-sk="depthAlarm"] [data-step="-1"]',
+                   e=>e.disabled),
+     'at the bottom of its range the minus goes out');
+const wasQ4=JSON.stringify((await peek()).pend['set:depthAlarm']);
+/* The attribute is what stops a FINGER - a disabled button does not
+   fire a click at all, forced or not. What the guard in the handler
+   is for is the row drawn with no value on the wire yet: nothing is
+   under the floor so nothing is disabled, and the minus would walk
+   straight off the bottom. */
+await p.evaluate(()=>{ delete S.now.set.depthAlarm; shPaint(); });
+await p.waitForTimeout(200);
+await p.click('.srow[data-sk="depthAlarm"] [data-step="-1"]');
+await p.waitForTimeout(300);
+t.ok(JSON.stringify((await peek()).pend['set:depthAlarm'])===wasQ4,
+     'a row with no value on it yet does not step off the bottom',
+     wasQ4+' / '+JSON.stringify((await peek()).pend['set:depthAlarm']));
+await p.click('.srow[data-sk="depthAlarm"] [data-step="1"]');
+await p.waitForTimeout(300);
+t.ok(((await peek()).pend['set:depthAlarm']||{}).v===2,
+     'while the plus starts it from the floor the panel gave',
+     JSON.stringify((await peek()).pend['set:depthAlarm']));
+
+t.head('and the swap riding with it turns the units');
+/* One button for both, because the one in force is beside the number
+   already - the glass labels it FT / M for the same reason. */
+await p.click('.srow[data-sk="depthAlarm"] [data-swap="depthUnit"]');
+await p.waitForTimeout(300);
+t.ok(JSON.stringify((await peek()).pend['set:depthUnit'])===
+     JSON.stringify({kind:'set', k:'depthUnit', v:'m'}),
+     'it sends the other one', JSON.stringify((await peek()).pend['set:depthUnit']));
+t.ok(/\sM$/.test(await nv()),
+     'and the unit beside the number moves before the boat answers',
+     await nv());
 await fetch(base+'/poke?max=40&alarm=3&warn=6');
 await p.evaluate(()=>load()); await p.waitForTimeout(600);
-
-t.head('and the picture follows the thumb, not the boat');
-/* One that waited for the boat would be a picture of the number you
-   had before you moved it. */
-const sl=await p.$eval('.srow[data-sk="depthAlarm"] input',e=>{
-  const r=e.getBoundingClientRect();
-  return {x:r.left, y:r.top+r.height/2, w:r.width};});
-const zoneW=()=>p.$eval('.srow[data-sk="depthAlarm"] .dbar .al',
-                        e=>e.getBoundingClientRect().width);
-const z0=await zoneW();
-await p.mouse.move(sl.x+sl.w*0.1, sl.y); await p.mouse.down();
-await p.mouse.move(sl.x+sl.w*0.6, sl.y); await p.waitForTimeout(150);
-const z1=await zoneW();
-t.ok(z1>z0+2, 'the alarm zone grows under the thumb',
-     Math.round(z0)+' -> '+Math.round(z1));
-await p.mouse.up(); await p.waitForTimeout(300);
-t.ok((await peek()).pend['set:depthAlarm'],
-     'and letting go sends the number',
-     JSON.stringify((await peek()).pend['set:depthAlarm']));
 
 t.head('and a tap on one sends it, showing it before the boat answers');
 /* A cycle goes round the panel's own list and back to the start. */
@@ -1200,12 +1242,15 @@ const slid=await p.$eval('.srow[data-sk="dim"] input',e=>{
                                              w:r.width};});
 const dimTxt=()=>p.$eval('.srow[data-sk="dim"] b',e=>e.textContent);
 const dim0=await dimTxt();
+const dimWas=JSON.stringify((await peek()).pend['set:dim']);
 await p.mouse.move(slid.x+slid.w*0.5, slid.y);
 await p.mouse.down(); await p.mouse.move(slid.x+slid.w*0.2, slid.y);
 await p.waitForTimeout(150);
-t.ok((await peek()).pend['set:dim']===undefined,
+/* A delta: the queue is drained by the panel and there is no panel
+   here, so whatever a section above left in it is still there. */
+t.ok(JSON.stringify((await peek()).pend['set:dim'])===dimWas,
      'nothing is sent while the thumb is still down',
-     JSON.stringify((await peek()).pend['set:dim']));
+     dimWas+' / '+JSON.stringify((await peek()).pend['set:dim']));
 const dim1=await dimTxt();
 t.ok(dim1!==dim0 && /^\d+%$/.test(dim1) && +dim1.slice(0,-1)<+dim0.slice(0,-1),
      'while the number follows the thumb, because a slider whose '

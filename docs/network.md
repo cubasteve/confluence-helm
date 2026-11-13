@@ -1039,6 +1039,7 @@ needs no change in `netd.py` and none on the phone.
 | | |
 |---|---|
 | `range` | a slider, the number following the thumb, only the value you let go of sent |
+| `step` | a minus, the number and its unit, a plus — because the alarm you want is a whole foot away, not somewhere on a track |
 | `cycle` | a tap goes round the panel's own list and back to the start |
 | `toggle` | a switch, because on and off is the one value you should not have to read |
 | `action` | a press carrying no value — TEST on the horn |
@@ -1048,6 +1049,14 @@ icon with its name and its value under it, laid side by side at the end
 of its card. The Display card puts THEME and SAVER that way on the
 panel and the phone does the same — the panel says which of its
 settings are tiles, rather than leaving the phone to decide.
+
+A setting may carry **`with`**, naming another that rides on its row
+rather than taking a line of its own. The glass's own `.steprow` is
+`[−] [6 FT] [+] [FT / M]`, so the alarm says `with: 'depthUnit'` and
+the swap is drawn beside it. The swap offers *both* options rather than
+naming one, because the one in force is beside the number already —
+which is why the glass labels that button `FT / M` too. A setting
+another one carries is not drawn twice.
 
 Three of them earn their own note:
 
