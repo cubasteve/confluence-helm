@@ -2437,14 +2437,35 @@ SONAR_BINS = int(os.environ.get('HELM_SONAR_BINS', '256'))
 # that started its history when you looked at it would show a blank
 # screen for the first minute every time.
 SONAR_KEEP = int(os.environ.get('HELM_SONAR_KEEP', '600'))
-# Microseconds per sample - the ADC period the firmware was built with,
-# 13.2 on both the UNO R3 and the R4, which is about a centimetre of
-# water there and back.
+# Microseconds per sample - the ADC period the firmware was built
+# with. The project does not agree with itself: the comments and
+# echo_interface.py say 13.2, the NMEA sketch's code says 13.0, and
+# the ADC setup (prescaler 16, so a 1 MHz ADC clock, 13 clocks a
+# free-running conversion) implies 13.0 exactly.
 SONAR_US = float(os.environ.get('HELM_SONAR_US', '13.2'))
-# Metres per second through the water. It moves a percent or two with
-# temperature and salinity, and the frame carries a temperature, so
-# this is the number to refine on the day that a percent matters.
+# Metres per second through the water. echo_interface.py uses 1440,
+# the NMEA sketch 1450, fresh water at 15-20 C is 1450-1460 and
+# seawater about 1500.
 SONAR_C = float(os.environ.get('HELM_SONAR_C', '1500'))
+# Those two are only ever used as their PRODUCT, and between them the
+# disagreements above are about 4% - sixty centimetres at fifteen
+# metres. So the product is settable directly, and the honest way to
+# fill it in is not to pick a side but to MEASURE: a leadline at two
+# depths, say three metres and twelve, and fit
+#
+#     depth = SONAR_MPS * index + SONAR_OFFSET
+#
+# Both coefficients, not just the first. The offset catches the fixed
+# index error from ring-down delay and comparator latency, which the
+# 328P sketch has no parameter for at all - the R4's firmware has a
+# DEPTH_OFFSET and the R3's does not.
+SONAR_MPS = float(os.environ.get('HELM_SONAR_MPS', '0'))
+SONAR_OFFSET = float(os.environ.get('HELM_SONAR_OFFSET', '0'))
+
+
+def sonar_mps():
+    """Metres of water per sample, there and back halved."""
+    return SONAR_MPS if SONAR_MPS > 0 else SONAR_US * 1e-6 * SONAR_C / 2
 
 # ---- putting the depth back on the bus -------------------------------
 #
@@ -2654,7 +2675,7 @@ def sonar_read(after=0, limit=None):
             # Metres of water per SAMPLE, there and back halved. The
             # panel multiplies by a ping's own `ns` for the range of
             # the column it is drawing.
-            'mps': SONAR_US * 1e-6 * SONAR_C / 2,
+            'mps': sonar_mps(),
             'age': round(now - at, 1) if at else None,
             'good': good, 'bad': bad, 'error': err, 'pings': ps,
             # What it is telling the rest of the boat, if anything.
@@ -2673,18 +2694,33 @@ def nmea(body):
 
 
 def sonar_sentences(m, keel=0.0):
-    """What a sounder says, for `m` metres under the transducer.
+    """What a sounder says, for `m` metres under the transducer - or
+    for not knowing, which is `m` of None.
 
-    Both sentences, the way a real sounder sends both. DPT is the one
-    that carries the offset, so it is what lets a consumer work out
-    the depth under the KEEL rather than under the transducer. DBT
-    carries no offset and is what older software reads. They say the
-    same thing, so anything reading both still has one number.
+    Both sentences when there is a depth, the way a real sounder sends
+    both. DPT is the one that carries the offset, so it is what lets a
+    consumer work out the depth under the KEEL rather than under the
+    transducer. DBT carries no offset and is what older software
+    reads. They say the same thing, so anything reading both still has
+    one number.
 
     The offset goes out NEGATIVE: NMEA reads a positive offset as the
     distance up to the waterline and a negative one as the distance
     down to the keel, and it is the keel that runs aground.
+
+    With no depth it is DPT alone, with an EMPTY depth field. That is
+    the one spelling of "I am here and I do not know" that was checked
+    against the parser - an empty field becomes null, where DBT's
+    empty fields were not verified to. And saying it at all is the
+    point: the failure that matters on this instrument is not a dead
+    port, it is a LIVE link with no echo - a fouled transducer, air
+    under the hull going upwind, a hull lifting the transducer clear -
+    where perfect frames keep arriving and every one of them reports
+    nothing found. Stay silent through that and the last good depth
+    sits on the glass looking current.
     """
+    if m is None:
+        return [nmea('SDDPT,,%.2f,' % (-abs(keel) if keel else 0.0))]
     # A fathom is six feet exactly, and a foot is 0.3048 m exactly, so
     # both of these are definitions rather than measurements.
     ft, fath = m / 0.3048, m / 1.8288
@@ -2731,13 +2767,18 @@ def _sonar_say(sock, host, port, now):
             return
         since = [p for p in _sonar['pings'] if p['t'] / 1000.0 > _sonar['said']]
         _sonar['said'] = now
-    # Only pings that found a bottom. A board reporting zero has not
-    # got one, and announcing nought metres of water to the alarm is
-    # the worst lie available here.
-    idx = sorted(p['idx'] for p in since if p['idx'] > 0)
-    if not idx:
-        return
-    m = idx[len(idx) // 2] * SONAR_US * 1e-6 * SONAR_C / 2
+    # Only the pings that found a bottom. Zero is a board that has
+    # not got one; the last sample is a board that searched to the end
+    # of its window and gave up there. Both are "no detection" and
+    # neither is a depth - announcing nought metres of water to a
+    # shallow alarm is the worst lie available here.
+    idx = sorted(p['idx'] for p in since if 0 < p['idx'] < p['ns'] - 1)
+    if since and not idx:
+        m = None              # alive, and looking at nothing
+    elif not idx:
+        return                # nothing arrived at all; say nothing
+    else:
+        m = idx[len(idx) // 2] * sonar_mps() + SONAR_OFFSET
     try:
         for line in sonar_sentences(m, SONAR_KEEL):
             sock.sendto(line.encode('ascii'), (host, port))
@@ -2860,6 +2901,14 @@ def _sonar_serial(dev, baud):
     # from here on the VTIME above is what bounds a read.
     fd = os.open(dev, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
     try:
+        # Ours alone. Linux does not set this on a ttyUSB by itself,
+        # so an Arduino IDE serial monitor left open - or a second
+        # netd - takes a random half of the bytes and NEITHER side is
+        # told. That arrives here as checksum failures and resyncs,
+        # which look exactly like a bad cable. With it, the second
+        # opener gets EBUSY and knows.
+        with contextlib.suppress(OSError):
+            fcntl.ioctl(fd, termios.TIOCEXCL)
         sonar_baud(fd, baud)
         fcntl.fcntl(fd, fcntl.F_SETFL,
                     fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)

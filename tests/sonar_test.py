@@ -34,7 +34,8 @@ def load(**env):
     for k in ('HELM_SONAR', 'HELM_SONAR_SAMPLES', 'HELM_SONAR_BINS',
               'HELM_SONAR_KEEP', 'HELM_SONAR_US', 'HELM_SONAR_C',
               'HELM_SONAR_VTIME', 'HELM_DEV', 'HELM_SONAR_NMEA',
-              'HELM_SONAR_NMEA_HZ', 'HELM_SONAR_KEEL'):
+              'HELM_SONAR_NMEA_HZ', 'HELM_SONAR_KEEL', 'HELM_SONAR_MPS',
+              'HELM_SONAR_OFFSET'):
         os.environ.pop(k, None)
     os.environ.update({k: str(v) for k, v in env.items()})
     return importlib.reload(importlib.import_module('netd'))
@@ -388,6 +389,25 @@ class Wire(unittest.TestCase):
         self.assertEqual([p['idx'] for p in got['pings']], [1, 2, 3],
                          'three frames in, three frames out')
         self.assertEqual(got['bad'], 0)
+        # And nobody else gets a share of them. Linux does not make a
+        # ttyUSB exclusive by itself, so an Arduino IDE serial monitor
+        # left open - or a second netd - takes a random half of the
+        # bytes and NEITHER side is told; it arrives as checksum
+        # failures and resyncs, which look exactly like a bad cable.
+        #
+        # Asserted as the FLAG and not as the EBUSY it causes, because
+        # the kernel waives exclusivity for CAP_SYS_ADMIN and a probe
+        # run as root would see the second open succeed and conclude
+        # the opposite of the truth. On the Pi, netd runs as the
+        # desktop user and the second opener is refused.
+        fd2 = os.open(dev, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
+        try:
+            TIOCGEXCL = 0x80045440
+            on = struct.unpack('i', fcntl.ioctl(
+                fd2, TIOCGEXCL, struct.pack('i', 0)))[0]
+            self.assertTrue(on, 'the port is held exclusively')
+        finally:
+            os.close(fd2)
         # And then the board stops talking, which is a thing boats do.
         th.join(4)
         self.assertFalse(th.is_alive(),
@@ -610,19 +630,87 @@ class Announce(unittest.TestCase):
         said = float(last.split(',')[1])
         self.assertLess(said, 10, 'the 9000-sample flyer did not become 89 m')
 
-    def test_no_lock_is_said_as_silence_not_as_nought(self):
-        # A board reporting index zero has not found a bottom.
-        # Announcing nought metres of water to the shallow alarm is
-        # the worst lie available here - so it says nothing, and the
-        # alarm's own staleness rule takes it from there.
+    def test_no_lock_is_said_out_loud_as_nothing_known(self):
+        # The failure that matters on this instrument is not a dead
+        # port. It is a LIVE link with no echo - a fouled transducer,
+        # air under the hull going upwind, a hull lifting the
+        # transducer clear - where perfect frames keep arriving and
+        # every one of them reports nothing found. Stay silent through
+        # that and the last good depth sits on the glass looking
+        # current, which is the one outcome worth engineering against.
+        #
+        # So: an EMPTY depth field, which the parser turns into null.
+        # Not nought metres, which is the worst lie available here,
+        # and not silence, which is indistinguishable from the helper
+        # having died.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port,
+                 HELM_SONAR_KEEL=0.6)
+        n.sonar_nmea_open()
+        for _ in range(4):
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=0)), 1800)
+        got = sk.recv(200).decode()
+        self.assertTrue(got.startswith('$SDDPT,,'),
+                        'the depth field is empty, not a number: ' + got)
+        self.assertIn(',-0.60,', got, 'and the keel offset still goes')
+        self.assertEqual(n.sonar_read(0)['sent'], 1)
+        # DPT alone. An empty DBT was never checked against the
+        # parser, and guessing is how a null becomes a zero.
+        with self.assertRaises(OSError):
+            sk.recv(200)
+
+    def test_a_board_pegged_at_the_end_of_its_window_has_not_found_one(self):
+        # Index zero is "nothing yet"; the LAST sample is "searched to
+        # the end and gave up there". Both are no detection and
+        # neither is 17.8 metres of water.
         sk, port = self.listen()
         n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port)
         n.sonar_nmea_open()
         for _ in range(4):
-            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=0)), 1800)
-        self.assertEqual(n.sonar_read(0)['sent'], 0)
-        with self.assertRaises(OSError):
-            sk.recv(200)
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=1799)), 1800)
+        self.assertTrue(sk.recv(200).decode().startswith('$SDDPT,,'))
+
+    def test_nothing_arriving_at_all_is_different_from_nothing_found(self):
+        # No pings in the window says the READER has stopped, and
+        # that is not this layer's to announce - the staleness rules
+        # downstream say it better. Only a live link with no echo gets
+        # a null.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port,
+                 HELM_SONAR_NMEA_HZ=1000)
+        n.sonar_nmea_open()
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=400)), 1800)
+        sk.recv(300), sk.recv(300)
+        before = n.sonar_read(0)['sent']
+        n._sonar_say(n._nmea['sock'], n._nmea['host'], n._nmea['port'],
+                     time.time())
+        self.assertEqual(n.sonar_read(0)['sent'], before,
+                         'an empty window says nothing at all')
+
+    def test_the_scale_can_be_measured_rather_than_argued_about(self):
+        # The project disagrees with itself by about 4% - 13.0 us vs
+        # 13.2, and 1440 vs 1450 vs 1500 m/s - which is sixty
+        # centimetres at fifteen metres. The product is settable
+        # directly so it can be fitted against a leadline instead.
+        n = load()
+        self.assertAlmostEqual(n.sonar_mps(), 0.0099, places=5)
+        n = load(HELM_SONAR_MPS=0.0094)
+        self.assertAlmostEqual(n.sonar_mps(), 0.0094, places=6)
+        self.assertAlmostEqual(n.sonar_read(0)['mps'], 0.0094, places=6)
+
+    def test_and_the_offset_the_sketch_has_no_parameter_for(self):
+        # depth = mps * index + offset. The second coefficient catches
+        # the fixed index error from ring-down delay and comparator
+        # latency; the R4's firmware has a DEPTH_OFFSET for it and the
+        # R3's has nothing at all.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port,
+                 HELM_SONAR_MPS=0.01, HELM_SONAR_OFFSET=-0.25)
+        n.sonar_nmea_open()
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=400)), 1800)
+        got = sk.recv(300).decode()
+        self.assertIn('SDDPT,3.75,', got,
+                      '400 x 0.01 is 4.00, less the 0.25: ' + got)
 
     def test_a_bad_destination_is_named_rather_than_opened(self):
         n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='tcp:10110')

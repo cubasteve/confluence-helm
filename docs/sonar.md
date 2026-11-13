@@ -81,7 +81,7 @@ Off unless asked for, and that default is load-bearing: a boat whose
 board still announces its own depth must not acquire a second source.
 
 ```sh
-HELM_SONAR_NMEA=udp:10110         # where to send it
+HELM_SONAR_NMEA=udp:10111         # where to send it
 HELM_SONAR_NMEA_HZ=2              # how often (default 2)
 HELM_SONAR_KEEL=0.6               # metres from transducer face to keel bottom
 ```
@@ -89,12 +89,34 @@ HELM_SONAR_KEEL=0.6               # metres from transducer face to keel bottom
 It goes out as **NMEA 0183 over UDP**, which is what everything else on
 a boat already speaks — Signal K, AvNav and OpenCPN all ingest it — so
 nothing downstream needs changing. 10110 is the registered port for
-NMEA 0183 over IP.
+NMEA 0183 over IP — but **use 10111**: Signal K's own NMEA-0183 *output*
+server listens on 10110, and two things named the same on one machine
+is a debugging session nobody needs.
 
 In Signal K that is one connection, with two fields:
 
 > **Server → Data Connections → Add**
-> Data Type **NMEA 0183**, NMEA 0183 Source **udp**, Port **10110**.
+> Data Type **NMEA 0183**, NMEA 0183 Source **udp**, Port **10111**,
+> **Validate checksum** on, **Append checksum** off (netd appends its
+> own).
+
+Give the connection an `id` you will recognise and keep it stable —
+it becomes the base of `$source`, so with talker `SD` the Data Browser
+will show something like `open-echo.SD`, and source-priority rules
+reference it.
+
+A malformed sentence is **dropped silently** with nothing logged
+anywhere, because `validateChecksum` defaults on. Get it right once
+and confirm in the Data Browser rather than assuming.
+
+Signal K's UDP listener calls `bind()` with no address, so **the port
+is open on every interface**, boat WiFi included, and anything on the
+LAN can inject a depth. netd sends to loopback by default; close the
+other side too:
+
+```sh
+sudo nft add rule inet filter input iifname != "lo" udp dport 10111 drop
+```
 
 UDP is Signal K's only *plain inbound listener*. The alternatives were
 checked and rejected on the merits rather than on taste:
@@ -143,11 +165,41 @@ shallow alarm is a sounder somebody switches off. At 2 Hz over a board
 pinging at 10, that is a median of five — enough to throw away an
 outlier, not enough to lag a boat.
 
-A ping that reports index **zero** has not found a bottom, and those are
-excluded. Announcing nought metres of water to a shallow alarm is the
-worst lie available here. If nothing has a lock, netd says nothing at
-all and the staleness rules downstream take it from there — the panel
-drops the reading after 8 s, which is the truth.
+### No detection is announced, not kept quiet
+
+A ping reporting index **zero** has not found a bottom; one reporting
+the **last sample** searched to the end of its window and gave up
+there. Both are excluded from the median — announcing nought metres of
+water to a shallow alarm is the worst lie available here.
+
+But silence is the wrong way to say so, and getting this wrong was the
+real bug:
+
+> **The failure that matters is not a dead port. It is a live link
+> with no echo** — a fouled transducer, air under the hull pounding
+> upwind, a planing hull lifting the transducer clear — where perfect
+> frames keep arriving and every one of them reports nothing found.
+
+Stay quiet through that and the last good depth sits on the glass
+looking current, which most displays will show without comment. So
+netd says it out loud, as a DPT with an **empty depth field**, which
+the parser turns into `null`:
+
+```
+$SDDPT,,-0.60,
+```
+
+DPT alone in that case. An empty `DBT` was never checked against the
+parser, and guessing is how a null quietly becomes a zero.
+
+Nothing arriving **at all** is different and gets nothing: that means
+the reader has stopped, which is not this layer's to announce — the
+staleness rules downstream say it better, and the panel drops a
+reading after 8 s.
+
+Worth adding downstream: a notification when depth has been null for
+N seconds. A sounder that has lost the bottom and says so is only
+useful if something is listening for it.
 
 ## The frame, and what it leaves out
 
@@ -220,14 +272,40 @@ The rest only matter if your firmware is not stock:
 | | default | what it is |
 |---|---|---|
 | `HELM_SONAR_SAMPLES` | 1800 | the firmware's `NUM_SAMPLES`. Serial only — a datagram says its own length |
-| `HELM_SONAR_US` | 13.2 | microseconds per sample, the ADC period. ~1 cm of water there and back |
+| `HELM_SONAR_US` | 13.2 | microseconds per sample, the ADC period |
 | `HELM_SONAR_C` | 1500 | metres per second through the water |
+| `HELM_SONAR_MPS` | *(from the two above)* | metres per sample, set directly — **measure this** |
+| `HELM_SONAR_OFFSET` | 0 | metres added after scaling |
 | `HELM_SONAR_BINS` | 256 | columns the picture is squeezed to before it crosses the wire |
 | `HELM_SONAR_KEEP` | 600 | pings held. At ~10 Hz, a minute |
 
 `US × C ÷ 2` is the metres each sample covers, and that number times a
 ping's own sample count is the depth scale the app draws. At the
 defaults a column reaches **17.8 m / 58 ft**.
+
+### Don't trust either constant — measure the product
+
+The project does not agree with itself about either of them:
+
+| | |
+|---|---|
+| sample period | comments and `echo_interface.py` say **13.2 µs**; the NMEA sketch's code says **13.0**; and the ADC setup (prescaler 16 → 1 MHz ADC clock, 13 clocks per free-running conversion) implies **13.0 exactly** |
+| speed of sound | `echo_interface.py` uses **1440**, the NMEA sketch **1450**, fresh water at 15–20 °C is **1450–1460**, seawater about **1500** |
+
+Together that is a **±4 % systematic scale error — 60 cm at 15 m**:
+
+| | 13.0 µs / 1450 m/s | 13.2 µs / 1500 m/s |
+|---|---|---|
+| per sample | 9.4 mm | 9.9 mm |
+| full scale (1800) | 16.96 m | 17.82 m |
+
+They are only ever used as their **product**, so don't pick a side —
+fit it. Take a leadline reading at two depths, say 3 m and 12 m, and
+solve `depth = MPS × index + OFFSET`. Keep **both** coefficients:
+`MPS` absorbs the whole `US × C ÷ 2` product as one number, and
+`OFFSET` catches the fixed index error from ring-down delay and
+comparator latency — which the R4's firmware has a `DEPTH_OFFSET` for
+and the **R3's has no parameter for at all**.
 
 ### 250000 baud, and why `stty` cannot get there
 
@@ -324,12 +402,42 @@ difference sets your depth range:
 | range | ~17.8 m / 58 ft | ~50 m |
 | echogram | yes | **no** |
 
-Both sample at 13.2 µs, which is 0.95 cm of water per sample — the
-range is purely how many samples the sketch keeps. The raw firmware's
-1800 is what `HELM_SONAR_SAMPLES` defaults to. Raise both together if
-you want more water, and pay for it in ping rate: the board manages
-about **9.4 pings a second** at 1800 samples and the bottleneck is the
-serial link, so 5224 samples would be nearer 3.
+That 5224 is misleading and I repeated it before checking: **the NMEA
+sketch never allocates it.** The line that would store a sample is
+commented out, so the array is garbage-collected by the linker and the
+sketch reaches 50 m by *counting* samples without keeping any.
+
+The raw firmware has to keep them, and that is the wall:
+
+> 1800 samples is a **1808-byte** frame struct in a 328P's **2048
+> bytes** of SRAM, plus 64 + 64 bytes of serial ring buffer = 1936.
+> About 112 bytes are left for the stack.
+
+So **~17.8 m / 58 ft is the ceiling for the echogram on this board**,
+full stop — not a default to raise. Below the window you get no
+detection rather than a wrong number. More range means either slowing
+the sample loop (the host script has a commented-out 52.2 µs option
+reaching ~70 m, at four times worse resolution and nearly four times
+the acquisition time) or an UNO R4, which has room for ~12000 samples.
+
+If you anchor in 3–8 m and sail over 40, this instrument is useful for
+one of those and blind in the other. Worth knowing which problem you
+are solving before reflashing.
+
+### The blind zone is the thing to check first
+
+The sketch has `BLINDZONE_SAMPLE_END = 450`, which at 0.95 cm a sample
+is about **4.2–4.5 m**. If it does what the name says — ignore returns
+before that sample — the sounder is blind in exactly the water where
+depth matters: anchorages, marina approaches, every grounding.
+
+This is inferred from the constant's name; the research never got to
+the code that consumes it. **Read the sketch before trusting shallow
+water to this**, and if it is what it looks like, lowering it is the
+first firmware change to make — then check the transducer's own
+ring-down does not false-trigger the comparator at short range, which
+is what the blanking is there for. Bench-test alongside at a known
+depth.
 
 ## Squeezing 1800 into 256
 
@@ -456,12 +564,101 @@ Closing the app zeroes **both** canvases. The offscreen is the one
 nothing else holds a handle on, and a canvas keeps its backing store
 until its dimensions are set to zero however detached it is.
 
+## Four things on the Pi that each cost an afternoon
+
+**`brltty` eats the port.** On Debian-derived images it has a udev rule
+claiming `1a86:7523` — the CH340's own VID:PID. The symptom is
+`ttyUSB0` appearing and then vanishing about a second later.
+
+```sh
+dmesg | grep -i ch341
+systemctl status brltty        # remove it, or mask its udev rule
+```
+
+**ModemManager probes new serial ports with AT commands.** If the board
+has the DTR→reset capacitor wired, that resets it and injects garbage
+into your first frames. Tell it to leave the device alone with a udev
+rule setting `ENV{ID_MM_DEVICE_IGNORE}="1"`.
+
+**`ttyUSB0` moves** the moment you plug in another USB serial device.
+Use a stable path — and prefer **`by-path`** over `by-id` here, because
+CH340C parts ship with no USB serial number, so the `by-id` name is
+generic (`usb-1a86_USB_Serial-if00-port0`) and collides with the next
+CH340 you own. `by-path` is tied to the physical socket, which on a
+boat is what you actually mean.
+
+```sh
+ls -l /dev/serial/by-path/
+HELM_SONAR=serial:/dev/serial/by-path/platform-xhci-hcd.0-usb-0:1.2:1.0-port0:250000
+```
+
+**Two programs on one port is silent.** Linux does not make a `ttyUSB`
+exclusive by itself, so an Arduino IDE serial monitor left open takes a
+random half of the bytes and neither side is told — it arrives as
+checksum failures and resyncs that look exactly like a bad cable. netd
+sets `TIOCEXCL` now, so the second opener gets `EBUSY` and knows. (Not
+against root, which the kernel exempts; netd runs as the desktop user.)
+
+And one that costs a board rather than an afternoon: **do not Burn
+Bootloader, and do not use an ISP programmer**, until you know which
+chip you have. If it is a 328PB, avrdude's signature check fails
+(`m328p` is 1E 95 0F, `m328pb` is 1E 95 16) and you can brick a working
+board fixing a problem you do not have. Ordinary serial uploads work
+either way, because Optiboot reports a hardcoded signature.
+
+## The analog chain, which fails silently
+
+Worth knowing before blaming software for a grassy picture:
+
+- The shield's front end is tuned by **solder jumpers** (presets for
+  40/150/200/600 kHz), and the firmware's `FILTER_FREQUENCY_REGISTER`
+  has to be matched to them **by hand**. A mismatch gives a
+  plausible-looking echogram with useless signal-to-noise and no error
+  anywhere.
+- The project's >50 m results used a 150 kHz in-hull transducer driven
+  at **15–20 V from a boost converter**, not from the Arduino's 5 V
+  rail. Keep the transducer drive off the Arduino supply.
+- Keyestudio publishes no schematic and no regulator part, and
+  specifies 150 mA on the 3.3 V rail against a real UNO R3's 50 mA —
+  a different power design, with `AREF` never mentioned on either
+  page. The shield feeds an analog envelope into A0, so a noisy 5 V
+  rail reads directly as a noise floor, which is to say as false
+  bottoms. If it looks grassy, suspect the board before the shield.
+- **There is no flow control.** The firmware blocks ~72 ms writing each
+  frame and the CH340 link has no handshaking. If the Pi stops draining
+  the port, bytes are simply lost — truncated frames and resyncs, not
+  back-pressure. If checksum failures track Pi load, that is why.
+
 ## Still open
+
+Unresolved, and said plainly rather than smoothed over:
+
+- **Which chip is actually on the board.** Keyestudio's two pages
+  contradict each other and one contradicts itself. It changes nothing
+  about the firmware (either part builds and runs as "Arduino Uno"),
+  but it decides whether a second UART exists and whether an ISP
+  programmer is safe. `lsusb` settles the bridge; the TQFP marking
+  settles the MCU.
+- **`BLINDZONE_SAMPLE_END` semantics are inferred from the name**, and
+  it is the single most consequential unknown for shallow water.
+- **250000 baud has not been tested on this CH340C.** The arithmetic is
+  exact on both sides — UBRR 7 with U2X on an AVR, and the ch341 driver
+  derives ps=3/div=24 from its 48 MHz clock for exactly 250000 — but
+  the bridge runs off an internal oscillator with no crystal and WCH
+  does not enumerate 250000. Judge it by checksum pass rate, not by
+  arithmetic.
+- **Nothing here has been compiled.** No AVR toolchain was available,
+  so "it builds" is expected rather than demonstrated.
+- The shield facts are for **revision 002**; a revision with an onboard
+  boost converter is said to be coming.
+
+And in this repo:
 
 - The gain is a straight divide by the running peak with a noise floor
   under it. No noise-floor *subtraction*, because that would mean
   guessing at the shape of noise nobody here has seen yet. First
   contact with real water is what should decide it.
-- `HELM_SONAR_C` is fixed at 1500 m/s. The frame carries a temperature,
-  so the day a percent matters, that is the number to refine with.
+- The frame carries a temperature and nothing uses it. The day the
+  speed of sound matters to a percent, that is the number to refine
+  `HELM_SONAR_MPS` with.
 - Nothing is recorded. The ring is a minute and then it is gone.
