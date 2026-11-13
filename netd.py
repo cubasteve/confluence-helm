@@ -2777,6 +2777,7 @@ def _power_sheet(v):
         if not act or len(act) > 24 or not act.isalpha():
             continue
         out.append({'a': act, 'name': name[:40],
+                    'short': str(a.get('short') or name)[:16],
                     'verb': str(a.get('verb') or name)[:40],
                     'danger': 1 if a.get('danger') else 0,
                     'need': str(a.get('need') or '')[:40]})
@@ -2888,6 +2889,41 @@ def remote_available_power():
                 continue
         out.append(a)
     return out
+
+
+def remote_radios():
+    """What the radios ARE, and nothing you can do to them.
+
+    The second stated exception to "no live data crosses", after the
+    start clock, and a narrower one: it is read-only. There is no
+    switch, no scan and no join on this path - the picker stays on the
+    glass, because its content is the readings and because a scan is
+    ten seconds of the hotspot stuttering for every device on it,
+    the asking phone included.
+
+    Fetched when the settings sheet opens and at no other time. The
+    panel itself only asks while its control-panel drawer is open, for
+    the reason its own comment gives - a panel that spends its life on
+    the dial has no business asking about radios all day, and each ask
+    is a handful of subprocesses. The phone makes the same deal.
+
+    Cached for four seconds on top of that, so opening the sheet twice
+    in a row, or two phones opening it at once, is one ask."""
+    w = wifi_status()
+    out = []
+    for d in (w.get('devices') or []):
+        out.append({'dev': str(d.get('dev') or ''),
+                    'bus': str(d.get('bus') or ''),
+                    'up': bool(d.get('up')),
+                    'conn': bool(d.get('conn')),
+                    'ap': bool(d.get('ap')),
+                    'ssid': str(d.get('ssid') or ''),
+                    'signal': int(d.get('signal') or 0)})
+    b = bt_status()
+    return {'wifi': {'available': bool(w.get('available')), 'devices': out},
+            'bt': {'available': bool(b.get('available')),
+                   'on': bool(b.get('powered')),
+                   'names': [str(n) for n in (b.get('connected') or [])][:4]}}
 
 
 def remote_power(action, token):
@@ -3424,6 +3460,22 @@ svg.gl .f{fill:currentColor;stroke:none}
    readable label do not both fit across a 358px sheet. */
 .srow.rng{flex-wrap:wrap}
 .srow.rng input{width:100%;margin:10px 2px 0;accent-color:var(--accent)}
+/* A status, not a control. No :active, no button, and the value in the
+   label's own colour rather than the accent - accent on this sheet
+   means "you can change this", and on these two you cannot.
+   Its own proportions as well: an SSID is as long as somebody felt
+   like making it, so the name takes one line with the interface under
+   it and the state takes the rest, right-aligned and smaller. Equal
+   halves put "Built-in" on two lines to make room for a word nobody
+   is reading letter by letter. */
+.srow.ro{padding:11px 12px}
+.srow.ro s{flex:0 0 auto;max-width:42%}
+.srow.ro s em{display:block;font-style:normal;font-size:11px;
+ letter-spacing:.14em;color:var(--label);margin-top:2px}
+.srow.ro b{color:var(--ink-dim);font-weight:600;flex:1;text-align:right;
+ font-size:12px;letter-spacing:.1em;overflow:hidden;
+ text-overflow:ellipsis;white-space:nowrap}
+.srow.ro.off b{color:var(--label)}
 .prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
  border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;
  text-align:left}
@@ -3437,6 +3489,30 @@ svg.gl .f{fill:currentColor;stroke:none}
 .prow.arm svg{color:var(--accent)}
 .prow.dgr.arm{color:#C81E1E}
 .prow.dgr.arm svg{color:#C81E1E}
+/* The power sheet is tiles, which is what the glass's own is: an icon
+   and the one word that fits under it. A list of sentences is a list
+   you read; a grid of glyphs is one you aim at, and this is the sheet
+   you reach for with one hand on something else.
+   Two tiers, as the glass has them - the safe ones above the rule and
+   the two that take the boat down below it, which is the separation
+   that does not depend on colour. Night is a single red hue. */
+.ptier{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+ padding:10px}
+.ptier.low{grid-template-columns:repeat(2,1fr);
+ border-top:2px solid var(--hairline);padding-top:14px}
+.ptile{border:2px solid var(--hairline);border-radius:18px;
+ padding:16px 6px 13px;display:flex;flex-direction:column;
+ align-items:center;gap:9px;color:var(--ink);background:none;font:inherit}
+.ptile:active{background:var(--chip)}
+.ptile svg{width:28px;height:28px;flex:none;color:var(--label)}
+.ptile b{font-size:12px;font-weight:600;letter-spacing:.08em;
+ text-align:center;line-height:1.15}
+.ptile.arm{background:var(--chip);border-color:var(--accent);
+ color:var(--accent)}
+.ptile.arm svg{color:var(--accent)}
+.ptile.dgr{border-color:#C81E1E}
+.ptile.dgr svg, .ptile.dgr b{color:#C81E1E}
+.ptile.dgr.arm{background:var(--chip)}
 /* The bar that does it. The glass asks for a full slide, because a
    round panel at speed produces touches nobody offered - a sleeve on
    the rim, a knuckle passing through. A phone in a hand does not do
@@ -3972,6 +4048,7 @@ function shOpen(which){
     return;
   }
   clearTimeout(shWipe);
+  if(SHEET==='set') radGet();
   shPaint();
   e.className='on';
   sc.className='on'+(SHEET==='power'?' pw':'');
@@ -3986,11 +4063,15 @@ function shHead(title){
 }
 function pwRows(){
   var h=shHead(S.uptime ? 'DEVICE RUNTIME: '+S.uptime : 'DEVICE');
+  var safe='', risk='';
   (S.power||[]).forEach(function(a){
-    h+='<button class="prow'+(a.danger?' dgr':'')
+    var t='<button class="ptile'+(a.danger?' dgr':'')
       +(ARM&&ARM.a===a.a?' arm':'')+'" data-pa="'+esc(a.a)+'">'
-      +gly(a.a)+'<s>'+esc(a.name)+'</s></button>';
+      +gly(a.a)+'<b>'+esc(a.short||a.name)+'</b></button>';
+    if(a.danger) risk+=t; else safe+=t;
   });
+  h+='<div class="ptier">'+safe+'</div>'
+    +(risk?'<div class="ptier low">'+risk+'</div>':'');
   return h+'</div><div id="hold"'
     +(ARM?(' class="on'+(ARM.danger?' dgr':'')+'"'):'')+'>'
     +'<i></i><b>'+esc(ARM?('HOLD TO '+(ARM.verb||'CONFIRM')):'')+'</b></div>';
@@ -4019,8 +4100,61 @@ function sVal(d,v){
   }
   return '';
 }
+/* The radios, as a status and nothing else: no switch, no scan, no
+   join. Fetched when this sheet opens and at no other time - the panel
+   only asks while its own drawer is open, for the reason its comment
+   gives, and the phone makes the same deal. Drawn as a dash until the
+   answer lands, so the sheet opens at once rather than waiting out a
+   Bluetooth read that costs two seconds on real hardware. */
+var RAD=null;
+function radGet(){
+  RAD=null;
+  get('/r/radios?t='+encodeURIComponent(T), function(j){
+    if(!j || !j.ok) return;
+    RAD=j;
+    if(SHEET==='set') shPaint();
+  });
+}
+function radName(d){
+  return esc(d.bus==='usb' ? 'USB adapter' : 'Built-in')
+       + (d.dev ? '<em>'+esc(d.dev)+'</em>' : '');
+}
+function radWhat(d){
+  if(!d.up)   return 'OFF';
+  if(d.ap)    return 'HOTSPOT'+(d.ssid ? ' · '+d.ssid : '');
+  if(d.conn)  return (d.ssid||'ON')+(d.signal ? '  '+d.signal+'%' : '');
+  return 'ON · NOT JOINED';
+}
+function radRows(){
+  var h='';
+  if(!RAD){
+    return '<div class="sgrp">RADIOS</div>'
+         + '<div class="srow ro off"><s>Asking the boat</s><b>…</b></div>';
+  }
+  var w=RAD.wifi||{};
+  if(w.available && (w.devices||[]).length){
+    h+='<div class="sgrp">WIFI</div>';
+    w.devices.forEach(function(d){
+      /* radName is the one thing on this wire built AS markup, and it
+         is built here out of two escaped pieces - nothing from the
+         boat goes in unescaped. */
+      h+='<div class="srow ro'+(d.up?'':' off')+'">'
+        +'<s>'+radName(d)+'</s><b>'+esc(radWhat(d))+'</b></div>';
+    });
+  }
+  var b=RAD.bt||{};
+  if(b.available){
+    h+='<div class="sgrp">BLUETOOTH</div>'
+      +'<div class="srow ro'+(b.on?'':' off')+'"><s>Adapter</s><b>'
+      +esc(!b.on ? 'OFF'
+           : (b.names||[]).length ? b.names.join(', ') : 'ON · NOTHING ON IT')
+      +'</b></div>';
+  }
+  return h;
+}
+
 function stRows(){
-  var h=shHead('SETTINGS'), set=(S.now||{}).set||{}, last='';
+  var h=shHead('SETTINGS')+radRows(), set=(S.now||{}).set||{}, last='';
   (S.settings||[]).forEach(function(d){
     if(d.g && d.g!==last){ last=d.g; h+='<div class="sgrp">'+esc(d.g)+'</div>'; }
     var v=set[d.k];
@@ -4486,6 +4620,18 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 return self._send({'ok': False, 'error': 'BAD TOKEN'}, 403)
             return self._send(remote_manifest(_remote['token']), 200,
                               'application/manifest+json')
+        if path == '/r/radios':
+            r = _remote
+            if not r['armed']:
+                return self._send({'ok': False, 'error': 'NOT ARMED'}, 403)
+            if not secrets.compare_digest(self._token(), r['token']):
+                return self._send({'ok': False, 'error': 'BAD TOKEN'}, 403)
+            # Its own route rather than a field on /r/state, because
+            # /r/state is fetched on every poll of the start clock and
+            # this costs a handful of subprocesses. One is cheap and
+            # the other is not, so they are not the same door.
+            d = memo('rradios', 4, remote_radios)
+            return self._send(dict(d, ok=True))
         if path == '/r/state':
             r = _remote
             if not r['armed']:

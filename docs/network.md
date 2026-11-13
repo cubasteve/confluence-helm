@@ -983,12 +983,38 @@ right, which lets you read the whole sheet down its right-hand edge
 without reading a word of it. The room the old four-button theme row
 freed goes to the face, which is the thing this app is.
 
-**Every one of them is a thing that is SET, not a thing that is read.**
-That is the rule this remote has always had, and it is why the radios
-are not on the sheet: WiFi and Bluetooth have no fixed catalogue to
-ship — their content *is* live data, what is in range and how strong
-and which adapter is up. Strip the readings and four verbs are left
-with no subjects.
+Above them sit **WIFI** and **BLUETOOTH**, which are a *status and
+nothing else* — the second stated exception to "no live data crosses",
+after the start clock, and a narrower one, because it is read-only.
+Each adapter's row says what it is: `HOTSPOT · CONFLUENCE`,
+`MARINA-GUEST  72%`, or `OFF`. Bluetooth says what is connected to it.
+They are drawn in the label's colour rather than the accent, because
+accent on this sheet means "you can change this" and on these two you
+cannot. A press on one asks the boat for nothing.
+
+**The picker stays on the glass.** Its content *is* the readings — what
+is in range, how strong, which adapter is up — so there is no fixed
+catalogue to ship the way the settings and the power sheet ship theirs;
+strip the readings and four verbs are left with no subjects. And a scan
+is **ten seconds** of the adapter leaving its channel to sweep the
+others, which on `wlan0` is the hotspot stuttering for every device on
+it, the asking phone included.
+
+The status comes down its **own door**, `/r/radios`, and is asked for
+when the sheet opens and at no other time — the panel makes the same
+deal with itself, polling `/status` only while its control-panel drawer
+is open, for the reason its own comment gives: *"a panel that spends
+its life on the dial has no business asking about radios all day, and
+each ask is a handful of subprocesses on the Pi."* Not a field on
+`/r/state`, which the start clock polls every four seconds while it
+runs; one of those is cheap and the other is not, so they are not the
+same door. Cached four seconds on top, so opening the sheet twice, or
+two phones opening it at once, is one ask. The sheet draws a dash until
+the answer lands, because a Bluetooth read costs two seconds on real
+hardware and the sheet should not wait on it.
+
+Everything below those two **is a thing that is SET, not a thing that
+is read**, which is the rule this remote has always had.
 
 The catalogue is the panel's, the same way the power sheet's is.
 `REM_SET()` names each setting's card, its words, its **shape**
@@ -1029,9 +1055,13 @@ puts on its own theme tile.
 ### The power sheet
 
 The **power button** opens the glass's own power sheet: Reload the app, Restart helper, Desktop or
-Back to the kiosk, Reboot, Shut down. Least destructive first, which is
-the glass's rule and matters more on a phone: the top of a list is where
-a hurried thumb lands, and that should not be the shutdown.
+Back to the kiosk, Reboot, Shut down. It is **tiles**, as the glass's own power sheet is: an
+icon and the one short word that fits under it. A list of sentences is
+a list you read; a grid of glyphs is one you aim at, and this is the
+sheet you reach for with one hand already on something else. Two tiers,
+as the glass has them — the safe ones above a rule and the two that
+take the boat down below it, which is a separation that does not rest
+on colour. Night is a single red hue.
 
 It goes **straight through netd**, not queued for the panel. The reason
 you reach for this is usually that the glass has stopped answering, and

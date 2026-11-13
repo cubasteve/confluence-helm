@@ -63,6 +63,19 @@ def _did(action):
 
 netd.power_do = _did
 
+# Radios, too. This container has neither, and a real wifi_status() here
+# would answer for the machine running the probe rather than for a boat.
+netd.wifi_status = lambda: {'available': True, 'radio': True, 'devices': [
+    {'dev': 'wlan0', 'bus': 'builtin', 'up': True, 'conn': True, 'ap': True,
+     'ssid': 'CONFLUENCE', 'signal': 0},
+    {'dev': 'wlan1', 'bus': 'usb', 'up': True, 'conn': True, 'ap': False,
+     'ssid': 'MARINA-GUEST', 'signal': 72},
+    {'dev': 'wlan2', 'bus': 'usb', 'up': False, 'conn': False, 'ap': False,
+     'ssid': '', 'signal': 0, 'ip': '10.0.0.9', 'state': 'disconnected'},
+]}
+netd.bt_status = lambda: {'available': True, 'powered': True,
+                          'connected': ['JBL FLIP'], 'scanning': False}
+
 netd._remote.update(armed=True, token='T0KEN', how='device', cidr='')
 r = netd.remote_register(cat)
 assert r['ok'], r

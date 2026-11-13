@@ -420,6 +420,61 @@ class Door(unittest.TestCase):
             finally:
                 p.close()
 
+    def test_the_radios_are_a_read_and_nothing_else(self):
+        """The second stated exception to "no live data crosses", and a
+        narrower one than the clock: it is read-only. No switch, no
+        scan, no join - the picker stays on the glass, because a scan
+        is ten seconds of the hotspot stuttering for every device on
+        it, the asking phone included."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            was = (netd.wifi_status, netd.bt_status)
+            netd.wifi_status = lambda: {
+                'available': True, 'radio': True, 'devices': [
+                    {'dev': 'wlan0', 'bus': 'builtin', 'up': True,
+                     'conn': True, 'ap': True, 'ssid': 'CONFLUENCE',
+                     'signal': 0, 'ip': '10.42.0.1',
+                     'state': 'connected', 'managed': True}]}
+            netd.bt_status = lambda: {'available': True, 'powered': True,
+                                      'connected': ['JBL FLIP'],
+                                      'scanning': False}
+            try:
+                armed(netd)
+                p = Phone(netd)
+                try:
+                    for q in ('', '?t=', '?t=wrong'):
+                        code, j = p.js('/r/radios' + q)
+                        self.assertEqual(code, 403, j)
+                    netd._remote['armed'] = False
+                    code, j = p.js('/r/radios?t=T0KEN')
+                    self.assertEqual(code, 403, j)
+                    netd._remote['armed'] = True
+                    netd.bust()                    # the 4 s memo above
+                    code, j = p.js('/r/radios?t=T0KEN')
+                    self.assertEqual(code, 200, j)
+                    d = j['wifi']['devices'][0]
+                    self.assertEqual(d['ssid'], 'CONFLUENCE')
+                    self.assertTrue(d['ap'])
+                    self.assertEqual(j['bt']['names'], ['JBL FLIP'])
+                    # Only the fields the phone draws with. The address
+                    # and NetworkManager's own state word are the
+                    # boat's business, not a remote's.
+                    self.assertEqual(sorted(d),
+                                     ['ap', 'bus', 'conn', 'dev',
+                                      'signal', 'ssid', 'up'])
+                    # And nothing on this socket can touch them. A
+                    # scan, a join and a switch are all on the panel's
+                    # own endpoints, which RemoteHandler cannot reach.
+                    for path in ('/wifi/list', '/wifi/power',
+                                 '/wifi/connect', '/bt/scan', '/bt/power',
+                                 '/r/radios/scan', '/r/wifi'):
+                        code, j = p.js(path + '?t=T0KEN', {'dev': 'wlan0'})
+                        self.assertEqual(code, 404,
+                                         '%s -> %s %s' % (path, code, j))
+                finally:
+                    p.close()
+            finally:
+                netd.wifi_status, netd.bt_status = was
+
     def test_the_settings_arrive_by_registering(self):
         """armed() above writes _remote directly, so every other test
         here would pass with the register throwing the catalogue away.

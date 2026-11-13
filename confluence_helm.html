@@ -9391,6 +9391,11 @@ function remoteCat(){
               later arrives here with its words, its place in the order
               and its danger flag right, and no picture. */
            power:POWER_ACTIONS.map(a=>({a:a.a, name:a.name, verb:a.verb,
+                                        /* The word the GLASS puts under
+                                           its own tile, which is the
+                                           one that fits under an icon:
+                                           Helper, not Restart helper. */
+                                        short:a.short||a.name,
                                         danger:a.danger?1:0,
                                         need:a.need||''})),
            settings:REM_SET().map(x=>({g:x.g, k:x.k, name:x.name,

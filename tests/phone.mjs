@@ -575,11 +575,29 @@ await sheet('#pwb');
    resolves `need` against power_status() exactly as the glass resolves
    it against /status, and the rig says a desktop is startable and the
    kiosk is not - so one of that pair is here and the other is not. */
-const prows=await p.$$eval('.prow',gs=>gs.map(g=>g.dataset.pa));
+const prows=await p.$$eval('.ptile',gs=>gs.map(g=>g.dataset.pa));
 t.ok(prows.join()==='reload,helper,desktop,reboot,poweroff',
      'the glass\'s own actions, in the glass\'s own order - least '
      +'destructive first, because the top of a list is where a hurried '
      +'thumb lands', prows.join());
+/* Tiles, as the glass's own power sheet has them: an icon and the one
+   word that fits under it. A list of sentences is a list you read; a
+   grid of glyphs is one you aim at, and this is the sheet you reach
+   for with one hand on something else. */
+const ptl=await p.$$eval('.ptile',gs=>gs.map(g=>({
+  a:g.dataset.pa, svg:g.querySelectorAll('svg').length,
+  word:(g.querySelector('b')||{}).textContent||'',
+  tier:g.parentElement.className})));
+t.ok(ptl.every(x=>x.svg===1 && x.word),
+     'a glyph and a word on each', JSON.stringify(ptl.map(x=>x.word)));
+t.ok(ptl.every(x=>x.word.split(' ').length<=2),
+     'and the word is the short one the glass puts under its own tile',
+     JSON.stringify(ptl.map(x=>x.word)));
+/* Two tiers, as the glass has them. Night is a single red hue, so the
+   separation cannot rest on colour - the rule between them carries it. */
+t.ok(ptl.filter(x=>/low/.test(x.tier)).map(x=>x.a).join()==='reboot,poweroff',
+     'with the two that take the boat down under a rule of their own',
+     ptl.filter(x=>/low/.test(x.tier)).map(x=>x.a).join());
 t.ok(!prows.includes('cage'),
      'and the one this device cannot do is simply not on it');
 t.ok(/3d 4h/.test(await p.textContent('#sheet .hd b')),
@@ -591,23 +609,23 @@ t.head('and nothing on it happens because you touched it once');
 const did=async()=>(await peek()).did;
 t.ok((await did()).length===0, 'nothing has been asked for yet',
      JSON.stringify(await did()));
-await p.click('.prow[data-pa="poweroff"]'); await p.waitForTimeout(250);
+await p.click('.ptile[data-pa="poweroff"]'); await p.waitForTimeout(250);
 t.ok((await did()).length===0, 'and arming it is not doing it',
      JSON.stringify(await did()));
-t.ok(await p.$eval('.prow[data-pa="poweroff"]',e=>e.classList.contains('arm')),
-     'the row is lit, the way the glass lights an armed tile');
+t.ok(await p.$eval('.ptile[data-pa="poweroff"]',e=>e.classList.contains('arm')),
+     'the tile is lit, the way the glass lights an armed one');
 t.ok(/HOLD TO SHUT DOWN/.test(await p.textContent('#hold b')),
      'and the bar says what it would do, in the glass\'s own words',
      await p.textContent('#hold b'));
 /* Tapping the armed one again is the way out without doing anything -
    which is why neither this nor the glass needs a caption saying so. */
-await p.click('.prow[data-pa="poweroff"]'); await p.waitForTimeout(250);
+await p.click('.ptile[data-pa="poweroff"]'); await p.waitForTimeout(250);
 t.ok(!(await p.isVisible('#hold.on')), 'touching it again puts it away');
 t.ok((await did()).length===0, 'having asked the device for nothing',
      JSON.stringify(await did()));
 
 t.head('and a hold you let go of early is a hold you changed your mind about');
-await p.click('.prow[data-pa="reboot"]'); await p.waitForTimeout(250);
+await p.click('.ptile[data-pa="reboot"]'); await p.waitForTimeout(250);
 /* Measured each time rather than once: the bar moves with the sheet,
    and a press at where it used to be is a press on the face. */
 const holdFor=async ms=>{
@@ -632,7 +650,7 @@ await p.waitForTimeout(1500);
    bring it back. */
 if(!(await p.isVisible('#sheet.on'))){
   await sheet('#pwb'); }
-await p.click('.prow[data-pa="reload"]'); await p.waitForTimeout(250);
+await p.click('.ptile[data-pa="reload"]'); await p.waitForTimeout(250);
 await holdFor(1100);
 t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
      'a reload is not asked of the device', JSON.stringify(await did()));
@@ -727,16 +745,20 @@ const ctr=await p.evaluate(()=>{
   const sh=document.getElementById('sheet');
   const r=sh.getBoundingClientRect(), s=getComputedStyle(sc);
   return {y:(r.top+r.bottom)/2, h:r.height, vis:s.visibility,
-          dim:s.backgroundColor, bottom:r.bottom,
+          dim:s.backgroundColor, bottom:r.bottom, top:r.top,
           scrimTop:sc.getBoundingClientRect().top,
           scrimBot:sc.getBoundingClientRect().bottom};
 });
 t.ok(Math.abs(ctr.y-844/2) < 90,
      'the box sits about the middle of the glass, not on its bottom edge',
      Math.round(ctr.y)+' of 422');
-t.ok(ctr.bottom < 844-60,
-     'with glass under it, so it reads as a window rather than a drawer',
-     Math.round(ctr.bottom));
+/* Equally inset top and bottom, which is what centred means and what
+   a drawer pinned to one edge never is. Measured rather than the gap
+   below it, because a sheet with enough on it fills the height that is
+   going - and is still a window. */
+t.ok(Math.abs(ctr.top-(844-ctr.bottom))<10,
+     'equally clear of the top and the bottom, which a drawer is not',
+     Math.round(ctr.top)+' / '+Math.round(844-ctr.bottom));
 t.ok(/^rgba\(0, 0, 0, 0\.\d+\)$/.test(ctr.dim),
      'and the page behind it is dimmed rather than left lit', ctr.dim);
 /* It arrives from somewhere rather than replacing what you were
@@ -801,6 +823,58 @@ t.ok(await p.isVisible('#sheet.on'),
      'while a tap inside the box leaves it alone');
 await p.click('[data-shx]'); await p.waitForTimeout(400);
 
+t.head('the radios are a status and nothing you can do to them');
+/* The owner asked to see them and nothing more. The picker stays on
+   the glass: its content IS the readings, and a scan is ten seconds of
+   the hotspot stuttering for every device on it - the asking phone
+   included. */
+await sheet('#thb');
+await p.waitForTimeout(500);                 /* the fetch is its own */
+const rad=await p.$$eval('#sheet .srow.ro',gs=>gs.map(g=>({
+  tag:g.tagName, name:g.querySelector('s').textContent,
+  sub:(g.querySelector('s em')||{}).textContent||'',
+  val:g.querySelector('b').textContent,
+  off:g.classList.contains('off'),
+  sk:g.dataset.sk||'' })));
+t.ok(rad.length===4, 'a row per adapter and one for bluetooth',
+     String(rad.length));
+t.ok(rad.every(r=>r.tag==='DIV' && !r.sk),
+     'none of them is a button, and none carries a setting key',
+     JSON.stringify(rad.map(r=>r.tag)));
+t.ok(rad[0].val==='HOTSPOT · CONFLUENCE',
+     'the one running the hotspot says so', rad[0].val);
+t.ok(rad[1].val==='MARINA-GUEST  72%',
+     'the one reaching out says what it is on and how strong',
+     rad[1].val);
+t.ok(rad[2].val==='OFF' && rad[2].off,
+     'an adapter that is down says OFF and is dimmed',
+     rad[2].val+' / '+rad[2].off);
+t.ok(rad[3].val==='JBL FLIP', 'and bluetooth says what is on it',
+     rad[3].val);
+t.ok(rad[0].sub==='wlan0' && rad[1].sub==='wlan1',
+     'with the interface under the name rather than beside it',
+     rad[0].sub+','+rad[1].sub);
+/* Accent on this sheet means "you can change this". */
+const cols=await p.evaluate(()=>{
+  const ro=document.querySelector('#sheet .srow.ro b');
+  const rw=document.querySelector('#sheet .srow[data-sk] b');
+  return {ro:getComputedStyle(ro).color, rw:getComputedStyle(rw).color};
+});
+t.ok(cols.ro!==cols.rw,
+     'and they are not drawn in the colour the settings are',
+     JSON.stringify(cols));
+/* The whole point: nothing on them does anything. */
+const wasQ3=JSON.stringify((await peek()).pend);
+await p.click('#sheet .srow.ro'); await p.waitForTimeout(350);
+t.ok(JSON.stringify((await peek()).pend)===wasQ3,
+     'and pressing one asks the boat for nothing',
+     JSON.stringify((await peek()).pend));
+/* They come down their own door. /r/state is fetched on every poll of
+   the start clock and this costs a handful of subprocesses, so the two
+   are deliberately not the same door. */
+t.ok((await p.evaluate(()=>S.wifi||S.bt||S.radios))===undefined,
+     'they are not on /r/state, which the clock polls every four seconds');
+
 t.head('the gear is the glass\'s own settings, in the glass\'s own cards');
 await sheet('#thb');
 const rows=()=>p.$$eval('#sheet .sgrp,#sheet .srow',gs=>gs.map(g=>
@@ -811,10 +885,15 @@ const rows=()=>p.$$eval('#sheet .sgrp,#sheet .srow',gs=>gs.map(g=>
        on:g.classList.contains('on'),
        slider:!!g.querySelector('input[type=range]')}));
 const R=await rows();
-t.ok(R.filter(x=>x.grp).map(x=>x.grp).join()===
-     [...new Set(cat.settings.map(x=>x.g))].join(),
-     'a heading per card, in the panel\'s order',
-     R.filter(x=>x.grp).map(x=>x.grp).join());
+const heads=R.filter(x=>x.grp).map(x=>x.grp);
+const want=[...new Set(cat.settings.map(x=>x.g))];
+t.ok(heads.slice(-want.length).join()===want.join(),
+     'a heading per card, in the panel\'s order', heads.join());
+/* The radios first, because they are what you open this to check -
+   and they are the only cards on it the panel does not register. */
+t.ok(heads.slice(0,heads.length-want.length).join()==='WIFI,BLUETOOTH',
+     'under the radios, which come first and are not settings at all',
+     heads.join());
 t.ok(R.filter(x=>x.k).map(x=>x.k).join()===cat.settings.map(x=>x.k).join(),
      'and every setting the panel registered, in its order, and no others',
      R.filter(x=>x.k).map(x=>x.k).join());
