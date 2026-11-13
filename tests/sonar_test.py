@@ -33,7 +33,8 @@ def load(**env):
     """netd, imported fresh, with HELM_SONAR* set the way a boat would."""
     for k in ('HELM_SONAR', 'HELM_SONAR_SAMPLES', 'HELM_SONAR_BINS',
               'HELM_SONAR_KEEP', 'HELM_SONAR_US', 'HELM_SONAR_C',
-              'HELM_SONAR_VTIME', 'HELM_DEV'):
+              'HELM_SONAR_VTIME', 'HELM_DEV', 'HELM_SONAR_NMEA',
+              'HELM_SONAR_NMEA_HZ', 'HELM_SONAR_KEEL'):
         os.environ.pop(k, None)
     os.environ.update({k: str(v) for k, v in env.items()})
     return importlib.reload(importlib.import_module('netd'))
@@ -443,6 +444,190 @@ class Missing(unittest.TestCase):
             n._sonar['err'] = str(e)[:120]
         self.assertIn('not there', n.sonar_read(0)['error'])
         self.assertTrue(n.sonar_read(0)['on'])
+
+
+class Announce(unittest.TestCase):
+    """Putting the depth back on the boat's bus.
+
+    An ATMEGA328P has one UART and it is wired to USB, so the board
+    sends the echogram or it sends NMEA - never both. Flashing the
+    firmware that carries the samples takes the depth OFF the bus, and
+    the depth is what the shallow alarm rings on. So netd says it
+    instead.
+
+    The rule did not change: one depth on this boat, read from one
+    place. Only who measures it changed, and the OFF default is what
+    keeps it that way - a board still announcing its own depth must
+    not end up with a second one beside it.
+    """
+
+    def listen(self):
+        import socket as S
+        sk = S.socket(S.AF_INET, S.SOCK_DGRAM)
+        sk.bind(('127.0.0.1', 0))
+        sk.settimeout(2)
+        self.addCleanup(sk.close)
+        return sk, sk.getsockname()[1]
+
+    def tearDown(self):
+        # Each load() is a fresh module and the sender it opened goes
+        # with the old one. On a boat there is exactly one, for ever;
+        # here there is one per test, and an unclosed socket warning
+        # in the output is noise that hides the next real one.
+        import sys
+        n = sys.modules.get('netd')
+        if n and getattr(n, '_nmea', {}).get('sock') is not None:
+            n._nmea['sock'].close()
+            n._nmea['sock'] = None
+
+    def test_the_checksum_is_between_the_dollar_and_the_star(self):
+        n = load()
+        line = n.nmea('SDDPT,4.57,-0.60')
+        self.assertTrue(line.startswith('$') and line.endswith('\r\n'))
+        body, ck = line[1:-2].split('*')
+        want = 0
+        for c in body:
+            want ^= ord(c)
+        self.assertEqual(int(ck, 16), want)
+        # Two upper-case hex digits, always. A receiver that compares
+        # the text rather than the value throws out '$...*7a' and
+        # '$...*7A' is the one it keeps.
+        self.assertRegex(ck, r'^[0-9A-F]{2}$')
+
+    def test_a_known_sentence_comes_out_right(self):
+        # Checked against an independent XOR, and the '$' is NOT in it:
+        # 0x24 is not zero, so including it would change every answer.
+        n = load()
+        self.assertEqual(n.nmea('SDDBT,15.0,f,4.57,M,2.50,F'),
+                         '$SDDBT,15.0,f,4.57,M,2.50,F*33\r\n')
+
+    def test_both_sentences_say_the_same_depth(self):
+        n = load()
+        dpt, dbt = n.sonar_sentences(4.57, 0.6)
+        self.assertIn('SDDPT,4.57,', dpt)
+        # A foot is 0.3048 m and a fathom is six feet, both exactly.
+        self.assertIn('SDDBT,15.0,f,4.57,M,2.50,F', dbt)
+
+    def test_the_keel_offset_goes_out_negative(self):
+        # NMEA reads a POSITIVE offset as the distance up to the
+        # waterline and a negative one as the distance down to the
+        # keel. Get the sign wrong and a boat in four metres of water
+        # is told it has five, which is the wrong way to be wrong.
+        n = load()
+        self.assertIn('SDDPT,4.00,-0.60', n.sonar_sentences(4.0, 0.6)[0])
+        self.assertIn('SDDPT,4.00,-0.60', n.sonar_sentences(4.0, -0.6)[0])
+        self.assertIn('SDDPT,4.00,0.00', n.sonar_sentences(4.0, 0.0)[0])
+
+    def test_a_sender_with_no_host_means_this_machine(self):
+        # The same spelling means opposite things at the two ends: a
+        # listener with no host wants every interface, a sender with
+        # no host wants loopback. Broadcasting the boat's depth to the
+        # marina is not the friendly default.
+        n = load()
+        self.assertEqual(n.sonar_spec('udp:10110')['host'], '0.0.0.0')
+        self.assertEqual(n.sonar_spec('udp:10110', '127.0.0.1')['host'],
+                         '127.0.0.1')
+        self.assertEqual(n.sonar_spec('udp:10.0.0.9:10110', '127.0.0.1')['host'],
+                         '10.0.0.9')
+        # And the SENDER actually asks for that default. Testing the
+        # parser alone left the caller free to take the listener's.
+        n2 = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:10110')
+        n2.sonar_nmea_open()
+        self.assertEqual(n2._nmea['host'], '127.0.0.1',
+                         'not 0.0.0.0 - the marina does not need our depth')
+
+    def test_nothing_is_said_unless_it_is_asked_for(self):
+        n = load(HELM_SONAR='serial:/dev/ttyUSB0')
+        self.assertEqual(n.sonar_nmea_open(), '')
+        self.assertIsNone(n._nmea['sock'])
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=400)), 1800)
+        self.assertEqual(n.sonar_read(0)['sent'], 0)
+
+    def test_and_it_lands_on_the_wire(self):
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/ttyUSB0',
+                 HELM_SONAR_NMEA='udp:%d' % port, HELM_SONAR_KEEL=0.6)
+        self.assertIn('10' if False else 'NMEA', n.sonar_nmea_open())
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=400)), 1800)
+        got = [sk.recv(200).decode(), sk.recv(200).decode()]
+        self.assertTrue(got[0].startswith('$SDDPT,'), got[0])
+        self.assertTrue(got[1].startswith('$SDDBT,'), got[1])
+        # 400 samples at 13.2 us through 1500 m/s, there and back
+        # halved, is 3.96 m.
+        self.assertIn('SDDPT,3.96,-0.60', got[0])
+        self.assertEqual(n.sonar_read(0)['sent'], 1)
+
+    def test_it_says_it_at_the_rate_it_was_told(self):
+        # SPREAD OUT on purpose. Pushed in a tight loop they all land
+        # in the same millisecond, and then the "pings since the last
+        # sentence" filter alone keeps the count at one - so the probe
+        # passes with the rate limit torn out, which is what it was
+        # doing. Twelve pings over a third of a second is more than
+        # one ping and less than one gap, and only the limit can tell
+        # the difference.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port,
+                 HELM_SONAR_NMEA_HZ=2)                    # a gap of 0.5 s
+        n.sonar_nmea_open()
+        for i in range(12):
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=400 + i)), 1800)
+            time.sleep(0.025)
+        self.assertEqual(n.sonar_read(0)['sent'], 1,
+                         'a third of a second of pings is one sentence')
+        time.sleep(0.4)                                   # now past the gap
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=412)), 1800)
+        self.assertEqual(n.sonar_read(0)['sent'], 2,
+                         'and the next gap gets its own - a limit, not a latch')
+
+    def test_it_says_the_median_and_not_the_latest(self):
+        # One bottom pick is one sample index off one noisy return. A
+        # sounder that shouts every flyer at the shallow alarm is a
+        # sounder somebody switches off.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port,
+                 HELM_SONAR_NMEA_HZ=1000)          # no rate limit in the way
+        n.sonar_nmea_open()
+        for idx in (400, 402, 401, 9000, 403):     # one wild outlier
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=idx)), 1800)
+            try:
+                sk.recv(400), sk.recv(400)
+            except OSError:
+                pass
+        n._sonar['said'] = 0
+        for idx in (400, 402, 401, 9000, 403):
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=idx)), 1800)
+        # Drain and read the last DPT seen.
+        last = ''
+        sk.settimeout(0.3)
+        while True:
+            try:
+                m = sk.recv(400).decode()
+            except OSError:
+                break
+            if m.startswith('$SDDPT'):
+                last = m
+        self.assertTrue(last, 'something was said')
+        said = float(last.split(',')[1])
+        self.assertLess(said, 10, 'the 9000-sample flyer did not become 89 m')
+
+    def test_no_lock_is_said_as_silence_not_as_nought(self):
+        # A board reporting index zero has not found a bottom.
+        # Announcing nought metres of water to the shallow alarm is
+        # the worst lie available here - so it says nothing, and the
+        # alarm's own staleness rule takes it from there.
+        sk, port = self.listen()
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='udp:%d' % port)
+        n.sonar_nmea_open()
+        for _ in range(4):
+            n._sonar_push(n.sonar_parse(frame([9] * 8, idx=0)), 1800)
+        self.assertEqual(n.sonar_read(0)['sent'], 0)
+        with self.assertRaises(OSError):
+            sk.recv(200)
+
+    def test_a_bad_destination_is_named_rather_than_opened(self):
+        n = load(HELM_SONAR='serial:/dev/x', HELM_SONAR_NMEA='tcp:10110')
+        self.assertIn('not udp', n.sonar_nmea_open())
+        self.assertIsNone(n._nmea['sock'])
 
 
 class Door(unittest.TestCase):

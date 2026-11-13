@@ -2446,20 +2446,63 @@ SONAR_US = float(os.environ.get('HELM_SONAR_US', '13.2'))
 # this is the number to refine on the day that a percent matters.
 SONAR_C = float(os.environ.get('HELM_SONAR_C', '1500'))
 
-_sonar = {'seq': 0, 'pings': [], 'at': 0, 'err': '', 'good': 0, 'bad': 0}
+# ---- putting the depth back on the bus -------------------------------
+#
+# An ATMEGA328P has ONE hardware UART and it is wired to the USB
+# socket, so the board sends the echogram or it sends NMEA, never
+# both. Flashing the firmware that carries the samples therefore takes
+# the depth OFF the boat's bus - and the depth is the number the
+# shallow alarm rings on.
+#
+# So netd puts it back, and that is the SAME rule as before rather
+# than a change of mind. There is one depth on this boat and
+# everything reads it from the same place. What moved is who measures
+# it, because a board that can only say one thing at a time can no
+# longer both measure and announce.
+#
+# It goes out as NMEA 0183 over UDP, which is what everything else on
+# a boat already speaks - Signal K, AvNav and OpenCPN all ingest it -
+# so the dial, the alarm, the chartplotter and the log go on reading
+# one number from one place, and none of them need to know that it
+# changed hands. 10110 is the registered port for NMEA 0183 over IP.
+#
+# Off unless asked for, and that default is load-bearing: a boat whose
+# board still announces its own depth would otherwise have two, which
+# is the thing this whole arrangement exists to prevent.
+SONAR_NMEA = os.environ.get('HELM_SONAR_NMEA', '')
+# How often to say it. The board pings around ten times a second; a
+# depth that moves faster than a boat does is noise on a bus other
+# things share.
+SONAR_NMEA_HZ = float(os.environ.get('HELM_SONAR_NMEA_HZ', '2'))
+# Metres from the face of the transducer down to the bottom of the
+# keel. DPT carries it as a negative offset and Signal K does the
+# subtraction, so what reaches the glass is the number you actually
+# run aground on.
+SONAR_KEEL = float(os.environ.get('HELM_SONAR_KEEL', '0'))
+
+_sonar = {'seq': 0, 'pings': [], 'at': 0, 'err': '', 'good': 0, 'bad': 0,
+          'said': 0, 'sent': 0, 'nmea_err': ''}
 _sonar_lk = threading.Lock()
 
 
-def sonar_spec(spec):
+def sonar_spec(spec, dflt='0.0.0.0'):
     """What HELM_SONAR says, or None if it says nothing usable.
 
     Parsed here rather than where the socket is opened so that a typo
     in the unit file is a thing this file can be asked about, instead
     of something only a boat with a transducer could discover.
+
+    `dflt` is what an unnamed host means, and it is not the same thing
+    at both ends: a LISTENER with no host given means every interface,
+    and a SENDER with no host given means this machine. Spelling them
+    the same and defaulting them differently is the honest reading -
+    'udp:5005' said to a listener and 'udp:10110' said to a sender are
+    both "the obvious one", and they are obvious in opposite
+    directions.
     """
     parts = str(spec or '').strip().split(':')
     if parts[0] == 'udp' and len(parts) in (2, 3):
-        host = parts[1] if len(parts) == 3 else '0.0.0.0'
+        host = parts[1] if len(parts) == 3 else dflt
         try:
             port = int(parts[-1])
         except ValueError:
@@ -2572,6 +2615,12 @@ def _sonar_push(p, ns):
             del _sonar['pings'][:-SONAR_KEEP]
         _sonar['at'] = time.time()
         _sonar['good'] += 1
+    # OUTSIDE that block: _sonar_lk is a plain Lock and _sonar_say
+    # takes it too, so saying this inside would deadlock the reader on
+    # the first ping - which is a hang rather than an error, and the
+    # worst way for this to fail.
+    if _nmea['sock'] is not None:
+        _sonar_say(_nmea['sock'], _nmea['host'], _nmea['port'], time.time())
 
 
 def sonar_read(after=0, limit=None):
@@ -2607,7 +2656,96 @@ def sonar_read(after=0, limit=None):
             # the column it is drawing.
             'mps': SONAR_US * 1e-6 * SONAR_C / 2,
             'age': round(now - at, 1) if at else None,
-            'good': good, 'bad': bad, 'error': err, 'pings': ps}
+            'good': good, 'bad': bad, 'error': err, 'pings': ps,
+            # What it is telling the rest of the boat, if anything.
+            'nmea': SONAR_NMEA, 'sent': _sonar['sent'],
+            'nmea_error': _sonar['nmea_err']}
+
+
+def nmea(body):
+    """A sentence and its checksum: the XOR of every character between
+    the $ and the *, which is the whole of NMEA 0183's error
+    detection and has to be upper-case hex two digits wide."""
+    x = 0
+    for ch in body:
+        x ^= ord(ch)
+    return '$%s*%02X\r\n' % (body, x)
+
+
+def sonar_sentences(m, keel=0.0):
+    """What a sounder says, for `m` metres under the transducer.
+
+    Both sentences, the way a real sounder sends both. DPT is the one
+    that carries the offset, so it is what lets a consumer work out
+    the depth under the KEEL rather than under the transducer. DBT
+    carries no offset and is what older software reads. They say the
+    same thing, so anything reading both still has one number.
+
+    The offset goes out NEGATIVE: NMEA reads a positive offset as the
+    distance up to the waterline and a negative one as the distance
+    down to the keel, and it is the keel that runs aground.
+    """
+    # A fathom is six feet exactly, and a foot is 0.3048 m exactly, so
+    # both of these are definitions rather than measurements.
+    ft, fath = m / 0.3048, m / 1.8288
+    # -abs(0.0) is NEGATIVE zero, and '%.2f' spells that '-0.00'. A
+    # boat with the transducer at the keel would have been announcing
+    # a signed nought in a field some parsers read strictly, and all
+    # of them read as a direction.
+    off = -abs(keel) if keel else 0.0
+    return [nmea('SDDPT,%.2f,%.2f' % (m, off)),
+            nmea('SDDBT,%.1f,f,%.2f,M,%.2f,F' % (ft, m, fath))]
+
+
+_nmea = {'sock': None, 'host': '', 'port': 0}
+
+
+def sonar_nmea_open():
+    """The sender, if this boat wants one. Returns what it did, for
+    the banner."""
+    if not SONAR_NMEA:
+        return ''
+    sp = sonar_spec(SONAR_NMEA, '127.0.0.1')
+    if not sp or sp['kind'] != 'udp':
+        return 'HELM_SONAR_NMEA=%r is not udp:[HOST:]PORT' % SONAR_NMEA[:40]
+    _nmea['sock'] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    _nmea['host'], _nmea['port'] = sp['host'], sp['port']
+    return 'depth out as NMEA to %s:%d, %g a second%s' % (
+        sp['host'], sp['port'], SONAR_NMEA_HZ,
+        ', keel %.2f m under the transducer' % SONAR_KEEL if SONAR_KEEL else '')
+
+
+def _sonar_say(sock, host, port, now):
+    """The depth, at most SONAR_NMEA_HZ times a second.
+
+    The MEDIAN of the pings since the last one went out, not the
+    latest of them. A single bottom pick is one sample index off one
+    noisy return, and a sounder that shouts every outlier at the
+    shallow alarm is a sounder somebody switches off. At two a second
+    over a board pinging at ten, the median is of five - enough to
+    throw away a flyer and not enough to lag a boat.
+    """
+    gap = 1.0 / SONAR_NMEA_HZ if SONAR_NMEA_HZ > 0 else 0.5
+    with _sonar_lk:
+        if now - _sonar['said'] < gap:
+            return
+        since = [p for p in _sonar['pings'] if p['t'] / 1000.0 > _sonar['said']]
+        _sonar['said'] = now
+    # Only pings that found a bottom. A board reporting zero has not
+    # got one, and announcing nought metres of water to the alarm is
+    # the worst lie available here.
+    idx = sorted(p['idx'] for p in since if p['idx'] > 0)
+    if not idx:
+        return
+    m = idx[len(idx) // 2] * SONAR_US * 1e-6 * SONAR_C / 2
+    try:
+        for line in sonar_sentences(m, SONAR_KEEL):
+            sock.sendto(line.encode('ascii'), (host, port))
+        with _sonar_lk:
+            _sonar['sent'] += 1
+    except OSError as e:
+        with _sonar_lk:
+            _sonar['nmea_err'] = str(e)[:80]
 
 
 def _sonar_udp(host, port):
@@ -5482,6 +5620,11 @@ if __name__ == '__main__':
                  SONAR_BINS,
                  'a datagram' if _sp['kind'] == 'udp' else '%d samples' % SONAR_SAMPLES),
               flush=True)
+        _said = sonar_nmea_open()
+        if _said:
+            print('[netd] sonar: %s' % _said, flush=True)
+        elif SONAR_NMEA:
+            print('[netd] sonar: depth NOT announced - see above', flush=True)
         threading.Thread(target=sonar_run, daemon=True).start()
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
     # Fill the caches before anyone asks. The kiosk often comes up at the

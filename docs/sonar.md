@@ -24,30 +24,112 @@ Open Echo  ──UDP or serial──▶  netd.py  ──POST /sonar──▶  th
             (1808-byte frames)   (checks, squeezes, keeps a minute)
 ```
 
-## Two numbers, one of them deliberately not computed
+## One depth, and who measures it
 
-netd could work out a depth. It has the firmware's own bottom pick and
-the sample rate, and `idx × SAMPLE_TIME × c / 2` is the whole of it.
+The rule is that this boat has **one** depth and everything reads it
+from the same place. Two of them — off the same transducer by two
+routes, disagreeing by a few centimetres and some fraction of a second
+— would leave nothing to say which one the shallow alarm was ringing
+about.
 
-It does not, and that is the main design decision on this page. The
-depth is already on the Signal K bus. A second one, off the same
-transducer by another route, would disagree with the first by a few
-centimetres and some fraction of a second — and then there would be two
-depths on one boat and nothing to say which one the shallow alarm was
-ringing about.
+Who satisfies that rule depends on the board, and the ATMEGA328P
+settles it:
 
-So the split is:
+> **An UNO R3 has one hardware UART and it is wired to the USB socket.**
+> The board sends the echogram or it sends NMEA. Never both.
+
+So on an R4, where the binary goes out over USB and NMEA goes out on
+separate pins, the board announces its own depth and `netd` must keep
+its hands off. On an **R3 the two are mutually exclusive** — flashing
+the firmware that carries the samples takes the depth off the bus
+entirely, and the depth is the number the alarm rings on.
+
+`netd` therefore puts it back, and that is the same rule rather than a
+change of mind. What moved is *who measures it*, because a board that
+can only say one thing at a time can no longer both measure and
+announce.
+
+```
+          R4 (two outputs)                 R3 (one output)
+  board ──NMEA──▶ Signal K ──▶ panel   board ──binary──▶ netd
+  board ──UDP───▶ netd ──▶ echogram                        ├──▶ echogram
+                                                           └──NMEA──▶ Signal K ──▶ panel
+```
+
+Either way the panel, the alarm, the chartplotter and the log read one
+number from `environment.depth.*`, and none of them need to know which
+side of that diagram it came from.
+
+### What crosses, and in what form
 
 | | comes from | shown as |
 |---|---|---|
-| the number | Signal K | the big figure at the top, and the dial, and the alarm |
-| the picture | netd | the waterfall |
+| the number | Signal K — whoever put it there | the big figure, the dial, the alarm |
+| the picture | netd, always | the waterfall |
 | the bottom pick | netd, as a **sample index** | a line drawn *on* the picture |
 
 The pick stays an index on purpose. In that form it is in the same
 coordinate system as the samples it is drawn over, so it lands exactly
-on the echo it refers to. Converted to metres it would be a second
-depth wearing a disguise.
+on the echo it refers to. Converted to metres and printed, it would be
+a second depth wearing a disguise — and that is still true even now
+that netd computes one for the bus, because the one on the bus is *the*
+depth rather than a second opinion about it.
+
+### Announcing it
+
+Off unless asked for, and that default is load-bearing: a boat whose
+board still announces its own depth must not acquire a second source.
+
+```sh
+HELM_SONAR_NMEA=udp:10110         # where to send it
+HELM_SONAR_NMEA_HZ=2              # how often (default 2)
+HELM_SONAR_KEEL=0.6               # metres from transducer face to keel bottom
+```
+
+It goes out as **NMEA 0183 over UDP**, which is what everything else on
+a boat already speaks — Signal K, AvNav and OpenCPN all ingest it — so
+nothing downstream needs changing. 10110 is the registered port for
+NMEA 0183 over IP.
+
+An unnamed host means **this machine** for a sender and **every
+interface** for a listener. The same spelling, defaulting opposite
+ways, because `udp:5005` said to a listener and `udp:10110` said to a
+sender are both "the obvious one" and the obvious ones point in
+opposite directions. Broadcasting the boat's depth to the marina is not
+a friendly default.
+
+Two sentences go out, the way a real sounder sends both:
+
+```
+$SDDPT,4.57,-0.60*7A
+$SDDBT,15.0,f,4.57,M,2.50,F*33
+```
+
+`DPT` carries the offset and is what lets a consumer work out the depth
+under the **keel** rather than under the transducer. `DBT` carries no
+offset and is what older software reads. They say the same thing, so
+anything reading both still has one number.
+
+The offset goes out **negative**: NMEA reads a positive offset as the
+distance up to the waterline and a negative one as the distance down to
+the keel. Get the sign wrong and a boat in four metres is told it has
+five, which is the wrong direction to be wrong in. (`-abs(0.0)` is
+negative zero, and `%.2f` spells that `-0.00`, so a boat with the
+transducer at the keel was briefly announcing a signed nought in a
+field that is read as a direction. A probe caught it.)
+
+What is announced is the **median** of the pings since the last
+sentence, not the latest of them. One bottom pick is one sample index
+off one noisy return, and a sounder that shouts every flyer at the
+shallow alarm is a sounder somebody switches off. At 2 Hz over a board
+pinging at 10, that is a median of five — enough to throw away an
+outlier, not enough to lag a boat.
+
+A ping that reports index **zero** has not found a bottom, and those are
+excluded. Announcing nought metres of water to a shallow alarm is the
+worst lie available here. If nothing has a lock, netd says nothing at
+all and the staleness rules downstream take it from there — the panel
+drops the reading after 8 s, which is the truth.
 
 ## The frame, and what it leaves out
 
