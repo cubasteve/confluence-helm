@@ -3499,13 +3499,14 @@ svg.gl .f{fill:currentColor;stroke:none}
 /* A setting the glass draws as a tile. Same shape as a radio's, with
    the label where the network goes and the value under it - which is
    what the Display card puts side by side on the panel. */
-/* Not the full half-width each: at 1fr they were slabs wider than they
-   were tall, where the glass's are 104px squares in a card with room
-   to spare. Sized to the content and left where the Display card's row
-   starts, which is where the panel has them. The 44px floor is the
-   thing that must not move - they are still something you press. */
-.stier{display:grid;grid-template-columns:repeat(2,minmax(0,124px));
- gap:8px;padding:2px 10px 10px}
+/* The pair spans the sheet, each taking half of what is left after the
+   gap, so the two outer edges sit exactly where every row's does and
+   the whole card is symmetric about its middle. Sized DOWN by their
+   padding and their type rather than by their width - which is what
+   124px columns did, and it left the pair hanging off the left with
+   the gap all on one side. */
+.stier{display:grid;grid-template-columns:repeat(2,1fr);
+ gap:8px;padding:2px 0 10px;margin:0 -8px}
 .stile{display:flex;flex-direction:column;align-items:center;gap:6px;
  padding:9px 4px;border:2px solid var(--hairline);border-radius:14px;
  background:none;color:var(--label);font:inherit}

@@ -957,6 +957,20 @@ t.ok(tl.length>1 && tl.every(x=>/\bstier\b/.test(x.tier)
 t.ok(tl.every(x=>x.w>=44),
      'and still wide enough to hit without looking',
      JSON.stringify(tl.map(x=>Math.round(x.w)+'x'+Math.round(x.h))));
+/* The pair reaches both sides of the sheet and is symmetric about its
+   middle. At fixed-width columns it hung off the left with the slack
+   all on one side, which is the thing you see before you read
+   anything on the card. */
+const sym=await p.evaluate(()=>{
+  const box=document.getElementById('shr').getBoundingClientRect();
+  const ts=[...document.querySelectorAll('#sheet .stile')]
+             .map(e=>e.getBoundingClientRect());
+  if(!ts.length) return null;
+  return {l:ts[0].left-box.left, r:box.right-ts[ts.length-1].right};
+});
+t.ok(sym && Math.abs(sym.l-sym.r)<=1 && sym.l<=1,
+     'and the two of them reach both sides of the sheet, evenly',
+     JSON.stringify(sym));
 t.ok(R.find(x=>x.k==='keepAwake').on===true,
      'a toggle is a switch that is on when the setting is');
 /* Its unit is the OTHER setting's value. A second unit field would say
