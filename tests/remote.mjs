@@ -263,6 +263,86 @@ t.ok((await p.evaluate(()=>tLeft))===300000,
      'and a part minute, an over-long one, a string or nothing is not done',
      String(await p.evaluate(()=>tLeft)));
 
+t.head('the clock\'s three gestures mean what the glass says they mean');
+/* The phone sends the GESTURE, never the transition: its idea of
+   tState is up to four seconds old, and from a stale state it would
+   sometimes ask for the wrong one. One function resolves them for both
+   halves, so the glass and the mirror cannot disagree. */
+const TABLE=[
+  ['idle',     'tap',    'countdown', 'a tap starts the five minute prep'],
+  ['countdown','double', 'racing',    'a double is you crossing the line'],
+  ['racing',   'double', 'finished',  'and racing it is the finish'],
+  ['racing',   'hold',   'idle',      'a hold puts it back to idle from a race'],
+  ['countdown','hold',   'idle',      'and from a countdown'],
+  ['finished', 'hold',   'idle',      'and from a finished race'],
+  ['idle',     'double', 'countdown', 'a double on a stopped clock starts it'],
+];
+for(const [st,g,want,says] of TABLE){
+  const got=await p.evaluate(([st,g])=>{
+    tState=st; tLeft=300000;
+    if(st==='countdown') tEnd=rnow()+200000;
+    if(st==='racing')    tGun=rnow()-30000;
+    timerGesture(g);
+    return tState;
+  },[st,g]);
+  t.ok(got===want, says, st+' +'+g+' -> '+got);
+}
+/* A tap mid-countdown is a SYNC: it pulls the clock to the NEAREST
+   whole minute, which is what the signal you have just heard means.
+   The state is 'countdown' either way, so a probe that read only the
+   state could not tell a sync from a restart - and a restart with
+   thirty seconds to go is the worst thing on this list.
+   Both directions, because nearest is the claim: a probe that only
+   went up would pass on a round-up and one that only went down would
+   pass on a floor. */
+const syncs=[];
+for(const [sec,want] of [[154,180],[140,120],[31,60],[29,0]]){
+  syncs.push(await p.evaluate(sec=>{
+    tState='countdown'; tEnd=rnow()+sec*1000;
+    timerGesture('tap');
+    return Math.round((tEnd-rnow())/1000);
+  }, sec));
+  const got=syncs[syncs.length-1];
+  t.ok(Math.abs(got-want)<=1,
+       sec+' seconds to go syncs to '+want, String(got));
+}
+/* The one that must do nothing. A tap while the race is running is a
+   finger on the glass going past, and the glass does nothing with it
+   either - the finish is a double. */
+const r0=await p.evaluate(()=>{ tState='racing'; tGun=rnow()-30000;
+                                timerGesture('tap'); return tState; });
+t.ok(r0==='racing', 'and a single tap mid-race is not a finish', r0);
+
+t.head('and a sequence of them from the phone runs in order');
+/* Latest-wins is right for a slot and wrong here. A hold followed by a
+   tap means reset and then start; keeping only the last leaves the
+   boat in a state nobody asked for. */
+await p.evaluate(()=>{ tState='racing'; tGun=rnow()-30000;
+                       remoteDo({kind:'clock', seq:['hold','tap']}); });
+t.ok((await p.evaluate(()=>tState))==='countdown',
+     'reset and then started, rather than only the last of the two',
+     await p.evaluate(()=>tState));
+/* From RACING, because idle is where a stray gesture lands you anyway
+   - a probe that checks nonsense from an idle clock cannot tell "not
+   run" from "run, and happened to mean reset". */
+await p.evaluate(()=>{ tState='racing'; tGun=rnow()-30000;
+                       remoteDo({kind:'clock', seq:['burn','', 'TAP']});
+                       remoteDo({kind:'clock', seq:'tap'});
+                       remoteDo({kind:'clock', seq:{0:'tap'}});
+                       remoteDo({kind:'clock'}); });
+t.ok((await p.evaluate(()=>tState))==='racing',
+     'a gesture it does not have, or no list at all, does nothing',
+     await p.evaluate(()=>tState));
+/* Four is already more than a finger makes inside one poll, and the
+   cap is what stops a phone that has lost the boat handing over an
+   afternoon of them at once. */
+await p.evaluate(()=>{ tState='idle'; tLeft=300000;
+  remoteDo({kind:'clock', seq:['tap','hold','tap','hold','tap']}); });
+t.ok((await p.evaluate(()=>tState))==='idle',
+     'and only the first four of a longer list are run',
+     await p.evaluate(()=>tState));
+await p.evaluate(()=>{ tState='idle'; tLeft=300000; });
+
 t.head('the phone\'s tab turns the glass with it');
 /* A phone showing the music page while the panel shows the dial is a
    mirror of something nobody is looking at. */

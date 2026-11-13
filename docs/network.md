@@ -879,6 +879,46 @@ the panel refusing anything that is not a whole number of minutes inside
 an hour. The panel's check is the one that matters, since it is the only
 one a phone cannot skip.
 
+**The three gestures.** The numerals themselves take the glass's own
+tap, double-tap and hold, on the glass's own two numbers — a 320 ms
+double-tap window and a 700 ms hold:
+
+| | |
+|---|---|
+| tap | idle: start the five minute prep · counting down: sync to the nearest whole minute |
+| double | counting down: you crossed, start the race clock · racing: finished, freeze the elapsed time |
+| hold | any state: back to idle |
+
+What crosses is the **gesture, never the transition**. The phone's idea
+of the clock's state is up to four seconds old, and from a stale one it
+would sometimes ask for the wrong transition — "start the race" when the
+race has already started. `timerGesture()` on the panel resolves them
+for both halves, so the glass and the mirror cannot disagree, because
+the same lines decide.
+
+These queue as a **sequence**, not latest-wins. Everything else on this
+wire is latest-wins, which is right for a slot — the last reading you
+chose is the one you want. These are events: a hold followed by a tap
+means reset and then start, and keeping only the last leaves the boat in
+a state nobody asked for. Capped at four, which is more than a finger
+makes inside the panel's 1.5 s poll and is what stops a phone that has
+lost the boat handing over an afternoon of them at once.
+
+The phone cannot say what a gesture did — only the boat knows what state
+it was in — so rather than guess and correct itself a second later, the
+clock dims to say it is waiting and asks again just past the panel's
+next poll.
+
+The gesture zone is a rectangle under the numerals, bounded left and
+right by the two buttons' own tap circles (the thing you must never do
+reaching for **+** is reset the race) and running down to exactly where
+the lanes begin — one number, read from the same place, so the zone and
+the lanes cannot overlap. It reaches further **up** than down because an
+SVG `text` hit-tests on its glyphs and not on its box: at 68 units
+either way the zone was four pixels outside the ink, and a finger
+between the `5` and the colon landed on the face behind it and did
+nothing. Above the numerals is empty rim, so the zone takes it.
+
 **The tab.** Tapping between the two faces on the phone turns the glass
 with it. A phone showing the music page while the panel shows the dial
 is a mirror of something nobody is looking at. It goes the other way
@@ -925,9 +965,11 @@ list of objects, and `tests/remote.mjs` asserts the panel sends them.
    public). The icon needs none: it is a picture of the number 45.
 3. **The catalogue.** A slot, reading or page the panel never declared
    is refused, so the worst a stranger on the hotspot can do with a
-   valid token is change a complication, turn the page, or move the
-   start clock by whole minutes inside an hour. There is nothing on that
-   socket that starts a race, stops one, or writes a mark.
+   valid token is change a complication, turn the page, work the start
+   clock — the same taps and holds the glass takes — or ask for one of
+   the power sheet's own actions. There is nothing on that socket that
+   writes a mark or touches the radios, and nothing that is not also a
+   button on the glass.
 
 `RemoteHandler` is a different class from `Handler` and **has no call
 path to `route()`**. netd's twenty-seven endpoints are not reachable

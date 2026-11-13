@@ -6456,7 +6456,7 @@ function judgeGesture(g){
   if(moved>24) return;                       // a drag, not a tap
   if(PAGE_I!==1) return;                     // the taps below are the dial's
   if(dt>700){ clearTimeout(tapTimer); tapTimer=null; lastTap=0;
-              return resetAll(); }           // hold anywhere = reset
+              return timerGesture('hold'); } // hold anywhere = reset
 
   const one=g.p.values().next().value;
   const r=$('stage').getBoundingClientRect();
@@ -6468,20 +6468,36 @@ function judgeGesture(g){
    double never fires the single action. 320 ms is about the shortest
    that still feels deliberate with cold hands. */
 const DBL=320; let tapTimer=null, lastTap=0;
+/* What a gesture MEANS, apart from how it was made. The glass reads
+   fingers on a round panel and the phone reads them on a 390px pane,
+   and neither of those is the rule - this is. It is also the only way
+   the phone can have these at all: it cannot send 'start the race',
+   because its idea of tState is up to four seconds old and it would
+   sometimes send the wrong transition for the state the boat is
+   actually in. It sends the GESTURE and this resolves it, so the two
+   always agree because the same lines decide. */
+function timerGesture(k){
+  if(k==='hold') return resetAll();            // any state, back to idle
+  if(k==='double'){
+    if(tState==='countdown') return startRace();   // crossed the line
+    if(tState==='racing')    return finishRace();  // done
+    if(tState==='idle')      return startCountdown();
+    return;
+  }
+  if(k!=='tap') return;
+  if(tState==='idle')      return startCountdown();
+  if(tState==='countdown') return syncMinute();
+}
+
 function timerTap(){
   const now=Date.now();
   if(now-lastTap < DBL){                       // -------- double tap
     clearTimeout(tapTimer); tapTimer=null; lastTap=0;
-    if(tState==='countdown') startRace();      // crossed the line
-    else if(tState==='racing') finishRace();   // done
-    else if(tState==='idle') startCountdown();
-    return;
+    return timerGesture('double');
   }
   lastTap=now;
   tapTimer=setTimeout(()=>{                    // -------- single tap
-    tapTimer=null;
-    if(tState==='idle') startCountdown();
-    else if(tState==='countdown') syncMinute();
+    tapTimer=null; timerGesture('tap');
   }, DBL);
 }
 
@@ -9314,6 +9330,16 @@ function remoteDo(c){
        object with no .page and is simply not a page this panel has. */
     const g=PICK_G[c.page];
     if(g && g.page) goPage(g.page);
+  }else if(c.kind==='clock'){
+    /* A LIST, because these are events and not a state: two of them
+       inside one poll are two of them. Everything else on this wire is
+       latest-wins, which is right for a slot - the last reading you
+       chose is the one you want - and wrong here, where a hold
+       followed by a tap means reset and then start, and dropping the
+       first leaves the boat in a state nobody asked for. */
+    for(const g of (Array.isArray(c.seq) ? c.seq : []).slice(0,4)){
+      if(g==='tap' || g==='double' || g==='hold') timerGesture(g);
+    }
   }else if(c.kind==='power'){
     /* Only ever this one. Everything else on that sheet netd runs
        itself, because the reason you reach for the phone's power sheet

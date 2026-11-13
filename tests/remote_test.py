@@ -381,6 +381,68 @@ class Door(unittest.TestCase):
             finally:
                 p.close()
 
+    def test_clock_gestures_queue_as_a_sequence(self):
+        """Everything else on this wire is latest-wins, which is right
+        for a slot - the last reading you chose is the one you want.
+        These are EVENTS: a hold then a tap means reset and then start,
+        and keeping only the last leaves the boat in a state nobody
+        asked for."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for g in ('tap', 'double', 'hold'):
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'clock', 'do': g})
+                    self.assertEqual(code, 200, j)
+                self.assertEqual(netd._remote['pend']['clock'],
+                                 {'kind': 'clock',
+                                  'seq': ['tap', 'double', 'hold']})
+                # Handed over once, in order, and gone after.
+                drained = netd.remote_poll({})
+                self.assertEqual(drained['cmds']['clock']['seq'],
+                                 ['tap', 'double', 'hold'])
+                self.assertEqual(netd.remote_poll({})['cmds'], {})
+            finally:
+                p.close()
+
+    def test_a_held_finger_cannot_queue_an_afternoon_of_them(self):
+        """Four is already more than a finger makes inside the panel's
+        1.5 s poll. The cap is what stops a phone that has lost the
+        boat handing over a hundred of them the moment it comes back."""
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for _ in range(20):
+                    p.js('/r/cmd?t=T0KEN', {'kind': 'clock', 'do': 'tap'})
+                self.assertEqual(netd._remote['pend']['clock']['seq'],
+                                 ['tap'] * 4)
+                # The LAST four, not the first: what you just did
+                # matters more than what you did twenty presses ago.
+                p.js('/r/cmd?t=T0KEN', {'kind': 'clock', 'do': 'hold'})
+                self.assertEqual(netd._remote['pend']['clock']['seq'][-1],
+                                 'hold')
+                self.assertEqual(len(netd._remote['pend']['clock']['seq']), 4)
+            finally:
+                p.close()
+
+    def test_a_gesture_the_glass_does_not_have_is_refused(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE)]) as netd:
+            armed(netd)
+            p = Phone(netd)
+            try:
+                for bad in ('start', 'triple', '', 'TAP', 1, None, True,
+                            ['tap']):
+                    code, j = p.js('/r/cmd?t=T0KEN',
+                                   {'kind': 'clock', 'do': bad})
+                    self.assertEqual(code, 400, '%r -> %s %s' % (bad, code, j))
+                code, j = p.js('/r/cmd?t=T0KEN', {'kind': 'clock'})
+                self.assertEqual(code, 400, j)
+                self.assertEqual(netd._remote['pend'], {})
+            finally:
+                p.close()
+
     def test_taps_on_the_clock_add_up_rather_than_replacing(self):
         """The one place latest-wins is the wrong rule. Three taps before
         the panel polls are three minutes, and dropping two of them loses

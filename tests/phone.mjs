@@ -275,6 +275,97 @@ await p.click('[data-f="dial"]'); await p.waitForTimeout(350);
 t.ok((await peek()).pend['page'].page==='dial', 'and back again',
      JSON.stringify((await peek()).pend['page']));
 
+t.head('the clock takes the glass\'s own three gestures');
+/* The owner asked for these by describing the glass: press to start,
+   double to stop, hold to reset. What crosses is the GESTURE and never
+   the transition - the phone's idea of the state is up to four seconds
+   old, and from a stale one it would sometimes ask for the wrong
+   thing. */
+const zb=await p.$eval('.tmz',e=>{const r=e.getBoundingClientRect();
+  return {x:r.left,y:r.top,w:r.width,h:r.height};});
+/* Pressed near the TOP of the zone, not in the middle of it. The
+   middle is the digits, which hit-test on their own - a probe that
+   pressed there passed with no grab at all. The ink of 5:00 is about
+   two thirds of the zone's height and none of its corners, and a thumb
+   does not land on ink. */
+const tx=await p.$eval('.fv .tm',e=>{const r=e.getBoundingClientRect();
+  return {y:r.top, h:r.height};});
+t.ok(zb.h > tx.h+8, 'the zone is taller than the ink standing in it',
+     Math.round(zb.h)+' vs '+Math.round(tx.h));
+const mid={x:zb.x+zb.w/2, y:zb.y+5};
+const press=async(ms)=>{ await p.mouse.move(mid.x,mid.y); await p.mouse.down();
+  await p.waitForTimeout(ms||40); await p.mouse.up(); };
+const seq=async()=>((await peek()).pend.clock||{}).seq;
+/* Bounded by the two buttons' own tap circles. A finger reaching for +
+   that lands a little low must nudge a minute, not reset the race. */
+const gy=cat.geom.dial, kz=(await faceBox()).w/1080;
+t.ok(zb.w>40 && zb.h>40, 'it is a target you can hit without looking',
+     Math.round(zb.w)+'x'+Math.round(zb.h));
+t.ok(zb.x >= (await faceBox()).x + (gy.btn.up[0]+68)*kz - 1 &&
+     zb.x+zb.w <= (await faceBox()).x + (gy.btn.dn[0]-68)*kz + 1,
+     'and it stops short of both buttons, so + is never a reset',
+     Math.round(zb.x)+'..'+Math.round(zb.x+zb.w));
+
+await press(); await p.waitForTimeout(420);
+t.ok(JSON.stringify(await seq())===JSON.stringify(['tap']),
+     'one press is a tap', JSON.stringify(await seq()));
+/* Checked here, with one gesture in flight and nothing else. The mark
+   is cleared by the answer landing, which is the point of it - so a
+   later check would be racing the reply it is waiting for. */
+t.ok(await p.$eval('.fv .tm',e=>e.classList.contains('wait')),
+     'and the clock says it is waiting rather than guessing what it did');
+/* The single action waits out one double-tap window, so the first half
+   of a double never fires it - the glass waits the same 320 ms. */
+await press(); await p.waitForTimeout(90); await press();
+await p.waitForTimeout(420);
+t.ok(JSON.stringify(await seq())===JSON.stringify(['tap','double']),
+     'two quick ones are a double and NOT two taps',
+     JSON.stringify(await seq()));
+await press(900); await p.waitForTimeout(350);
+t.ok(JSON.stringify(await seq())===JSON.stringify(['tap','double','hold']),
+     'and a long press is a hold', JSON.stringify(await seq()));
+/* Letting go after the hold has already gone must not also be a tap.
+   On the glass that would reset the race and then start a countdown. */
+t.ok((await seq()).length===3, 'with no tap trailing it',
+     JSON.stringify(await seq()));
+/* Four is more than a finger makes inside one poll of the panel's. */
+for(let i=0;i<3;i++){ await press(); await p.waitForTimeout(420); }
+t.ok((await seq()).length===4, 'and the queue is capped',
+     JSON.stringify(await seq()));
+
+t.head('and the two buttons are still a nudge, not a gesture');
+/* They sit inside the clock's own third of the face. Before the grab
+   was bounded, a press on + was a press on the numerals too.
+   A delta rather than a figure: the queue is drained by the panel and
+   there is no panel here, so the total is whatever the sections above
+   left in it. */
+const wasBy=((await peek()).pend['timer']||{}).by||0;
+await p.click('#main .fv .tb[data-by="60"]'); await p.waitForTimeout(400);
+t.ok(((await peek()).pend['timer']||{}).by === wasBy+60,
+     'the + nudges a minute',
+     wasBy+' -> '+((await peek()).pend['timer']||{}).by);
+t.ok((await seq()).length===4, 'and asks the clock for nothing',
+     JSON.stringify(await seq()));
+/* Every gesture asks again just past the panel's next poll. Let the
+   last of those land before the sections below, or it arrives in the
+   middle of one and snaps the page back to the one the glass is on -
+   which is the app working, in the wrong place. */
+await p.waitForTimeout(2000);
+
+t.head('and the clock\'s zone does not reach into anybody\'s lane');
+/* It runs down to exactly where the lanes begin, and the lanes begin
+   where it ends - one number, read from the same place. A zone that
+   grew past it would take taps meant for the big number's picker and
+   turn them into a gesture on the race clock, which is the worst
+   direction for that mistake to go. */
+for(const c of await cells()){
+  const L=c.lane;
+  const over = !(zb.x+zb.w<=L.x+1 || L.x+L.w<=zb.x+1 ||
+                 zb.y+zb.h<=L.y+1 || L.y+L.h<=zb.y+1);
+  t.ok(!over, 'the clock\'s zone is clear of '+c.s+"'s lane",
+       JSON.stringify([Math.round(zb.y+zb.h), Math.round(L.y)]));
+}
+
 t.head('and no lane sits on top of the two buttons');
 /* The whole tap circle, not its centre. The buttons sit just ABOVE the
    top of the big number's box, so a probe that checked the middle

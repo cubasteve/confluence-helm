@@ -3068,6 +3068,19 @@ def remote_cmd(body, token):
             if page not in r['slots']:
                 return {'ok': False, 'error': 'NO SUCH PAGE'}, 400
             r['pend']['page'] = {'kind': 'page', 'page': page}
+        elif kind == 'clock':
+            # Queued as a SEQUENCE, not latest-wins. These are events:
+            # a hold then a tap means reset and then start, and keeping
+            # only the last leaves the boat in a state nobody asked
+            # for. Four is more than a finger produces inside the
+            # panel's 1.5 s poll, and a cap is what stops a phone that
+            # has lost the boat queueing an afternoon of them.
+            g = body.get('do')
+            if g not in ('tap', 'double', 'hold'):
+                return {'ok': False, 'error': 'NO SUCH GESTURE'}, 400
+            was = r['pend'].get('clock')
+            seq = ((was['seq'] if was else []) + [g])[-4:]
+            r['pend']['clock'] = {'kind': 'clock', 'seq': seq}
         elif kind == 'timer':
             # A whole minute either way, which is the whole of what the
             # glass's own two buttons do. Not an arbitrary number: a
@@ -3160,6 +3173,11 @@ body{margin:0;background:var(--bg);color:var(--ink);
  font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
 .tm.idle{fill:var(--label)}
 .tm.hot{fill:#C81E1E}
+/* Asked, not yet answered. The phone cannot work out what a gesture
+   did - only the boat knows what state it was in - so rather than
+   guess and correct itself a second later it says it is waiting. */
+.tm.wait{opacity:.45}
+.tmg{fill:transparent;cursor:pointer}
 .tb circle{fill:none;stroke:var(--hairline);stroke-width:3}
 .tb rect{fill:var(--label)}
 .tb .grab{fill:transparent;stroke:none}
@@ -3324,6 +3342,14 @@ var PAGE_OF={dial:1, mus:2};
    moving what is drawn, and stops just clear of the big number's box
    at 322. */
 var TM_GRAB=68;
+/* How far ABOVE the numerals the gesture zone reaches. 68 either way
+   put it four pixels outside the ink, which is no target at all: an
+   SVG text hit-tests on its glyphs and not on its box, so a finger
+   between the 5 and the colon landed on the face behind it and did
+   nothing. Below is fixed at TM_GRAB by the big number's box, which
+   starts at 322 and must stay tappable; above is empty rim, so the
+   zone takes it and is asymmetric on purpose. */
+var TM_UP=96;
 /* The clock the phone runs between polls. `at` is when the figure
    arrived, by the phone's own monotonic clock - the two machines are
    not assumed to agree about the time of day, only about how long is
@@ -3591,10 +3617,23 @@ function pages(){
    is the moment you are on the rail with both hands full. */
 function clockFace(G){
   var ms=tmLeft(), off=(TM.st==='racing'||TM.st==='finished');
-  var h='<text class="tm'+(TM.st==='idle'?' idle':'')
-       +(TM.st==='countdown'&&ms<60000?' hot':'')+'" x="'+G.tmr[0]
-       +'" y="'+G.tmr[1]+'" font-size="104">'+esc(tmTxt(ms))+'</text>';
   var b=G.btn||{};
+  /* The numerals take the glass's own three gestures, so a grab goes
+     under them - bounded by the two buttons' own tap circles, because
+     the thing you must never do reaching for + is reset the race.
+     Grab and numerals in ONE group: a transparent fill still hit-tests,
+     so without the group a finger on the digits would land on the text
+     and a finger beside them on the rect, and only one of the two would
+     be a gesture. */
+  var h='<g class="tmz">';
+  if(b.up && b.dn){
+    var L=b.up[0]+TM_GRAB, R=b.dn[0]-TM_GRAB;
+    if(R>L) h+='<rect class="tmg" x="'+L+'" y="'+(G.tmr[1]-TM_UP)+'" width="'
+              +(R-L)+'" height="'+(TM_UP+TM_GRAB)+'"/>';
+  }
+  h+='<text class="tm'+(TM.st==='idle'?' idle':'')+(TM.wait?' wait':'')
+     +(TM.st==='countdown'&&ms<60000?' hot':'')+'" x="'+G.tmr[0]
+     +'" y="'+G.tmr[1]+'" font-size="104">'+esc(tmTxt(ms))+'</text></g>';
   [['up',1],['dn',-1]].forEach(function(p){
     var c=b[p[0]]; if(!c) return;
     var r=c[2], bar=Math.round(r*1.04), th=Math.round(r*0.22);
@@ -3774,6 +3813,16 @@ document.getElementById('pw').addEventListener('click',function(e){
 
 
 
+['pointerdown','pointerup','pointercancel','pointerleave'].forEach(
+  function(ev){
+    document.getElementById('main').addEventListener(ev,function(e){
+      if(!e.target.closest('.tmz')) return;
+      if(ev==='pointerdown'){ e.preventDefault(); return gStart(); }
+      if(ev==='pointerup')  return gEnd();
+      gOff();                       /* a scroll or an incoming call */
+    });
+  });
+
 document.getElementById('main').onclick=function(e){
   var f=e.target.closest('[data-f]');
   if(f){
@@ -3815,6 +3864,55 @@ document.getElementById('foot').onclick=function(e){
     setTimeout(load, 1800); });
 };
 
+/* ---- the clock's three gestures --------------------------------------
+   The glass's own, with the glass's own two numbers: 320 ms is the
+   double-tap window it uses, 700 ms the hold. Nothing here decides what
+   a gesture MEANS - timerGesture() on the panel does, because only the
+   boat knows which state it is in and this app's copy is up to four
+   seconds old. Sending the gesture rather than the transition is what
+   keeps the two from ever disagreeing.
+
+     tap ........ idle: start the five minute prep
+                  counting down: sync to the nearest whole minute
+     double ..... counting down: you crossed, start the race clock
+                  racing: finished, freeze the elapsed time
+     hold ....... any state: back to idle                           */
+var G_DBL=320, G_HOLD=700;
+var gLast=0, gTap=null, gHold=null;
+function gFire(k){
+  clearTimeout(gTap); gTap=null;
+  post({kind:'clock', do:k});
+  /* The phone cannot say what that did - it does not know for certain
+     what state the boat was in. Rather than guess and correct itself a
+     second later it says it is waiting, and asks again just past the
+     panel's next poll. */
+  TM.wait=true; tmRun();
+  setTimeout(load, 1800);
+}
+function gStart(){
+  clearTimeout(gHold);
+  gHold=setTimeout(function(){ gHold=null; gLast=0; gFire('hold'); }, G_HOLD);
+}
+function gEnd(){
+  /* gHold is the whole of "a press is live": set when one lands on the
+     zone, cleared when the hold fires. So this one line covers both a
+     release the hold already answered - which must not ALSO be a tap,
+     or a reset would be followed by a countdown - and a release that
+     began somewhere else. A second flag alongside it said the same
+     thing twice, and no control could make either of them fail. */
+  if(!gHold) return;
+  clearTimeout(gHold); gHold=null;
+  var now=performance.now();
+  if(now-gLast < G_DBL){ gLast=0; return gFire('double'); }
+  gLast=now;
+  /* One double-tap window, so the first half of a double never fires
+     the single action - the glass waits the same 320 ms for the same
+     reason. */
+  clearTimeout(gTap);
+  gTap=setTimeout(function(){ gTap=null; gFire('tap'); }, G_DBL);
+}
+function gOff(){ clearTimeout(gHold); gHold=null; }
+
 /* Redrawn on its own, not through draw(): the whole face is a string
    and rebuilding it twice a second would throw away the card, the lit
    zone and any scroll in it. Only the numerals move. */
@@ -3822,7 +3920,8 @@ var tmTick=0;
 function tmRun(){
   clearTimeout(tmTick);
   var el=document.querySelector('.fv .tm');
-  if(el) el.textContent=tmTxt(tmLeft());
+  if(el){ el.textContent=tmTxt(tmLeft());
+          el.classList.toggle('wait', !!TM.wait); }
   if(TM.st==='countdown'||TM.st==='racing') tmTick=setTimeout(tmRun, 250);
 }
 
