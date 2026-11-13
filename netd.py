@@ -3499,14 +3499,16 @@ svg.gl .f{fill:currentColor;stroke:none}
 /* A setting the glass draws as a tile. Same shape as a radio's, with
    the label where the network goes and the value under it - which is
    what the Display card puts side by side on the panel. */
-/* The pair spans the sheet, each taking half of what is left after the
-   gap, so the two outer edges sit exactly where every row's does and
-   the whole card is symmetric about its middle. Sized DOWN by their
-   padding and their type rather than by their width - which is what
-   124px columns did, and it left the pair hanging off the left with
-   the gap all on one side. */
+/* The pair spans the card, each taking half of what is left after the
+   gap, so it is symmetric about its middle - and its outer edges stop
+   where every ROW's words stop rather than against the sheet's own
+   border. Flush looked like two borders touching; this lines the pills
+   up with the column everything else on the sheet is written in.
+   Sized DOWN by their padding and their type rather than by their
+   width, which is what 124px columns did and it left the pair hanging
+   off the left with the slack all on one side. */
 .stier{display:grid;grid-template-columns:repeat(2,1fr);
- gap:8px;padding:2px 0 10px;margin:0 -8px}
+ gap:8px;padding:2px 12px 10px}
 .stile{display:flex;flex-direction:column;align-items:center;gap:6px;
  padding:9px 4px;border:2px solid var(--hairline);border-radius:14px;
  background:none;color:var(--label);font:inherit}

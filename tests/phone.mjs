@@ -957,20 +957,27 @@ t.ok(tl.length>1 && tl.every(x=>/\bstier\b/.test(x.tier)
 t.ok(tl.every(x=>x.w>=44),
      'and still wide enough to hit without looking',
      JSON.stringify(tl.map(x=>Math.round(x.w)+'x'+Math.round(x.h))));
-/* The pair reaches both sides of the sheet and is symmetric about its
-   middle. At fixed-width columns it hung off the left with the slack
-   all on one side, which is the thing you see before you read
-   anything on the card. */
+/* Symmetric about the middle of the card, and stopping where every
+   row's WORDS stop. At fixed-width columns it hung off the left with
+   the slack all on one side, which is the thing you see before you
+   read anything on it; hard against the sheet's own border it was two
+   borders touching. */
 const sym=await p.evaluate(()=>{
   const box=document.getElementById('shr').getBoundingClientRect();
   const ts=[...document.querySelectorAll('#sheet .stile')]
              .map(e=>e.getBoundingClientRect());
-  if(!ts.length) return null;
-  return {l:ts[0].left-box.left, r:box.right-ts[ts.length-1].right};
+  const w=document.querySelector('#sheet .srow[data-sk] s');
+  if(!ts.length || !w) return null;
+  const r=w.getBoundingClientRect();
+  return {l:ts[0].left-box.left, r:box.right-ts[ts.length-1].right,
+          off:ts[0].left-r.left};
 });
-t.ok(sym && Math.abs(sym.l-sym.r)<=1 && sym.l<=1,
-     'and the two of them reach both sides of the sheet, evenly',
+t.ok(sym && Math.abs(sym.l-sym.r)<=1,
+     'and the two of them sit evenly either side of the middle',
      JSON.stringify(sym));
+t.ok(sym && sym.l>=4 && Math.abs(sym.off)<=1,
+     'clear of the sheet\'s own edge, and lined up with the column the '
+     +'rest of the card is written in', JSON.stringify(sym));
 t.ok(R.find(x=>x.k==='keepAwake').on===true,
      'a toggle is a switch that is on when the setting is');
 /* Its unit is the OTHER setting's value. A second unit field would say
