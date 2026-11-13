@@ -247,7 +247,8 @@ One environment variable, read at startup:
 ```sh
 HELM_SONAR=udp:5005                      # R4 WiFi, broadcasting frames
 HELM_SONAR=udp:192.168.8.1:5005          # …pinned to one interface
-HELM_SONAR=serial:/dev/ttyACM0:250000    # R3, or R4 over USB
+HELM_SONAR=serial:/dev/ttyUSB0:250000    # R3 with a CH340 or CP2102 bridge
+HELM_SONAR=serial:/dev/ttyACM0:250000    # …or a 16U2, as a genuine UNO has
 ```
 
 Put it in **`~/.config/confluence-helm.env`**, not in `netd.sh`:
