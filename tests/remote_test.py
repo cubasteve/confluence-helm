@@ -10,9 +10,11 @@ about (docs/network.md): "There is no auth in the service because the
 socket makes it unnecessary; if you ever bind it wider, that stops
 being true." So the remote does NOT bind netd wider. It gets its own
 socket and its own handler class, and that class has no call path to
-route() - the twenty-seven endpoints are unreachable from the phone
+route() - EVERY endpoint is unreachable from the phone
 because the code to reach them is not there, not because a list says
-so.
+so. (This said "the twenty-seven endpoints" until there were
+thirty-three of them, which is what a count written into prose always
+does.)
 
     python3 tests/remote_test.py
 """

@@ -91,6 +91,24 @@ a boat already speaks — Signal K, AvNav and OpenCPN all ingest it — so
 nothing downstream needs changing. 10110 is the registered port for
 NMEA 0183 over IP.
 
+In Signal K that is one connection, with two fields:
+
+> **Server → Data Connections → Add**
+> Data Type **NMEA 0183**, NMEA 0183 Source **udp**, Port **10110**.
+
+UDP is Signal K's only *plain inbound listener*. The alternatives were
+checked and rejected on the merits rather than on taste:
+
+| | why not |
+|---|---|
+| `PUT /signalk/v1/api/…/environment/depth/belowTransducer` | not a data-injection route at all — a stock server answers **405 PUT not supported** |
+| the WebSocket delta stream | it does ingest, but writes go through `shouldAllowWrite`, so it wants credentials that a stdlib helper would then have to store and renew |
+| NMEA 0183 over **TCP** | Signal K's TCP modes connect *outward* as a client, or serve; neither is a plain listener on a port of your choosing |
+
+UDP needs no auth, no credentials on disk, no outbound anything, and
+works with the boat's internet unplugged — which on a lake is the
+normal condition.
+
 An unnamed host means **this machine** for a sender and **every
 interface** for a listener. The same spelling, defaulting opposite
 ways, because `udp:5005` said to a listener and `udp:10110` said to a
@@ -240,23 +258,78 @@ mode were ever dropped.
 
 ### Which board have I got?
 
-The two things to look at, neither of which needs a terminal:
+The USB-C socket says nothing — it is just a connector, and plenty of
+UNO **R3** clones have one. What matters is the MCU and the USB-serial
+bridge:
 
-- **UNO R4 WiFi** — USB-**C**, and a red 12×8 LED matrix in the middle.
-  Streams the binary frames over USB *and* UDP, and emits NMEA on
-  SoftwareSerial pins 4/5 at 4800 baud — **not** over USB.
-- **UNO R3** — the big square USB-**B** printer plug, no matrix. Binary
-  over USB serial at 250000 baud only; no WiFi, no NMEA.
+- **UNO R4 WiFi** — a red 12×8 LED matrix in the middle of the board.
+  Renesas RA4M1, two serial outputs: binary over USB *and* UDP, with
+  NMEA on SoftwareSerial pins 4/5 at 4800 baud. Announces its own
+  depth, so `netd` keeps its hands off.
+- **UNO R3, and R3 clones** — no matrix. One AVR USART wired to the USB
+  bridge, so binary **or** NMEA, never both.
+- The **Keyestudio 328 PLUS** is the second kind. Its bridge is a WCH
+  **CH340C**, which the mainline `ch341` driver supports over "46 to
+  3000000 bps", so 250000 is reachable and the board arrives as
+  `/dev/ttyUSB0`.
 
-And in Signal K's admin, under Server → Connections, the baud rate of
-whatever is feeding depth says which sketch is flashed:
+> **Keyestudio's own documentation contradicts itself** across its
+> similarly-named boards: KS0486 "PLUS Control Board" is ATMEGA328P-AU
+> with a **CP2102**, while KS0546 "328 PLUS" is **ATMEGA328PB** with a
+> CH340C — and one page gives the MCU as 328P while its own memory
+> lines say 328PB. Settle it on the Pi rather than from a product page:
+>
+> ```sh
+> lsusb          # 1a86:7523 → CH340   |   10c4:ea60 → CP2102
+> ls /dev/ttyUSB* /dev/ttyACM*
+> ```
+>
+> Either bridge appears as `ttyUSB*`, so the device path is the same
+> answer either way.
+
+**A 328PB has two USARTs — and it does not help.** The stock Arduino AVR
+core has no 328PB entry at all (`boards.txt` contains zero occurrences
+of `328pb`), so the board is built and flashed as a 328P and the second
+USART is simply not addressable. One output, whichever chip is really
+under the label.
+
+**Nor does SoftwareSerial rescue it.** SoftwareSerial transmits by
+bit-banging with interrupts off: 1.875 ms a byte at 4800 baud, so an
+80-character NMEA sentence busy-waits about **167 ms with ~150 ms of
+that interrupts-disabled**. The sampling loop runs at roughly 75 kHz.
+Sending one depth sentence would blind the sounder for the length of
+fifteen pings. That is why `netd` announces the depth and the board
+does not.
+
+### Which firmware is flashed?
+
+In Signal K's admin, under Server → Data Connections, the baud rate of
+whatever currently feeds depth:
 
 | | |
 |---|---|
-| **9600** | the `NMEA_DBT_OUT` sketch. Depth works and **there is no echogram**: that sketch never stores the samples. Reflashing is the only cure |
+| **9600** | `NMEA_DBT_OUT`. Depth works and **there is no echogram** — the line that would store a sample is commented out in the sketch. Reflashing is the only cure, and it takes the depth with it (see [One depth](#one-depth-and-who-measures-it)) |
 | **4800** | the R4's NMEA pins. The echogram is alive, over UDP |
 | **250000** | the raw binary, with something of yours translating it |
 | a UDP connection | R4, raw, already on the network |
+
+The two UNO R3 sketches differ in more than their output, and the
+difference sets your depth range:
+
+| | `TUSS4470_arduino` (raw) | `NMEA_DBT_OUT` |
+|---|---|---|
+| output | 1808-byte binary frames | `$SDDBT` ASCII |
+| baud | 250000 | 9600 |
+| `NUM_SAMPLES` | **1800** | **5224** |
+| range | ~17.8 m / 58 ft | ~50 m |
+| echogram | yes | **no** |
+
+Both sample at 13.2 µs, which is 0.95 cm of water per sample — the
+range is purely how many samples the sketch keeps. The raw firmware's
+1800 is what `HELM_SONAR_SAMPLES` defaults to. Raise both together if
+you want more water, and pay for it in ping rate: the board manages
+about **9.4 pings a second** at 1800 samples and the bottleneck is the
+serial link, so 5224 samples would be nearer 3.
 
 ## Squeezing 1800 into 256
 
