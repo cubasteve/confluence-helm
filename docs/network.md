@@ -935,12 +935,32 @@ target, which is drawn right and impossible to hit. The lanes are held clear of 
 without it the big number's lane covers both buttons and every press of
 **+** opens the picker instead.
 
+### The two header buttons
+
+Two ringed glyphs in the top right of the header: a **gear** for the
+display, and a **power button** beside it, in its own red. Circled,
+because a bare glyph on a header reads as a label rather than something
+you press; 44px of target on a 38px ring, which is the smallest thing a
+thumb finds without looking. They are in the corner a thumb reaches
+last, because everything below them is the face and these are not
+complications.
+
+They share **one sheet**, which wears whichever header has been
+pressed. Pressing the other one swaps it; pressing the one already up
+puts it away.
+
+The **gear** holds the theme, which used to be four buttons along the
+bottom — the room that frees goes to the face, which is the thing this
+app is. It needs no arming: nothing on it is destructive, and a theme
+you did not mean is undone by picking the one you did. The tick moves
+before the boat has answered, and `AUTO` carries what the clock has
+actually chosen beside it — the mode and the outcome are two different
+facts and you want both, which is the same pair the glass puts on its
+own theme tile.
+
 ### The power sheet
 
-A power glyph in the top right corner of the header — the glyph and
-nothing else, in the corner a thumb reaches last, because everything
-below it is the face and this is not another setting. It opens the
-glass's own power sheet: Reload the app, Restart helper, Desktop or
+The **power button** opens the glass's own power sheet: Reload the app, Restart helper, Desktop or
 Back to the kiosk, Reboot, Shut down. Least destructive first, which is
 the glass's rule and matters more on a phone: the top of a list is where
 a hurried thumb lands, and that should not be the shutdown.
@@ -979,6 +999,19 @@ something a thumb does without looking, which a drag across a 390px
 glass in a seaway is not. Tapping the armed row again puts it away,
 which is the way out without doing anything — the same as the glass's
 armed tile, and why neither needs a caption saying so.
+
+Two things that only showed up once there were two sheets:
+
+- A finished action puts the sheet away after a beat, and that beat
+  outlived the sheet. Close it yourself and open the other one inside
+  the second and a half, and the old timer shut the new one in your
+  face — which is exactly what a hurried hand does. Opening anything
+  cancels it now.
+- The word about what just happened is fixed to the bottom of the
+  glass, and so is the sheet, so it sat straight on the bar that does
+  the next thing — and for the two and a half seconds it was there,
+  pressing that bar pressed the message. While a sheet is up the
+  message goes to the top instead.
 
 `power_status()` is cached for twenty seconds, because the phone
 re-polls every four while the start clock runs and that call shells out

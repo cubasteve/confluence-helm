@@ -3166,6 +3166,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
  color:var(--ink);border-bottom:2px solid var(--hairline);margin-bottom:4px;
  display:flex;align-items:center;gap:10px}
 .top b{flex:1;font-weight:inherit;letter-spacing:inherit}
+#pwslot{display:flex;align-items:center;gap:10px;flex:none}
 #main{flex:1}
 
 /* The switch. Outlined rather than filled: hairline-to-accent is how
@@ -3228,25 +3229,37 @@ h1{font-size:12px;letter-spacing:.22em;color:var(--label);margin:16px 0 10px}
  color:var(--label);border-radius:14px;padding:13px 0;font:inherit;
  font-size:13px;letter-spacing:.1em}
 .th button.on{border-color:var(--accent);color:var(--accent)}
-/* The way to the power sheet: the glyph and nothing else, in the corner
-   a thumb reaches last. Everything below it is the face, which is what
-   this app is for - a full-width button under the theme row read as
-   another setting, and this is not one.
-   The padding is the target: 21px of glyph is not something you press
-   on a moving boat, and the negative margin keeps the ink on the same
-   line as the name while the tap area runs past it. */
-#pwb{background:none;border:0;padding:11px;margin:-11px 0;
- color:var(--label);display:flex;line-height:0;border-radius:50%}
-#pwb svg{width:21px;height:21px;flex:none}
-#pwb:active{color:var(--accent);background:var(--chip)}
+/* The two ways in, in the corner a thumb reaches last. Everything
+   below them is the face, which is what this app is for - a full-width
+   row under it read as another setting, and these are not settings,
+   they are the device.
+   Circled, because a bare glyph on a header reads as a label rather
+   than a thing you press. 38px of circle is smaller than a tap wants,
+   so the padding outside it carries the target to 44 and the negative
+   margin keeps both rings on the name's own line. */
+.hb{background:none;padding:6px;margin:-6px 0;border-radius:50%;
+ display:flex;line-height:0;
+ border:2px solid var(--hairline);color:var(--label);
+ width:38px;height:38px;align-items:center;justify-content:center;
+ box-sizing:content-box;background-clip:content-box}
+.hb svg{width:19px;height:19px;flex:none}
+.hb:active{background:var(--chip)}
+/* The power one wears its own colour, because it is the one on this
+   header that can take the boat's instruments down. The same red the
+   sheet marks Reboot and Shut down in, and the glass marks its own
+   danger with. On the night theme everything is red for night vision
+   and the ring is what carries it instead. */
+#pwb{border-color:#C81E1E;color:#C81E1E}
 svg.gl{fill:none;stroke:currentColor;stroke-width:2;
  stroke-linecap:round;stroke-linejoin:round}
 svg.gl .f{fill:currentColor;stroke:none}
 
-/* The power sheet. The same panel as the card, anchored to the bottom
-   of the glass rather than to the face: it is about the device, not
-   about a complication, so there is nothing for it to hang from. */
-#pw{position:fixed;left:var(--pad);right:var(--pad);
+/* The sheet. One of them, wearing whichever of the two headers has
+   been pressed: the same panel as the card, anchored to the bottom of
+   the glass rather than to the face, because it is about the device
+   and not about a complication, so there is nothing for it to hang
+   from. */
+#sheet{position:fixed;left:var(--pad);right:var(--pad);
  bottom:calc(10px + env(safe-area-inset-bottom));display:none;
  flex-direction:column;background:var(--panel);border-radius:18px;
  border:2px solid var(--hairline);overflow:hidden;z-index:8;
@@ -3255,14 +3268,18 @@ svg.gl .f{fill:currentColor;stroke:none}
     sheet would otherwise grow off the top and take its first row - the
     least destructive one - with it. */
  max-height:calc(100dvh - 80px)}
-#pw.on{display:flex}
-#pw .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;
+#sheet.on{display:flex}
+#sheet .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;
  border-bottom:2px solid var(--hairline)}
-#pw .hd b{flex:1;font-size:11px;letter-spacing:.18em;color:var(--label);
+#sheet .hd b{flex:1;font-size:11px;letter-spacing:.18em;color:var(--label);
  font-weight:600}
-#pw .hd button{background:none;border:0;color:var(--accent);font:inherit;
+#sheet .hd button{background:none;border:0;color:var(--accent);font:inherit;
  font-size:12px;letter-spacing:.14em;padding:4px 2px}
-#pwr{padding:8px;overflow:auto;-webkit-overflow-scrolling:touch}
+#shr{padding:8px;overflow:auto;-webkit-overflow-scrolling:touch}
+.prow i{font-style:normal;color:var(--accent);font-size:15px;flex:none}
+.prow em{font-style:normal;color:var(--label);font-size:11px;
+ letter-spacing:.16em;flex:none}
+.prow svg[viewBox="0 0 40 40"]{width:23px;height:23px}
 .prow{display:flex;align-items:center;gap:13px;width:100%;background:none;
  border:0;color:inherit;border-radius:12px;padding:13px 12px;font:inherit;
  text-align:left}
@@ -3323,12 +3340,18 @@ svg.gl .f{fill:currentColor;stroke:none}
  bottom:calc(14px + env(safe-area-inset-bottom));
  background:#C81E1E;color:#fff;border-radius:12px;padding:12px 16px;
  font-size:14px;display:none;z-index:9}
+/* While a sheet is up the message goes to the TOP instead. It is
+   fixed to the bottom of the glass and the sheet is too, so a word
+   about what just happened sat straight on the bar that does the next
+   thing - and for the two and a half seconds it was there, pressing
+   that bar pressed the message. */
+body.shon #msg{bottom:auto;top:calc(env(safe-area-inset-top) + 64px)}
 </style></head><body>
 <div class="top"><b>CONFLUENCE HELM</b><span id="pwslot"></span></div>
 <div id="main"></div>
 <div id="foot"></div>
 <div id="list"></div>
-<div id="pw"></div>
+<div id="sheet"></div>
 <div id="msg"></div>
 <script>
 var T=new URLSearchParams(location.search).get('t')||'';
@@ -3354,6 +3377,26 @@ var PICO={
  cage:'<path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/>',
  reboot:'<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v4.4h-4.4"/>',
  poweroff:'<path d="M12 3.4v8.2"/><path d="M6.9 6.7a8 8 0 1 0 10.2 0"/>'};
+/* The glass's own theme glyphs, on its own 40-unit box. Local, like
+   the power sheet's, and for the same reason: a picture is decoration.
+   What AUTO resolves to is not - that comes over the wire as now.eff. */
+var TICO={
+ auto:'<circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="3"/>'
+     +'<path d="M20 12v9l6 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>',
+ day:'<circle cx="20" cy="20" r="8" fill="currentColor"/><g stroke="currentColor" '
+    +'stroke-width="3" stroke-linecap="round"><path d="M20 2v5M20 33v5M2 20h5M33 20h5'
+    +'M7 7l3.5 3.5M29.5 29.5L33 33M33 7l-3.5 3.5M10.5 29.5L7 33"/></g>',
+ dusk:'<path d="M8 26a12 12 0 0 1 24 0" fill="currentColor"/><g stroke="currentColor" '
+     +'stroke-width="3" stroke-linecap="round"><path d="M3 31h34M20 4v5M5 12l3 3M35 12l-3 3"/></g>',
+ night:'<path d="M27 25A13 13 0 0 1 15 6a14 14 0 1 0 12 19z" fill="currentColor"/>'};
+function tly(k){
+  return TICO[k] ? '<svg viewBox="0 0 40 40">'+TICO[k]+'</svg>' : '';
+}
+/* A gear, for the settings the theme is the whole of. */
+var ICO_GEAR='<circle cx="12" cy="12" r="3.3"/>'
+ +'<path d="M12 2.6l1.4 2.5 2.8-.5.5 2.8 2.5 1.4-1.6 2.4 1.6 2.4-2.5 1.4'
+ +'-.5 2.8-2.8-.5L12 21.4l-1.4-2.5-2.8.5-.5-2.8-2.5-1.4L6.4 12 4.8 9.6'
+ +'l2.5-1.4.5-2.8 2.8.5z"/>';
 function gly(k,cls){
   return PICO[k] ? '<svg class="gl '+(cls||'')+'" viewBox="0 0 24 24">'
                    +PICO[k]+'</svg>' : '';
@@ -3683,19 +3726,21 @@ function draw(){
   h+='</div>'+face(PG)
     +'<div class="hint">TAP A COMPLICATION TO CHANGE IT</div>';
   document.getElementById('main').innerHTML=h;
-  var f='<h1>THEME</h1><div class="th">';
-  S.themes.forEach(function(t){
-    f+='<button data-t="'+esc(t)+'"'+((S.now.theme===t)?' class="on"':'')+'>'
-      +esc(t.toUpperCase())+'</button>';});
-  document.getElementById('foot').innerHTML=f+'</div>';
+  /* The theme used to be four buttons along the bottom. It is behind
+     the gear now, where the owner asked for it - and the room that
+     frees goes to the face, which is the thing this app is. */
+  document.getElementById('foot').innerHTML='';
   /* Only when there is something on it. A Pi with no systemctl offers
      nothing here, and a button that opens an empty sheet is worse than
      no button. Drawn from here rather than sitting in the page so that
      it appears with the rest of what the boat said, instead of being
      there from the first frame and then possibly not meaning anything. */
   document.getElementById('pwslot').innerHTML =
-    (S.power||[]).length ? '<button id="pwb" aria-label="Power">'
-                           +gly('poweroff')+'</button>' : '';
+    '<button class="hb" id="thb" aria-label="Display">'
+    +'<svg class="gl" viewBox="0 0 24 24">'+ICO_GEAR+'</svg></button>'
+    + ((S.power||[]).length
+       ? '<button class="hb" id="pwb" aria-label="Power">'
+         +gly('poweroff')+'</button>' : '');
   if(OPEN) place();
 }
 
@@ -3739,37 +3784,70 @@ function pick(p,sl){
 function shut(){ OPEN=null;
   document.getElementById('list').className=''; draw(); }
 
-/* ---- the power sheet ---------------------------------------------------
-   The glass's own sheet: same words, same order, same two in red, and
-   the same two-step - arm the thing, then do a gesture that a stray
-   touch does not complete. Least destructive first, which is the
+/* ---- the sheet, in its two guises --------------------------------------
+   POWER is the glass's own sheet: same words, same order, same two in
+   red, and the same two-step - arm the thing, then do a gesture a
+   stray touch does not complete. Least destructive first, which is the
    glass's rule and matters more here: the top of a list is where a
-   hurried thumb lands and that should not be the shutdown. */
-var ARM=null, HOLD_MS=900, HT=null;
-function pwOpen(on){
-  var e=document.getElementById('pw');
-  if(!on){ ARM=null; e.className=''; e.innerHTML=''; return; }
-  pwPaint();
+   hurried thumb lands, and that should not be the shutdown.
+
+   DISPLAY is the theme, which used to be four buttons along the
+   bottom. It needs no arming: nothing on it is destructive, and a
+   theme you did not mean is undone by picking the one you did. */
+var SHEET=null, ARM=null, HOLD_MS=900, HT=null;
+/* A finished action puts the sheet away after a beat, and that beat
+   outlives the sheet: close it yourself and open the other one inside
+   the second and a half, and the old timer shuts the new one in your
+   face. Opening anything cancels it. */
+var shAuto=null;
+function shOpen(which){
+  var e=document.getElementById('sheet');
+  clearTimeout(shAuto); shAuto=null;
+  SHEET=which||null; ARM=null;
+  document.body.classList.toggle('shon', !!SHEET);
+  if(!SHEET){ e.className=''; e.innerHTML=''; return; }
+  shPaint();
   e.className='on';
 }
-function pwPaint(){
-  var h='<div class="hd"><b>'+esc(S.uptime ? 'DEVICE RUNTIME: '+S.uptime
-                                           : 'DEVICE')+'</b>'
-       +'<button data-pwx="1">CLOSE</button></div><div id="pwr">';
+function shPaint(){
+  document.getElementById('sheet').innerHTML =
+    SHEET==='power' ? pwRows() : thRows();
+}
+function shHead(title){
+  return '<div class="hd"><b>'+esc(title)+'</b>'
+        +'<button data-shx="1">CLOSE</button></div><div id="shr">';
+}
+function pwRows(){
+  var h=shHead(S.uptime ? 'DEVICE RUNTIME: '+S.uptime : 'DEVICE');
   (S.power||[]).forEach(function(a){
     h+='<button class="prow'+(a.danger?' dgr':'')
       +(ARM&&ARM.a===a.a?' arm':'')+'" data-pa="'+esc(a.a)+'">'
       +gly(a.a)+'<s>'+esc(a.name)+'</s></button>';
   });
-  h+='</div><div id="hold"'+(ARM?(' class="on'+(ARM.danger?' dgr':'')+'"')
-                                :'')+'>'
+  return h+'</div><div id="hold"'
+    +(ARM?(' class="on'+(ARM.danger?' dgr':'')+'"'):'')+'>'
     +'<i></i><b>'+esc(ARM?('HOLD TO '+(ARM.verb||'CONFIRM')):'')+'</b></div>';
-  document.getElementById('pw').innerHTML=h;
+}
+function thRows(){
+  var h=shHead('DISPLAY');
+  (S.themes||[]).forEach(function(t){
+    var on=(S.now||{}).theme===t;
+    h+='<button class="prow'+(on?' arm':'')+'" data-th="'+esc(t)+'">'
+      +tly(t)+'<s>'+esc(t.toUpperCase())+'</s>'
+      /* On auto the mode and the outcome are two different facts and
+         you want both: the row says AUTO, and beside it is what the
+         clock has actually chosen right now. The glass puts the same
+         pair on its own theme tile. */
+      +(t==='auto' && (S.now||{}).eff
+        ? '<em>'+esc(String(S.now.eff).toUpperCase())+'</em>' : '')
+      +(on?'<i>&#10003;</i>':'')+'</button>';
+  });
+  return h+'</div>';
 }
 /* Tapping the armed one again disarms it, which is the way out without
    doing anything - the same way the glass's armed tile works, and the
    reason neither needs a caption saying so. */
-function pwArm(a){ ARM=(ARM&&ARM.a===a.a)?null:a; pwPaint(); }
+function pwArm(a){ ARM=(ARM&&ARM.a===a.a)?null:a; shPaint(); }
 
 function holdStop(ok){
   clearTimeout(HT); HT=null;
@@ -3806,7 +3884,7 @@ function pwPost(a,heavy){
     say(a.a==='poweroff' ? 'SHUTTING DOWN…'
       : a.a==='reboot'   ? 'REBOOTING…'
       : a.a==='reload'   ? 'RELOADING THE PANEL…' : 'DONE');
-    if(!heavy) setTimeout(function(){ pwOpen(false); }, 1400);
+    if(!heavy) shAuto=setTimeout(function(){ shOpen(null); }, 1400);
   };
   x.onerror=function(){
     if(heavy) return say('GOING DOWN…');
@@ -3815,8 +3893,20 @@ function pwPost(a,heavy){
   x.send(JSON.stringify({action:a.a}));
 }
 
-document.getElementById('pw').addEventListener('click',function(e){
-  if(e.target.closest('[data-pwx]')) return void pwOpen(false);
+document.getElementById('sheet').addEventListener('click',function(e){
+  if(e.target.closest('[data-shx]')) return void shOpen(null);
+  var th=e.target.closest('[data-th]');
+  if(th){
+    /* Applied with one tap, like the row it replaced. The theme is the
+       one command that changes what the mirror should LOOK like, and
+       only the panel knows what auto resolves to - so one refetch,
+       just past a poll, rather than a guess here. */
+    post({kind:'theme', theme:th.dataset.th}, function(){
+      S.now.theme=th.dataset.th; shPaint();
+      setTimeout(load, 1800);
+    });
+    return;
+  }
   var r=e.target.closest('[data-pa]');
   if(!r) return;
   var a=(S.power||[]).filter(function(x){ return x.a===r.dataset.pa; })[0];
@@ -3826,13 +3916,13 @@ document.getElementById('pw').addEventListener('click',function(e){
    mouse a probe uses, and pointercancel is what a scroll or an incoming
    call looks like - both have to let go of the bar. */
 ['pointerdown'].forEach(function(ev){
-  document.getElementById('pw').addEventListener(ev,function(e){
+  document.getElementById('sheet').addEventListener(ev,function(e){
     if(!e.target.closest('#hold.on')) return;
     e.preventDefault(); holdStop(false); holdGo();
   });
 });
 ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
-  document.getElementById('pw').addEventListener(ev,function(e){
+  document.getElementById('sheet').addEventListener(ev,function(e){
     if(HT) holdStop(false);
   });
 });
@@ -3880,16 +3970,11 @@ document.getElementById('main').onclick=function(e){
          else pick(z.dataset.p, z.dataset.s); }
 };
 document.querySelector('.top').onclick=function(e){
-  if(e.target.closest('#pwb')) pwOpen(true);
-};
-document.getElementById('foot').onclick=function(e){
-  var t=e.target.closest('[data-t]'); if(!t) return;
-  post({kind:'theme',theme:t.dataset.t},function(){
-    S.now.theme=t.dataset.t; draw();
-    /* The theme is the one command that changes what the mirror should
-       LOOK like, and only the panel knows what auto resolves to. One
-       refetch, just past a poll, rather than a guess here. */
-    setTimeout(load, 1800); });
+  /* Pressing the other one swaps the sheet rather than closing it,
+     which is what a header of buttons should do. Pressing the one that
+     is already up puts it away. */
+  if(e.target.closest('#pwb')) return void shOpen(SHEET==='power'?null:'power');
+  if(e.target.closest('#thb')) return void shOpen(SHEET==='theme'?null:'theme');
 };
 
 /* ---- the clock's three gestures --------------------------------------

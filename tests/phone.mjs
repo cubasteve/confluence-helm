@@ -587,8 +587,8 @@ t.ok(prows.join()==='reload,helper,desktop,reboot,poweroff',
      +'thumb lands', prows.join());
 t.ok(!prows.includes('cage'),
      'and the one this device cannot do is simply not on it');
-t.ok(/3d 4h/.test(await p.textContent('#pw .hd b')),
-     'with how long it has been up', await p.textContent('#pw .hd b'));
+t.ok(/3d 4h/.test(await p.textContent('#sheet .hd b')),
+     'with how long it has been up', await p.textContent('#sheet .hd b'));
 
 t.head('and nothing on it happens because you touched it once');
 /* Two steps, like the glass: arm the row, then a gesture a stray touch
@@ -613,44 +613,137 @@ t.ok((await did()).length===0, 'having asked the device for nothing',
 
 t.head('and a hold you let go of early is a hold you changed your mind about');
 await p.click('.prow[data-pa="reboot"]'); await p.waitForTimeout(250);
-const hb=await p.$eval('#hold',e=>{const r=e.getBoundingClientRect();
-  return {x:r.left+r.width/2, y:r.top+r.height/2};});
-await p.mouse.move(hb.x,hb.y); await p.mouse.down();
-await p.waitForTimeout(400); await p.mouse.up();
-await p.waitForTimeout(250);
+/* Measured each time rather than once: the bar moves with the sheet,
+   and a press at where it used to be is a press on the face. */
+const holdFor=async ms=>{
+  const r=await p.$eval('#hold',e=>{const b=e.getBoundingClientRect();
+    return {x:b.left+b.width/2, y:b.top+b.height/2};});
+  await p.mouse.move(r.x,r.y); await p.mouse.down();
+  await p.waitForTimeout(ms); await p.mouse.up();
+  await p.waitForTimeout(300);
+};
+await holdFor(400);
 t.ok((await did()).length===0, 'four hundred milliseconds is not a hold',
      JSON.stringify(await did()));
-await p.mouse.move(hb.x,hb.y); await p.mouse.down();
-await p.waitForTimeout(1100); await p.mouse.up();
-await p.waitForTimeout(300);
+await holdFor(1100);
 t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
      'and a full one is', JSON.stringify(await did()));
 /* reload is the one that does NOT go to the device: the thing being
    reloaded is the panel's page, and netd cannot reload a browser
    without killing it. */
 await p.waitForTimeout(1500);
-await p.click('#pwb'); await p.waitForTimeout(300);
+/* The button toggles, and a reboot is heavy so the sheet stays up to
+   say so - pressing it here would put the sheet away rather than
+   bring it back. */
+if(!(await p.isVisible('#sheet.on'))){
+  await p.click('#pwb'); await p.waitForTimeout(300); }
 await p.click('.prow[data-pa="reload"]'); await p.waitForTimeout(250);
-await p.mouse.move(hb.x,hb.y); await p.mouse.down();
-await p.waitForTimeout(1100); await p.mouse.up();
-await p.waitForTimeout(300);
+await holdFor(1100);
 t.ok(JSON.stringify(await did())===JSON.stringify(['reboot']),
      'a reload is not asked of the device', JSON.stringify(await did()));
 t.ok(JSON.stringify((await peek()).pend['power'])===
      JSON.stringify({kind:'power', action:'reload'}),
      'it is queued for the panel, which is the thing being reloaded',
      JSON.stringify((await peek()).pend['power']));
-await p.click('[data-pwx]'); await p.waitForTimeout(250);
-t.ok(!(await p.isVisible('#pw.on')), 'and CLOSE leaves the sheet');
+/* The word about what just happened is fixed to the bottom of the
+   glass, and so is the sheet - so it sat straight on the bar that does
+   the next thing, and for the two and a half seconds it was there,
+   pressing that bar pressed the message. */
+const over=await p.evaluate(()=>{
+  const m=document.getElementById('msg');
+  const h=document.getElementById('hold');
+  if(!m || !h || m.style.display==='none') return null;
+  const a=m.getBoundingClientRect(), b=h.getBoundingClientRect();
+  return !(a.bottom<=b.top || b.bottom<=a.top);
+});
+t.ok(over===false, 'and the word about it is not sitting on the bar',
+     String(over));
+await p.click('[data-shx]'); await p.waitForTimeout(250);
+t.ok(!(await p.isVisible('#sheet.on')), 'and CLOSE leaves the sheet');
+/* A finished action puts the sheet away after a beat, and that beat
+   outlives the sheet. Close it yourself and open the other one inside
+   the second and a half and the old timer shut the new one in your
+   face - which is exactly what a hurried hand does. */
+await p.click('#thb'); await p.waitForTimeout(200);
+await p.waitForTimeout(1600);
+t.ok(await p.isVisible('#sheet.on'),
+     'and a sheet opened straight after one is not shut by its timer');
+await p.click('[data-shx]'); await p.waitForTimeout(250);
 
-t.head('the theme row still works, and the mirror wears the panel\'s colours');
+t.head('the theme is behind the gear, beside the power button');
+/* It was four buttons along the bottom. The owner wanted it in the
+   header with the other one, and the room that frees goes to the face,
+   which is the thing this app is. */
+const hdb=await p.$$eval('.top .hb',gs=>gs.map(g=>{
+  const r=g.getBoundingClientRect();
+  return {id:g.id, x:r.left, w:r.width, h:r.height,
+          txt:g.textContent.trim(), svg:g.querySelectorAll('svg').length,
+          ring:getComputedStyle(g).borderTopColor,
+          /* The colour on its own is not the ring: a zero-width border
+             still reports one, so a button with no ring at all read as
+             ringed. The width is the ring. */
+          ringW:parseFloat(getComputedStyle(g).borderTopWidth)||0};}));
+t.ok(hdb.length===2 && hdb.map(x=>x.id).join()==='thb,pwb',
+     'two of them, the gear to the LEFT of the power button',
+     hdb.map(x=>x.id).join());
+t.ok(hdb.every(x=>x.txt==='' && x.svg===1),
+     'a glyph each and no word beside either');
+t.ok(hdb.length===2 && hdb.every(x=>x.w>=44 && x.h>=44),
+     'with a target bigger than the ring that draws it - 44 is the '
+     +'smallest thing a thumb finds without looking',
+     JSON.stringify(hdb.map(x=>Math.round(x.w)+'x'+Math.round(x.h))));
+/* Circled, because a bare glyph on a header reads as a label rather
+   than a thing you press - and the power one in its own colour,
+   because it is the one here that can take the instruments down. */
+t.ok(hdb.length===2 && hdb.every(x=>x.ringW>=1
+                                  && x.ring && x.ring!=='rgba(0, 0, 0, 0)'),
+     'both are ringed, so they read as buttons rather than as labels',
+     JSON.stringify(hdb.map(x=>x.ringW+' '+x.ring)));
+t.ok(hdb.length===2 && hdb[1].ring!==hdb[0].ring,
+     'and the power one wears a colour of its own',
+     JSON.stringify(hdb.map(x=>x.ring)));
+t.ok((await p.$$('#foot .th')).length===0,
+     'and nothing is left of the row along the bottom');
+
+t.head('and it is the panel\'s own four, with what AUTO resolved to');
+await p.click('#thb'); await p.waitForTimeout(350);
+const th=await p.$$eval('.prow[data-th]',gs=>gs.map(g=>({
+  k:g.dataset.th, on:g.classList.contains('arm'),
+  sub:(g.querySelector('em')||{}).textContent||'',
+  tick:!!g.querySelector('i')})));
+t.ok(th.map(x=>x.k).join()===cat.themes.join(),
+     'the themes the panel registered, in its order',
+     th.map(x=>x.k).join());
+t.ok(th.filter(x=>x.tick).length===1 && th.find(x=>x.tick).k===cat.now.theme,
+     'with a tick on the one the glass is set to',
+     JSON.stringify(th.filter(x=>x.tick).map(x=>x.k)));
+/* On auto the mode and the outcome are two different facts and you
+   want both: the row says AUTO and beside it is what the clock has
+   chosen. The glass puts the same pair on its own theme tile. */
+t.ok(th.find(x=>x.k==='auto').sub===String(cat.now.eff).toUpperCase(),
+     'and AUTO says what the clock has actually chosen right now',
+     th.find(x=>x.k==='auto').sub+' vs '+cat.now.eff);
 const bg=await p.evaluate(()=>getComputedStyle(document.body).backgroundColor);
 t.ok(bg==='rgb(244, 246, 247)',
      'the day palette came down the wire and was applied', bg);
-await p.click('[data-t="night"]'); await p.waitForTimeout(400);
+/* One tap, not two: nothing on this sheet is destructive, and a theme
+   you did not mean is undone by picking the one you did. */
+await p.click('.prow[data-th="night"]'); await p.waitForTimeout(400);
 t.ok(JSON.stringify((await peek()).pend['theme'])===
-     JSON.stringify({kind:'theme',theme:'night'}), 'and a theme tap is queued',
-     JSON.stringify((await peek()).pend));
+     JSON.stringify({kind:'theme',theme:'night'}), 'and one tap sends it',
+     JSON.stringify((await peek()).pend['theme']));
+t.ok(await p.$eval('.prow[data-th="night"]',e=>!!e.querySelector('i')),
+     'with the tick moving before the boat has answered');
+/* Pressing the OTHER one swaps the sheet rather than closing it,
+   which is what a header of buttons should do. */
+await p.click('#pwb'); await p.waitForTimeout(350);
+t.ok(/DEVICE/.test(await p.textContent('#sheet .hd b')),
+     'the power button swaps the sheet rather than stacking a second one',
+     await p.textContent('#sheet .hd b'));
+t.ok((await p.$$('.prow[data-th]')).length===0, 'with the themes gone');
+await p.click('#pwb'); await p.waitForTimeout(300);
+t.ok(!(await p.isVisible('#sheet.on')),
+     'and pressing the one already up puts it away');
 
 t.head('everything clears the glass of a real phone');
 /* Headless reports no safe-area insets at all, so measuring here
@@ -661,9 +754,23 @@ t.head('everything clears the glass of a real phone');
    it, because nothing here could. */
 await p.addStyleTag({content:'body{padding-top:47px;padding-bottom:34px}'});
 await p.waitForTimeout(250);
-const foot=await p.$eval('#foot .th',e=>e.getBoundingClientRect().bottom);
-t.ok(foot<=844-34, 'the theme row is above the home indicator',
-     String(Math.round(foot)));
+/* The header is what is nearest the notch now that the theme row has
+   gone from the foot - and it holds two things you press. */
+const hbt=await p.$eval('#pwb',e=>e.getBoundingClientRect().top);
+t.ok(hbt>=47, 'the header buttons are below the notch',
+     String(Math.round(hbt)));
+/* The sheet is position:fixed, so the padding pushed in above does
+   not move it and there is no way to measure this headless - Chromium
+   reports no safe-area insets at all. What CAN be checked is that the
+   rule asks for one, which is the thing that would be lost. */
+const shRule=await p.evaluate(()=>{
+  for(const sh of document.styleSheets)
+    for(const r of sh.cssRules)
+      if(r.selectorText==='#sheet') return r.style.bottom;
+  return '';
+});
+t.ok(/safe-area-inset-bottom/.test(shRule),
+     'and a sheet is held off the home indicator by the inset', shRule);
 t.ok((await faceBox()).y>=47, 'and the face below the notch',
      String(Math.round((await faceBox()).y)));
 t.ok((await faceBox()).b<=844-34,
