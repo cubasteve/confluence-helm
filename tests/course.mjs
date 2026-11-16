@@ -72,9 +72,17 @@ t.head('the course is its own app, off the dock beside the radar');
    sheet that reads none of it. */
 await p.evaluate(()=>{ closeApp(); }); await p.waitForTimeout(400);
 await p.evaluate(()=>openApps()); await p.waitForTimeout(500);
-t.ok(await p.evaluate(()=>APPS.map(a=>a.id)[1])==='course',
-     'second on the dock, right off the radar',
+/* The whole order, not one slot: the owner set it, and a probe that
+   only pinned the course to slot two would let everything around it
+   drift. */
+t.ok(await p.evaluate(()=>APPS.map(a=>a.id).join())===
+       'tracks,course,radar,sonar,energy,golden',
+     'the dock reads Tracks, Course, Radar, Sonar, Energy, Golden Hour',
      await p.evaluate(()=>APPS.map(a=>a.id).join()));
+t.ok(await p.evaluate(()=>[...document.querySelectorAll('#app-row [data-app]')]
+       .map(e=>e.querySelector('span').textContent.replace(/\n/g,' ')).join('|'))
+     ==='TRACKS|COURSE|RADAR|SONAR|ENERGY|GOLDEN HOUR',
+     'and the tiles on the glass are drawn in that order');
 t.ok(await p.evaluate(()=>{ const r=$('app-row');
        return r.scrollWidth<=r.clientWidth; }),
      'and every tile still fits the 600 px row without it scrolling - the '

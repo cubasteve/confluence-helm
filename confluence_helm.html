@@ -15723,22 +15723,8 @@ function tracksClose(){
   $('stage').appendChild(tmap);
 }
 
+/* Left to right on the dock, in the order the owner asked for. */
 const APPS=[
-  {id:'radar', name:'Radar',
-   ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
-      +'<path d="M12 12l6.4-6.4"/>',
-   open:radarOpen, close:radarClose},
-  /* Two marks and the way between them, curved because nothing on the
-     water is a straight line. Quiet on purpose: it sits next to the
-     radar, and the three candidates that read loudest - a triangle of
-     buoys, an arrow rounding a mark, a buoy on the water - were all a
-     ring with something in it at 42 px, which is what the radar already
-     is. This one is the only shape on the dock that is two things and
-     a path. */
-  {id:'course', name:'Course',
-   ico:'<circle cx="5.8" cy="17.6" r="2.4"/><circle cx="18.2" cy="6.4" r="2.4"/>'
-      +'<path d="M5.8 15.2C5.8 9.4 18.2 14.6 18.2 8.8"/>',
-   open:courseOpen, close:courseClose},
   /* The route cutting across the glass with the boat riding it, the way
      Tesla draws the road under the car. The band is its two edges rather
      than a fill, because everything else on this panel is an open
@@ -15752,9 +15738,31 @@ const APPS=[
       +'<path fill="currentColor" stroke="none"'
       +' d="M14.6 7.1L8 13.2L11.2 13.5L13.2 16.1Z"/>',
    open:tracksOpen, close:tracksClose},
-  /* A sun low on the water with its light on it. Half a disc rather
-     than a whole one, because a sun ON the horizon is the thing this
-     app is about - a full circle would just be "weather". */
+  /* Two marks and the way between them, curved because nothing on the
+     water is a straight line. Quiet on purpose: it sits next to the
+     radar, and the three candidates that read loudest - a triangle of
+     buoys, an arrow rounding a mark, a buoy on the water - were all a
+     ring with something in it at 42 px, which is what the radar already
+     is. This one is the only shape on the dock that is two things and
+     a path. */
+  {id:'course', name:'Course',
+   ico:'<circle cx="5.8" cy="17.6" r="2.4"/><circle cx="18.2" cy="6.4" r="2.4"/>'
+      +'<path d="M5.8 15.2C5.8 9.4 18.2 14.6 18.2 8.8"/>',
+   open:courseOpen, close:courseClose},
+  {id:'radar', name:'Radar',
+   ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
+      +'<path d="M12 12l6.4-6.4"/>',
+   open:radarOpen, close:radarClose},
+  /* A hull, the cone under it and the bottom it is looking for. The
+     only wavy line on the dock, which is what makes it readable at
+     42 px beside the radar's ring and the course's two circles - and
+     the seabed is the half of it that says SOUNDER rather than
+     "something pointing down". */
+  {id:'sonar', name:'Sonar',
+   ico:'<path d="M4.6 3.4h14.8"/>'
+      +'<path d="M12 3.4L7.4 14.2"/><path d="M12 3.4l4.6 10.8"/>'
+      +'<path d="M2.8 19.4q3-2.6 6 0t6 0t6 0"/>',
+   open:sonarOpen, close:sonarClose},
   /* A battery, which is the only rectilinear shape on the dock and so
      the only one that cannot be mistaken for the radar's ring or the
      course's two circles at 42 px. The bolt is FILLED for the reason
@@ -15766,16 +15774,9 @@ const APPS=[
       +'<path fill="currentColor" stroke="none"'
       +' d="M11.9 8.7L7.7 12.9h2.9l-.5 2.6 4.2-4.2h-2.9z"/>',
    open:energyOpen, close:energyClose},
-  /* A hull, the cone under it and the bottom it is looking for. The
-     only wavy line on the dock, which is what makes it readable at
-     42 px beside the radar's ring and the course's two circles - and
-     the seabed is the half of it that says SOUNDER rather than
-     "something pointing down". */
-  {id:'sonar', name:'Sonar',
-   ico:'<path d="M4.6 3.4h14.8"/>'
-      +'<path d="M12 3.4L7.4 14.2"/><path d="M12 3.4l4.6 10.8"/>'
-      +'<path d="M2.8 19.4q3-2.6 6 0t6 0t6 0"/>',
-   open:sonarOpen, close:sonarClose},
+  /* A sun low on the water with its light on it. Half a disc rather
+     than a whole one, because a sun ON the horizon is the thing this
+     app is about - a full circle would just be "weather". */
   {id:'golden', name:'Golden Hour',
    ico:'<path d="M3.5 17.5h17"/><path d="M7.4 17.5a4.6 4.6 0 0 1 9.2 0"/>'
       +'<path d="M12 5.6v2"/><path d="M5.2 8.4l1.4 1.4"/>'
