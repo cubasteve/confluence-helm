@@ -9,7 +9,7 @@ How the Pi gets from cold to a helm display, and what keeps it there.
 The app is **served over HTTP by AvNav**, not opened from `file://`:
 
 ```
-http://localhost:8080/user/helm/confluence_helm.html
+http://localhost:8080/user/viewer/helm/confluence_helm.html
 ```
 
 This matters. Chromium cannot `fetch()` a `file://` URL at all, so the
@@ -22,7 +22,7 @@ There are two copies of the HTML, and that is deliberate:
 | Path | Role |
 |---|---|
 | `~/helm/` | the repo — **edit here** |
-| `~/avnav/data/user/helm/` | what AvNav serves and the kiosk loads |
+| `~/avnav/data/user/viewer/helm/` | what AvNav serves and the kiosk loads |
 
 They cannot be a symlink (the sshfs mount used to edit them cannot create
 one), so `deploy.sh` keeps them in step. It is the only thing that should
@@ -996,3 +996,20 @@ always the **dusk** palette. Boot into day and there is one dark-to-light
 step at the app. Fixing it properly means teaching the installer to
 render a day variant and something to choose between them at boot, which
 is a lot of machinery for one frame.
+
+## When AvNav does not serve the panel
+
+AvNav 20261102 stopped serving `~/avnav/data/user/helm/` - it serves only
+`user/viewer` and `user/images` - and the kiosk came up black. Two things
+changed because of it:
+
+- the panel now lives in `~/avnav/data/user/viewer/helm/`, reached at
+  `http://<pi>:8080/user/viewer/helm/confluence_helm.html`. `deploy.sh`
+  moves whatever was in the old folder (map tiles, GPX, now-playing)
+  across the first time it runs, and autopull runs it.
+- `boot/cage-session.sh` no longer opens an address AvNav will not
+  answer. A steady 404 for ten seconds, or silence for a minute, and it
+  loads `file://~/helm/confluence_helm.html` instead. Instruments, battery,
+  sonar and the radios all work from the file; map tiles and now-playing
+  need the served copy, because they sit beside it.
+

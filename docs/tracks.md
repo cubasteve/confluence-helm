@@ -463,8 +463,8 @@ races the kiosk recorded are in it. So exporting on the helm used to
 mean a `.gpx` in the Pi's `~/Downloads`, where nothing can reach it.
 
 The track now goes the other way. `⤓` on the track page POSTs the XML to
-`netd`, which writes it into `~/avnav/data/user/helm/gpx/` — a folder
-**AvNav already serves**, at `/user/helm/gpx/<name>.gpx`. Any device on
+`netd`, which writes it into `~/avnav/data/user/viewer/helm/gpx/` — a folder
+**AvNav already serves**, at `/user/viewer/helm/gpx/<name>.gpx`. Any device on
 the boat WiFi can fetch it; on iOS it lands in Files, and the share sheet
 from there reaches SailTies, HealthFit and anything else that eats GPX.
 

@@ -35,7 +35,7 @@ CONFIG = os.path.expanduser("~/.config/confluence-spotify.json")
 # music page simply stayed on "Nothing playing" with no clue why.
 _HOME = os.path.expanduser("~")
 TARGETS = [
-    os.path.join(_HOME, "avnav/data/user/helm/nowplaying.json"),  # served by AvNav
+    os.path.join(_HOME, "avnav/data/user/viewer/helm/nowplaying.json"),  # served by AvNav
     os.path.join(_HOME, "helm/nowplaying.json"),                  # the file:// copy
 ]
 

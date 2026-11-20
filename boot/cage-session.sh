@@ -22,7 +22,7 @@
 set -u
 
 REPO="${REPO:-$HOME/helm}"
-URL="${URL:-http://localhost:8080/user/helm/confluence_helm.html}"
+URL="${URL:-http://localhost:8080/user/viewer/helm/confluence_helm.html}"
 LOG="${LOG:-/tmp/cage-session.log}"
 DM="${DM:-lightdm}"
 GOOD_RUN="${GOOD_RUN:-20}"            # a session shorter than this is a failure

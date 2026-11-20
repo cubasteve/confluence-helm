@@ -12,7 +12,7 @@
 # broken server gives you Chromium's error page rather than a black
 # screen with no way in.
 
-URL="http://localhost:8080/user/helm/confluence_helm.html"
+URL="http://localhost:8080/user/viewer/helm/confluence_helm.html"
 FALLBACK="file://$HOME/helm/confluence_helm.html"
 
 # Debian ships the browser as `chromium`; Raspberry Pi OS ships it as

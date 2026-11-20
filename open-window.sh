@@ -37,7 +37,7 @@
 # opens a NEW window. So the duplicate is guaranteed rather than likely.
 set -u
 
-URL="${HELM_URL:-http://localhost:8080/user/helm/confluence_helm.html}"
+URL="${HELM_URL:-http://localhost:8080/user/viewer/helm/confluence_helm.html}"
 
 # Anchored on the executable. An unanchored -f matches any process whose
 # command line merely MENTIONS the string - a grep, an editor, the very

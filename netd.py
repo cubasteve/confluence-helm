@@ -887,7 +887,7 @@ def bt_connect(mac):
 
 CHROME = shutil.which('chromium-browser') or shutil.which('chromium') or ''
 APP_URL = os.environ.get('HELM_URL',
-                         'http://localhost:8080/user/helm/confluence_helm.html')
+                         'http://localhost:8080/user/viewer/helm/confluence_helm.html')
 KIOSK_FLAG = '--kiosk'
 WIN_FLAG = '--start-maximized'          # how we tell our windowed one apart
 # Anchored on the executable: an unanchored -f pattern also matches any
@@ -2269,7 +2269,7 @@ def power_do(action):
 #
 # So the panel hands the XML here and this writes it into the folder AvNav
 # already serves. From then on any phone on the boat WiFi can fetch it at
-#   http://<pi>:8080/user/helm/gpx/<name>.gpx
+#   http://<pi>:8080/user/viewer/helm/gpx/<name>.gpx
 # which on iOS lands in Files, and from there the share sheet reaches
 # SailTies, HealthFit and anything else that takes a GPX.
 #
@@ -2278,7 +2278,7 @@ def power_do(action):
 # which a phone cannot: it is loopback-only. The phone reads the index
 # from AvNav, same origin as the app itself.
 
-GPX_DIR = os.path.expanduser('~/avnav/data/user/helm/gpx')
+GPX_DIR = os.path.expanduser('~/avnav/data/user/viewer/helm/gpx')
 GPX_SAFE = re.compile(r'[^A-Za-z0-9._-]')
 GPX_MAX = 8 * 1024 * 1024
 

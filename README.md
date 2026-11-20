@@ -85,7 +85,7 @@ a round panel. → [the whole gesture story](docs/display.md#how-many-fingers)
 The app is **served over HTTP by AvNav**, not opened from `file://`:
 
 ```
-http://localhost:8080/user/helm/confluence_helm.html
+http://localhost:8080/user/viewer/helm/confluence_helm.html
 ```
 
 That matters — Chromium cannot `fetch()` a `file://` URL, so the music
@@ -97,7 +97,7 @@ There are two copies of the HTML, deliberately:
 | Path | Role |
 |---|---|
 | `~/helm/` | the repo — **edit here** |
-| `~/avnav/data/user/helm/` | what AvNav serves and the kiosk loads |
+| `~/avnav/data/user/viewer/helm/` | what AvNav serves and the kiosk loads |
 
 ```bash
 # edit ~/helm/confluence_helm.html, then
