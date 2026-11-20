@@ -13,6 +13,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 C.getDeviceProps = async () => C._props;
 C.REPLY_MS = [30, 60, 120];
+C.CONNECT_TRIES = 2; C.CONNECT_RETRY_SECS = 0.02; C.GATT_SECS = 0.2;
 
 class Char extends EventEmitter {
   constructor(flags) { super(); this.flags = flags; this.notifying = false; this.writes = []; }
@@ -26,12 +27,12 @@ function makeDevice({ mac, frames, needUnlock = true, flags = ["write-without-re
   const tx = new Char(flags);
   const dev = new EventEmitter();
   dev.helper = Object.assign(new EventEmitter(), { iface: "org.bluez.Device1",
-    callMethod: async () => { dev.connects = (dev.connects || 0) + 1; }, _prepare() {}, removeListeners() {} });
+    callMethod: async () => { dev.connects = (dev.connects || 0) + 1; if (dev.refuse > 0) { dev.refuse--; throw new Error("le-connection-abort-by-local"); } }, _prepare() {}, removeListeners() {} });
   dev.disconnects = 0;
   dev.disconnect = async () => { dev.disconnects++; };
   const svc = { getCharacteristic: async (u) => (u.startsWith("0000fff1") ? rx : u.startsWith("0000fff2") ? tx : Promise.reject(new Error("no char"))) };
-  dev.gatt = async () => ({ getPrimaryService: async (u) => { if (!u.startsWith("0000fff0")) throw new Error("no svc"); return svc; },
-    services: async () => [], helper: { removeListeners() {} } });
+  dev.gatt = async () => { if (dev.gattDelay) await sleep(dev.gattDelay); return dev.hangGatt ? new Promise(() => {}) : ({ getPrimaryService: async (u) => { if (!u.startsWith("0000fff0")) throw new Error("no svc"); return svc; },
+    services: async () => [], helper: { removeListeners() {} } }); };
   const got = new Set();
   let streaming = !needUnlock;
   const stream = () => { if (!dev.silent) for (const f of frames) rx.emit("valuechanged", f); };
@@ -182,6 +183,58 @@ const expand = (tmpl) => String(tmpl).replace("{batteryID}", "house");
     await s.stopListening();
     const w = dev._tx.writes.length; await sleep(300);
     ok(dev._tx.writes.length === w, "no writes after stop");
+    C.STALE_SECS = 15; C.WATCH_SECS = 5;
+  }
+
+  // ---- 6. Refused connections and service discovery that never answers ----
+  {
+    C.STALE_SECS = 0.15; C.WATCH_SECS = 0.05;
+    const dev = makeDevice({ mac: "E2:E7:79:99:53:58", frames: [hx("v1a1")] });
+    dev.refuse = 4; // two whole connect rounds of two tries each
+    const s = await makeSensor(dev);
+    let err = null;
+    const t0 = Date.now();
+    await s.activate({}, { id: "x" }).catch((e) => (err = e));
+    ok(err && Date.now() - t0 < 1000, `refused connect: activate rejects promptly (${err && err.message})`);
+    await sleep(1500);
+    ok(near(s.values.voltage, 13.29), "refused connect: watchdog retries until data");
+    ok(!s.isError(), "error cleared once connected");
+    await s.stopListening();
+
+    const d2 = makeDevice({ mac: "E2:E7:79:99:53:58", frames: [hx("v1a1")] });
+    d2.hangGatt = true;
+    const s2 = await makeSensor(d2);
+    err = null;
+    const t1 = Date.now();
+    await s2.activate({}, { id: "x" }).catch((e) => (err = e));
+    ok(err && /timed out/.test(err.message) && Date.now() - t1 < 1000, `hung discovery: activate rejects (${err && err.message})`);
+    d2.hangGatt = false;
+    await sleep(1500);
+    ok(near(s2.values.voltage, 13.29), "hung discovery: watchdog retries until data");
+    // a drop whose reconnect hangs must not lock the watchdog out
+    s2.setConnected(false); d2.hangGatt = true; d2.silent = true;
+    await sleep(800);
+    d2.hangGatt = false; d2.silent = false; s2.values = {};
+    await sleep(1500);
+    ok(near(s2.values.voltage, 13.29), "reconnect that hung once still recovers");
+    await s2.stopListening();
+    const w = d2._tx.writes.length, c = d2.connects; await sleep(300);
+    ok(d2._tx.writes.length === w && d2.connects === c, "nothing after stop");
+
+    // stopped while a slow reconnect is still finishing: it must stay stopped
+    {
+      const d3 = makeDevice({ mac: "E2:E7:79:99:53:58", frames: [hx("v1a1")] });
+      const s3 = await makeSensor(d3);
+      await s3.activate({}, { id: "x" }); await sleep(50);
+      s3.setConnected(false); d3.silent = true; d3.gattDelay = 120; // inside GATT_SECS, so the reconnect would succeed
+      const c0 = d3.connects;
+      while (d3.connects === c0) await sleep(10); // reconnect under way
+      await s3.stopListening();
+      const w = d3._tx.writes.length;
+      d3.silent = false;
+      await sleep(900);
+      ok(d3._tx.writes.length === w && !s3.intervalID, `stop during reconnect stays stopped (writes ${d3._tx.writes.length - w}, timer ${!!s3.intervalID})`);
+    }
     C.STALE_SECS = 15; C.WATCH_SECS = 5;
   }
 

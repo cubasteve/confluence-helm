@@ -34,6 +34,20 @@ In **Server → Plugin Config → BT Sensors**:
 5. Save and enable. Within a few seconds, **Data Browser** should show
    `electrical.batteries.house.voltage`, and the Energy app lights up.
 
+## Two things that look wrong and are not
+
+- **The status line under BT Sensors says `Initializing <MAC>`** for a
+  stream of addresses. That is the plugin announcing every Bluetooth
+  device it hears, every few seconds. It says nothing about the battery:
+  the battery's own row in the device list does.
+- **The settings page says "Enable plugin to see configuration" while the
+  plugin is enabled.** BT Sensors only creates its web routes when it
+  starts, and Signal K only mounts a plugin's routes once, when the server
+  starts. Switch the plugin on after a server start and its page has
+  nothing to talk to. Restart Signal K with the plugin on
+  (`sudo systemctl restart signalk`). Whenever BT Sensors goes from off to
+  on, restart the server after.
+
 If nothing arrives, the plugin's debug log (enable debug for BT Sensors)
 prints `no data; asking again` or `link dropped; reconnecting` every 15 s.
 
@@ -52,13 +66,16 @@ mkdir /tmp/bts && (cd /tmp/bts && npm pack bt-sensors-plugin-sk@1.3.7 && tar xzf
   && cd package && npm install --omit=dev --ignore-scripts)
 cd boat/bt-sensors           # from the repo root
 cp EcoWorthyBW02.js /tmp/bts/package/sensor_classes/
-node test/test-eco.js /tmp/bts/package          # 73 passed, 0 failed
+node test/test-eco.js /tmp/bts/package          # 81 passed, 0 failed
 ```
 
 Checked: the values match aiobmsble's expected results for protocols 1
 and 2; wrong CRC, wrong type and a foreign MAC are rejected; problem codes
 decode; empty cell slots stay unpublished; the schema loads without
 connecting; a silent pack does not hang activation; the watchdog asks
-again and reconnects; both write modes fall back. Twelve deliberate
-breaks of the class (no CRC check, the release's cell offset, Celsius,
-no watchdog, …) are each caught.
+again and reconnects; both write modes fall back; a refused connect or a
+service discovery that never answers ends activation with an error and
+is retried until data flows; a sensor stopped mid-reconnect stays
+stopped. Seventeen deliberate breaks of the class (no CRC check, the
+release's cell offset, Celsius, no discovery time limit, no stop flag,
+…) are each caught.

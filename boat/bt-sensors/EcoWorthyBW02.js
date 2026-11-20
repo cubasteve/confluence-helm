@@ -28,9 +28,14 @@
   - On activation: notifications on, then the two unlock commands, each
     waiting briefly for any valid frame (retried, both write modes tried),
     exactly as aiobmsble does.
-  - A watchdog: no valid frame for STALE_SECS and it asks again, or
-    reconnects if the link has dropped. A pack that goes quiet is asked,
-    not waited on.
+  - A watchdog, running from the first connect attempt: no valid frame
+    for STALE_SECS and it asks again, or sets the link up again if it
+    dropped or never finished. A pack that goes quiet is asked, not
+    waited on.
+  - A refused connect is an error, and service discovery has a time limit.
+    (The base class gives up on a refused connect without saying so, and
+    node-ble then waits for services with no limit - activation would
+    never end, and nothing would retry.)
   - Frames are accepted only if the CRC checks, and only in the two layouts
     aiobmsble accepts. A reading that cannot be decoded is not published:
     absent stays absent, never zero.
@@ -72,6 +77,9 @@ class EcoWorthyBW02 extends BTSensor {
   static STALE_SECS = 15; // no valid frame for this long: ask again
   static WATCH_SECS = 5;
   static REPLY_MS = [500, 1000, 2000]; // per-attempt wait for any valid frame
+  static CONNECT_TRIES = 5; // per connect, as the base class does
+  static CONNECT_RETRY_SECS = 3;
+  static GATT_SECS = 20; // service discovery that takes longer has failed
 
   static ImageFile = "EcoWorthyBW02.webp";
 
@@ -170,10 +178,40 @@ class EcoWorthyBW02 extends BTSensor {
     return true;
   }
 
+  // Reject after `secs`, so a BlueZ call that never answers is a failure
+  // the watchdog can retry, not a wait that holds everything for ever.
+  withTimeout(promise, secs, what) {
+    let t;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        t = setTimeout(() => reject(new Error(`${what} timed out after ${secs} s`)), secs * 1000);
+      }),
+    ]).finally(() => clearTimeout(t));
+  }
+
+  /*
+    The base class gives up on a refused connect without saying so, and
+    node-ble then waits with no time limit for services that will never
+    resolve. Here a refused connect is an error, and service discovery has
+    a time limit - so activation always ends, and the watchdog retries.
+  */
   async initGATTConnection(isReconnecting = false) {
-    await super.initGATTConnection(isReconnecting);
-    const gatt = await this.getGATTServer();
-    const svc = await gatt.getPrimaryService(this.constructor.TX_RX_SERVICE);
+    const C = this.constructor;
+    this._ready = false; // set once notifications are on and the pack is asked
+    await super.initGATTConnection(isReconnecting, C.CONNECT_TRIES, C.CONNECT_RETRY_SECS);
+    if (!this.isConnected()) throw new Error("the battery refused the connection");
+    let svc;
+    try {
+      svc = await this.withTimeout(
+        (async () => (await this.getGATTServer()).getPrimaryService(C.TX_RX_SERVICE))(),
+        C.GATT_SECS,
+        "service discovery"
+      );
+    } catch (e) {
+      this._gattServer = null; // never reuse a half-made server
+      throw e;
+    }
     this.rxChar = await svc.getCharacteristic(this.constructor.NOTIFY_CHAR_UUID);
     try {
       this.txChar = await svc.getCharacteristic(this.constructor.WRITE_CHAR_UUID);
@@ -183,6 +221,19 @@ class EcoWorthyBW02 extends BTSensor {
     return this;
   }
 
+  // The watchdog runs from the first connect attempt, so a battery that
+  // refuses the first connection is asked again rather than given up on.
+  async activateGATT(isReconnecting = false) {
+    this._stopped = false;
+    this.startWatchdog();
+    this._connecting = true;
+    try {
+      await super.activateGATT(isReconnecting);
+    } finally {
+      this._connecting = false;
+    }
+  }
+
   // A polling frequency set in the GATT settings means nothing to a pack
   // that streams; never fall into the base class's poll-and-disconnect loop.
   async initGATTInterval() {
@@ -190,12 +241,13 @@ class EcoWorthyBW02 extends BTSensor {
   }
 
   async initGATTNotifications() {
+    if (this._stopped) return; // stopped while a reconnect was under way
     this.rxChar.removeAllListeners("valuechanged");
     this.rxChar.on("valuechanged", (buf) => this.onFrame(buf));
     await this.rxChar.startNotifications();
     this._lastFrame = 0;
     await this.unlock();
-    this.startWatchdog();
+    this._ready = true; // the watchdog, started in activateGATT, takes it from here
   }
 
   onFrame(raw) {
@@ -244,7 +296,7 @@ class EcoWorthyBW02 extends BTSensor {
 
   async write(cmd) {
     const tx = this.txChar;
-    if (!tx) return false;
+    if (!tx || this._stopped) return false;
     if (this._withResponse === undefined) {
       let flags = [];
       try {
@@ -280,20 +332,29 @@ class EcoWorthyBW02 extends BTSensor {
   }
 
   startWatchdog() {
+    if (this._stopped) return;
     if (this.intervalID) clearInterval(this.intervalID);
     this.intervalID = setInterval(() => this.watch(), this.constructor.WATCH_SECS * 1000);
   }
 
   async watch() {
-    if (this._watching) return;
+    if (this._watching || this._connecting || this._stopped) return;
     this._watching = true;
     try {
       if (Date.now() - (this._lastFrame || 0) < this.constructor.STALE_SECS * 1000) return;
-      if (!this.isConnected()) {
+      // Connected but never set up (discovery timed out) needs the full
+      // setup again, not just another unlock.
+      if (!this.isConnected() || !this._ready) {
         this.debug("link dropped; reconnecting");
         this._gattServer = null;
-        await this.initGATTConnection(true);
-        await this.initGATTNotifications();
+        this._connecting = true;
+        try {
+          await this.initGATTConnection(true);
+          await this.initGATTNotifications();
+        } finally {
+          this._connecting = false;
+        }
+        if (this.isError && this.isError()) this.unsetError();
       } else {
         this.debug("no data; asking again");
         await this.unlock();
@@ -306,6 +367,7 @@ class EcoWorthyBW02 extends BTSensor {
   }
 
   async deactivateGATT() {
+    this._stopped = true;
     if (this.intervalID) {
       clearInterval(this.intervalID);
       this.intervalID = null;

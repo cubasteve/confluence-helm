@@ -1817,7 +1817,9 @@ keeps its settings, and publishes exactly the paths above with Battery
 ID `house` — the panel needed no change. It unlocks with retries and
 both write modes, re-asks (or reconnects) after fifteen silent seconds,
 accepts a frame only when its CRC checks, and publishes nothing it could
-not decode. `boat/bt-sensors/README.md` has the install and the test.
+not decode. A refused connect, or service discovery that never answers,
+ends in an error the watchdog retries — the release would sit on
+*Connecting* for ever. `boat/bt-sensors/README.md` has the install and the test.
 
 A plugin update puts the release file back; re-copy after one.
 
