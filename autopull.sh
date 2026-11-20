@@ -101,9 +101,33 @@ while true; do
      git diff --name-only "$before" "$after" 2>/dev/null | grep -q '^netd\.py$'; then
     pkill -f '^python3 .*netd\.py' 2>/dev/null && log "radio helper restarting"
   fi
+  # The now-playing poller too, for the same reason: left running, an old
+  # one goes on writing wherever the old code said - which, after the
+  # panel moved to ~/helm-www, froze the music page on one song. Its
+  # supervisor (cage-session.sh, or the autostart loop) brings it back.
+  if [ "$before" != "$after" ] &&
+     git diff --name-only "$before" "$after" 2>/dev/null | grep -q '^spotify-now\.py$'; then
+    if pkill -f '^python3 .*spotify-now\.py' 2>/dev/null; then
+      log "now-playing poller restarting"
+      # cage-session.sh relaunches it within 30 s. The desktop's autostart
+      # entry does not relaunch anything, so if nobody has by 40 s, this
+      # does - after, so the two can never both start one.
+      ( sleep 40
+        if [ -f "$HOME/.config/confluence-spotify.json" ] &&
+           ! pgrep -f '^python3 .*spotify-now\.py' >/dev/null 2>&1; then
+          setsid nohup python3 "$REPO/spotify-now.py" >/dev/null 2>&1 < /dev/null &
+        fi ) &
+    fi
+  fi
 
   if bash "$REPO/deploy.sh"; then
     if [ "$RELOAD" = "1" ]; then
+      # netd serves the page now. If it was just restarted above, give it
+      # up to half a minute to answer before the kiosk is sent to it.
+      for _ in $(seq 1 30); do
+        curl -sf -o /dev/null -m 2 "http://localhost:${HELM_WWW_PORT:-8090}/confluence_helm.html" && break
+        sleep 1
+      done
       # Both supervisors run chromium in a restart loop, so killing it is
       # all it takes - no window-manager tooling, no xdotool. Under cage,
       # chromium dying takes cage with it and cage-session.sh relaunches

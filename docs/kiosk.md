@@ -1016,7 +1016,18 @@ so the panel now has its own server and owes AvNav nothing:
   if the page server does not answer - netd not running - with the
   instruments, battery, sonar and radios; map tiles and now-playing need
   the served copy, because they sit beside it.
-- `HELM_WWW_PORT` and `HELM_WWW_DIR` move it; `HELM_WWW_PORT=0` turns it
-  off.
+- The port and folder are fixed: 8090 and `~/helm-www`. netd, deploy,
+  the kiosk scripts and the now-playing poller all assume them, and
+  netd's `HELM_WWW_*` variables exist for the tests, not as boat
+  settings - setting one in `confluence-helm.env` moves netd alone.
+- It drops a connection that says nothing for 10 s and closes any past
+  48 at once, because it shares a process with the helper that powers
+  the Pi off.
+- **Saved data comes across once.** A browser keeps races, marks and
+  settings per address, port included, so the panel at :8090 starts
+  empty. On its first load it reads what was saved at :8080 through
+  `helm-export.html`, a page deploy leaves in AvNav's viewer folder, and
+  fills the gaps; races are added, never replaced. The tile cache is
+  not carried - it refills.
 
 AvNav keeps running for charts, on 8080 as before.

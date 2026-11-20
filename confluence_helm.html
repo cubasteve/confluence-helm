@@ -16084,6 +16084,78 @@ heldPaint();
    has long finished by the time anyone swipes up - instead of the panel
    drawing its empty state and filling in while you watch. */
 netStatus();
+/* ---- the hand-over from the old address ----
+   The panel lived on AvNav's server at :8080 until AvNav stopped serving
+   it; it has its own on :8090 now. A browser keeps what a page saves per
+   ADDRESS, port included - so the races, marks, course and settings saved
+   at :8080 are not there at :8090, and the panel would come up looking
+   wiped. Nothing was deleted; it is just out of reach of this address.
+
+   So once, in the background, this loads a small page deploy.sh leaves
+   at the old address (helm-export.html) in a hidden frame. That page
+   reads what was saved there and posts it here, and only here. What is
+   missing is filled in; races are added by id, never replaced.
+   Overwriting is allowed only while this address is NEW (MOVED_FRESH_MS
+   since it first loaded): a panel that has been used here since must not
+   have its new marks put back to old ones because AvNav came back up.
+   Nothing heard - AvNav down, no hand-over page yet - and it simply asks
+   again next load. The tile cache is not carried: it refills itself. */
+const MOVED_KEY='helm.moved8080', BORN_KEY='helm.born';
+const MOVED_FRESH_MS=10*60*1000, MOVED_WAIT_MS=20000;
+function helmMoved(){
+  if(location.protocol!=='http:' || !location.hostname
+     || location.port==='8080') return;
+  let born;
+  try{
+    if(localStorage.getItem(MOVED_KEY)) return;
+    born=+localStorage.getItem(BORN_KEY)||0;
+    if(!born){ born=Date.now(); localStorage.setItem(BORN_KEY,String(born)); }
+  }catch(e){ return; }
+  const over=Date.now()-born<MOVED_FRESH_MS;
+  const from=location.protocol+'//'+location.hostname+':8080';
+  const fr=document.createElement('iframe');
+  fr.style.display='none'; fr.setAttribute('aria-hidden','true');
+  let done=false;
+  const stop=()=>{ done=true; clearTimeout(t);
+    window.removeEventListener('message',take); fr.remove(); };
+  const t=setTimeout(stop, MOVED_WAIT_MS);
+  async function take(e){
+    if(done || e.origin!==from || !e.data || e.data.kind!=='helm-export') return;
+    stop();
+    let n=0;
+    const ls=(e.data.ls && typeof e.data.ls==='object') ? e.data.ls : {};
+    for(const k of Object.keys(ls)){
+      if(k===MOVED_KEY || k===BORN_KEY || typeof ls[k]!=='string') continue;
+      try{
+        const cur=localStorage.getItem(k);
+        if(cur===null || (over && cur!==ls[k])){ localStorage.setItem(k,ls[k]); n++; }
+      }catch(x){}
+    }
+    const tr=Array.isArray(e.data.tracks) ? e.data.tracks : [];
+    if(tr.length){
+      try{
+        const db=await dbOpen();
+        n+=await new Promise(res=>{
+          let c=0;
+          const tx=db.transaction(DB_STORE,'readwrite'), st=tx.objectStore(DB_STORE);
+          tr.forEach(r=>{
+            if(!r || r.id===undefined) return;
+            const g=st.get(r.id);
+            g.onsuccess=()=>{ if(!g.result){ st.put(r); c++; } };
+          });
+          tx.oncomplete=()=>res(c); tx.onerror=tx.onabort=()=>res(c);
+        });
+      }catch(x){}
+    }
+    try{ localStorage.setItem(MOVED_KEY, String(Date.now())); }catch(x){}
+    if(n){ console.log('[helm] brought '+n+' saved items over from '+from);
+           location.reload(); }
+  }
+  window.addEventListener('message', take);
+  fr.src=from+'/user/viewer/helm/helm-export.html?export=1';
+  document.body.appendChild(fr);
+}
+setTimeout(helmMoved, 2500);
 /* ---- the boot currents ----
    Drawn across 2160 so a -1080 drift loops seamlessly, which needs
    every wavelength to divide 1080 exactly. Generated rather than

@@ -120,15 +120,16 @@ start_helpers(){
 # nothing else: a black panel. So a steady 404 gives up early, and either
 # way main() loads the panel from its file.
 NOT_FOUND_AFTER="${NOT_FOUND_AFTER:-10}"
+SERVED_URL="$URL"
 wait_for_page(){
-  local n=0 code
+  local n=0 code limit="${1:-$WAIT_AVNAV}"
   while :; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$URL" 2>/dev/null)
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$SERVED_URL" 2>/dev/null)
     [ "$code" = 200 ] && { log "page server answered after ${n}s"; return 0; }
     n=$((n+1))
     if [ "$code" = 404 ] && [ "$n" -ge "$NOT_FOUND_AFTER" ]; then
-      log "the server is up but has no $URL (404 for ${n}s) - run deploy.sh"; return 1; fi
-    [ "$n" -ge "$WAIT_AVNAV" ] && { log "page server still quiet after ${n}s (last answer: ${code:-none})"; return 1; }
+      log "the server is up but has no $SERVED_URL (404 for ${n}s) - run deploy.sh"; return 1; fi
+    [ "$n" -ge "$limit" ] && { log "page server still quiet after ${n}s (last answer: ${code:-none})"; return 1; }
     sleep 1
   done
 }
@@ -137,6 +138,24 @@ wait_for_page(){
 # what it cannot have is what sits BESIDE the served copy: map tiles and
 # now-playing. Phones cannot reach a file on the Pi at all.
 FILE_URL="${FILE_URL:-file://$REPO/confluence_helm.html}"
+
+# Which of the two to open, asked before EVERY launch and not only at
+# boot. The page server lives in netd now, and netd restarts - autopull
+# does it on every push that touches it, then kills the kiosk. Asked only
+# once, the relaunch would land on a server still starting and sit on
+# the browser's connection-error page, which does not exit, for good.
+choose_url(){
+  if wait_for_page "${1:-$WAIT_AVNAV}"; then
+    URL="$SERVED_URL"
+  elif [ -r "${FILE_URL#file://}" ]; then
+    URL="$FILE_URL"
+    log "loading the panel from its file instead: $URL"
+  else
+    URL="$SERVED_URL"
+    log "and there is no ${FILE_URL#file://} either - opening $URL anyway"
+  fi
+}
+RELAUNCH_WAIT="${RELAUNCH_WAIT:-20}"
 
 # ---- the kiosk ------------------------------------------------------
 # Two flag sets, tried in order. Chromium on this image may want the
@@ -179,17 +198,12 @@ main(){
     fall_back_to_desktop "cage is not installed"; return 1; }
 
   start_helpers
-  if ! wait_for_page; then
-    if [ -r "${FILE_URL#file://}" ]; then
-      URL="$FILE_URL"
-      log "loading the panel from its file instead: $URL"
-    else
-      log "and there is no ${FILE_URL#file://} either - opening $URL anyway"
-    fi
-  fi
+  choose_url "$WAIT_AVNAV"
 
-  local quick=0 which=FLAGS_A started ran
+  local quick=0 which=FLAGS_A started ran first=1
   while true; do
+    [ "$first" = 1 ] || choose_url "$RELAUNCH_WAIT"
+    first=0
     started=$(date +%s)
     run_kiosk "$which"
     ran=$(( $(date +%s) - started ))

@@ -179,6 +179,61 @@ class Live(Folder):
             self.assertEqual(f.read(), b'<html>panel</html>')
 
 
+class Limits(Folder):
+    """It shares a process with the helper that powers the Pi off. A
+    phone - or anything on the boat network - must not be able to spend
+    that process's descriptors by connecting and saying nothing."""
+
+    def serve(self, idle, cap):
+        self.n.WwwHandler.timeout = idle
+        self.n.WWW_MAX_CONN = cap
+        srv = self.n.WwwServer(('127.0.0.1', 0), self.n.WwwHandler)
+        port = srv.server_address[1]
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        return port
+
+    def idle_conn(self, port):
+        import socket
+        s = socket.create_connection(('127.0.0.1', port), timeout=5)
+        self.addCleanup(s.close)
+        return s
+
+    def get(self, port):
+        c = http.client.HTTPConnection('127.0.0.1', port, timeout=3)
+        try:
+            c.request('GET', '/confluence_helm.html')
+            return c.getresponse().status
+        except (OSError, http.client.HTTPException):
+            return None
+        finally:
+            c.close()
+
+    def test_a_silent_connection_is_dropped(self):
+        import time
+        port = self.serve(idle=0.5, cap=8)
+        s = self.idle_conn(port)
+        t0 = time.time()
+        self.assertEqual(s.recv(10), b'')       # the server hung up
+        self.assertLess(time.time() - t0, 3)
+
+    def test_past_the_cap_the_next_is_closed_and_the_rest_still_work(self):
+        import time
+        port = self.serve(idle=1.5, cap=2)
+        a, b = self.idle_conn(port), self.idle_conn(port)
+        time.sleep(0.3)
+        self.assertIsNone(self.get(port))        # full: closed on arrival
+        a.close(); b.close()
+        time.sleep(2)                            # their slots come back
+        self.assertEqual(self.get(port), 200)
+
+    def test_the_boat_defaults(self):
+        n = load()
+        self.assertEqual(n.WwwHandler.timeout, 10)
+        self.assertGreaterEqual(n.WWW_MAX_CONN, 16)
+
+
 class Wiring(unittest.TestCase):
 
     def test_a_page_from_it_may_call_the_helper(self):

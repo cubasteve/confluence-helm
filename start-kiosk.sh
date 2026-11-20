@@ -32,16 +32,26 @@ if [ -z "$CHROME" ]; then
   exit 1
 fi
 
-n=0
-until curl -sf -o /dev/null --max-time 3 "$URL"; do
-  n=$((n + 1))
-  if [ "$n" -ge 60 ]; then
-    echo "helm: $URL never answered after ~2min; falling back to file://" >&2
-    URL="$FALLBACK"
-    break
-  fi
-  sleep 2
-done
+SERVED="$URL"
+# Before EVERY launch, not only the first: the page server lives in netd,
+# netd restarts (autopull does it per push, then kills this browser), and
+# a relaunch onto a server still starting sits on Chromium's connection-
+# error page, which does not exit. $1 is how many 2 s tries to give it.
+pick_url(){
+  local n=0
+  URL="$SERVED"
+  until curl -sf -o /dev/null --max-time 3 "$SERVED"; do
+    n=$((n + 1))
+    if [ "$n" -ge "$1" ]; then
+      echo "helm: $SERVED not answering after $((n * 2))s; falling back to file://" >&2
+      URL="$FALLBACK"
+      return
+    fi
+    sleep 2
+  done
+}
+pick_url 60
+first=1
 
 # Restart if Chromium dies - a crash on a boat should self-heal rather
 # than leave a blank helm.
@@ -93,6 +103,8 @@ while true; do
     echo "helm: it closed - taking the screen back" >&2
   fi
 
+  [ "$first" = 1 ] || pick_url 10
+  first=0
   started=$(date +%s)
   # --default-background-color is what the browser paints before the page
   # has anything to show. Left alone it is white, which after a whole

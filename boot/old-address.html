@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Confluence Helm</title>
+<!-- helm-forward: what deploy.sh leaves at the panel's OLD address, on
+     AvNav's port. Two jobs.
+
+     Opened by a person - a bookmark, a home-screen icon - it sends them to
+     the panel's own server on __PORT__, on whatever host they used.
+
+     Opened by the panel itself, hidden, with ?export=1: it hands over what
+     the browser saved while the panel lived HERE. A browser keeps saved
+     data per address, port included, so the races, marks, course and
+     settings saved at :8080 are invisible to the same panel at :__PORT__
+     until something on :8080 reads them out. This is that something. It
+     reads, and posts to the panel's origin only; it never writes. -->
+<script>
+(function () {
+  var to = location.protocol + '//' + location.hostname + ':__PORT__';
+  if (location.search.indexOf('export=1') < 0 || window.parent === window) {
+    location.replace(to + '/confluence_helm.html');
+    return;
+  }
+  var ls = {};
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      ls[k] = localStorage.getItem(k);
+    }
+  } catch (e) {}
+  var sent = false;
+  function done(tracks) {
+    if (sent) return;
+    sent = true;
+    try {
+      window.parent.postMessage({kind: 'helm-export', v: 1, ls: ls,
+                                 tracks: tracks || []}, to);
+    } catch (e) {}
+  }
+  try {
+    var r = indexedDB.open('confluence');
+    // Nothing was ever saved here: say so, and do not create a database.
+    r.onupgradeneeded = function (e) { e.target.transaction.abort(); };
+    r.onerror = function () { done([]); };
+    r.onblocked = function () { done([]); };
+    r.onsuccess = function (e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains('tracks')) { db.close(); return done([]); }
+      var q = db.transaction('tracks', 'readonly').objectStore('tracks').getAll();
+      q.onsuccess = function () { db.close(); done(q.result || []); };
+      q.onerror = function () { db.close(); done([]); };
+    };
+  } catch (e) { done([]); }
+  // No timeout of its own on purpose: half an answer - the settings
+  // without the races - would be taken as the whole one. Silence is
+  // safer; the panel gives up and asks again on its next load.
+})();
+</script>
+<p style="font:16px sans-serif">The helm panel moved to port __PORT__.</p>

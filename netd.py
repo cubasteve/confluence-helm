@@ -5760,6 +5760,15 @@ class Handler(BaseHTTPRequestHandler):
 WWW_DIR = os.path.expanduser(os.environ.get('HELM_WWW_DIR', '~/helm-www'))
 WWW_BIND = os.environ.get('HELM_WWW_BIND', '0.0.0.0')
 WWW_INDEX = 'confluence_helm.html'
+# This listener is on the boat's network and shares a process with the
+# helper that runs the radios and the power sheet. Unbounded, a phone
+# opening a thousand idle connections would spend every descriptor netd
+# has, and the loopback helper would stop answering with it. So: a
+# connection that says nothing for WWW_IDLE_S is dropped, and past
+# WWW_MAX_CONN at once the next is closed on arrival. A panel needs a
+# handful; a map pan asks for a dozen tiles.
+WWW_IDLE_S = 10
+WWW_MAX_CONN = int(os.environ.get('HELM_WWW_MAX_CONN', '48'))
 # What it will serve, and how long a browser may keep it. The page and
 # anything JSON change under it - a deploy, a track, the next song - so
 # those are fetched fresh every time; a map tile never changes.
@@ -5818,6 +5827,9 @@ def www_resolve(urlpath, root=None):
 class WwwHandler(BaseHTTPRequestHandler):
     server_version = 'helm'
     sys_version = ''
+    # A peer that connects and says nothing is dropped, rather than kept -
+    # a thread and a descriptor each - for as long as it likes.
+    timeout = WWW_IDLE_S
 
     def log_message(self, *a):
         pass                     # a tile request per map pan is not news
@@ -5865,6 +5877,30 @@ class WwwHandler(BaseHTTPRequestHandler):
     do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = _refuse
 
 
+class WwwServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, *a, **k):
+        self._slots = threading.BoundedSemaphore(WWW_MAX_CONN)
+        super().__init__(*a, **k)
+
+    def process_request(self, request, client_address):
+        if not self._slots.acquire(blocking=False):
+            self.shutdown_request(request)          # full: closed, not queued
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+
 def www_start():
     """Up beside the helper, in its own thread. A port somebody else
     already holds is said and survived: the radios and the power sheet
@@ -5873,13 +5909,18 @@ def www_start():
         print('[netd] www: off (HELM_WWW_PORT=0)', flush=True)
         return None
     try:
-        srv = ThreadingHTTPServer((WWW_BIND, WWW_PORT), WwwHandler)
+        srv = WwwServer((WWW_BIND, WWW_PORT), WwwHandler)
     except OSError as e:
         print('[netd] www: NOT serving - %s:%d %s'
               % (WWW_BIND, WWW_PORT, str(e)[:80]), flush=True)
         return None
-    srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    # The panel lists tracks from gpx/index.json. A deploy that merged an
+    # old gpx folder in brought files the index does not name, so it is
+    # rebuilt from what is actually there at every start.
+    if os.path.isdir(GPX_DIR):
+        with contextlib.suppress(Exception):
+            gpx_write_index()
     print('[netd] www: %s on %s:%d%s'
           % (WWW_DIR, WWW_BIND, WWW_PORT,
              '' if os.path.isfile(os.path.join(WWW_DIR, WWW_INDEX))
@@ -5888,6 +5929,10 @@ def www_start():
 
 
 if __name__ == '__main__':
+    # FIRST, before the radio probes: the kiosk is waiting on this, and a
+    # restart of netd (autopull does one per push) is otherwise several
+    # seconds of a dead page server while nmcli is asked about adapters.
+    www_start()
     cap = capabilities()
     print('[netd] wifi via nmcli: %s   bluetooth via bluetoothctl: %s'
           % ('yes' if cap['nm'] else 'NO', 'yes' if cap['bt'] else 'NO'), flush=True)
@@ -5942,7 +5987,6 @@ if __name__ == '__main__':
             print('[netd] sonar: depth NOT announced - see above', flush=True)
         threading.Thread(target=sonar_run, daemon=True).start()
     print('[netd] listening on %s:%d' % (BIND, PORT), flush=True)
-    www_start()
     # Fill the caches before anyone asks. The kiosk often comes up at the
     # same moment this does, and the first /status is the one that decides
     # whether the panel draws its radios or its empty state.

@@ -35,37 +35,68 @@ WWW_PORT="${HELM_WWW_PORT:-8090}"
 OLD_DIRS=("$HOME/avnav/data/user/viewer/helm" "$HOME/avnav/data/user/helm")
 
 [ -f "$SRC" ] || { echo "no source at $SRC" >&2; exit 1; }
+# The page left at an old address: it forwards people to the new one,
+# and hands the panel what the browser saved there (see the file).
+FWD_SRC="$HOME/helm/boot/old-address.html"
+fwd_page(){ sed "s/__PORT__/$WWW_PORT/g" "$FWD_SRC"; }
+www_up(){ curl -sf -o /dev/null -m 3 "http://localhost:$WWW_PORT/confluence_helm.html"; }
+# Each old folder that is still serving something other than the forward.
+stale_old(){
+  local o
+  for o in "${OLD_DIRS[@]}"; do
+    [ -f "$o/confluence_helm.html" ] || continue
+    fwd_page | cmp -s - "$o/confluence_helm.html" || echo "$o"
+  done
+}
+
 if [ "${1:-}" != "--check" ]; then
   mkdir -p "$DST_DIR"
-  # Once: whatever lived beside the page in an old folder comes with it.
-  # Never over something already here, and never the page itself, which
-  # is written fresh below.
+  # Once per old folder: whatever lived beside the page comes with it.
+  # Never over a file already here, never the page itself (written fresh
+  # below), never now-playing (rewritten every few seconds by its poller,
+  # so a copy would only be a stale one). Nothing in an old folder may
+  # stop the page being published: every step here is allowed to fail,
+  # and the folder is only marked done when every step did not.
   for OLD in "${OLD_DIRS[@]}"; do
     [ -d "$OLD" ] || continue
-    if [ ! -e "$OLD/.moved-to-helm-www" ]; then
-      for x in "$OLD"/* "$OLD"/.[!.]*; do
-        [ -e "$x" ] || continue
-        n=$(basename "$x")
-        case "$n" in confluence_helm.html|.moved-to-helm-www) continue;; esac
-        if [ ! -e "$DST_DIR/$n" ]; then
-          mv "$x" "$DST_DIR/" && echo "moved $n -> $DST_DIR"
-        elif [ -d "$x" ] && [ -d "$DST_DIR/$n" ]; then
-          # Both folders had one - two AvNav layouts, two deploys. Merge,
-          # and never over a file that is already here.
-          cp -an "$x/." "$DST_DIR/$n/" && echo "merged $n -> $DST_DIR/$n"
-        fi
-      done
-      # Once per old folder: a tile cache is thousands of files, and
-      # nobody wants them walked on every deploy for ever.
-      : > "$OLD/.moved-to-helm-www"
+    [ -e "$OLD/.moved-to-helm-www" ] && continue
+    if [ ! -w "$OLD" ]; then echo "cannot write $OLD - not moving anything out of it" >&2; continue; fi
+    ok=1
+    for x in "$OLD"/* "$OLD"/.[!.]*; do
+      [ -e "$x" ] || continue
+      n=$(basename "$x")
+      case "$n" in confluence_helm.html|helm-export.html|nowplaying.json|.moved-to-helm-www|*.new) continue;; esac
+      if [ ! -e "$DST_DIR/$n" ]; then
+        if mv "$x" "$DST_DIR/"; then echo "moved $n -> $DST_DIR"; else ok=0; fi
+      elif [ -d "$x" ] && [ -d "$DST_DIR/$n" ]; then
+        # Both had one - two AvNav layouts, two deploys. Merge, never
+        # over a file already here. (netd rebuilds gpx/index.json from
+        # what is actually there when it starts.)
+        if cp -an "$x/." "$DST_DIR/$n/"; then echo "merged $n -> $DST_DIR/$n"; else ok=0; fi
+      fi
+    done
+    if [ "$ok" = 1 ]; then
+      : > "$OLD/.moved-to-helm-www" 2>/dev/null || echo "cannot mark $OLD as moved" >&2
+    else
+      echo "some of $OLD did not move - the next deploy tries again" >&2
     fi
-    # The old address forwards to the new one, keeping whatever host the
-    # phone used to reach it - a bookmark, a home-screen icon.
-    printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Confluence Helm</title>' \
-      "<script>location.replace(location.protocol+'//'+location.hostname+':$WWW_PORT/confluence_helm.html')</script>" \
-      "<p>The panel moved: port $WWW_PORT.</p>" > "$OLD/confluence_helm.html.new" \
-      && mv -f "$OLD/confluence_helm.html.new" "$OLD/confluence_helm.html"
   done
+  # The hand-over file at the old address (AvNav's viewer folder, on
+  # :8080): the panel on :$WWW_PORT loads it hidden, once, to bring across
+  # the races and settings the browser saved while the panel lived there.
+  # Its own name, written now, because it replaces nothing - unlike the
+  # forward below, which waits for :$WWW_PORT.
+  EXP="$HOME/avnav/data/user/viewer/helm"
+  if [ -d "$(dirname "$EXP")" ] && [ -f "$FWD_SRC" ] && mkdir -p "$EXP" 2>/dev/null; then
+    if ! fwd_page | cmp -s - "$EXP/helm-export.html"; then
+      if fwd_page > "$EXP/helm-export.html.new" 2>/dev/null &&
+         mv -f "$EXP/helm-export.html.new" "$EXP/helm-export.html"; then
+        echo "hand-over page in place: $EXP/helm-export.html"
+      else
+        rm -f "$EXP/helm-export.html.new"
+      fi
+    fi
+  fi
 fi
 
 # The repo copy keeps the literal __BUILD__, so a page showing that is a
@@ -79,7 +110,13 @@ build_id(){
 stamp(){ sed "s/__BUILD__/$(build_id)/" "$SRC"; }
 
 if [ "${1:-}" = "--check" ]; then
-  stamp | cmp -s - "$DST" && exit 0 || exit 1
+  stamp | cmp -s - "$DST" || exit 1
+  # Current - unless an old address still serves the old panel while the
+  # new server is up to forward to, in which case there is a deploy owed.
+  # Only then: with :$WWW_PORT down this would ask for a deploy that can
+  # not finish, and autopull would restart the kiosk every interval.
+  if [ -n "$(stale_old)" ] && www_up; then exit 1; fi
+  exit 0
 fi
 
 # Write beside the target and rename, never straight over it. `> "$DST"`
@@ -109,6 +146,26 @@ if command -v curl >/dev/null 2>&1; then
     "http://localhost:$WWW_PORT/confluence_helm.html" || echo 000)
   echo "served check: HTTP $code"
   [ "$code" = "200" ] || echo "  (netd's page server not answering - is netd running? the kiosk falls back to file://)" >&2
+fi
+
+# The old addresses forward to the new one - but only once the new one
+# answers. Before that, a forward is a bookmark pointed at a dead port
+# and the page AvNav was serving thrown away; the old copy stays, and
+# --check owes a deploy until this has happened.
+if [ -n "$(stale_old)" ]; then
+  if www_up; then
+    while IFS= read -r o; do
+      if fwd_page > "$o/confluence_helm.html.new" 2>/dev/null &&
+         mv -f "$o/confluence_helm.html.new" "$o/confluence_helm.html"; then
+        echo "old address forwards: $o"
+      else
+        rm -f "$o/confluence_helm.html.new"
+        echo "could not write the forward in $o" >&2
+      fi
+    done < <(stale_old)
+  else
+    echo "  old addresses left as they are until :$WWW_PORT answers" >&2
+  fi
 fi
 
 echo "reload the kiosk to pick it up"
