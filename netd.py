@@ -2738,6 +2738,18 @@ def _sonar_push(p, ns):
         _sonar_say(_nmea['sock'], _nmea['host'], _nmea['port'], time.time())
 
 
+def sonar_status():
+    """Is a sounder configured, and how long since its last ping - for
+    the depth glyph's in-between state: plugged in and pinging, with no
+    bottom found. Two numbers netd already holds and no subprocess, so it
+    rides on /status, which the panel asks every five seconds while the
+    control panel is open."""
+    with _sonar_lk:
+        at = _sonar['at']
+    return {'on': bool(sonar_spec(SONAR)),
+            'age': round(time.time() - at, 1) if at else None}
+
+
 def sonar_read(after=0, limit=None):
     """Every ping since `after`, and the scale to draw them by.
 
@@ -3141,7 +3153,8 @@ def route(path, body):
                 'display': display_status(), 'power': power_status(),
                 'backlight': backlight_status(), 'buzzer': buzzer_status(),
                 'score': score_status(), 'gpx': gpx_status(),
-                'spotify': spotify_status(), 'fit': fit_status()}
+                'spotify': spotify_status(), 'fit': fit_status(),
+                'sonar': sonar_status()}
 
     # The remote's three, all LOOPBACK: they arrive on the panel's own
     # socket, from the panel's own browser. Nothing on the phone's

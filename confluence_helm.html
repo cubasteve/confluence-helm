@@ -195,6 +195,11 @@ body.night #mark{opacity:.07}
 .sen{stroke:var(--label);fill:var(--label);opacity:.28;
   transition:opacity .3s,stroke .3s,fill .3s}
 .sen.live{stroke:var(--stbd);fill:var(--stbd);opacity:1}
+/* Between the two: the device is there and talking, and the reading is
+   not. Only the depth glyph has it - a sounder plugged in and pinging
+   that has found no bottom - and it is NOT lit, on purpose: a lit depth
+   glyph over a dash would be reassurance at exactly the wrong moment. */
+.sen.wait:not(.live){stroke:var(--warn);fill:var(--warn);opacity:.62}
 .tbtn circle{fill:none;stroke:var(--hairline);stroke-width:3}
 .tbtn rect{fill:var(--label)}
 .tbtn:active circle{fill:var(--chip)}
@@ -3789,6 +3794,10 @@ function gpsPosition(lat, lon, tms){
    state of health never publishes it and the line it would sit on is
    not written. That is the whole rule for this app - absent is absent,
    and nothing anywhere below turns a missing reading into a number. */
+/* A sounder that last pinged longer ago than this is not "connected",
+   it is gone quiet - the Sonar app says SILENT at the same mark. */
+const SEN_WAIT_S=8;
+
 const BAT_ID='house';
 const bp=k=>'electrical.batteries.'+BAT_ID+'.'+k;
 const BAT_CELLS=4;
@@ -4132,6 +4141,13 @@ function render(){
      working position. */
   live('s-gps', get('pos.lat')!==null||sogR!==null);
   live('s-dpt', d!==null);
+  /* netd says a sounder is configured and pinged within SEN_WAIT_S, and
+     Signal K has no depth: connected, not measuring. NET.st is refreshed
+     every five seconds while the panel - which is where this glyph is -
+     is open, and a helper that stops answering empties it. */
+  const snS=(NET.st&&NET.st.sonar)||{};
+  wCls('s-dpt','wait', d===null && !!snS.on
+       && typeof snS.age==='number' && snS.age<SEN_WAIT_S);
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
   /* The house bank: lit by any reading from it, numbered only by its own
@@ -6946,7 +6962,7 @@ async function netStatus(){
      NET.st at all - and a `need` path pointing at a missing branch is
      silently false, so the tile just never appears. */
   NET.st={wifi:w,bt:b,display:dsp,power:pwr,gpx:gpx,spotify:spo,fit:fit,
-          buzzer:snd, score:scr};
+          buzzer:snd, score:scr, sonar:(j&&j.sonar)||{}};
   paintSounder(snd);
   /* The save button's visibility is decided by what the helper just said, and
      the music page may well have painted before this answer arrived -

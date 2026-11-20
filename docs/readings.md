@@ -1161,3 +1161,6 @@ menu, dimmed. It stays selectable — the sensor may wake up — but it does
 not look live. Which instruments are actually feeding is shown by the
 five glyphs at the top of the control panel: GPS, depth, wind, heading,
 and the house battery, which carries its state of charge inside the case.
+The depth glyph has a third state between dim and lit: a sounder that is
+plugged in and pinging but has found no bottom draws half-lit in the warn
+colour - connected, not measuring - and never fully lit over a dash.

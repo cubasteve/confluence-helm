@@ -358,6 +358,29 @@ class History(unittest.TestCase):
         self.assertEqual(r['avg_min'], 3)
 
 
+class StatusLine(unittest.TestCase):
+    """What /status says about the sounder, for the depth glyph."""
+
+    def test_off_is_off(self):
+        n = load()
+        self.assertEqual(n.sonar_status(), {'on': False, 'age': None})
+
+    def test_configured_and_never_heard(self):
+        n = load(HELM_SONAR='udp:5005')
+        self.assertEqual(n.sonar_status(), {'on': True, 'age': None})
+
+    def test_a_ping_just_now(self):
+        n = load(HELM_SONAR='udp:5005', HELM_SONAR_BINS=4)
+        n._sonar_push(n.sonar_parse(frame([9] * 8, idx=0)), 8)
+        st = n.sonar_status()
+        self.assertTrue(st['on'])
+        self.assertLess(st['age'], 2)
+
+    def test_it_rides_on_status(self):
+        n = load(HELM_SONAR='udp:5005')
+        self.assertIn('sonar', n.route('/status', {}))
+
+
 class Scale(unittest.TestCase):
 
     def test_a_sample_is_about_a_centimetre(self):
