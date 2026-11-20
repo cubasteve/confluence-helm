@@ -34,7 +34,7 @@ In **Server → Plugin Config → BT Sensors**:
 5. Save and enable. Within a few seconds, **Data Browser** should show
    `electrical.batteries.house.voltage`, and the Energy app lights up.
 
-## Two things that look wrong and are not
+## Three things that looked wrong
 
 - **The status line under BT Sensors says `Initializing <MAC>`** for a
   stream of addresses. That is the plugin announcing every Bluetooth
@@ -47,6 +47,13 @@ In **Server → Plugin Config → BT Sensors**:
   nothing to talk to. Restart Signal K with the plugin on
   (`sudo systemctl restart signalk`). Whenever BT Sensors goes from off to
   on, restart the server after.
+- **The Pi's own screen says NO BATTERY FEED while a laptop shows the
+  bank.** The kiosk's browser was holding an expired Signal K login from
+  using the admin page on the Pi (logins last an hour). Signal K refuses
+  any stream that carries an invalid login, rather than treating it as
+  an anonymous reader. The panel now clears that cookie by itself when it
+  is refused, and reconnects. `panel-probe.js` here shows what the panel
+  receives, with a clean profile and with the kiosk's own.
 
 If nothing arrives, the plugin's debug log (enable debug for BT Sensors)
 prints `no data; asking again` or `link dropped; reconnecting` every 15 s.

@@ -3841,11 +3841,37 @@ function skMessage(data){
   });
 }
 
+/* A stale Signal K login locks the panel out, and nothing on the glass
+   says so. Log in to the admin page in the kiosk's own browser and it
+   keeps the session cookie; Signal K's logins last an hour by default,
+   and from then on it REFUSES every stream that carries the expired one -
+   "token was provided but is invalid, always reject" - instead of
+   falling back to the anonymous read-only access it allows a browser
+   with no cookie at all. The kiosk read NO BATTERY FEED for as long as
+   the cookie lived while a laptop on the same page read the bank.
+
+   The stream never clears the cookie; an ordinary HTTP request does
+   (Signal K force-clears a bad session cookie on any request through
+   its login check). So a socket that closes without ever opening asks
+   for one, and the next attempt goes in as a reader. no-cors because
+   only the Set-Cookie matters, and the response is never read. A panel
+   with a GOOD login never gets here - only one refused at the door. */
+let skHealAt=0;
+function skHeal(){
+  const now=Date.now();
+  if(now-skHealAt<20000) return;
+  skHealAt=now;
+  try{ fetch(`http://${CFG.host||location.host}/skServer/loginStatus`,
+             {mode:'no-cors', credentials:'include', cache:'no-store'})
+         .catch(()=>{}); }catch(e){}
+}
+
 function connect(){
   if(CFG.demo){setLink('var(--warn)','DEMO');return demoSet(true);}
+  let opened=false;
   try{ws=new WebSocket(`ws://${CFG.host||location.host}/signalk/v1/stream?subscribe=none`);}
   catch(e){return setTimeout(connect,retry);}
-  ws.onopen=()=>{setLink('var(--stbd)','SIGNAL K');retry=1000;
+  ws.onopen=()=>{opened=true;setLink('var(--stbd)','SIGNAL K');retry=1000;
     ws.send(JSON.stringify({context:'vessels.self',
       /* 'instant' pushed every path the moment it changed - 17 paths at
          NMEA rates is a continuous drizzle of small deltas landing at
@@ -3863,6 +3889,7 @@ function connect(){
     skMessage(e.data);
   };
   ws.onclose=()=>{setLink('var(--label)','RECONNECTING');
+    if(!opened) skHeal();          /* refused at the door - see skHeal */
     retry=Math.min(retry*1.6,15000);setTimeout(connect,retry);};
   ws.onerror=()=>ws.close();
 }
