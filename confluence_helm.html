@@ -2590,7 +2590,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
    <g mask="url(#cht-wind)"><g mask="url(#cht-mask-o)">
     <g mask="url(#cht-mask-y)"><g mask="url(#cht-mask-x)">
     <g mask="url(#cht-mask-g)"><image id="cht-img" preserveAspectRatio="none"
-       style="display:none"/></g></g></g></g>
+       style="display:none"/></g></g></g>
     <g mask="url(#cht-mask-r)" clip-path="url(#cht-clip-rt)">
       <polyline id="cht-past" class="cht-leg"/>
       <polyline id="cht-ahead" class="cht-leg cht-ahead"/>
@@ -16364,7 +16364,7 @@ setTimeout(helmMoved, 2500);
    that changes per paint is a transform - no filter runs over it. */
 const CHT={
   BX:322, BY:470,            /* the boat on the glass, beside the digits' top */
-  EDGE:355,                  /* the digits' left edge the geometry was drawn at */
+  EDGE:355,                  /* the digits' left edge the geometry was drawn around */
   FIT:150, FIT_TURN:120,     /* px from the boat to the next waypoint */
   MPP_MIN:2.5, MPP_MAX:26,   /* metres per screen px, closest and furthest */
   NEXT_PX:46,                /* the stub of the next leg, near a turn */
@@ -16536,44 +16536,71 @@ function chtImgWant(b, upp){
      sitting on a boundary does not flip between two images */
   if(lv===null || upp>2**lv || upp<2**lv/2.5)
     lv=Math.max(CHT.LVL_MIN, Math.min(CHT.LVL_MAX, Math.ceil(Math.log2(Math.max(upp,1e-3)))));
-  const L=2**lv, step=128*L;
-  /* the farthest corner of the sector is ~330 px from the boat */
-  const need=330*upp;
-  if(cur && cur.lv===lv && Math.max(Math.abs(b[0]-cur.cx),Math.abs(b[1]-cur.cy))+need<512*L)
-    return;
-  const gx=Math.round(b[0]/step), gy=Math.round(b[1]/step);
-  chtImgLoad(lv, gx, gy);
+  if(cur && cur.lv===lv && chtCovers(cur, b, upp)) return;
+  chtImgLoad(b, upp, lv);
 }
-async function chtImgLoad(lv,gx,gy){
-  const k=chtKey(lv,gx,gy);
-  if(CHI.busy || (CHI.cur&&CHI.cur.k===k)) return;
-  const f=CHI.fail.get(k); if(f && Date.now()-f<CHT.RETRY_MS) return;
+/* Does the image filed as cell c reach the far corner of the sector? That
+   corner is ~330 px from the boat, at upp mercator metres per px. */
+const chtCovers=(c,b,upp)=>{ const st=128*2**c.lv;
+  return Math.max(Math.abs(b[0]-c.gx*st),Math.abs(b[1]-c.gy*st))+330*upp < 512*2**c.lv; };
+/* The grid cell an image at level lv around b is filed under. */
+function chtCell(b,lv){
+  const st=128*2**lv, gx=Math.round(b[0]/st), gy=Math.round(b[1]/st);
+  return {lv, gx, gy, k:chtKey(lv,gx,gy)};
+}
+const chtCached=c=>tileGet(c.k).then(r=>r&&r.b?r:null).catch(()=>null);
+/* Any cached image at level lv that covers b: the boat's own cell, or
+   one of the three others whose corner it is nearest - the boat will
+   rarely be back on the exact spot it was when the image was fetched. */
+async function chtCachedNear(b,lv,upp){
+  const st=128*2**lv, fx=b[0]/st, fy=b[1]/st, seen=new Set();
+  for(const gx of [Math.round(fx), Math.floor(fx), Math.ceil(fx)])
+    for(const gy of [Math.round(fy), Math.floor(fy), Math.ceil(fy)]){
+      const c={lv, gx, gy, k:chtKey(lv,gx,gy)};
+      if(seen.has(c.k) || !chtCovers(c,b,upp)) continue;
+      seen.add(c.k);
+      const r=await chtCached(c); if(r) return {c, r};
+    }
+  return null;
+}
+async function chtImgLoad(b, upp, lv){
+  const want=chtCell(b,lv);
+  if(CHI.busy || (CHI.cur&&CHI.cur.k===want.k)) return;
+  const f=CHI.fail.get(want.k); if(f && Date.now()-f<CHT.RETRY_MS) return;
   CHI.busy=true;
   try{
-    let rec=null, blob=null, at={lv,gx,gy,k};
-    try{ rec=await tileGet(k); }catch(e){}
-    if(rec&&rec.b){ blob=rec.b;
-      /* used again, so it is not the oldest: keep it out of the trim */
-      if(Date.now()-(rec.t||0)>864e5) tilePut(k,rec.b).catch(()=>{}); }
-    if(!blob){ blob=await chtImgFetch(lv,gx,gy);
-      if(blob){ tilePut(k,blob).then(()=>tileTrim()).catch(()=>{}); } }
+    /* The cache first: this scale, or the one either side of it that the
+       hysteresis in chtImgWant would have kept anyway - so water already
+       seen never costs a request, even when today's scale is a level off
+       the day it was cached. */
+    const fits=l=>l>=CHT.LVL_MIN && l<=CHT.LVL_MAX && upp<=2**l && upp>=2**l/2.5;
+    let at=null, rec=null;
+    for(const l of [lv, lv+1, lv-1]){
+      if(l!==lv && !fits(l)) continue;
+      const h=await chtCachedNear(b,l,upp);
+      if(h){ at=h.c; rec=h.r; break; }
+    }
+    let blob=rec?rec.b:null;
+    /* used again, so it is not the oldest: keep it out of the trim */
+    if(rec && Date.now()-(rec.t||0)>864e5) tilePut(at.k,blob).catch(()=>{});
+    if(!blob){ blob=await chtImgFetch(want);
+      if(blob){ at=want; tilePut(want.k,blob).then(()=>tileTrim()).catch(()=>{}); } }
     if(!blob){
-      CHI.fail.set(k,Date.now());
+      CHI.fail.set(want.k,Date.now());
       /* offline and never here at this scale: a coarser picture of the
          same water is better than none */
-      for(const d of [1,2,-1]){
-        const l2=lv+d; if(l2<CHT.LVL_MIN||l2>CHT.LVL_MAX) continue;
-        const s=128*2**lv/(128*2**l2), k2=chtKey(l2,Math.round(gx*s),Math.round(gy*s));
-        if(CHI.cur&&CHI.cur.k===k2) break;
-        let r2=null; try{ r2=await tileGet(k2); }catch(e){}
-        if(r2&&r2.b){ blob=r2.b; at={lv:l2,gx:Math.round(gx*s),gy:Math.round(gy*s),k:k2}; break; }
+      for(const l of [lv+1, lv+2]){
+        if(l>CHT.LVL_MAX) break;
+        const h=await chtCachedNear(b,l,0);
+        if(h && !(CHI.cur&&CHI.cur.k===h.c.k)){ blob=h.r.b; at=h.c; break; }
+        if(h) break;
       }
     }
     if(blob) await chtBake(blob, at);
   }catch(e){}
   finally{ CHI.busy=false; }
 }
-function chtImgFetch(lv,gx,gy){
+function chtImgFetch({lv,gx,gy}){
   const L=2**lv, cx=gx*128*L, cy=gy*128*L, h=512*L;   /* EPSG:3857 is y UP */
   const q=new URLSearchParams({bbox:[cx-h,cy-h,cx+h,cy+h].map(v=>v.toFixed(1)).join(','),
     bboxSR:'3857', imageSR:'3857', size:CHT.IMG+','+CHT.IMG, format:'png',
@@ -16629,9 +16656,13 @@ async function chtColour(img){
    the clip - is set from it, so 12.4 pushes the chart left rather than
    the chart running under the 1.
    Measured against the three-character reading the geometry was drawn
-   for (2.7, whose ink starts at CHT.EDGE): shapeW is the advance, not
-   the ink, so it is the DIFFERENCE that is trusted, never the number.
-   Narrower than that (a bare 0) leaves the chart where it is. */
+   around (a 2.7; CHT.EDGE is where the mock-up had its ink): shapeW is
+   the advance, not the ink, and the face moves the ink, so it is the
+   DIFFERENCE between two widths that is trusted, never a width. In
+   Poppins that leaves the boat some 40-50 px clear of the ink at 2.7,
+   12.4 and 10.0 alike - tests/chart.mjs measures the real ink off the
+   glass rather than trusting this. Narrower than three
+   characters leaves the chart where it is. */
 let chtEdgeAt=null;
 function chtEdge(){
   const t=$('spd').textContent||'';

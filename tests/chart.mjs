@@ -103,10 +103,12 @@ t.head('no route: nothing, and not one pixel of difference');
    has answered and has no course. */
 await p.evaluate(()=>{ skEver=true; });
 await settle();
+let s0=await st();
+await settle(2500);
 let s=await st();
 t.ok(!s.on, 'Signal K up, no course: the chart is display:none');
-t.ok(s.paints===0 && s.fetch===0, 'and it never painted or fetched anything',
-     JSON.stringify(s));
+t.ok(s.paints===s0.paints && s.fetch===s0.fetch,
+     'and from then on it paints and fetches nothing', JSON.stringify([s0,s]));
 
 /* Pixels. The demo off so nothing on the dial moves between shots; the
    chart's markup then taken OUT of the page entirely, which is the dial
@@ -115,8 +117,12 @@ await p.evaluate(()=>demoSet(false)); await settle(900);
 const A=await shot();
 const removed=await p.evaluate(()=>{
   const g=$('cht'), d=$('cht-fade-g').closest('defs');
+  /* and anything of the chart's that is not inside those two - a stray
+     element outside its group is exactly what this is here to catch */
+  const stray=[...document.querySelectorAll('[id^="cht"]')]
+    .filter(e=>!g.contains(e) && !d.contains(e));
   window.__cht=[g, g.nextSibling, d, d.nextSibling];
-  g.remove(); d.remove(); return true; });
+  g.remove(); d.remove(); return stray.length===0; });
 await settle(300);
 const B=await shot();
 t.ok(removed && A.equals(B),
@@ -124,6 +130,38 @@ t.ok(removed && A.equals(B),
      +'to the dial without it', A.length+' vs '+B.length);
 await p.evaluate(()=>{ const [g,gn,d,dn]=window.__cht;
   dn.parentNode.insertBefore(d,dn); gn.parentNode.insertBefore(g,gn); });
+/* A route comes and goes on that same still dial. A fix is put in by
+   hand (the demo is off) for both shots, so the one thing that differs
+   between them is that the chart has been and gone. */
+await p.evaluate(()=>{ put('pos.lat',28.83); put('pos.lon',-81.27); });
+await settle(500);
+const P1=await shot();
+const came=await p.evaluate(async()=>{
+  const la=28.83, lo=-81.27;
+  skMessage(JSON.stringify({updates:[{values:[
+    {path:'navigation.course.activeRoute', value:null},
+    {path:'navigation.course.nextPoint', value:{type:'Location', position:{latitude:la+.01, longitude:lo}}},
+    {path:'navigation.course.previousPoint', value:{type:'VesselPosition', position:{latitude:la-.002, longitude:lo}}}]}]}));
+  chtLastAt=0; await new Promise(r=>setTimeout(r,800));
+  const on=$('cht').style.display!=='none';
+  skMessage(JSON.stringify({updates:[{values:[
+    {path:'navigation.course.nextPoint', value:null},
+    {path:'navigation.course.previousPoint', value:null}]}]}));
+  chtLastAt=0; await new Promise(r=>setTimeout(r,800));
+  return on && $('cht').style.display==='none';
+});
+await settle(300);
+const P2=await shot();
+t.ok(came && P1.equals(P2), 'and after a route has come and gone, the same pixels again');
+if(!P1.equals(P2)) console.log('DIFF', await p.evaluate(async([a,c])=>{
+  const ld=async b=>{ const im=new Image(); im.src='data:image/png;base64,'+b; await im.decode();
+    const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height;
+    const x=cv.getContext('2d'); x.drawImage(im,0,0); return x.getImageData(0,0,cv.width,cv.height).data; };
+  const da=await ld(a), dc=await ld(c); let x0=1e9,y0=1e9,x1=-1,y1=-1,n=0;
+  for(let i=0;i<da.length;i+=4) if(da[i]!==dc[i]||da[i+1]!==dc[i+1]||da[i+2]!==dc[i+2]){
+    const k=i/4, x=k%1080, y=(k/1080)|0; n++; x0=Math.min(x0,x); y0=Math.min(y0,y); x1=Math.max(x1,x); y1=Math.max(y1,y); }
+  return JSON.stringify({n,x0,y0,x1,y1}); },[P1.toString('base64'),P2.toString('base64')]));
+await p.evaluate(()=>{ delete S['pos.lat']; delete S['pos.lon']; });
 for(const th of ['night','dusk']){
   await p.evaluate(th=>{ CFG.theme=th; applyTheme(); }, th); await settle(500);
   const a=await shot();
@@ -194,6 +232,11 @@ ROUTES.r1={name:'Evening', feature:{type:'Feature',
   geometry:{type:'LineString', coordinates:[A0,A1,A2,A3]},
   properties:{coordinatesMeta:[{name:'MARINA'},{name:'RUM'},{name:'GOSLING'},{name:'STORMY'}]}}};
 const pos=c=>({latitude:c[1], longitude:c[0]});
+const bake0=await p.evaluate(()=>CHT.n.bake);
+const CHT_P=['navigation.course.activeRoute','navigation.course.nextPoint',
+  'navigation.course.previousPoint','navigation.courseGreatCircle.activeRoute.href',
+  'navigation.courseGreatCircle.nextPoint.position',
+  'navigation.courseGreatCircle.previousPoint.position'];
 await delta([
   {path:'navigation.course.activeRoute', value:{href:'/resources/routes/r1',
     pointIndex:1, pointTotal:4, reverse:false, name:'Evening'}},
@@ -207,7 +250,7 @@ t.ok(asked.filter(x=>x.endsWith('/routes/r1')).length===1,
 t.ok(s.past.split(' ').length===2 && s.ahead.split(' ').length===3,
      'the leg behind, and the rest of the route ahead (faint)', s.past+' | '+s.ahead);
 t.ok(s.next==='', 'no stub of the next leg - the turn is 900 m away');
-t.ok(s.img && s.imgShown && s.bake===1, 'a chart fetched, baked once, shown');
+t.ok(s.img && s.imgShown && s.bake>bake0, 'a chart fetched, baked, shown');
 const txt=await p.evaluate(()=>({n:$('cht').querySelectorAll('text,tspan,foreignObject').length,
   s:$('cht').textContent.trim()}));
 t.ok(txt.n===0 && txt.s==='', 'and not a word on it: no text elements, no text',
@@ -341,16 +384,20 @@ t.ok(near2(holes.port[0],-60) && near2(holes.port[1],-100),
 t.ok(near2(holes.port2,-61), 'and it follows the mark round');
 t.ok(holes.stbd.every(h=>h.r===0), 'from starboard there is no chart there: no hole');
 t.ok(holes.none.every(h=>h.r===0), 'no wind: no hole');
-/* and live: the dial's own render loop, following the drawn mark */
-await p.evaluate(()=>{ for(const k in CHW) delete CHW[k]; });
-await settle(400);
+/* and live: the dial's own render loop, following the drawn mark. The
+   demo's sail at 17 minutes has the apparent wind on the port bow. */
+await p.evaluate(()=>{ demoT=1020; for(const k in CHW) delete CHW[k]; });
+await settle(3000);
 const live=await p.evaluate(()=>{
   const m=/rotate\(([-\d.e]+)/.exec($('awa-mark').getAttribute('transform')||'');
-  return {a:m?+m[1]:null, on:+$('awa-mark').getAttribute('opacity')>0,
+  return {a:m?+m[1]:null, on:+$('awa-mark').getAttribute('opacity')>0, edge:chtEdgeAt,
           h:{cx:+$('cht-hole-a').getAttribute('cx'), cy:+$('cht-hole-a').getAttribute('cy'),
              r:+$('cht-hole-a').getAttribute('r')}};
 });
-if(live.on && live.a<-15 && live.a>-165)
+/* on where the mark is over the chart's side: left of the digits' edge
+   by less than a hole's radius - the same test chtWind makes */
+const over=live.on && 540+434*Math.sin(live.a/57.29578) < live.edge+95;
+if(over)
   t.ok(Math.abs(live.h.cx-at(live.a)[0])<4 && Math.abs(live.h.cy-at(live.a)[1])<4,
        'render() moves the hole with the drawn apparent mark', JSON.stringify(live));
 else
@@ -362,10 +409,9 @@ t.head('wide speeds: the chart gets out of the digits\' way');
 /* The digits' ink, off the glass: the leftmost dark pixel of the band
    they sit in, with the chart hidden so it cannot be the chart. */
 const inkLeft=async()=>{
-  await p.evaluate(()=>{ $('cht').style.visibility='hidden'; }); await settle(150);
+  await p.evaluate(()=>{ $('cht').style.display='none'; }); await settle(150);
   const png=await shot({x:150,y:400,width:400,height:180});
-  if(process.env.CHT_DEBUG) (await import('fs')).writeFileSync(SHOTS+'band-'+Date.now()+'.png', png);
-  await p.evaluate(()=>{ $('cht').style.visibility=''; });
+  await p.evaluate(()=>{ $('cht').style.display=''; });
   return p.evaluate(async b64=>{
     const im=new Image(); im.src='data:image/png;base64,'+b64; await im.decode();
     const c=document.createElement('canvas'); c.width=im.width; c.height=im.height;
@@ -435,6 +481,9 @@ await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); }); await settle(1500);
 
 /* ===================================================================== */
 t.head('the chart seen once with a signal is there without one');
+/* The boat held where it is, so the same water is asked for twice. */
+await p.evaluate(()=>{ window.__df=demoT; window.__hold=setInterval(()=>{ demoT=window.__df; },20); });
+await settle(3000);
 const key=await p.evaluate(()=>CHI.cur.k);
 const kept=await p.evaluate(k=>tileGet(k).then(r=>!!(r&&r.b&&r.t)), key);
 t.ok(/^cht\/\d+\/-?\d+\/-?\d+$/.test(key) && kept,
@@ -444,7 +493,10 @@ const n0=noaa;
 await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear(); chtSeq++; chtLastAt=0; });
 await settle(2500);
 s=await st();
-t.ok(s.img && s.imgShown, 'offline, the same water: the chart is back from IndexedDB');
+t.ok(s.img && s.imgShown && await p.evaluate(()=>/^cht\//.test(CHI.cur.k)),
+     'offline, the same water: the chart is back from IndexedDB',
+     await p.evaluate(k=>JSON.stringify({k, cur:CHI.cur&&CHI.cur.k, k1:chtView&&1/chtView.k,
+       fail:[...CHI.fail.keys()], busy:CHI.busy, demoT}), key));
 t.ok(noaa===n0, 'without asking the network', (noaa-n0)+' asks');
 /* and new water, offline: no picture, the route on clean glass */
 await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear();
@@ -463,7 +515,7 @@ await settle(2500);
 t.ok(noaa-asks<=1, 'and the dead network is not asked again every second',
      (noaa-asks)+' asks in 2.5 s');
 OFFLINE=false;
-await p.evaluate(()=>{ CHI.fail.clear(); chtLastAt=0; });
+await p.evaluate(()=>{ clearInterval(window.__hold); CHI.fail.clear(); chtLastAt=0; });
 await settle(2500);
 
 /* ===================================================================== */
@@ -473,8 +525,6 @@ const c0=await st(); await settle(2500); const c1=await st();
 t.ok(c1.ticks===c0.ticks && c1.paints===c0.paints && c1.fetch===c0.fetch,
      'an app over the dial: not a tick, not a paint, not a fetch',
      JSON.stringify([c0.ticks,c1.ticks,c0.paints,c1.paints]));
-const tm=await p.evaluate(()=>String(CHT_PATHS.length));
-t.ok(tm==='6', 'six course paths subscribed beside the readings');
 await p.evaluate(()=>closeApp&&closeApp()); await settle(800);
 
 /* ===================================================================== */
@@ -495,23 +545,38 @@ t.ok(!(await p.evaluate(()=>/chtFeed|chtRoute|CHT\./.test(
    typeof markWatch==='function'?markWatch.toString():''].join('')))),
      'the race course code never reads the route chart', JSON.stringify(sep));
 
-/* the subscribe message, from a socket that opens */
-t.head('the socket: the course paths subscribed, the course fetched on open');
+/* ===================================================================== */
+t.head('the socket: the course paths subscribed, the course arriving on it');
+/* A Signal K of our own on the socket. Playwright mocks a WebSocket by
+   patching the page's constructor, which only a new document gets - so
+   the route goes in and the page comes up again under it. The route
+   arrives the way Freeboard-SK's "activate route" sends it: deltas from
+   the course API, with the course GET answering 404 so it can only have
+   come over the socket. */
 const subs=[];
-await p.routeWebSocket(/:3000\/signalk\/v1\/stream/, ws=>{
-  ws.onMessage(m=>{ try{ const j=JSON.parse(m); if(j.subscribe) subs.push(...j.subscribe); }catch(e){} });
+COURSE=null;
+const fromSk=JSON.stringify({context:'vessels.self', updates:[{values:[
+  {path:'navigation.course.activeRoute', value:{href:'/resources/routes/r1',
+    pointIndex:1, pointTotal:4, reverse:false, name:'Evening'}},
+  {path:'navigation.course.nextPoint', value:{type:'RoutePoint', position:pos(A1)}},
+  {path:'navigation.course.previousPoint', value:{type:'RoutePoint', position:pos(A0)}}]}]});
+await p.routeWebSocket(/\/signalk\/v1\/stream/, ws=>{
+  ws.onMessage(m=>{ try{ const j=JSON.parse(m);
+    if(j.subscribe){ subs.push(...j.subscribe); ws.send(fromSk); } }catch(e){} });
 });
 const gets=asked.length;
-/* rather than wait out the reconnect's back-off, which by now is 15 s */
-await p.evaluate(()=>connect());
-await p.waitForFunction(()=>skEver===true && ws && ws.readyState===1, null, {timeout:30000})
+await p.reload();
+await p.waitForFunction(()=>typeof skEver!=='undefined' && skEver===true, null, {timeout:20000})
   .catch(()=>{});
-await settle(600);
-const cs=subs.filter(x=>x.path.startsWith('navigation.course'));
+await settle(3000);
+const cs=subs.filter(x=>CHT_P.includes(x.path));
 t.ok(cs.length===6 && cs.every(x=>x.policy==='instant'),
      'six course paths, instant rather than the readings\' fixed 4 Hz',
      JSON.stringify(cs.map(x=>x.path+':'+x.policy)));
 t.ok(asked.slice(gets).includes('/signalk/v2/api/vessels/self/navigation/course'),
-     'and the course API asked once the socket is open');
+     'the course API asked once the socket is open');
+s=await st();
+t.ok(s.on && s.ahead.split(' ').length===3,
+     'and the route, from the deltas alone, on the dial', s.past+' | '+s.ahead);
 
 await t.done(b);

@@ -57,6 +57,7 @@ probes count on.
 | `scroll` | no native scrollbar anywhere, the fade on the edge that has something behind it, and the arc on the rim |
 | `pick` | the menu the dial's readings and the course sheet's settings share: where it opens, what a tap on a row does, and the veil |
 | `sonar` | the echogram: that the gain measures the transmit pulse instead of assuming it, that now is at the right-hand edge, that night is a red ramp which repaints what is already drawn, and that the big number is the dial's number rather than one worked out from the picture |
+| `chart` | the route chart in the left of the dial: no route is the same pixels as no feature at all, not a word on it, the course API's index and direction (v2, v1, reversed, go-to, a 404, no API), the deltas over a real socket, the wind holes, wide speeds measured off the glass, night's ink, the chart offline from IndexedDB, and nothing at all while the dial is covered |
 
 ## The helper
 
