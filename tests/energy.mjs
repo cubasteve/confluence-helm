@@ -140,13 +140,13 @@ t.ok(/21°C/.test(f.f1), 'the temperature, in C off Signal K\'s kelvin', f.f1);
 t.ok(/SPREAD 4 MV/.test(f.f1), 'and the spread between the cells, in '
      +'millivolts, which is the number that says whether the pack is healthy',
      f.f1);
-t.ok(/SOH 98%/.test(f.f2), 'the state of health the Eco-Worthy reports', f.f2);
+t.ok(/BATTERY HEALTH 98%/.test(f.f2), 'the state of health, spelled out the Eco-Worthy reports', f.f2);
 t.ok(/37 CYCLES/.test(f.f2), 'the cycle count, when the plugin has one', f.f2);
 t.ok(/BLE −58 DBM/.test(f.f2),
      'and the strength of the radio link, with a real minus sign - a bank on '
      +'Bluetooth four minutes stale looks exactly like one that is wrong',
      f.f2);
-t.ok(f.f1.length>0 && f.f2.length>0 && f.f1.indexOf('SOH')<0,
+t.ok(f.f1.length>0 && f.f2.length>0 && f.f1.indexOf('HEALTH')<0,
      'this moment on the first line, the pack\'s life on the second',
      f.f1+' // '+f.f2);
 
@@ -365,7 +365,7 @@ t.ok(/^\d+$/.test(f.pct) && f.cv.length===4,
 t.ok(f.sub!=='NO BATTERY FEED', 'and it does not claim to have no feed', f.sub);
 t.ok(/OF 100 AH/.test(f.f1) && /°C/.test(f.f1) && /SPREAD \d+ MV/.test(f.f1),
      'the first foot line is all there', f.f1);
-t.ok(/SOH \d+%/.test(f.f2) && /\d+ CYCLES/.test(f.f2)
+t.ok(/BATTERY HEALTH \d+%/.test(f.f2) && /\d+ CYCLES/.test(f.f2)
      && /BLE \u2212\d+ DBM/.test(f.f2),
      'and so is the second - a demo that leaves half the face on dashes is '
      +'not exercising the half it leaves', f.f2);

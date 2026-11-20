@@ -15707,7 +15707,9 @@ function enPaint(){
   const t=enTemp(b.temps); if(t) now.push(t);
   if(spread!==null && b.cells.length>1)
     now.push('SPREAD '+Math.round(spread*1000)+' MV');
-  if(b.soh!==null) life.push('SOH '+Math.round(b.soh*100)+'%');
+  /* Spelled out. SOH is the trade's abbreviation and nobody else's - on
+     the glass it read as a typo for SOC. */
+  if(b.soh!==null) life.push('BATTERY HEALTH '+Math.round(b.soh*100)+'%');
   if(b.cycles!==null) life.push(Math.round(b.cycles)+' CYCLES');
   /* Not decoration. This bank talks over Bluetooth, and a reading four
      minutes stale looks exactly like a reading that is wrong. staleAfter
