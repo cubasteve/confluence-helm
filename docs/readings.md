@@ -1159,4 +1159,5 @@ the rest.
 A reading with nothing behind it shows `––` on the glass and `—` in the
 menu, dimmed. It stays selectable — the sensor may wake up — but it does
 not look live. Which instruments are actually feeding is shown by the
-four glyphs at the top of the control panel.
+five glyphs at the top of the control panel: GPS, depth, wind, heading,
+and the house battery, which carries its state of charge inside the case.

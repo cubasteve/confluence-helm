@@ -758,7 +758,15 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* Under the pair rather than beside it: what the mode means is a
    sentence, and a sentence does not fit in a row of two pills. */
 .senrow{margin-bottom:6px}
-#sen-svg{display:block;width:340px;height:60px;margin:0 auto}
+#sen-svg{display:block;width:434px;height:60px;margin:0 auto}
+/* The house bank's glyph carries its state of charge INSIDE the case, the
+   way a phone does - the one number in the row, so it lives and dims with
+   the glyph. Low says so twice: in colour, and in weight, because night's
+   warn is night's ink and colour alone cannot carry it there. */
+#s-bat text{stroke:none;font-size:18px;font-weight:700;letter-spacing:-.02em}
+#s-bat.live.warn{stroke:var(--warn);fill:var(--warn)}
+#s-bat.live.bad{stroke:var(--alarm);fill:var(--alarm)}
+#s-bat.warn text,#s-bat.bad text{font-weight:800}
 /* The glyph row is the glyphs now. The DEMO pill used to be absolutely
    placed beside them, taking slack that was already there; it is at the
    foot of the panel under the build line instead. */
@@ -981,7 +989,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   color:var(--panel)}
 
 /* The .pills grid was the first form of the sensor liveness row. It is
-   the four .sen glyphs at the top of the panel now, lit by wCls(el,
+   the five .sen glyphs at the top of the panel now, lit by wCls(el,
    'live', ok) from render()'s DATA block - see .sen.live above. */
 
 /* record state is carried by .rbtn.rec.on */
@@ -2771,27 +2779,32 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          when you are already in the settings - and the dial's foot was
          the one place the lock and the page dots both needed. -->
     <div class="senrow">
-    <svg id="sen-svg" viewBox="370 928 340 60">
+    <svg id="sen-svg" viewBox="323 928 434 60">
   <g id="sensors" transform="translate(540 958)">
-    <g class="sen" id="s-gps" transform="translate(-141 0)">
+    <g class="sen" id="s-gps" transform="translate(-188 0)">
       <circle r="15" fill="none" stroke-width="3"/>
       <circle r="4"/>
       <path d="M0 -22v7M0 15v7M-22 0h7M15 0h7" stroke-width="3" stroke-linecap="round"/>
     </g>
-    <g class="sen" id="s-dpt" transform="translate(-47 0)">
+    <g class="sen" id="s-dpt" transform="translate(-94 0)">
       <path d="M-19 -16q9 -7 19 0t19 0" fill="none" stroke-width="3" stroke-linecap="round"/>
       <path d="M-13 -4q6.5 -6 13 0t13 0" fill="none" stroke-width="3" stroke-linecap="round"/>
       <path d="M0 6v11M-7 11l7 8 7-8" fill="none" stroke-width="3"
             stroke-linecap="round" stroke-linejoin="round"/>
     </g>
-    <g class="sen" id="s-wnd" transform="translate(47 0)">
+    <g class="sen" id="s-wnd" transform="translate(0 0)">
       <path d="M-20 -9h22a7 7 0 1 0 -7 -7" fill="none" stroke-width="3" stroke-linecap="round"/>
       <path d="M-20 3h30a7 7 0 1 1 -7 7" fill="none" stroke-width="3" stroke-linecap="round"/>
       <path d="M-20 15h16" fill="none" stroke-width="3" stroke-linecap="round"/>
     </g>
-    <g class="sen" id="s-hdg" transform="translate(141 0)">
+    <g class="sen" id="s-hdg" transform="translate(94 0)">
       <circle r="18" fill="none" stroke-width="3"/>
       <path d="M0 -11 L6 4 L0 0 L-6 4 Z"/>
+    </g>
+    <g class="sen" id="s-bat" transform="translate(188 0)">
+      <rect x="-27" y="-14" width="48" height="28" rx="6" fill="none" stroke-width="3"/>
+      <path d="M25.5 -6v12" fill="none" stroke-width="4" stroke-linecap="round"/>
+      <text id="s-bat-pct" x="-3" y="1" text-anchor="middle" dominant-baseline="central"></text>
     </g>
   </g>
     </svg>
@@ -4121,6 +4134,17 @@ function render(){
   live('s-dpt', d!==null);
   live('s-wnd', awaR!==null);
   live('s-hdg', get('navigation.headingMagnetic')!==null);
+  /* The house bank: lit by any reading from it, numbered only by its own
+     state of charge. A pack publishing volts and no state of charge lights
+     an empty case - absent is absent, never 0. */
+  const socR=get(bp('capacity.stateOfCharge'));
+  const pctR=(socR===null||!isFinite(socR)) ? null
+            : Math.max(0,Math.min(100,Math.round(socR*100)));
+  live('s-bat', pctR!==null || get(bp('voltage'))!==null
+                || get(bp('current'))!==null);
+  wCls('s-bat','warn', pctR!==null && pctR<=20 && pctR>10);
+  wCls('s-bat','bad',  pctR!==null && pctR<=10);
+  wText('s-bat-pct', pctR===null ? '' : String(pctR));
   windModeTick();
   shiftTick();
   lineWatch();

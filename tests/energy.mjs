@@ -417,4 +417,40 @@ t.ok(await p.evaluate(()=>get('environment.wind.speedTrue')!==null),
 await p.evaluate(()=>demoSet(false));
 
 await p.evaluate(()=>closeApp());
+
+t.head('the bank in the sensor row: its charge inside the case');
+/* The fifth glyph on the control panel. Lit by any reading from the bank,
+   numbered only by its own state of charge - and with no state of charge
+   it is an empty case, never a 0. */
+const glyph=async()=>{ await p.waitForTimeout(700); return p.evaluate(()=>({
+  live:$('s-bat').classList.contains('live'),
+  warn:$('s-bat').classList.contains('warn'),
+  bad:$('s-bat').classList.contains('bad'),
+  txt:$('s-bat-pct').textContent})); };
+await blank();
+let g=await glyph();
+t.ok(!g.live && g.txt==='', 'no feed: dim, and no number', JSON.stringify(g));
+await feed({'capacity.stateOfCharge':0.34}); g=await glyph();
+t.ok(g.live && g.txt==='34' && !g.warn && !g.bad,
+     'a feed: lit, with the percentage inside', JSON.stringify(g));
+await feed({'capacity.stateOfCharge':1}); g=await glyph();
+t.ok(g.txt==='100', 'a full bank reads 100, and fits', g.txt);
+await feed({'capacity.stateOfCharge':0.15}); g=await glyph();
+t.ok(g.warn && !g.bad && g.txt==='15', 'at 20 % or under it warns', JSON.stringify(g));
+await feed({'capacity.stateOfCharge':0.08}); g=await glyph();
+t.ok(g.bad && !g.warn && g.txt==='8', 'at 10 % or under it alarms', JSON.stringify(g));
+await blank(); await feed({'voltage':13.2}); g=await glyph();
+t.ok(g.live && g.txt==='',
+     'volts and no state of charge: lit, but an empty case - absent is absent',
+     JSON.stringify(g));
+const fits=await p.evaluate(()=>{
+  const r=$('s-bat').getBoundingClientRect(), row=$('sen-svg').getBoundingClientRect();
+  const t=$('s-bat-pct'); t.textContent='100';
+  const tb=t.getBoundingClientRect(), cb=$('s-bat').querySelector('rect').getBoundingClientRect();
+  return {inRow:r.right<=row.right+0.5 && r.left>=row.left-0.5,
+          inCase:tb.left>=cb.left && tb.right<=cb.right};});
+t.ok(fits.inRow, 'the glyph sits inside the row', JSON.stringify(fits));
+t.ok(fits.inCase, 'and "100" sits inside the case', JSON.stringify(fits));
+await blank();
+
 t.done(); await b.close();
