@@ -35,13 +35,13 @@ BUILD="$HOME/open_echo-build"
 BIN="$HOME/.local/bin"
 
 say(){ printf '\n== %s\n' "$*"; }
+# netd is paused, never restarted from here. Started from an SSH login it
+# would lose the right to power the Pi off and reboot it - the desktop
+# session's loop in netd.sh brings it back instead, once the pause goes.
+PAUSE=/tmp/helm-netd.pause
 die(){ printf '\nSTOPPED: %s\n' "$*" >&2; restart_netd; exit 1; }
-restart_netd(){
-  if ! pgrep -f 'helm/netd.sh' >/dev/null 2>&1; then
-    setsid nohup bash "$HOME/helm/netd.sh" >/dev/null 2>&1 < /dev/null &
-    echo "netd restarted"
-  fi
-}
+restart_netd(){ rm -f "$PAUSE"; echo "netd: pause lifted, it comes back by itself"; }
+trap 'rm -f "$PAUSE"' EXIT
 
 # Drive frequency, and the TUSS4470 band-pass register nearest to it
 # (datasheet table 7.1, as listed in the sketch's settings.h).
@@ -55,9 +55,14 @@ esac
 [ -e "$DEV" ] || { echo "The sounder is not plugged in: $DEV is missing." >&2; exit 1; }
 
 say "1/6  pausing netd (it holds the sounder's port)"
-pkill -f 'helm/netd.sh' 2>/dev/null || true
+if ! pgrep -f 'helm/netd.sh' >/dev/null 2>&1; then
+  echo "netd's launcher is not running - reboot the Pi first, so it starts"
+  echo "from the desktop session (an SSH-started netd cannot power off)."
+  exit 1
+fi
+touch "$PAUSE"
 pkill -f 'helm/netd.py' 2>/dev/null || true
-sleep 2
+sleep 3
 
 say "2/6  arduino-cli"
 export PATH="$BIN:$PATH"
@@ -105,7 +110,7 @@ arduino-cli upload -p "$DEV" --fqbn "$FQBN" "$BUILD/TUSS4470_arduino" \
 
 say "6/6  restarting netd, then listening for pings"
 restart_netd
-sleep 12
+sleep 15
 curl -s -X POST -H 'Content-Type: application/json' -d '{"after":0}' \
   http://127.0.0.1:8091/sonar | python3 -c "
 import json,sys

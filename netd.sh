@@ -30,7 +30,19 @@ if [ -r "$HELM_ENV" ]; then set -a; . "$HELM_ENV"; set +a; fi
 # every five seconds for ever. So don't launch while someone is already
 # answering - and keep looping, so this copy takes over the moment the
 # other one stops.
+# A pause, for whatever needs the sounder's port to itself for a minute -
+# flashing the board, chiefly. Stopping THIS loop instead would work and
+# would be wrong: netd has to come back from here, inside the desktop
+# session, because that is what lets it power the Pi off and reboot it.
+# Started again from an SSH login it is refused both ("NOT PERMITTED FROM
+# HERE"). So whoever needs the port touches this file and kills netd.py;
+# the loop waits; the file goes; netd comes back in the right session.
+HELM_PAUSE="${XDG_RUNTIME_DIR:-/tmp}/helm-netd.pause"
+
 while true; do
+  if [ -e "$HELM_PAUSE" ] || [ -e /tmp/helm-netd.pause ]; then
+    sleep 2; continue
+  fi
   if ! curl -sf -o /dev/null --max-time 2 http://127.0.0.1:8091/status; then
     python3 "$HOME/helm/netd.py" "$@"
   fi
