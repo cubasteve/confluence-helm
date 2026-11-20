@@ -3393,7 +3393,7 @@ const CFG={
      against wherever the page was served from - on the Pi that is
      ~/helm-www/tiles/{z}/{x}/{y}.jpg, NOT ~/helm/tiles/,
      which is only where the pack lives in the repo. deploy.sh does not
-     copy it; put the pack where AvNav can serve it.
+     copy it; put the pack in ~/helm-www/tiles, which netd serves.
 
      The point of a disk pack is that the chart works with no network at
      all, which on the water is precisely when you want it. Outside the
