@@ -1782,17 +1782,44 @@ design capacity, cell voltages, a temperature per probe, and a raw
 **derived by the library, not by the pack** — power, runtime,
 delta cell voltage, average temperature.
 
-**not available from this plugin at all** — cycle count (the line is
-commented out in the source), charge and discharge MOSFET states,
-balancer state, heater, and any *meaning* for the bits in the problem
-code.
+**not reported at all** — cycle count (the line is commented out in the
+library's source), charge and discharge MOSFET states, balancer state,
+heater, and any *meaning* for the bits in the problem code.
 
-The app subscribes to `cycles` anyway, because three of the four plugins
-an Eco-Worthy can land on do publish it and a path nothing writes costs
-one entry in a list. Which plugin a given battery lands on depends on how
-it advertises — `ECO-WORTHY 02_*` and the `fff0`/`DCHOUSE*` matchers go
-to one, `ECO????` to another — so the honest design is the one here: ask
-for everything, draw what arrives, and leave the rest of the line out.
+The app subscribes to `cycles` anyway: a path nothing writes costs one
+entry in a list, and another reader, or a later firmware, may publish
+it. The honest design is the one here: ask for everything, draw what
+arrives, and leave the rest of the line out.
+
+### The reader: a patched BT Sensors class
+
+What reads the pack on this boat is the Signal K plugin
+`bt-sensors-plugin-sk`, with one file replaced:
+[`boat/bt-sensors/EcoWorthyBW02.js`](../boat/bt-sensors/EcoWorthyBW02.js),
+dropped over the plugin's own `sensor_classes/EcoWorthyBW02.js`. The
+release (1.3.7) cannot read this battery, for four reasons, each checked
+against aiobmsble and its recorded frames:
+
+- **It never asks.** Some of these packs stay silent until two unlock
+  commands are written to `fff2`. The release writes nothing, and its
+  settings step waits for a cell count with no time limit, so the
+  plugin's page sits on *Fetching schema* for ever while holding the
+  Bluetooth link (the pack's comm light stays on).
+- **It knows one frame layout.** Protocol 2, which this `0B` speaks,
+  puts the pack's MAC address in front of the frame type and scales
+  current by ten, not a hundred. The release recognises none of it.
+- **It checks no CRC.**
+- **It drops cell 1 and probe 1**, and sends temperatures out in
+  Celsius labelled Kelvin.
+
+The patch keeps the class name, so a battery set up as `EcoWorthyBW02`
+keeps its settings, and publishes exactly the paths above with Battery
+ID `house` — the panel needed no change. It unlocks with retries and
+both write modes, re-asks (or reconnects) after fifteen silent seconds,
+accepts a frame only when its CRC checks, and publishes nothing it could
+not decode. `boat/bt-sensors/README.md` has the install and the test.
+
+A plugin update puts the release file back; re-copy after one.
 
 ### Nothing here falls back to zero
 
