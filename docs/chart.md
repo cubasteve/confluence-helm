@@ -178,8 +178,12 @@ route here is only ever one somebody planned.
 
 ## Tests
 
-`tests/chart.mjs` — no route is pixel-identical (day, dusk, night, and
-after a route has come and gone); no text in it; the course API's index
+`tests/chart.mjs` — no route is pixel-identical to the dial with the
+chart's markup taken out altogether (day, dusk, night), and after a
+route has come and gone the chart's half of the dial is the same pixels
+again (Chromium re-rasters the far edge of the hull-number watermark a
+few levels differently once a chart has been up — nothing of the
+chart's); no text in it; the course API's index
 and direction, v2 and v1, go-to, a 404 and a server without the API;
 the deltas arriving over a real socket; the wind holes; wide speeds
 measured off the glass; the night ink and strength; the offline cache;

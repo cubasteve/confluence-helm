@@ -200,9 +200,15 @@ body.night #mark{opacity:.07}
    which paints it into the image's own alpha once per image and theme,
    rather than set as an opacity here: group opacity on a masked image
    is one more offscreen layer to composite on every repaint, and on
-   the Pi that is the expensive part. The marks are thin strokes, so
-   they can run stronger than the map and still lose to a reading by
-   sheer mass - but none of them is ever full strength. */
+   the Pi that is the expensive part. The marks run stronger than the
+   map, but each is drawn in a colour no brighter than the dimmest
+   reading (the TWS strip, in --ink-dim) and short of full strength, so
+   even a mark lying on chart ink loses to it. That is why the boat is
+   --ink-dim and not --ink: it is a solid shape, not a stroke, and at
+   dusk --ink at .72 was brighter than the strip. And why at night the
+   route is --ink-dim and not --accent: night's accent is the brightest
+   red in the palette, brighter than --ink. tests/chart.mjs measures
+   the marks against the strip off the glass in all three themes. */
 body{--cht-map:.40}
 body.dusk{--cht-map:.38}
 body.night{--cht-map:.44}
@@ -212,11 +218,9 @@ body.night{--cht-map:.44}
 .cht-leg-next{stroke:var(--accent);opacity:.56;stroke-dasharray:none}
 .cht-act{stroke:var(--accent);stroke-width:5;stroke-linecap:round;opacity:.68}
 .cht-wp{fill:none;stroke:var(--accent);stroke-width:3.5;opacity:.85}
-.cht-boat{fill:var(--ink);opacity:.72}
-body.night .cht-wp{opacity:.72}
-body.night .cht-act{opacity:.56}
-body.night .cht-leg-next{opacity:.5}
-body.night .cht-boat{opacity:.8}
+.cht-boat{fill:var(--ink-dim);opacity:.8}
+body.night .cht-wp,body.night .cht-act,body.night .cht-leg-next{stroke:var(--ink-dim)}
+body.night .cht-boat{opacity:.85}
 .sen{stroke:var(--label);fill:var(--label);opacity:.28;
   transition:opacity .3s,stroke .3s,fill .3s}
 .sen.live{stroke:var(--stbd);fill:var(--stbd);opacity:1}
@@ -2540,10 +2544,12 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
     <linearGradient id="cht-fade-x" gradientUnits="userSpaceOnUse" x1="250" y1="0" x2="350" y2="0">
       <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
-    <!-- and top and bottom: clear of the clock's +, gone by the TWS rule -->
-    <linearGradient id="cht-fade-y" gradientUnits="userSpaceOnUse" x1="0" y1="230" x2="0" y2="650">
-      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".2" stop-color="#fff"/>
-      <stop offset=".78" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    <!-- and top and bottom: clear of the clock's +, and gone by the TWS
+         rule (y 606) - zero at 600, so no land reaches the rule or the
+         strip under it -->
+    <linearGradient id="cht-fade-y" gradientUnits="userSpaceOnUse" x1="0" y1="230" x2="0" y2="600">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".227" stop-color="#fff"/>
+      <stop offset=".838" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
     <radialGradient id="cht-fade-r" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1"
         gradientTransform="translate(290 400) scale(240 240)">
@@ -2560,8 +2566,16 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
       <rect width="1080" height="1080" fill="url(#cht-fade-x)"/></mask>
     <mask id="cht-mask-y" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
       <rect width="1080" height="1080" fill="url(#cht-fade-y)"/></mask>
+    <!-- the route's own inboard edge: a short fade to nothing just
+         before the clip, so a leg running off towards the digits ends
+         soft, the way the chart under it does, rather than cut. Black
+         over the radial, so it is still one mask; moved by chtEdge() -->
+    <linearGradient id="cht-fade-rt">
+      <stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000"/>
+    </linearGradient>
     <mask id="cht-mask-r" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-r)"/></mask>
+      <rect width="1080" height="1080" fill="url(#cht-fade-r)"/>
+      <rect id="cht-fade-rt-r" x="340" y="0" width="12" height="1080" fill="url(#cht-fade-rt)"/></mask>
     <mask id="cht-wind" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
       <rect width="1080" height="1080" fill="#fff"/>
       <circle id="cht-hole-a" r="0" fill="url(#cht-hole)"/>
@@ -2578,7 +2592,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
          It is what keeps it cheap: the SOG digits redraw twenty times a
          second just to the right of it, and a dirty rect that does not
          touch the box never re-runs the masks above. Width set by chtEdge(). -->
-    <clipPath id="cht-clip"><rect id="cht-clip-r" x="100" y="230" width="252" height="420"/></clipPath>
+    <clipPath id="cht-clip"><rect id="cht-clip-r" x="100" y="230" width="252" height="370"/></clipPath>
     <!-- the route, inside that box: above the rule, and off the clock's +
          (a hole the size of the button's ring), so the route behind or far
          ahead never runs over a control. The hole lies wholly inside the
@@ -3934,7 +3948,15 @@ const PATHS=[...BAT_PATHS,
 /* The course, for the route chart (see CHT). Objects, not numbers, and
    they change when somebody activates a route or a waypoint is reached -
    so 'instant' rather than the readings' fixed 4 Hz beat, which would
-   resend the same route object four times a second for nothing. */
+   resend the same route object four times a second for nothing.
+   And no minPeriod. The server applies it as a debounce that passes the
+   first value and DROPS the rest of the window - it never sends the
+   last one late - and the course API routinely sends two course deltas
+   back to back: activating a route over a plotter's course clears the
+   old one first (nextPoint null) and then sends the new one. With a
+   minPeriod the panel kept the null and showed no route while one was
+   active. These paths only change on a course command, so there is
+   nothing to throttle; chtCheck() runs at 1 Hz whatever arrives. */
 const CHT_PATHS=['navigation.course.activeRoute','navigation.course.nextPoint',
  'navigation.course.previousPoint',
  'navigation.courseGreatCircle.activeRoute.href',
@@ -4022,9 +4044,10 @@ function connect(){
          NMEA rates is a continuous drizzle of small deltas landing at
          random moments, and each one is a task that can skip an
          animation frame. 'fixed' batches them onto a predictable 4 Hz
-         beat instead. Slower data, smoother glass - a deliberate trade. */
+         beat instead. Slower data, smoother glass - a deliberate trade.
+         The course paths are 'instant' with NO minPeriod - see CHT_PATHS. */
       subscribe:PATHS.map(p=>({path:p,period:250,policy:'fixed'}))
-        .concat(CHT_PATHS.map(p=>({path:p,policy:'instant',minPeriod:1000})))}));
+        .concat(CHT_PATHS.map(p=>({path:p,policy:'instant'})))}));
     skEver=true; chtCourseGet();};
   /* Mid-slide the dial is completely hidden, so parsing a delta right
      now buys nothing visible and costs a frame: the parse is a discrete
@@ -4349,9 +4372,11 @@ function render(){
   const tg=$('twa-mark');
   tg.setAttribute('opacity',twa===null?'0':'.9');
   if(twa!==null)tg.setAttribute('transform',`rotate(${twa} ${CX} ${CY})`);
-  chtTick(awa,twa);                 /* the route chart, left - see CHT */
 
   paintDialCells();
+  /* after the cells, so a SOG that has just grown a digit moves the
+     chart out of its way in this same frame - see chtTick */
+  chtTick(awa,twa);                 /* the route chart, left - see CHT */
 
   /* ---- RACE ---- */
   paintRace(met);
@@ -10910,6 +10935,7 @@ function tileTx(mode,fn){
 const tileGet  =k    =>tileTx('readonly', st=>st.get(k));
 const tilePut  =(k,b)=>tileTx('readwrite',st=>st.put({k,b,t:Date.now()}));
 const tileCount=()   =>tileTx('readonly', st=>st.count());
+const tileDel  =k    =>tileTx('readwrite',st=>st.delete(k));
 
 /* Oldest-first eviction, the same discipline the in-memory blobURL map
    two functions down has always had. Nothing evicted this store at all
@@ -16364,6 +16390,9 @@ setTimeout(helmMoved, 2500);
    that changes per paint is a transform - no filter runs over it. */
 const CHT={
   BX:322, BY:470,            /* the boat on the glass, beside the digits' top */
+  BX_MIN:196,                /* as far left as it steps for a mark to starboard */
+  WP_R:16,                   /* the ring's reach, stroke and a hair: what must fit */
+  RT_FADE:12,                /* the route's soft inboard edge, px, ending at the clip */
   EDGE:355,                  /* the digits' left edge the geometry was drawn around */
   FIT:150, FIT_TURN:120,     /* px from the boat to the next waypoint */
   MPP_MIN:2.5, MPP_MAX:26,   /* metres per screen px, closest and furthest */
@@ -16405,15 +16434,30 @@ function chtFeed(path,v){
   const P=path.slice('navigation.'.length);
   if(P.startsWith('course.')){
     CHK.seen2=true;
-    if(P==='course.activeRoute')    CHK.v2.route=(v&&typeof v.href==='string')?v:null;
+    if(P==='course.activeRoute'){   CHK.v2.route=(v&&typeof v.href==='string')?v:null;
+                                    chtStale(CHK.v2.route&&CHK.v2.route.href); }
     if(P==='course.nextPoint')      CHK.v2.next=chtPos(v&&v.position);
     if(P==='course.previousPoint')  CHK.v2.prev=chtPos(v&&v.position);
   } else {
-    if(P.endsWith('activeRoute.href'))        CHK.v1.href=typeof v==='string'?v:null;
+    if(P.endsWith('activeRoute.href')){       CHK.v1.href=typeof v==='string'?v:null;
+                                              chtStale(CHK.v1.href); }
     if(P.endsWith('nextPoint.position'))      CHK.v1.next=chtPos(v);
     if(P.endsWith('previousPoint.position'))  CHK.v1.prev=chtPos(v);
   }
   chtSeq++;
+}
+/* The route's shape is cached per href, but the course API sends
+   activeRoute again every time it emits the course - and one of those
+   times is an edit: when the active route is changed in Freeboard
+   (a waypoint dragged, one added) the server re-reads it and re-emits
+   with the same href. That delta is the only word the panel gets of it,
+   so every one marks the shape stale and it is fetched again. They are
+   rare - a course command or an edit, never a stream - so this is a
+   request per command. The old shape keeps drawing until the new one
+   is in, so an advance does not blink the route off. */
+function chtStale(href){
+  const e=href && CHR.get(href);
+  if(e && (e.c || e.busy)) e.stale=true;
 }
 /* What the server says we are steering for, in one shape whichever
    version said it. idx is null when nobody said (v1). */
@@ -16457,28 +16501,33 @@ function chtLegs(c, coords){
 const chtHost=()=>`http://${CFG.host||location.host}`;
 const chtGet=url=>fetch(url,{mode:'cors', credentials:'omit', cache:'no-store'})
   .then(r=>r.ok?r.json():null).catch(()=>null);
-/* The route's shape, fetched once per href. Not asked again for a
-   minute after a refusal, so a server without the resources plugin
-   costs one failed request a minute while a route is active, not one a
-   second - and nothing at all is written to the console by us. */
+/* The route's shape, fetched once per href and again when chtStale()
+   says it may have changed. Not asked again for a minute after a
+   refusal, so a server without the resources plugin costs one failed
+   request a minute while a route is active, not one a second - and
+   nothing at all is written to the console by us. A refused refetch
+   keeps the shape it had. */
 function chtRouteCoords(href){
   if(!href) return null;
-  const e=CHR.get(href);
-  if(e && e.c) return e.c;
-  if(e && (e.busy || Date.now()-e.t<CHT.RETRY_MS)) return null;
+  const e=CHR.get(href), old=(e&&e.c)||null;
+  if(old && !e.stale) return old;
+  if(e && (e.busy || (!old && Date.now()-e.t<CHT.RETRY_MS))) return old;
   const h=href.split('/').slice(-3);
   if(h.length<3 || h[0]!=='resources' || h[1]!=='routes' || !h[2]){
     CHR.set(href,{t:Date.now()}); return null; }
-  CHR.set(href,{busy:true});
+  CHR.set(href,{busy:true, c:old});
   chtGet(`${chtHost()}/signalk/v2/api/resources/routes/${encodeURIComponent(h[2])}`)
     .then(j=>{
       const g=j&&j.feature&&j.feature.geometry, cs=g&&g.coordinates;
       const ok=Array.isArray(cs) && cs.length>=2 && cs.every(q=>Array.isArray(q)
                && isFinite(q[0]) && isFinite(q[1]));
-      CHR.set(href, ok?{c:cs}:{t:Date.now()});
+      /* a newer stale mark that landed while this was in flight wins */
+      const now=CHR.get(href), again=!!(now && now.stale);
+      CHR.set(href, ok ? {c:cs, stale:again} : old ? {c:old, stale:false, t:Date.now()}
+                       : {t:Date.now()});
       chtSeq++;
     });
-  return null;
+  return old;
 }
 /* On every (re)connect: what the course is now, in case the deltas that
    carry it were sent before we subscribed, and a fresh look at every
@@ -16574,29 +16623,37 @@ async function chtImgLoad(b, upp, lv){
        seen never costs a request, even when today's scale is a level off
        the day it was cached. */
     const fits=l=>l>=CHT.LVL_MIN && l<=CHT.LVL_MAX && upp<=2**l && upp>=2**l/2.5;
-    let at=null, rec=null;
+    /* A kept image that will not decode - a blob file lost to a power
+       cut on the Pi's SD card, say - is deleted rather than skipped:
+       left in place it would win the cache lookup every second, forever,
+       and the network would never be asked for that water again. */
+    const bake=async(blob,at)=>{
+      try{ await chtBake(blob, at); return true; }
+      catch(e){ tileDel(at.k).catch(()=>{}); return false; } };
+    let done=false;
     for(const l of [lv, lv+1, lv-1]){
       if(l!==lv && !fits(l)) continue;
       const h=await chtCachedNear(b,l,upp);
-      if(h){ at=h.c; rec=h.r; break; }
+      if(!h) continue;
+      done=await bake(h.r.b, h.c);
+      /* used again, so it is not the oldest: keep it out of the trim */
+      if(done && Date.now()-(h.r.t||0)>864e5) tilePut(h.c.k,h.r.b).catch(()=>{});
+      break;
     }
-    let blob=rec?rec.b:null;
-    /* used again, so it is not the oldest: keep it out of the trim */
-    if(rec && Date.now()-(rec.t||0)>864e5) tilePut(at.k,blob).catch(()=>{});
-    if(!blob){ blob=await chtImgFetch(want);
-      if(blob){ at=want; tilePut(want.k,blob).then(()=>tileTrim()).catch(()=>{}); } }
-    if(!blob){
+    if(!done){ const blob=await chtImgFetch(want);
+      if(blob && (done=await bake(blob, want)))
+        tilePut(want.k,blob).then(()=>tileTrim()).catch(()=>{}); }
+    if(!done){
       CHI.fail.set(want.k,Date.now());
       /* offline and never here at this scale: a coarser picture of the
          same water is better than none */
       for(const l of [lv+1, lv+2]){
         if(l>CHT.LVL_MAX) break;
         const h=await chtCachedNear(b,l,0);
-        if(h && !(CHI.cur&&CHI.cur.k===h.c.k)){ blob=h.r.b; at=h.c; break; }
+        if(h && !(CHI.cur&&CHI.cur.k===h.c.k) && await bake(h.r.b, h.c)) break;
         if(h) break;
       }
     }
-    if(blob) await chtBake(blob, at);
   }catch(e){}
   finally{ CHI.busy=false; }
 }
@@ -16635,7 +16692,10 @@ async function chtBake(blob, at){
    so it is done only when the body's class - which is what changes the
    theme - has changed. */
 async function chtColour(img){
-  const cs=getComputedStyle(document.body);
+  /* the theme this ink is FOR, taken with the ink: a theme change during
+     the encode below then leaves img.theme behind the body's class, and
+     the next chtCheck recolours it */
+  const theme=document.body.className, cs=getComputedStyle(document.body);
   const s=Math.max(0,Math.min(1,parseFloat(cs.getPropertyValue('--cht-map'))||0));
   const x=img.c.getContext('2d',{willReadFrequently:true});
   x.fillStyle=cs.getPropertyValue('--ink').trim()||'#000';
@@ -16647,7 +16707,7 @@ async function chtColour(img){
   const bl=await new Promise(res=>img.c.toBlob(res,'image/png'));
   /* the old url is revoked by chtPaint once nothing shows it */
   img.url=bl?URL.createObjectURL(bl):null;
-  img.theme=document.body.className;
+  img.theme=theme;
 }
 
 /* ---- painting ------------------------------------------------------------ */
@@ -16670,10 +16730,12 @@ function chtEdge(){
   const e=CHT.EDGE+Math.min(0, 4*Math.floor(d/4));
   if(e!==chtEdgeAt){ chtEdgeAt=e;
     const g=$('cht-fade-x'); g.setAttribute('x1',e-105); g.setAttribute('x2',e-5);
+    $('cht-fade-rt-r').setAttribute('x',e-3-CHT.RT_FADE);
+    $('cht-fade-rt-r').setAttribute('width',CHT.RT_FADE);
     $('cht-clip-r').setAttribute('width',Math.max(0,e-3-100)); }
   return e;
 }
-let chtOn=false, chtLastAt=0, chtView=null, chtCog=0, chtHref=null;
+let chtOn=false, chtLastAt=0, chtView=null, chtCog=0, chtHref=null, chtSpdT=null;
 function chtHide(){
   if(!chtOn) return;
   chtOn=false; chtView=null; $('cht').style.display='none';
@@ -16683,6 +16745,14 @@ function chtHide(){
 function chtTick(awa,twa){
   CHT.n.tick++;
   const now=Date.now();
+  /* The digits are rewritten every frame and the chart only once a
+     second, so a SOG crossing 9.9 to 10.0 would have its new 1 under
+     the boat and the leg for up to a second. A changed reading is
+     measured now (two cached widths), and if the edge has moved the
+     chart is repainted in this same frame rather than at the next beat. */
+  const t=$('spd').textContent;
+  if(t!==chtSpdT){ chtSpdT=t;
+    if(chtOn && chtView && chtEdge()!==chtView.edge) chtLastAt=0; }
   if(now-chtLastAt>=CHT.PAINT_MS){ chtLastAt=now; chtCheck(); }
   if(chtOn) chtWind(awa,twa);
 }
@@ -16701,22 +16771,55 @@ function chtCheck(){
   /* near a turn the mark sits lower (FIT_TURN), so the next leg - which
      heads up and right after a right turn - stays clear of the clock's + */
   const mpp=Math.max(CHT.MPP_MIN, Math.min(CHT.MPP_MAX, dist/(turn?CHT.FIT_TURN:CHT.FIT)));
-  const k=cl/mpp;                                  /* screen px per mercator m */
+  const [BX, fk]=chtPlace(nx, boat, cl/mpp, -chtCog, edge);
+  const k=cl/mpp*fk;                               /* screen px per mercator m */
   chtImgWant([boat[0],-boat[1]], 1/k);
   const img=CHI.cur;
   if(img && img.theme!==document.body.className && !CHI.busy){
     CHI.busy=true; chtColour(img).finally(()=>{ CHI.busy=false; chtSeq++; }); }
-  const v={b:boat, k, th:-chtCog, edge, seq:chtSeq, n, turn, url:img&&img.url};
+  const v={b:boat, k, th:-chtCog, edge, BX, seq:chtSeq, n, turn, url:img&&img.url};
   const o=chtView;
   if(o && o.seq===v.seq && o.n===v.n && o.turn===v.turn && o.edge===v.edge && o.url===v.url
+     && o.BX===v.BX
      && Math.hypot(o.b[0]-v.b[0],o.b[1]-v.b[1])*v.k<CHT.MOVE_PX
      && Math.abs(o.th-v.th)<CHT.TURN_DEG && Math.abs(o.k/v.k-1)<.01) return;
   chtView=v;
-  chtPaint(W, n, boat, k, -chtCog, turn, edge, img);
+  chtPaint(W, n, boat, k, -chtCog, turn, BX, img);
 }
-function chtPaint(W, n, boat, k, th, turn, edge, img){
+/* Where the boat stands, and how far the scale gives, so the next
+   waypoint's ring is whole on the glass. Heading-up puts a waypoint
+   off the starboard bow to the right of the boat, and the boat is only
+   30 px from the digits: anything more than a few degrees to starboard
+   would have its ring cut by the clip, or by the hole round the clock's
+   +, and the leg chopped beside the digits. So the boat steps left
+   (6 px at a time, so it does not creep every second), and only when
+   that is not enough - a mark abeam or astern - the scale comes in too.
+   The places the ring must keep inside are the chart's own: left of
+   the inboard fade, above the rule, off the +, inside the radial fades.
+   Twelve sizes by twenty positions, once a second at most. Returns
+   [boat x, scale factor]. */
+function chtPlace(nx, boat, k, th, edge){
+  const base=Math.min(CHT.BX, edge-(CHT.EDGE-CHT.BX)), BY=CHT.BY, R=CHT.WP_R;
+  const c=Math.cos(th/DEG), s=Math.sin(th/DEG);
+  const dx=(nx[0]-boat[0])*k, dy=(nx[1]-boat[1])*k;
+  const ux=dx*c-dy*s, uy=dx*s+dy*c;               /* the waypoint, from the boat, px */
+  const xmax=edge-3-CHT.RT_FADE-R;
+  const ok=(x,y)=>x<=xmax && x>=100+R && y>=230+R && y<=600-R
+    && Math.hypot(x-356,y-258)>=54+R               /* the + (cht-clip-rt) */
+    && Math.hypot(x-290,y-400)<=190                /* cht-fade-r, still ~.7 */
+    && Math.hypot(x-CX,y-CY)<=361-R;               /* cht-fade-o, full */
+  /* a waypoint past the furthest scale stays past the edge, as it always
+     has: the leg runs out into the fade, and the scale is not stretched
+     beyond MPP_MAX to fetch it in */
+  const far=Math.hypot(ux,uy)>CHT.FIT+1;
+  for(let i=0;i<=(far?0:11);i++){ const f=1-i*.05;
+    for(let bx=base;bx>=CHT.BX_MIN;bx-=6)
+      if(ok(bx+ux*f, BY+uy*f)) return [bx, f]; }
+  return [base, 1];        /* nowhere it fits whole: as it falls, into the fades */
+}
+function chtPaint(W, n, boat, k, th, turn, BX, img){
   CHT.n.paint++;
-  const BX=Math.min(CHT.BX, edge-(CHT.EDGE-CHT.BX)), BY=CHT.BY;
+  const BY=CHT.BY;
   const c=Math.cos(th/DEG), s=Math.sin(th/DEG);
   const P=q=>{ const dx=(q[0]-boat[0])*k, dy=(q[1]-boat[1])*k;
     return [BX+dx*c-dy*s, BY+dx*s+dy*c]; };
@@ -16751,21 +16854,30 @@ function chtPaint(W, n, boat, k, th, turn, edge, img){
 }
 /* The wind marks ride the bezel; when the wind is from port they come
    round to the left, onto the chart. The chart gives way under each
-   one - a soft hole at the mark, following it at the dial's own rate.
-   Written only when a mark has moved half a degree, and parked at r=0
-   while it is on the starboard side, where there is no chart to hole. */
+   one - a soft hole at the mark, following it.
+   A write here is not cheap: the holes are inside the mask that wraps
+   the whole chart, so moving one re-rasters the image and every mask
+   under it, wherever the hole is. So a hole is on only while its circle
+   actually reaches the chart's box (#cht-clip-r) - close-hauled or
+   broad on port the mark is above or below the box, and there is
+   nothing to hole - and it moves in whole degrees (7 px at the bezel,
+   on a soft hole 95 px across), not every half degree the mark does. */
 const CHW={};
 function chtWind(awa,twa){
+  const x1=(chtEdgeAt||CHT.EDGE)-3;
   [['a',awa,'cht-hole-a'],['t',twa,'cht-hole-t']].forEach(([w,ang,id])=>{
-    const s=ang===null ? null : Math.sin(ang/DEG);
-    const on=s!==null && CX+CHT.HOLE_R0*s<(chtEdgeAt||CHT.EDGE)+CHT.HOLE_R;
-    const key=on ? Math.round(ang*2) : 'off';
+    let on=ang!==null, hx=0, hy=0;
+    if(on){ const a=Math.round(ang);
+      hx=CX+CHT.HOLE_R0*Math.sin(a/DEG); hy=CY-CHT.HOLE_R0*Math.cos(a/DEG);
+      const ex=Math.max(100-hx,0,hx-x1), ey=Math.max(230-hy,0,hy-600);
+      on=ex*ex+ey*ey<CHT.HOLE_R*CHT.HOLE_R; }
+    const key=on ? Math.round(ang) : 'off';
     if(CHW[w]===key) return;
     CHW[w]=key;
     const e=$(id);
     if(!on){ e.setAttribute('r',0); return; }
-    e.setAttribute('cx',(CX+CHT.HOLE_R0*s).toFixed(1));
-    e.setAttribute('cy',(CY-CHT.HOLE_R0*Math.cos(ang/DEG)).toFixed(1));
+    e.setAttribute('cx',hx.toFixed(1));
+    e.setAttribute('cy',hy.toFixed(1));
     e.setAttribute('r',CHT.HOLE_R);
   });
 }
