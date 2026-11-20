@@ -268,6 +268,27 @@ cannot read — an unreadable value and an unset one would otherwise look
 identical from the console, and the first is a typo somebody wants to
 hear about.
 
+### The range follows the water you have been in
+
+The board always sends its whole column, about 18 m (59 ft). Drawn whole,
+two metres of water is a bright line along the top over fifteen metres
+of black. So netd remembers the bottom - the median pick of each minute,
+for two hours - and the app draws about **three times that average**,
+rounded up to a whole 5 ft (1 m in metric): six or seven feet of water
+draws to 20 or 25 ft.
+
+- never less than 10 ft (3 m), never more than the column
+- a bottom NOW deeper than 85 % of the range widens it at once
+- before there are three minutes of history, the bottom now stands in;
+  before any bottom at all, the whole column
+- the history lives in `/dev/shm` (memory): it survives netd restarting,
+  costs the SD card nothing, and is gone after a reboot
+
+| | default | what it is |
+|---|---|---|
+| `HELM_SONAR_AVG_SECS` | 7200 | how far back the average reaches |
+| `HELM_SONAR_HIST` | `/dev/shm/helm-sonar-depth.json` | where it is kept |
+
 The rest only matter if your firmware is not stock:
 
 | | default | what it is |

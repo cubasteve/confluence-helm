@@ -23,7 +23,7 @@ when the code is wrong rather than merely different:
 
     python3 tests/sonar_test.py
 """
-import fcntl, importlib, os, pty, struct, sys, threading, time, unittest
+import fcntl, importlib, os, pty, struct, sys, tempfile, threading, time, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -35,8 +35,13 @@ def load(**env):
               'HELM_SONAR_KEEP', 'HELM_SONAR_US', 'HELM_SONAR_C',
               'HELM_SONAR_VTIME', 'HELM_DEV', 'HELM_SONAR_NMEA',
               'HELM_SONAR_NMEA_HZ', 'HELM_SONAR_KEEL', 'HELM_SONAR_MPS',
-              'HELM_SONAR_OFFSET'):
+              'HELM_SONAR_OFFSET', 'HELM_SONAR_HIST', 'HELM_SONAR_AVG_SECS',
+              'HELM_SONAR_AVG_MIN'):
         os.environ.pop(k, None)
+    # Never the real /dev/shm file: a test run on the boat must not
+    # leave made-up depths in the picture's range.
+    env.setdefault('HELM_SONAR_HIST', os.path.join(
+        tempfile.mkdtemp(prefix='helm-sonar-'), 'depth.json'))
     os.environ.update({k: str(v) for k, v in env.items()})
     return importlib.reload(importlib.import_module('netd'))
 
@@ -248,6 +253,109 @@ class Ring(unittest.TestCase):
         self.assertTrue(r['on'])            # configured
         self.assertEqual(r['pings'], [])
         self.assertIsNone(r['age'])         # and nothing has ever arrived
+
+
+class History(unittest.TestCase):
+    """How deep it has been: one median a minute, for the picture's
+    range. Driven with explicit clock times, so an hour passes in a
+    line."""
+
+    def setUp(self):
+        self.n = load(HELM_SONAR='udp:5005', HELM_SONAR_AVG_SECS=7200)
+        self.mps = self.n.sonar_mps()
+        self.t0 = 1_700_000_040.0          # on a minute boundary
+
+    def note(self, idx, minute, k=5, ns=1800):
+        closed = False
+        for i in range(k):
+            closed = self.n.sonar_note(idx, ns, self.t0 + minute * 60 + i) or closed
+        return closed
+
+    def avg(self, minute):
+        return self.n.sonar_avg(self.t0 + minute * 60 + 30)
+
+    def test_nothing_until_there_is_a_history(self):
+        self.note(200, 0)
+        self.note(200, 1)
+        self.assertEqual(self.avg(1), (None, 2))
+
+    def test_three_minutes_is_a_history_and_it_is_their_mean(self):
+        for m, idx in enumerate((200, 300, 400)):
+            self.note(idx, m)
+        a, n = self.avg(2)
+        self.assertEqual(n, 3)
+        self.assertAlmostEqual(a, 300 * self.mps, places=3)
+
+    def test_each_minute_is_its_median_so_a_flyer_does_not_count(self):
+        for m in range(3):
+            for idx in (200, 201, 1700, 199, 200):
+                self.n.sonar_note(idx, 1800, self.t0 + m * 60 + 1)
+        self.assertAlmostEqual(self.avg(2)[0], 200 * self.mps, places=3)
+
+    def test_no_bottom_is_not_a_depth(self):
+        # Zero and the last sample are both "found nothing"; counted, a
+        # boat with a fouled transducer would draw its range at nought.
+        for m in range(4):
+            self.note(0, m)
+            self.note(1799, m)
+        self.assertEqual(self.avg(3), (None, 0))
+
+    def test_old_water_ages_out(self):
+        for m in range(3):
+            self.note(900, m)                  # deep, two and a bit hours ago
+        for m in range(130, 133):
+            self.note(100, m)                  # shallow, now
+        self.assertAlmostEqual(self.avg(132)[0], 100 * self.mps, places=3)
+
+    def test_what_has_aged_out_is_let_go_and_not_just_ignored(self):
+        # A boat left on for a week must not hold a week of minutes.
+        for m in range(0, 300, 1):
+            self.n.sonar_note(200, 1800, self.t0 + m * 60)
+        self.assertLessEqual(len(self.n._depth['hist']), 121)
+
+    def test_closing_a_minute_is_what_saves(self):
+        self.assertFalse(self.note(200, 0))
+        self.assertTrue(self.note(200, 1))
+
+    def test_it_survives_a_restart_without_the_sd_card(self):
+        for m in range(4):
+            self.note(300, m)
+        self.n.sonar_hist_save()
+        path = os.environ['HELM_SONAR_HIST']
+        self.assertTrue(os.path.exists(path))
+        n2 = load(HELM_SONAR='udp:5005', HELM_SONAR_HIST=path)
+        n2.sonar_hist_load(now=self.t0 + 4 * 60)
+        a, k = n2.sonar_avg(self.t0 + 4 * 60)
+        self.assertEqual(k, 3)                  # the three closed minutes
+        self.assertAlmostEqual(a, 300 * self.mps, places=3)
+
+    def test_a_saved_history_older_than_the_window_is_dropped(self):
+        for m in range(4):
+            self.note(300, m)
+        self.n.sonar_hist_save()
+        path = os.environ['HELM_SONAR_HIST']
+        n2 = load(HELM_SONAR='udp:5005', HELM_SONAR_HIST=path)
+        n2.sonar_hist_load(now=self.t0 + 5 * 3600)
+        self.assertEqual(n2.sonar_avg(self.t0 + 5 * 3600), (None, 0))
+        self.assertEqual(n2._depth['hist'], [])
+
+    def test_an_unreadable_history_is_no_history(self):
+        path = os.environ['HELM_SONAR_HIST']
+        with open(path, 'w') as f:
+            f.write('{not json')
+        self.n.sonar_hist_load(now=self.t0)
+        self.assertEqual(self.n.sonar_avg(self.t0), (None, 0))
+
+    def test_the_reader_hands_it_to_the_panel(self):
+        for m in range(3):
+            self.note(250, m)
+        # sonar_read takes the real clock; give it minutes that are now.
+        now = time.time()
+        self.n._depth['hist'] = [[now - 120, 2.0], [now - 60, 2.2]]
+        self.n._depth['vals'] = [2.4]
+        r = self.n.sonar_read(0)
+        self.assertAlmostEqual(r['avg'], 2.2, places=3)
+        self.assertEqual(r['avg_min'], 3)
 
 
 class Scale(unittest.TestCase):

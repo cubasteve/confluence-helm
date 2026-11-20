@@ -2505,6 +2505,97 @@ _sonar = {'seq': 0, 'pings': [], 'at': 0, 'err': '', 'good': 0, 'bad': 0,
           'said': 0, 'sent': 0, 'nmea_err': ''}
 _sonar_lk = threading.Lock()
 
+# ---- how deep it has been ----------------------------------------------
+#
+# The picture's range follows the water you have actually been in. A
+# column that always shows its full eighteen metres draws a boat in two
+# metres of water as a thin bright line along the top and fifteen
+# metres of black, which is the one depth a sounder is most wanted in.
+#
+# So netd remembers: one number a minute, the MEDIAN of that minute's
+# bottom picks, for SONAR_AVG_SECS. Here and not in the panel because
+# netd sees every ping whether the Sonar app is open or not, and two
+# hours of history is not something an app that is closed between
+# glances could ever collect. The median and not the mean for the same
+# reason the NMEA side uses one: a single pick is one noisy sample index.
+#
+# Kept in /dev/shm, which is memory: it survives netd being restarted -
+# autopull does that on every push - without writing a byte to the SD
+# card. A reboot loses it, and it is back inside a few minutes.
+SONAR_AVG_SECS = int(os.environ.get('HELM_SONAR_AVG_SECS', '7200'))
+SONAR_HIST = os.environ.get('HELM_SONAR_HIST', '/dev/shm/helm-sonar-depth.json')
+# Fewer minutes than this is not yet a history, it is the last few
+# pings - and the panel already has those.
+SONAR_AVG_MIN = int(os.environ.get('HELM_SONAR_AVG_MIN', '3'))
+_depth = {'min': None, 'vals': [], 'hist': []}
+
+
+def _median(xs):
+    xs = sorted(xs)
+    return xs[len(xs) // 2]
+
+
+def sonar_note(idx, ns, now):
+    """One ping's bottom pick into the minute it belongs to. Returns
+    True when a minute was closed, so the caller can save outside the
+    lock. Caller holds _sonar_lk."""
+    # The same two refusals the NMEA side makes: zero is no bottom, the
+    # last sample is a board that searched to the end and gave up.
+    if not (0 < idx < ns - 1):
+        return False
+    m = idx * sonar_mps() + SONAR_OFFSET
+    minute = int(now // 60)
+    closed = False
+    if _depth['min'] is not None and minute != _depth['min'] and _depth['vals']:
+        _depth['hist'].append([_depth['min'] * 60, round(_median(_depth['vals']), 3)])
+        closed = True
+    if minute != _depth['min']:
+        _depth['min'], _depth['vals'] = minute, []
+    _depth['vals'].append(m)
+    cut = now - SONAR_AVG_SECS
+    while _depth['hist'] and _depth['hist'][0][0] < cut:
+        _depth['hist'].pop(0)
+    return closed
+
+
+def sonar_avg(now):
+    """The mean of the minutes in the window, the one being filled
+    included, in metres - or None while there are too few of them to
+    call a history. Caller holds _sonar_lk."""
+    cut = now - SONAR_AVG_SECS
+    ms = [m for t, m in _depth['hist'] if t >= cut]
+    if _depth['vals']:
+        ms.append(_median(_depth['vals']))
+    if len(ms) < SONAR_AVG_MIN:
+        return None, len(ms)
+    return round(sum(ms) / len(ms), 3), len(ms)
+
+
+def sonar_hist_save():
+    with _sonar_lk:
+        data = json.dumps({'hist': _depth['hist']})
+    # Written beside and renamed over, so a reader never sees half of it.
+    with contextlib.suppress(OSError):
+        tmp = SONAR_HIST + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(data)
+        os.replace(tmp, SONAR_HIST)
+
+
+def sonar_hist_load(now=None):
+    """What the last netd remembered, minus whatever has aged out of
+    the window since. Anything unreadable is simply no history."""
+    now = time.time() if now is None else now
+    try:
+        with open(SONAR_HIST) as f:
+            h = json.load(f).get('hist', [])
+        h = [[float(t), float(m)] for t, m in h
+             if float(t) >= now - SONAR_AVG_SECS and float(m) > 0]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return
+    with _sonar_lk:
+        _depth['hist'] = sorted(h)
+
 
 def sonar_spec(spec, dflt='0.0.0.0'):
     """What HELM_SONAR says, or None if it says nothing usable.
@@ -2636,6 +2727,9 @@ def _sonar_push(p, ns):
             del _sonar['pings'][:-SONAR_KEEP]
         _sonar['at'] = time.time()
         _sonar['good'] += 1
+        closed = sonar_note(p['idx'], ns, _sonar['at'])
+    if closed:
+        sonar_hist_save()
     # OUTSIDE that block: _sonar_lk is a plain Lock and _sonar_say
     # takes it too, so saying this inside would deadlock the reader on
     # the first ping - which is a hang rather than an error, and the
@@ -2656,6 +2750,7 @@ def sonar_read(after=0, limit=None):
     with _sonar_lk:
         seq, at = _sonar['seq'], _sonar['at']
         good, bad, err = _sonar['good'], _sonar['bad'], _sonar['err']
+        avg, avg_n = sonar_avg(now)
         try:
             a = int(after)
         except (TypeError, ValueError):
@@ -2678,6 +2773,10 @@ def sonar_read(after=0, limit=None):
             'mps': sonar_mps(),
             'age': round(now - at, 1) if at else None,
             'good': good, 'bad': bad, 'error': err, 'pings': ps,
+            # The bottom over the last SONAR_AVG_SECS, in metres, for
+            # the picture's range - and how many minutes that is of.
+            # None until there are enough of them to call a history.
+            'avg': avg, 'avg_min': avg_n,
             # What it is telling the rest of the boat, if anything.
             'nmea': SONAR_NMEA, 'sent': _sonar['sent'],
             'nmea_error': _sonar['nmea_err']}
@@ -2945,6 +3044,7 @@ def sonar_run():
     sp = sonar_spec(SONAR)
     if not sp:
         return
+    sonar_hist_load()
     while True:
         try:
             if sp['kind'] == 'udp':

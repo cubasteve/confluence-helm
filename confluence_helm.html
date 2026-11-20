@@ -14974,6 +14974,20 @@ function radarClose(){ radClose(); }
    pick, which is drawn as a line ON the picture rather than printed as
    a second number.                                                    */
 const SNR={
+  /* HOW MUCH OF THE COLUMN TO SHOW. The board always sends its whole
+     column - about eighteen metres - and drawing all of it puts a boat
+     in two metres of water as a bright line along the top over fifteen
+     metres of black. So the picture shows about three times the depth
+     you have been in for the last two hours (netd keeps that, see
+     sonar_avg), rounded UP to a whole step of the unit on the glass:
+     six or seven feet of water draws to twenty or twenty-five.
+     Never less than MIN_M, never more than the column, and the bottom
+     NOW always fits: a pick deeper than EDGE of the range widens it at
+     once, to CUR_X of that pick. Until netd has a history the bottom
+     now stands in for it; until there is a bottom at all, the column. */
+  AVG_X:3, EDGE:0.85, CUR_X:1.3, MIN_M:3,
+  CUR_N:20,                        /* picks the bottom-now is a median of */
+  STEP_FT:5, STEP_M:1,
   /* The board pings at ~10 Hz. Asking every 420 ms collects four or
      five at a time, which is four fewer round trips a second than
      asking for each as it lands - and the picture scrolls by four
@@ -15082,7 +15096,7 @@ function sonarOpen(host){
             is cheaper than the alternative of being wrong. */
          raw:[],
          ramp:sRamp(), theme:THEME_EFF, unit:CFG.depthUnit,
-         seq:0, hi:SNR.FLOOR, mps:0, ns:0,
+         seq:0, hi:SNR.FLOOR, mps:0, ns:0, avg:null,
          /* undefined and not null: null means the helper did not
             answer, and saying that before anyone has been asked put NO
             HELPER on the glass for the length of the first poll. */
@@ -15122,6 +15136,7 @@ async function sPoll(){
   SN.busy=false;
   if(!r || !r.ok){ SN.on=null; sPaint(); return; }   /* no helper */
   SN.on=!!r.on; SN.age=r.age; SN.err=r.error||''; SN.mps=r.mps||0;
+  SN.avg=(typeof r.avg==='number' && r.avg>0) ? r.avg : null;
   (r.pings||[]).forEach(p=>sPush(SN,p));
   /* netd's count, always, and not the larger of the two: when netd has
      restarted its sequence begins again, and a phone holding the old
@@ -15218,6 +15233,35 @@ function sRedraw(SN){
   for(let i=0;i<k;i++) SN.octx.putImageData(sCol(SN,SN.raw[i]), SNR.COLS-k+i, 0);
 }
 
+/* The bottom now, in metres: the median of the last few picks that
+   found one, or null. A median, so one flyer does not move the range. */
+function sNow(SN){
+  const ms=[];
+  for(let i=SN.raw.length-1; i>=0 && ms.length<SNR.CUR_N; i--){
+    const r=SN.raw[i];
+    if(r.idx>0 && r.ns>0 && r.idx<r.ns-1) ms.push(r.idx*SN.mps);
+  }
+  if(!ms.length) return null;
+  ms.sort((a,b)=>a-b);
+  return ms[ms.length>>1];
+}
+
+/* The metres of water the picture shows - see AVG_X above. */
+function sShown(SN){
+  const full=SN.ns*SN.mps;
+  if(!(full>0)) return 0;
+  const cur=sNow(SN);
+  const base=SN.avg!==null ? SN.avg : cur;
+  if(base===null) return full;
+  let want=Math.max(base*SNR.AVG_X, SNR.MIN_M);
+  if(cur!==null && cur>want*SNR.EDGE) want=cur*SNR.CUR_X;
+  /* Up to a whole step in the unit on the glass, so the scale reads
+     20 FT and not 19.6, and does not twitch with every minute. */
+  const k=metric()?1:M_TO_FT, step=metric()?SNR.STEP_M:SNR.STEP_FT;
+  const shown=Math.ceil(want*k/step)*step/k;
+  return Math.min(shown, full);
+}
+
 /* A nice round step near x: 1, 2, 5 or 10 of whatever size x is. */
 function sNice(x){
   if(!(x>0)) return 1;
@@ -15236,10 +15280,15 @@ function sPaint(){
      growing leftward from now, rather than a picture that starts full
      of blank and shunts it off. */
   const cols=SN.raw.length;
+  const fullM=SN.ns*SN.mps, shownM=sShown(SN);
+  /* Only the top of the column when the range is short of it: the rows
+     below are water deeper than anything this boat has been in. */
+  const frac=(fullM>0 && shownM>0) ? Math.min(1, shownM/fullM) : 1;
   if(SN.off && cols){
     const w=R.w*cols/SNR.COLS;
+    const srcH=Math.max(1, SN.rows*frac);
     c.imageSmoothingEnabled=true;
-    c.drawImage(SN.off, SNR.COLS-cols, 0, cols, SN.rows,
+    c.drawImage(SN.off, SNR.COLS-cols, 0, cols, srcH,
                 R.x+R.w-w, R.y, w, R.h);
   }
   c.strokeStyle=css.getPropertyValue('--label').trim()||'#6C757C';
@@ -15250,7 +15299,7 @@ function sPaint(){
      derived from what netd sent rather than from anything assumed
      here: a board flashed with a different sample time has a different
      column and this has to say so. */
-  const rngM=SN.ns*SN.mps;
+  const rngM=shownM;
   if(rngM>0){
     const rng=metric()?rngM:rngM*M_TO_FT;
     const step=sNice(rng/6);
@@ -15295,7 +15344,7 @@ function sText(){
   wText('snr-u', metric()?'M':'FT');
   const bits=[];
   if(SN.ns&&SN.mps){
-    const r=SN.ns*SN.mps;
+    const r=sShown(SN);
     bits.push('RANGE '+Math.round(metric()?r:r*M_TO_FT)+(metric()?' M':' FT'));
   }
   if(SN.raw.length) bits.push(SN.raw.length+' PINGS');

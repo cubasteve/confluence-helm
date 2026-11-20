@@ -238,6 +238,52 @@ t.ok(Math.abs(parseFloat(await p.$eval('#snr-dv',e=>e.textContent))-4.9)<0.15,
      await p.$eval('#snr-dv',e=>e.textContent));
 await p.evaluate(()=>{ delete S['environment.depth.belowKeel']; });
 
+t.head('the range follows the water you have been in');
+/* A real column: 256 bins at 0.07 m is 17.9 m, about 59 ft - the board's
+   own reach. netd's two-hour average decides how much of it is drawn. */
+const fresh=async o=>{
+  await p.evaluate(()=>closeApp()); await p.waitForTimeout(250);
+  Object.assign(NEXT, {seq:0, pings:[], avg:null, mps:0.07, age:0}, o);
+  await open_(); await p.waitForTimeout(900); };
+await p.evaluate(()=>{ CFG.depthUnit='ft'; });
+await fresh({seq:20, pings:many(20, 8, {}, 0)});
+t.ok(/RANGE 59 FT/.test(await sub()),
+     'no history and no bottom yet: the whole column', await sub());
+await fresh({avg:2.0, seq:20, pings:many(20, 8, {}, 0)});
+t.ok(/RANGE 20 FT/.test(await sub()),
+     'two hours in 6.6 ft of water draws to 20 ft, not 59', await sub());
+await fresh({avg:null, seq:20, pings:many(20, 8, {}, 30)});
+t.ok(/RANGE 25 FT/.test(await sub()),
+     'before there is a history, the bottom now stands in for it (2.1 m x 3)',
+     await sub());
+await fresh({avg:0.4, seq:20, pings:many(20, 8, {}, 0)});
+t.ok(/RANGE 10 FT/.test(await sub()),
+     'never closer than 10 ft, however shallow it has been', await sub());
+await fresh({avg:1.0, seq:20, pings:many(20, 8, {}, 120)});
+t.ok(/RANGE 40 FT/.test(await sub()),
+     'a bottom now beyond the range widens it at once (8.4 m x 1.3)', await sub());
+await fresh({avg:1.0, seq:20, pings:many(20, 8, {}, 200)});
+t.ok(/RANGE 59 FT/.test(await sub()),
+     'and never past the end of the column', await sub());
+await p.evaluate(()=>{ CFG.depthUnit='m'; }); await p.waitForTimeout(500);
+await fresh({avg:2.0, seq:20, pings:many(20, 8, {}, 0)});
+t.ok(/RANGE 6 M/.test(await sub()), 'in metres too, in whole metres', await sub());
+await p.evaluate(()=>{ CFG.depthUnit='ft'; }); await p.waitForTimeout(400);
+/* And the picture is that range, not the column squeezed into the label:
+   an echo at 2.1 m sits about a third of the way down a 20 ft picture,
+   where on the full column it would have been an eighth. */
+await fresh({avg:2.0, seq:20, pings:many(20, 0, {30:250, 31:250})});
+const yAt=frac=>p.evaluate(([R,frac])=>{
+  const c=document.getElementById('snr-cv').getContext('2d');
+  const d=c.getImageData(Math.round(R.x+R.w-4), Math.round(R.y+R.h*frac), 1, 1).data;
+  return [d[0],d[1],d[2]]; }, [R,frac]);
+const shownM=20*0.3048, echoM=31*0.07;
+const there=await yAt(echoM/shownM), wasThere=await yAt(31/256);
+t.ok(lum(there) > lum(wasThere)+60,
+     'the echo is drawn at its depth on the shorter scale',
+     JSON.stringify([there, wasThere]));
+await fresh({mps:0.0099, seq:20, pings:many(20, 8)});
+
 t.head('and the four ways it can have nothing to show');
 /* Four, and not one, because "a dark screen" has four different cures
    and only one of them can be applied from the cockpit. */
