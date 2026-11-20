@@ -481,7 +481,7 @@ part of the above:
 | | |
 |---|---|
 | read the QR on the glass | the track you just published, at an address on the boat WiFi |
-| fetch a GPX | AvNav serves `~/avnav/data/user/viewer/helm/gpx/`, which is where the helper writes it |
+| fetch a GPX | netd's page server serves `~/helm-www/gpx/`, which is where the helper writes it |
 | play the music | Bluetooth to the cockpit speakers, with the panel showing what is on |
 | join the hotspot | the Pi's access point, which everything aboard is on |
 | open the page | it still renders — nothing refuses a phone, there is simply nothing built for one |

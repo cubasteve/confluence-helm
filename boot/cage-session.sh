@@ -22,7 +22,7 @@
 set -u
 
 REPO="${REPO:-$HOME/helm}"
-URL="${URL:-http://localhost:8080/user/viewer/helm/confluence_helm.html}"
+URL="${URL:-http://localhost:8090/confluence_helm.html}"
 LOG="${LOG:-/tmp/cage-session.log}"
 DM="${DM:-lightdm}"
 GOOD_RUN="${GOOD_RUN:-20}"            # a session shorter than this is a failure
@@ -108,33 +108,34 @@ start_helpers(){
   fi
 }
 
-# ---- AvNav ----------------------------------------------------------
+# ---- the page server ------------------------------------------------
+# netd's own page server on :8090 (see "www" in netd.py), started by
+# start_helpers above, normally answers within a couple of seconds.
 # Bounded, unlike the desktop version: there is nothing behind this to
-# look at, so waiting forever means a black screen forever. After the
-# timeout it starts anyway and the app's own boot splash covers the
-# retry.
+# look at, so waiting forever means a black screen forever.
 #
-# A 404 is a different answer from silence: AvNav is up and does not have
-# the page - which is what an AvNav update did, serving its own pages and
-# no longer ~/avnav/data/user/helm. Opening that URL anyway drew the
-# browser's background and nothing else: a black panel. So a steady 404
-# gives up early, and either way main() loads the panel from its file.
+# A 404 is a different answer from silence: something is up and does not
+# have the page - which is what an AvNav update did when AvNav was the
+# server. Opening that URL anyway drew the browser's background and
+# nothing else: a black panel. So a steady 404 gives up early, and either
+# way main() loads the panel from its file.
 NOT_FOUND_AFTER="${NOT_FOUND_AFTER:-10}"
-wait_for_avnav(){
+wait_for_page(){
   local n=0 code
   while :; do
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$URL" 2>/dev/null)
-    [ "$code" = 200 ] && { log "AvNav answered after ${n}s"; return 0; }
+    [ "$code" = 200 ] && { log "page server answered after ${n}s"; return 0; }
     n=$((n+1))
     if [ "$code" = 404 ] && [ "$n" -ge "$NOT_FOUND_AFTER" ]; then
-      log "AvNav is up but has no $URL (404 for ${n}s)"; return 1; fi
-    [ "$n" -ge "$WAIT_AVNAV" ] && { log "AvNav still quiet after ${n}s (last answer: ${code:-none})"; return 1; }
+      log "the server is up but has no $URL (404 for ${n}s) - run deploy.sh"; return 1; fi
+    [ "$n" -ge "$WAIT_AVNAV" ] && { log "page server still quiet after ${n}s (last answer: ${code:-none})"; return 1; }
     sleep 1
   done
 }
 # The panel straight off the disk. Everything it needs it asks for by
 # address - Signal K on :3000, netd on :8091 - so it works from file://;
-# only phones, which cannot reach a file on the Pi, need AvNav serving it.
+# what it cannot have is what sits BESIDE the served copy: map tiles and
+# now-playing. Phones cannot reach a file on the Pi at all.
 FILE_URL="${FILE_URL:-file://$REPO/confluence_helm.html}"
 
 # ---- the kiosk ------------------------------------------------------
@@ -178,7 +179,7 @@ main(){
     fall_back_to_desktop "cage is not installed"; return 1; }
 
   start_helpers
-  if ! wait_for_avnav; then
+  if ! wait_for_page; then
     if [ -r "${FILE_URL#file://}" ]; then
       URL="$FILE_URL"
       log "loading the panel from its file instead: $URL"

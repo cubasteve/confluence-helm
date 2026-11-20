@@ -1,18 +1,19 @@
 #!/bin/bash
 # Launch the Confluence helm display in kiosk mode.
 #
-# The page is now served by AvNav rather than loaded from file://, which
+# The page is served by netd's page server on :8090 (it used to be AvNav)
+# rather than loaded from file://, which
 # means there is a boot race: the desktop session can come up before
-# AvNav's HTTP server is listening. If Chromium wins that race it lands
+# the page server is listening. If Chromium wins that race it lands
 # on a connection-error page and just sits there - it does not exit, so
 # a plain restart loop would never notice. So we wait for the URL to
 # actually answer before launching anything.
 #
-# Bounded at ~2 minutes. If AvNav never comes up we launch anyway, so a
+# Bounded at ~2 minutes. If it never comes up we fall back to file://, so a
 # broken server gives you Chromium's error page rather than a black
 # screen with no way in.
 
-URL="http://localhost:8080/user/viewer/helm/confluence_helm.html"
+URL="http://localhost:8090/confluence_helm.html"
 FALLBACK="file://$HOME/helm/confluence_helm.html"
 
 # Debian ships the browser as `chromium`; Raspberry Pi OS ships it as

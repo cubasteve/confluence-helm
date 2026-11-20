@@ -85,7 +85,7 @@ a round panel. → [the whole gesture story](docs/display.md#how-many-fingers)
 The app is **served over HTTP by AvNav**, not opened from `file://`:
 
 ```
-http://localhost:8080/user/viewer/helm/confluence_helm.html
+http://localhost:8090/confluence_helm.html
 ```
 
 That matters — Chromium cannot `fetch()` a `file://` URL, so the music
@@ -97,7 +97,7 @@ There are two copies of the HTML, deliberately:
 | Path | Role |
 |---|---|
 | `~/helm/` | the repo — **edit here** |
-| `~/avnav/data/user/viewer/helm/` | what AvNav serves and the kiosk loads |
+| `~/helm-www/` | what netd serves on :8090 and the kiosk loads |
 
 ```bash
 # edit ~/helm/confluence_helm.html, then
@@ -116,7 +116,7 @@ entries, cage mode and the recovery paths.
 ```
 confluence_helm.html      the whole app: markup, CSS, JS
 start-kiosk.sh            what the desktop session launches at boot
-deploy.sh                 publishes the app to where AvNav serves it
+deploy.sh                 publishes the app to ~/helm-www, which netd serves on :8090
 autopull.sh               pulls the repo and redeploys when it changes
 netd.py                   local helper: WiFi and Bluetooth for the panel
 netd.sh                   keeps netd.py running, and lets a push replace it

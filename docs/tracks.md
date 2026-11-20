@@ -71,7 +71,7 @@ at 46.
 
 The library has two lists and they were not equal. **Saved here** is
 IndexedDB, per device, and has always had a `✕`. **On the boat** is the
-`gpx` folder AvNav serves, which every device on the boat WiFi can see
+`gpx` folder netd's page server serves, which every device on the boat WiFi can see
 — and it offered download and a QR code and no way to get rid of
 anything. That is the half you cannot clean up from a phone *or* from
 the helm, because the file is on the Pi.
@@ -209,7 +209,7 @@ and each says what a tap does to the rows beneath it:
 
 | | |
 |---|---|
-| `ON THE BOAT · TAP FOR A QR` | the `gpx` folder AvNav serves |
+| `ON THE BOAT · TAP FOR A QR` | the `gpx` folder netd's page server serves |
 | `SAVED HERE · TAP TO LOAD` | IndexedDB, this device, and `NO SAVED RACES` when it is empty |
 
 The foot of the page is down to `⤓ SHARE · ✕ DELETE`, which is the one
@@ -463,8 +463,8 @@ races the kiosk recorded are in it. So exporting on the helm used to
 mean a `.gpx` in the Pi's `~/Downloads`, where nothing can reach it.
 
 The track now goes the other way. `⤓` on the track page POSTs the XML to
-`netd`, which writes it into `~/avnav/data/user/viewer/helm/gpx/` — a folder
-**AvNav already serves**, at `/user/viewer/helm/gpx/<name>.gpx`. Any device on
+`netd`, which writes it into `~/helm-www/gpx/` — a folder
+**netd's page server serves it**, at `/gpx/<name>.gpx` on port 8090. Any device on
 the boat WiFi can fetch it; on iOS it lands in Files, and the share sheet
 from there reaches SailTies, HealthFit and anything else that eats GPX.
 

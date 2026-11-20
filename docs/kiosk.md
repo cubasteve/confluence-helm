@@ -9,7 +9,7 @@ How the Pi gets from cold to a helm display, and what keeps it there.
 The app is **served over HTTP by AvNav**, not opened from `file://`:
 
 ```
-http://localhost:8080/user/viewer/helm/confluence_helm.html
+http://localhost:8090/confluence_helm.html
 ```
 
 This matters. Chromium cannot `fetch()` a `file://` URL at all, so the
@@ -22,7 +22,7 @@ There are two copies of the HTML, and that is deliberate:
 | Path | Role |
 |---|---|
 | `~/helm/` | the repo — **edit here** |
-| `~/avnav/data/user/viewer/helm/` | what AvNav serves and the kiosk loads |
+| `~/helm-www/` | what netd serves on :8090 and the kiosk loads |
 
 They cannot be a symlink (the sshfs mount used to edit them cannot create
 one), so `deploy.sh` keeps them in step. It is the only thing that should
@@ -997,19 +997,26 @@ step at the app. Fixing it properly means teaching the installer to
 render a day variant and something to choose between them at boot, which
 is a lot of machinery for one frame.
 
-## When AvNav does not serve the panel
+## Its own server
 
-AvNav 20261102 stopped serving `~/avnav/data/user/helm/` - it serves only
-`user/viewer` and `user/images` - and the kiosk came up black. Two things
-changed because of it:
+The panel used to be served by AvNav, from a folder in AvNav's data.
+AvNav 20261102 stopped serving that folder and the kiosk came up black,
+so the panel now has its own server and owes AvNav nothing:
 
-- the panel now lives in `~/avnav/data/user/viewer/helm/`, reached at
-  `http://<pi>:8080/user/viewer/helm/confluence_helm.html`. `deploy.sh`
-  moves whatever was in the old folder (map tiles, GPX, now-playing)
-  across the first time it runs, and autopull runs it.
-- `boot/cage-session.sh` no longer opens an address AvNav will not
-  answer. A steady 404 for ten seconds, or silence for a minute, and it
-  loads `file://~/helm/confluence_helm.html` instead. Instruments, battery,
-  sonar and the radios all work from the file; map tiles and now-playing
-  need the served copy, because they sit beside it.
+- **netd serves it**, on port **8090**, from **`~/helm-www/`**: the page,
+  map tiles, GPX for phones, now-playing. Kiosk and phones alike open
+  `http://<pi>:8090/` (the page is the index). It is a second listener,
+  read-only - GET and HEAD, one folder, a short list of file types, no
+  hidden files, no listings - because netd's own port can power the Pi
+  off and stays loopback-only.
+- **`deploy.sh` writes the page there**, and the first time, moves what
+  lived beside it in either old AvNav folder across. The old AvNav
+  addresses get a page that forwards to port 8090, so bookmarks work.
+- **The kiosk** still falls back to `file://~/helm/confluence_helm.html`
+  if the page server does not answer - netd not running - with the
+  instruments, battery, sonar and radios; map tiles and now-playing need
+  the served copy, because they sit beside it.
+- `HELM_WWW_PORT` and `HELM_WWW_DIR` move it; `HELM_WWW_PORT=0` turns it
+  off.
 
+AvNav keeps running for charts, on 8080 as before.

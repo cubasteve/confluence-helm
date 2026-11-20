@@ -3391,7 +3391,7 @@ const CFG={
 
   /* Satellite basemap. tileBase is a RELATIVE url, so it resolves
      against wherever the page was served from - on the Pi that is
-     ~/avnav/data/user/viewer/helm/tiles/{z}/{x}/{y}.jpg, NOT ~/helm/tiles/,
+     ~/helm-www/tiles/{z}/{x}/{y}.jpg, NOT ~/helm/tiles/,
      which is only where the pack lives in the repo. deploy.sh does not
      copy it; put the pack where AvNav can serve it.
 
@@ -5550,7 +5550,7 @@ function trkFlash(msg,ms){
 }
 
 /* Send the track to the boat rather than to this browser's downloads.
-   netd writes it into the folder AvNav serves, so a phone on the boat
+   netd writes it into the folder netd's page server serves, so a phone on the boat
    WiFi can then fetch it - which is the whole point. The file never
    goes near the phone from here; the phone comes and gets it. */
 /* Put a race in the boat's gpx folder. Quiet: no flash, no QR, nothing
@@ -12899,7 +12899,7 @@ function openLib(){ $('t-lib').classList.add('on'); renderLib(); }
 
    SAVED HERE is IndexedDB: per origin and per device, so what the kiosk
    has recorded is invisible to a phone loading the same page. ON THE
-   BOAT is the gpx folder AvNav serves, which every device on the boat
+   BOAT is the gpx folder netd's page server serves, which every device on the boat
    WiFi can see - so those rows are plain links, and tapping one on a
    phone downloads the file into iOS Files. From there the share sheet
    reaches SailTies, HealthFit and anything else that eats GPX.
