@@ -32,10 +32,20 @@ under it is fetched with its words turned off: no place names, no light
 descriptions, no soundings.
 
 It is deliberately quiet. The chart image is at .40 by day, .38 at dusk
-and .44 at night, and every mark on it is a thin stroke well short of
-full strength, so it loses to every reading on the glass. With no route
-the dial is exactly the dial it was — the probe checks that pixel for
-pixel.
+and .44 at night. The marks run stronger than that, but each is drawn in
+a colour no brighter than the dimmest reading on the dial — the TWS
+strip, in `--ink-dim` — and short of full strength, so even a mark lying
+on chart ink loses to every reading on the glass. That is why the boat
+is `--ink-dim` rather than `--ink` (it is a solid shape, and at dusk full
+ink was brighter than the strip), and why at night the route is
+`--ink-dim` rather than the accent red (night's accent is the brightest
+red in the palette). The probe measures the ring and the boat against
+the strip off the glass in all three themes. With no route the dial is
+exactly the dial it was — the probe checks that pixel for pixel.
+
+The chart fades out before the clock's + at the top and is gone by the
+TWS rule at the bottom, so nothing of it reaches the rule or the strip
+under it.
 
 The scale follows the next waypoint: it sits about 150 px from the boat
 on a leg, and is brought in to 120 near a turn so the next leg, which
@@ -43,9 +53,22 @@ after a right turn heads up and right, stays clear of the clock's +. A
 waypoint more than a few miles off is past the edge, and the leg simply
 runs out into the fade.
 
+Heading-up puts a waypoint off the starboard bow to the right of the
+boat, and the boat stands only 30 px from the digits. So when the ring
+would not be whole there — cut by the digits' side of the sector, or by
+the clock's + — the boat steps left until it is, and for a mark abeam or
+astern the scale comes in as well. A leg that does run towards the
+digits (the rest of the route, say) ends in a short fade, the way the
+chart under it does, never a hard edge. All of this moves with the
+digits' own measured edge, in the very frame a speed grows from 9.9 to
+10.0.
+
 Where a wind mark comes round onto the left of the bezel the chart gives
 way under it — a soft hole that follows the mark — so the wind is never
-read through a chart.
+read through a chart. The hole is there only while it actually reaches
+the chart, and moves in whole degrees: moving it re-rasters the whole
+chart, so a mark close-hauled or broad on port, above or below the
+chart, costs nothing.
 
 ![Near a turn, at night](img/chart-night.png)
 
@@ -74,13 +97,25 @@ the socket it already has open:
 | `navigation.courseGreatCircle.activeRoute.href`, `.nextPoint.position`, `.previousPoint.position` | the same, on the old v1 paths, for a server older than the v2 API |
 
 (These are read off `emitCourseInfo` in signalk-server's
-`src/api/course`, not remembered.) On every connect the panel also asks
+`src/api/course`, not remembered.) They are subscribed `instant` with
+**no `minPeriod`**. The server applies `minPeriod` as a debounce that
+passes the first value and drops the rest of the window — it does not
+send the last one late — and the course API often sends two course
+deltas back to back (activating a route over a plotter's course clears
+the old one first). With a `minPeriod` the panel kept the clear and
+showed nothing while a route was active. On every connect the panel also asks
 `GET /signalk/v2/api/vessels/self/navigation/course` once, so a route
 activated before the panel came up is there straight away.
 
 The route's **shape** is not in the deltas — only which point is next.
-The panel fetches it once from
-`/signalk/v2/api/resources/routes/<id>` (a GeoJSON LineString), which
+The panel fetches it from
+`/signalk/v2/api/resources/routes/<id>` (a GeoJSON LineString), and
+again each time the course API re-sends `activeRoute`. That is how an
+edit reaches the panel: when the active route is changed in Freeboard
+the server re-reads it and re-emits the course with the same `href`,
+and that delta is the only word of it the panel gets. Those deltas only
+come with a course command or an edit, so it is a request per command,
+and the old shape stays drawn until the new one is in. This
 means the server needs a **resources provider** for routes: the built-in
 *Resources Provider* plugin, enabled in *Server → Plugin Config*.
 Freeboard-SK can't save a route without it either, so if you can plan
@@ -150,7 +185,9 @@ and under the same oldest-first trim. So a lake you have looked at once
 with a signal has its chart every time after without one. Offline and
 never been here, it looks for a coarser picture of the same water it
 has kept; failing that the route draws on clean glass, and the dead
-network is not asked again for a minute.
+network is not asked again for a minute. A kept image that no longer
+decodes (a blob lost to a power cut on the SD card) is deleted and
+fetched again, rather than tried every second for good.
 
 ### What it costs the Pi
 
@@ -185,6 +222,13 @@ again (Chromium re-rasters the far edge of the hull-number watermark a
 few levels differently once a chart has been up — nothing of the
 chart's); no text in it; the course API's index
 and direction, v2 and v1, go-to, a 404 and a server without the API;
-the deltas arriving over a real socket; the wind holes; wide speeds
-measured off the glass; the night ink and strength; the offline cache;
-and nothing done while the dial is covered.
+an edit to the active route redrawn without a reconnect; the course
+paths subscribed with no `minPeriod`; a waypoint to starboard, abeam
+and astern keeping its ring whole; the ring and the boat weaker than
+the TWS strip in every theme, off the glass; the chart gone by the TWS
+rule; the deltas arriving over a real socket; the wind holes, and none
+where they would not reach the chart; wide speeds measured off the
+glass, and the first frame that shows 10.0; the night ink and strength,
+and a theme change in the middle of a bake; the offline cache, and a
+cached image that will not decode; and nothing done while the dial is
+covered.

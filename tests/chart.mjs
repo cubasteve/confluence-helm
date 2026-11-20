@@ -29,7 +29,7 @@ const t=tally();
 /* Signal K's REST side. ROUTES by id; COURSE is what the course API's
    GET answers, null for a 404 (a server older than the v2 API). */
 const ROUTES={}, asked=[];
-let COURSE=null, ROUTE_STATUS=200;
+let COURSE=null, ROUTE_STATUS=200, ROUTE_DELAY=0;
 const sk=async r=>{
   const u=new URL(r.request().url()); asked.push(u.pathname);
   const json=(o,st=200)=>r.fulfill({status:st, contentType:'application/json',
@@ -38,13 +38,14 @@ const sk=async r=>{
     return COURSE ? json(COURSE) : json({message:'not found'},404);
   const m=/^\/signalk\/v2\/api\/resources\/routes\/(.+)$/.exec(u.pathname);
   if(m){ const rt=ROUTES[decodeURIComponent(m[1])];
+    if(ROUTE_DELAY) await new Promise(res=>setTimeout(res,ROUTE_DELAY));
     return rt && ROUTE_STATUS===200 ? json(rt) : json({message:'No provider for routes'},404); }
   return r.abort();
 };
 /* NOAA: a picture with land down its left side and water on the right,
    so the bake has something of each to do. Made by the page itself, so
    the probe carries no binary. OFFLINE turns it into a dead network. */
-let OFFLINE=false, noaa=0, PNG=null;
+let OFFLINE=false, noaa=0, PNG=null, INK=null, BLACK=false;
 const chartPng=async p=>PNG||(PNG=Buffer.from(await p.evaluate(()=>{
   const c=document.createElement('canvas'); c.width=c.height=1024;
   const x=c.getContext('2d');
@@ -53,12 +54,20 @@ const chartPng=async p=>PNG||(PNG=Buffer.from(await p.evaluate(()=>{
   x.fillStyle='#000';    x.fillRect(600,300,24,24);           /* a mark */
   return c.toDataURL('image/png').split(',')[1];
 }),'base64'));
+/* and a chart that is ink from edge to edge - the worst case for
+   anything that is meant to have faded out by a line */
+const inkPng=async p=>INK||(INK=Buffer.from(await p.evaluate(()=>{
+  const c=document.createElement('canvas'); c.width=c.height=1024;
+  const x=c.getContext('2d'); x.fillStyle='#000'; x.fillRect(0,0,1024,1024);
+  return c.toDataURL('image/png').split(',')[1];
+}),'base64'));
 let PAGE=null;
 const nos=async r=>{
   noaa++;
   if(OFFLINE) return r.abort('internetdisconnected');
   return r.fulfill({status:200, contentType:'image/png',
-    headers:{"Access-Control-Allow-Origin":"*"}, body:await chartPng(PAGE||r.request().frame().page())});
+    headers:{"Access-Control-Allow-Origin":"*"},
+    body:await (BLACK?inkPng:chartPng)(PAGE||r.request().frame().page())});
 };
 
 const {b,p}=await open(t,{routes:{
@@ -91,6 +100,17 @@ const off=(d,rel)=>p.evaluate(([d,rel])=>{
 },[d,rel]);
 const settle=(ms=1400)=>p.waitForTimeout(ms);
 const shot=(clip)=>p.screenshot({clip:clip||{x:0,y:0,width:1080,height:1080}});
+const dropCharts=()=>p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear();
+  return new Promise(res=>{ const r=indexedDB.open('confluence');
+    r.onsuccess=e=>{ const db=e.target.result, tx=db.transaction('tilecache','readwrite');
+      const st=tx.objectStore('tilecache'); st.getAllKeys().onsuccess=ev=>{
+        ev.target.result.filter(k=>String(k).startsWith('cht/')).forEach(k=>st.delete(k)); };
+      tx.oncomplete=()=>{ db.close(); res(); }; }; }); });
+/* Decoded pixels of a screenshot, in the page. */
+const pixels=`async b=>{ const im=new Image(); im.src='data:image/png;base64,'+b; await im.decode();
+  const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height;
+  const x=cv.getContext('2d'); x.drawImage(im,0,0);
+  return {w:cv.width, d:x.getImageData(0,0,cv.width,cv.height).data}; }`;
 const clearCourse=()=>delta([
   {path:'navigation.course.activeRoute', value:null},
   {path:'navigation.course.nextPoint', value:null},
@@ -373,10 +393,120 @@ COURSE={startTime:null, targetArrivalTime:null, arrivalCircle:50,
   activeRoute:{href:'/resources/routes/r1', pointIndex:1, pointTotal:4, reverse:false, name:'Evening'},
   nextPoint:{type:'RoutePoint', position:pos(A1)},
   previousPoint:{type:'RoutePoint', position:pos(A0)}};
-await p.evaluate(()=>chtCourseGet()); await settle(2000);
+await p.evaluate(()=>chtCourseGet());
+await p.waitForFunction(()=>($('cht-ahead').getAttribute('points')||'').split(' ').length===3,
+  null, {timeout:8000}).catch(()=>{});
 s=await st();
 t.ok(s.on && s.ahead.split(' ').length===3, 'course GET with a route: the route, '
      +'without waiting for a delta');
+
+/* ===================================================================== */
+t.head('the active route edited in Freeboard-SK, the socket staying up');
+/* The server re-reads the route and re-emits the course with the SAME
+   href - a waypoint ahead moved, nextPoint unchanged. That delta is the
+   only word the panel gets of the edit. The refetch is held back for a
+   second so the probe can see the old shape still drawn meanwhile. */
+const askR1=()=>asked.filter(x=>x.endsWith('/routes/r1')).length;
+const r1n=askR1(), aheadWas=(await st()).ahead;
+const A3e=await off(1900,-130);
+ROUTES.r1={...ROUTES.r1, feature:{type:'Feature',
+  geometry:{type:'LineString', coordinates:[A0,A1,A2,A3e]}}};
+ROUTE_DELAY=1500;
+await delta([
+  {path:'navigation.course.activeRoute', value:{href:'/resources/routes/r1',
+    pointIndex:1, pointTotal:4, reverse:false, name:'Evening'}},
+  {path:'navigation.course.nextPoint', value:{type:'RoutePoint', position:pos(A1)}}]);
+await settle(1100);
+s=await st();
+t.ok(s.ahead.split(' ').length===3,
+     'while the new shape is on its way, the old one is still drawn - no blink', s.ahead);
+await settle(2000);
+ROUTE_DELAY=0;
+s=await st();
+const lastPt=a=>a.split(' ').pop();
+t.ok(askR1()===r1n+1, 'the re-emitted course asks for the route again, once',
+     (askR1()-r1n)+' asks');
+t.ok(s.ahead.split(' ').length===3 && lastPt(s.ahead)!==lastPt(aheadWas),
+     'and the route ahead is the edited one', aheadWas+' -> '+s.ahead);
+await delta([{path:'navigation.course.nextPoint', value:{type:'RoutePoint', position:pos(A1)}}]);
+await settle(1500);
+t.ok(askR1()===r1n+1, 'a nextPoint alone does not refetch');
+
+/* ===================================================================== */
+t.head('a waypoint off the starboard bow keeps its ring');
+/* Heading-up, the boat 30 px from the digits: a waypoint to starboard
+   lands to the right of the boat. Its ring must be whole - left of the
+   route's inboard fade, off the clock's +, above the rule - so the boat
+   steps left and, abeam or astern, the scale comes in. */
+const ringFits=async()=>p.evaluate(()=>{
+  const cx=+$('cht-wp').getAttribute('cx'), cy=+$('cht-wp').getAttribute('cy');
+  const cr=$('cht-clip-r'), right=+cr.getAttribute('x')+ +cr.getAttribute('width');
+  const bx=+$('cht-boat').getAttribute('transform').match(/translate\(([-\d.]+)/)[1];
+  return {cx, cy, bx, right,
+    ok: cx+CHT.WP_R<=right-CHT.RT_FADE+.5 && cx-CHT.WP_R>=100 && cy+CHT.WP_R<=600.5
+        && cy-CHT.WP_R>=230 && Math.hypot(cx-356,cy-258)>=54+CHT.WP_R-.5};
+});
+const bad=[];
+for(const rel of [3,10,30,45,90,135,180,-150]){
+  await delta([
+    {path:'navigation.course.activeRoute', value:null},
+    {path:'navigation.course.nextPoint', value:{type:'Location', position:pos(await off(1500,rel))}},
+    {path:'navigation.course.previousPoint', value:null}]);
+  await p.evaluate(()=>{ chtLastAt=0; }); await settle(400);
+  const r=await ringFits(); if(!r.ok) bad.push(rel+': '+JSON.stringify(r));
+  if(rel===45) await p.screenshot({path:SHOTS+'chart-stbd.png'});
+}
+t.ok(bad.length===0, 'at 3, 10, 30, 45, 90, 135 and 180 degrees, and astern to port: '
+     +'the ring whole on the glass', bad.join(' | '));
+const dead=await (async()=>{
+  await delta([{path:'navigation.course.nextPoint', value:{type:'Location',
+    position:pos(await off(1500,-8))}}]);
+  await p.evaluate(()=>{ chtLastAt=0; }); await settle(400); return ringFits(); })();
+t.ok(dead.ok && dead.bx===322, 'a waypoint a little to port leaves the boat where it is',
+     JSON.stringify(dead));
+
+/* ===================================================================== */
+t.head('every mark loses to every reading, in every theme');
+/* Off the glass: the strongest pixel of the ring (with the leg running
+   into it), of the boat, against the strongest of the TWS strip - the
+   dimmest reading on the dial. Strength is luminance contrast with the
+   background, so it means the same by day (dark on light) as at night.
+   Over the stand-in chart's land, so the marks have ink under them. */
+COURSE.activeRoute={href:'/resources/routes/r1', pointIndex:1, pointTotal:4, reverse:false};
+await p.evaluate(()=>chtCourseGet()); await settle(2000);
+const glass=[];
+for(const th of ['day','dusk','night']){
+  await p.evaluate(th=>{ CFG.theme=th; applyTheme(); }, th); await settle(2800);
+  const png=await shot();
+  const m=await p.evaluate(async([b64,px])=>{
+    const {w,d}=await (eval(px))(b64);
+    const lin=v=>{ v/=255; return v<=.04045?v/12.92:((v+.055)/1.055)**2.4; };
+    const L=(x,y)=>{ const i=(Math.round(y)*w+Math.round(x))*4;
+      return .2126*lin(d[i])+.7152*lin(d[i+1])+.0722*lin(d[i+2]); };
+    const bg=L(1000,540);   /* clean glass, right of the bezel numerals... */
+    const cs=getComputedStyle(document.body);
+    const hex=cs.getPropertyValue('--bg').trim(), bgL=(()=>{ const v=parseInt(hex.slice(1),16);
+      return .2126*lin(v>>16&255)+.7152*lin(v>>8&255)+.0722*lin(v&255); })();
+    const C=(x,y)=>Math.abs(L(x,y)-bgL);
+    const cx=+$('cht-wp').getAttribute('cx'), cy=+$('cht-wp').getAttribute('cy');
+    let ring=0; for(let a=0;a<360;a+=5) for(const r of [12,13,14])
+      ring=Math.max(ring, C(cx+r*Math.cos(a/57.3), cy+r*Math.sin(a/57.3)));
+    const bx=+$('cht-boat').getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)/)[1],
+          by=CHT.BY;
+    let boat=0; for(const [x,y] of [[0,-8],[0,-4],[0,0],[-3,3],[3,3],[0,-12]])
+      boat=Math.max(boat, C(bx+x, by+y));
+    const bb=$('p-tws').getBBox();
+    let strip=0; for(let y=bb.y;y<bb.y+bb.height;y++) for(let x=bb.x;x<bb.x+bb.width;x++)
+      strip=Math.max(strip, C(x,y));
+    return {ring:+ring.toFixed(3), boat:+boat.toFixed(3), strip:+strip.toFixed(3), bg:+bg.toFixed(3)};
+  },[png.toString('base64'), pixels]);
+  glass.push(th+' '+JSON.stringify(m));
+  t.ok(m.ring>0.01 && m.boat>0.01 && m.ring<m.strip && m.boat<m.strip,
+       th+': the ring and the boat are on the glass, and weaker than the TWS strip',
+       JSON.stringify(m));
+  if(th==='night') await p.screenshot({path:SHOTS+'chart-night-marks.png'});
+}
+await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); }); await settle(1500);
 
 /* ===================================================================== */
 t.head('the wind marks: the chart gives way under each one');
@@ -387,6 +517,14 @@ const holes=await p.evaluate(()=>{
   chtWind(-61,-100); out.port2=h('cht-hole-a');
   chtWind(45,120);   out.stbd=[h('cht-hole-a'),h('cht-hole-t')];
   chtWind(null,null); out.none=[h('cht-hole-a'),h('cht-hole-t')];
+  /* close-hauled and broad on port, the mark is above or below the box:
+     a hole there would re-raster the whole chart for nothing */
+  chtWind(-12.2,-150); out.out=[h('cht-hole-a'),h('cht-hole-t')];
+  /* and it moves in whole degrees: a tenth of one writes nothing */
+  chtWind(-60,-100); const w0=$('cht-hole-a').getAttribute('cx');
+  const mo=new MutationObserver(()=>{}); mo.observe($('cht-wind'),{attributes:true,subtree:true});
+  chtWind(-60.2,-100.2); out.small=mo.takeRecords().length; mo.disconnect();
+  out.same=$('cht-hole-a').getAttribute('cx')===w0;
   return out;
 });
 const at=a=>[540+434*Math.sin(a/57.29578), 540-434*Math.cos(a/57.29578)];
@@ -396,6 +534,10 @@ t.ok(near2(holes.port[0],-60) && near2(holes.port[1],-100),
 t.ok(near2(holes.port2,-61), 'and it follows the mark round');
 t.ok(holes.stbd.every(h=>h.r===0), 'from starboard there is no chart there: no hole');
 t.ok(holes.none.every(h=>h.r===0), 'no wind: no hole');
+t.ok(holes.out.every(h=>h.r===0),
+     'from port but above or below the chart\'s box: no hole, nothing written',
+     JSON.stringify(holes.out));
+t.ok(holes.small===0 && holes.same, 'a fifth of a degree writes nothing', holes.small+'');
 /* and live: the dial's own render loop, following the drawn mark. The
    demo's sail at 17 minutes has the apparent wind on the port bow. */
 await p.evaluate(()=>{ demoT=1020; for(const k in CHW) delete CHW[k]; });
@@ -408,12 +550,14 @@ const live=await p.evaluate(()=>{
 });
 /* on where the mark is over the chart's side: left of the digits' edge
    by less than a hole's radius - the same test chtWind makes */
-const over=live.on && 540+434*Math.sin(live.a/57.29578) < live.edge+95;
+const over=live.on && (()=>{ const [hx,hy]=at(Math.round(live.a));
+  const ex=Math.max(100-hx,0,hx-(live.edge-3)), ey=Math.max(230-hy,0,hy-600);
+  return ex*ex+ey*ey<95*95; })();
 if(over)
   t.ok(Math.abs(live.h.cx-at(live.a)[0])<4 && Math.abs(live.h.cy-at(live.a)[1])<4,
        'render() moves the hole with the drawn apparent mark', JSON.stringify(live));
 else
-  t.ok(live.h.r===0, 'render() parks the hole while the apparent mark is to starboard',
+  t.ok(live.h.r===0, 'render() parks the hole while the apparent mark is off the chart',
        JSON.stringify(live));
 
 /* ===================================================================== */
@@ -457,6 +601,38 @@ for(const v of ['2.7','12.4','10.0']){
        `${v}: everything the chart can paint ends left of the digits' ink, `
        +'and the boat stands clear of it', JSON.stringify({ink, ...geo}));
 }
+/* And the moment it happens. The digits are rewritten every frame, the
+   chart once a second - so the frame that first shows 10.0 is the one
+   to look at, not one a second later. Caught by an observer on the
+   digits, which runs as soon as the frame's script has: what the
+   chart's box and boat say then is what that frame paints. */
+const cross=[];
+for(let i=0;i<3;i++){
+  await p.evaluate(()=>{ window.__hs=setInterval(()=>{ const f=window.__fix;
+    put('pos.lat',f[0]); put('pos.lon',f[1]); put('navigation.courseOverGroundTrue',f[2]);
+    put('navigation.speedOverGround',9.6/MS_TO_KT); put('disp.sog',9.6/MS_TO_KT); },100); });
+  await p.waitForFunction(()=>$('spd').textContent==='9.6', null, {timeout:8000}).catch(()=>{});
+  await settle(1100+i*330);
+  const r=await p.evaluate(()=>new Promise(res=>{
+    const mo=new MutationObserver(()=>{ const t=$('spd').textContent;
+      if(t.length<4) return;
+      mo.disconnect();
+      const want=CHT.EDGE+Math.min(0,4*Math.floor((shapeW('8.8')-shapeW(t))/2/4));
+      const cr=$('cht-clip-r');
+      res({t, want, edge:chtEdgeAt, clipR:+cr.getAttribute('x')+ +cr.getAttribute('width'),
+           bx:+$('cht-boat').getAttribute('transform').match(/translate\(([-\d.]+)/)[1]}); });
+    mo.observe($('spd'),{subtree:true, childList:true, characterData:true});
+    clearInterval(window.__hs);
+    window.__hs=setInterval(()=>{ const f=window.__fix;
+      put('pos.lat',f[0]); put('pos.lon',f[1]); put('navigation.courseOverGroundTrue',f[2]);
+      put('navigation.speedOverGround',10.3/MS_TO_KT); put('disp.sog',10.3/MS_TO_KT); },100);
+  }));
+  await p.evaluate(()=>clearInterval(window.__hs));
+  cross.push(r);
+}
+t.ok(cross.every(r=>r.edge===r.want && r.clipR===r.want-3 && r.bx<=r.want-33 && r.want<355),
+     'the first frame showing a fourth digit already has the chart out of its way',
+     JSON.stringify(cross));
 await p.evaluate(()=>demoSet(true)); await settle(1500);
 
 /* ===================================================================== */
@@ -489,7 +665,51 @@ t.ok(eq(str,['.40','.38','.44']), 'one strength per theme: day .40, dusk .38, ni
 const fil=await p.evaluate(()=>$('cht').querySelectorAll('[filter]').length
   + document.querySelectorAll('#cht filter, defs filter[id^="cht"]').length);
 t.ok(fil===0, 'and no SVG filter anywhere in it - the bake is the filter, once');
-await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); }); await settle(1500);
+/* A theme change that lands while the bake is encoding - the 60 s auto
+   dusk-to-night, or a tap - must not leave the old ink filed as the new
+   theme, where nothing would ever recolour it. */
+await p.evaluate(()=>{ CFG.theme='dusk'; applyTheme(); }); await settle(2600);
+const mid=await p.evaluate(async()=>{
+  const img=CHI.cur; CHI.busy=true;
+  const pr=chtColour(img); setTimeout(()=>{ CFG.theme='night'; applyTheme(); },0);
+  await pr; CHI.busy=false;
+  return {theme:img.theme, body:document.body.className};
+});
+await settle(2600);
+const midPx=await p.evaluate(()=>{ const img=CHI.cur;
+  return {theme:img.theme, px:[...img.c.getContext('2d').getImageData(100,500,1,1).data]}; });
+t.ok(mid.theme==='dusk' && mid.body==='night' && midPx.theme==='night'
+     && Math.abs(midPx.px[0]-0xC8)<=3 && Math.abs(midPx.px[1]-0x34)<=3,
+     'a theme change during the bake: filed under the theme it was baked for, '
+     +'and recoloured to the new one at the next check', JSON.stringify([mid, midPx]));
+
+/* Gone by the TWS rule. A chart that is ink everywhere, shot with its
+   image shown and hidden: from the rule down, not one pixel differs. */
+BLACK=true; await dropCharts();
+await p.evaluate(()=>{ window.__df=demoT; window.__hold=setInterval(()=>{ demoT=window.__df; },20);
+  chtSeq++; chtLastAt=0; });
+await p.waitForFunction(()=>CHI.cur && CHI.cur.url && $('cht-img').style.display!=='none',
+  null, {timeout:8000}).catch(()=>{});
+await settle(1200);
+const on=await shot();
+await p.evaluate(()=>{ $('cht-img').style.display='none'; }); await settle(150);
+const offI=await shot();
+await p.evaluate(()=>{ $('cht-img').style.display=''; clearInterval(window.__hold); });
+const rule=await p.evaluate(async([a,c,px])=>{
+  const A=await (eval(px))(a), B=await (eval(px))(c);
+  const dif=(y0,y1)=>{ let n=0, mx=0;
+    for(let y=y0;y<y1;y++) for(let x=100;x<360;x++){ const i=(y*A.w+x)*4;
+      const d=Math.max(Math.abs(A.d[i]-B.d[i]),Math.abs(A.d[i+1]-B.d[i+1]),Math.abs(A.d[i+2]-B.d[i+2]));
+      if(d>1){ n++; mx=Math.max(mx,d); } }
+    return {n, mx}; };
+  return {above:dif(480,560), below:dif(600,680)};
+},[on.toString('base64'), offI.toString('base64'), pixels]);
+t.ok(rule.above.n>0 && rule.below.n===0,
+     'the chart is there in the sector and gone by the TWS rule - nothing of it '
+     +'on the rule or the strip under it', JSON.stringify(rule));
+BLACK=false; await dropCharts();
+await p.evaluate(()=>{ chtSeq++; chtLastAt=0; });
+await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); }); await settle(2500);
 
 /* ===================================================================== */
 t.head('the chart seen once with a signal is there without one');
@@ -529,6 +749,22 @@ t.ok(noaa-asks<=1, 'and the dead network is not asked again every second',
 OFFLINE=false;
 await p.evaluate(()=>{ clearInterval(window.__hold); CHI.fail.clear(); chtLastAt=0; });
 await settle(2500);
+
+/* A kept image that no longer decodes - a blob lost to a power cut on
+   the SD card - must not win the cache every second forever. */
+await p.evaluate(()=>{ window.__df=demoT; window.__hold=setInterval(()=>{ demoT=window.__df; },20); });
+await settle(1500);
+const ck=await p.evaluate(()=>CHI.cur&&CHI.cur.k);
+await p.evaluate(k=>tilePut(k,new Blob(['not a png'],{type:'image/png'})), ck);
+const nb=noaa, bk=(await st()).bake;
+await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear(); chtSeq++; chtLastAt=0; });
+await settle(3500);
+const healed=await p.evaluate(k=>tileGet(k).then(r=>({size:r&&r.b?r.b.size:0, cur:CHI.cur&&CHI.cur.k})), ck);
+s=await st();
+t.ok(s.img && s.imgShown && noaa-nb===1 && s.bake===bk+1 && healed.size>1000,
+     'a cached image that will not decode is thrown away and fetched again, once',
+     JSON.stringify({ck, ...healed, asks:noaa-nb, bakes:s.bake-bk}));
+await p.evaluate(()=>clearInterval(window.__hold));
 
 /* ===================================================================== */
 t.head('covered, it does nothing at all');
@@ -585,6 +821,11 @@ const cs=subs.filter(x=>CHT_P.includes(x.path));
 t.ok(cs.length===6 && cs.every(x=>x.policy==='instant'),
      'six course paths, instant rather than the readings\' fixed 4 Hz',
      JSON.stringify(cs.map(x=>x.path+':'+x.policy)));
+/* the server's minPeriod is a debounce that DROPS what lands inside the
+   window - a clear and a new course a moment apart kept only the clear */
+t.ok(cs.every(x=>!('minPeriod' in x) && !('period' in x)),
+     'and no minPeriod, which would throw away the second of two course changes',
+     JSON.stringify(cs));
 t.ok(asked.slice(gets).includes('/signalk/v2/api/vessels/self/navigation/course'),
      'the course API asked once the socket is open');
 s=await st();
