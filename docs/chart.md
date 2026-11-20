@@ -206,12 +206,13 @@ fetched again, rather than tried every second for good.
 
 ## The demo
 
-With no Signal K at all — a laptop, say — the demo sail has a route of
-its own, a waypoint every fifteen minutes of the sail, so the feature
-can be seen. It only appears while the demo is playing the boat's
-position **and** no Signal K socket has ever opened in that session; on
-the boat Signal K answers within seconds of boot, and from then on a
-route here is only ever one somebody planned.
+Turn on the **DEMO** pill and, with no route activated, the demo sail
+gets a route of its own - a waypoint every fifteen minutes of the sail -
+so the chart can be seen at the dock or on a laptop with no Signal K.
+It needs the demo to be playing the boat's position: with a real GPS
+fix there is a real boat, and no made-up route is drawn on it. A route
+activated in Freeboard-SK always wins over the demo's. DEMO off, and
+it is gone.
 
 ## Tests
 

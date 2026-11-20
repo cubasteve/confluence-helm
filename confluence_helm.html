@@ -16406,6 +16406,7 @@ const CHT={
   IMG:1024, IMG_TO:15000,    /* the chart image, px square, and its patience */
   LVL_MIN:1, LVL_MAX:6,      /* image metres-per-pixel as powers of two */
   DEMO_LEG_S:900,            /* the demo route: a waypoint every 15 minutes of the sail */
+  DEMO_ROUTE:true,           /* ...and whether the demo has one at all */
   NOAA:'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer'
       +'/exts/MaritimeChartService/MapServer/export',
   /* The chart without its words. The ENC service draws place names,
@@ -16545,15 +16546,20 @@ function chtCourseGet(){
 }
 
 /* ---- the demo route ----------------------------------------------------
-   So the feature can be seen on a desktop with no Signal K at all. Only
-   while the demo is playing the FIX and no socket has ever opened: on
-   the boat Signal K answers within seconds of boot, and from then on a
-   route here is only ever one somebody planned. The waypoints are the
-   demo sail itself, sampled every DEMO_LEG_S, so the boat is always
-   somewhere on the leg it is shown sailing. */
+   So the feature can be seen with no route planned: on a desktop with no
+   Signal K, or on the boat with the DEMO pill on. Only while the demo is
+   playing the FIX - with a real GPS fix there is a real boat, and a made-
+   up route has no business on it - and only while there is no real
+   course: a route somebody activated always wins. Everything else on
+   the dial is the demo's too at that point, so the route is no more of
+   a pretence than the speed beside it. The waypoints are the demo sail
+   itself, sampled every DEMO_LEG_S, so the boat is always somewhere on
+   the leg it is shown sailing. CHT.DEMO_ROUTE false turns it off (the
+   probes use that to look at a boat with no course while the demo
+   plays the fix). */
 let skEver=false, chtDemoW=null;
 function chtDemo(){
-  if(!CFG.windDemo || skEver || !feedOwns('pos.lat','demo') || get('pos.lat')===null)
+  if(!CHT.DEMO_ROUTE || !CFG.windDemo || !feedOwns('pos.lat','demo') || get('pos.lat')===null)
     return null;
   const T=DEMO_TRACK.dlat.length*DEMO_TRACK.step;
   if(!chtDemoW){ chtDemoW=[];
@@ -16563,8 +16569,7 @@ function chtDemo(){
           demo:true};
 }
 function chtRoute(){
-  const d=chtDemo(); if(d) return d;
-  const c=chtCourse(); if(!c) return null;
+  const c=chtCourse(); if(!c) return chtDemo();
   return chtLegs(c, chtRouteCoords(c.href));
 }
 

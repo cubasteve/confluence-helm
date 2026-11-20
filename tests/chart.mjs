@@ -119,9 +119,9 @@ const clearCourse=()=>delta([
 /* ===================================================================== */
 t.head('no route: nothing, and not one pixel of difference');
 /* The demo plays the fix in every probe, and the demo has a route of its
-   own for a desktop with no Signal K - so first, a boat whose Signal K
-   has answered and has no course. */
-await p.evaluate(()=>{ skEver=true; });
+   own when there is no real course - so first, its route turned off: a
+   boat with no course. */
+await p.evaluate(()=>{ CHT.DEMO_ROUTE=false; });
 await settle();
 let s0=await st();
 await settle(2500);
@@ -778,12 +778,24 @@ await p.evaluate(()=>closeApp&&closeApp()); await settle(800);
 /* ===================================================================== */
 t.head('the demo has a route of its own, and only the demo');
 await clearCourse();
-await p.evaluate(()=>{ skEver=false; chtLastAt=0; }); await settle(1600);
+await p.evaluate(()=>{ CHT.DEMO_ROUTE=true; skEver=true; chtLastAt=0; }); await settle(1600);
 s=await st();
-t.ok(s.on && s.ahead!=='', 'no Signal K ever, the demo sailing: the demo route, so a '
-     +'desktop shows the feature');
-await p.evaluate(()=>{ skEver=true; chtLastAt=0; }); await settle(1600);
-t.ok(!(await st()).on, 'Signal K has answered once: the demo route is gone for good');
+t.ok(s.on && s.ahead!=='', 'no course, the demo sailing: the demo route - with Signal K '
+     +'up too, so the DEMO pill on the boat shows the feature');
+{ const far=await off(900,0);
+  await delta([{path:'navigation.course.activeRoute', value:null},
+    {path:'navigation.course.nextPoint', value:{type:'Location', position:{longitude:far[0], latitude:far[1]}}},
+    {path:'navigation.course.previousPoint', value:null}]);
+  await p.evaluate(()=>{ chtLastAt=0; }); await settle(1600);
+  const r=await p.evaluate(()=>{ const x=chtRoute(); return x&&{demo:!!x.demo, n:x.pts.length}; });
+  t.ok(r && !r.demo, 'a real course while the demo plays: the real one is drawn, not the demo\'s',
+       JSON.stringify(r));
+  await clearCourse(); await p.evaluate(()=>{ chtLastAt=0; }); await settle(1600);
+  t.ok((await p.evaluate(()=>{ const x=chtRoute(); return !!(x&&x.demo); })),
+       'and cleared, the demo route again'); }
+await p.evaluate(()=>{ demoSet(false); chtLastAt=0; }); await settle(1600);
+t.ok(!(await st()).on, 'the demo off: the demo route is gone');
+await p.evaluate(()=>{ demoSet(true); CHT.DEMO_ROUTE=false; chtLastAt=0; }); await settle(1600);
 
 t.head('it is separate from the race course');
 const sep=await p.evaluate(()=>({mk:typeof MARKS==='undefined'?null:JSON.stringify(MARKS).length}));
