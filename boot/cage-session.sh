@@ -113,16 +113,29 @@ start_helpers(){
 # look at, so waiting forever means a black screen forever. After the
 # timeout it starts anyway and the app's own boot splash covers the
 # retry.
+#
+# A 404 is a different answer from silence: AvNav is up and does not have
+# the page - which is what an AvNav update did, serving its own pages and
+# no longer ~/avnav/data/user/helm. Opening that URL anyway drew the
+# browser's background and nothing else: a black panel. So a steady 404
+# gives up early, and either way main() loads the panel from its file.
+NOT_FOUND_AFTER="${NOT_FOUND_AFTER:-10}"
 wait_for_avnav(){
-  local n=0
-  until curl -sf -o /dev/null --max-time 3 "$URL"; do
+  local n=0 code
+  while :; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$URL" 2>/dev/null)
+    [ "$code" = 200 ] && { log "AvNav answered after ${n}s"; return 0; }
     n=$((n+1))
-    [ "$n" -ge "$WAIT_AVNAV" ] && { log "AvNav still quiet after ${n}s - starting anyway"; return 1; }
+    if [ "$code" = 404 ] && [ "$n" -ge "$NOT_FOUND_AFTER" ]; then
+      log "AvNav is up but has no $URL (404 for ${n}s)"; return 1; fi
+    [ "$n" -ge "$WAIT_AVNAV" ] && { log "AvNav still quiet after ${n}s (last answer: ${code:-none})"; return 1; }
     sleep 1
   done
-  log "AvNav answered after ${n}s"
-  return 0
 }
+# The panel straight off the disk. Everything it needs it asks for by
+# address - Signal K on :3000, netd on :8091 - so it works from file://;
+# only phones, which cannot reach a file on the Pi, need AvNav serving it.
+FILE_URL="${FILE_URL:-file://$REPO/confluence_helm.html}"
 
 # ---- the kiosk ------------------------------------------------------
 # Two flag sets, tried in order. Chromium on this image may want the
@@ -165,7 +178,14 @@ main(){
     fall_back_to_desktop "cage is not installed"; return 1; }
 
   start_helpers
-  wait_for_avnav || true
+  if ! wait_for_avnav; then
+    if [ -r "${FILE_URL#file://}" ]; then
+      URL="$FILE_URL"
+      log "loading the panel from its file instead: $URL"
+    else
+      log "and there is no ${FILE_URL#file://} either - opening $URL anyway"
+    fi
+  fi
 
   local quick=0 which=FLAGS_A started ran
   while true; do
