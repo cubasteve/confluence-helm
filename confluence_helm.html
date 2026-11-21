@@ -209,9 +209,9 @@ body.night #mark{opacity:.07}
    route is --ink-dim and not --accent: night's accent is the brightest
    red in the palette, brighter than --ink. tests/chart.mjs measures
    the marks against the strip off the glass in all three themes. */
-body{--cht-map:.40}
-body.dusk{--cht-map:.38}
-body.night{--cht-map:.44}
+body{--cht-map:.50}
+body.dusk{--cht-map:.46}
+body.night{--cht-map:.58}   /* the depth tones' spacing at night: see CHT.BAND */
 .cht-leg{fill:none;stroke:var(--label);stroke-width:3;stroke-dasharray:2 9;
   stroke-linecap:round;stroke-linejoin:round;opacity:.66}
 .cht-ahead{opacity:.42}
@@ -2529,7 +2529,7 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        distance on this side of the glass is one more reading to tell
        apart from the real ones, and the chart is not a reading.
        The NOAA chart under the route is baked once per image by
-       chtBake() into one silhouette in the theme's own --ink, so night
+       chtBake() into a depth chart in the theme's own --ink, so night
        is red like everything else and no filter runs on the Pi.
        Where a wind mark stands on the left of the bezel the chart gives
        way (#cht-wind punches a soft hole under each mark). -->
@@ -16387,7 +16387,7 @@ setTimeout(helmMoved, 2500);
    so nothing at all runs while the dial is covered; with no route it
    is one check a second; with one it repaints at most once a second
    and only when the picture would move. The NOAA chart under the route
-   is one fetched image, baked once (chtBake) into a silhouette in the
+   is one fetched image, baked once (chtBake) into a depth chart in the
    theme's --ink with its strength in its own alpha, so the only thing
    that changes per paint is a transform - no filter runs over it. */
 const CHT={
@@ -16405,21 +16405,50 @@ const CHT={
   RETRY_MS:60000,            /* a refused GET is not asked again for a minute */
   IMG:1024, IMG_TO:15000,    /* the chart image, px square, and its patience */
   LVL_MIN:1, LVL_MAX:6,      /* image metres-per-pixel as powers of two */
+  KEY:'cht2',                /* the image cache's prefix; cht/ was the old params' */
   DEMO_LEG_S:900,            /* the demo route: a waypoint every 15 minutes of the sail */
   DEMO_ROUTE:true,           /* ...and whether the demo has one at all */
   NOAA:'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer'
       +'/exts/MaritimeChartService/MapServer/export',
-  /* The chart without its words. The ENC service draws place names,
-     light descriptions and soundings by default; these turn the text
-     groups and the "other" display category (soundings, contour labels)
-     off, which leaves the coast, the shoals, the channels and the marks:
-     a shape, not something to read. */
+  /* The chart without its words, in the day palette the bake reads by
+     colour. Display base + standard (1,2: the coast, depth areas, piles,
+     beacons, dangers) with the "other" category - soundings, contour
+     labels - and every text group off: a shape, not something to read.
+     Depth areas shaded in four steps at 1.0 / 1.8 / 3.0 m, so the ENC's
+     1.8 m (6 ft) line and the 1.8-3 m band both show. IntendedUsage 4
+     (approach) is what makes levels 5 and 6 draw the lake at all: left
+     to choose by scale the service picks overview cells that have no
+     inland water, and the whole picture comes back one flat land. */
   NOAA_DP:JSON.stringify({ECDISParameters:{version:'10.9.1',DynamicParameters:{
-    Parameter:[{name:'DisplayCategory',value:'1,2'},{name:'DisplayNOBJNM',value:1},
-               {name:'LabelContours',value:1}],
+    Parameter:[{name:'ColorScheme',value:0},{name:'IntendedUsage',value:'4'},
+      {name:'DisplayCategory',value:'1,2'},{name:'TwoDepthShades',value:1},
+      {name:'ShallowContour',value:1.0},{name:'SafetyContour',value:1.8},
+      {name:'DeepContour',value:3.0},{name:'SafetyDepth',value:0},
+      {name:'DisplaySafeSoundings',value:1},{name:'DisplayNOBJNM',value:1},
+      {name:'LabelContours',value:1},{name:'LabelSafetyContours',value:1}],
     ParameterGroup:[{name:'TextGroups',Parameter:
       ['11','21','23','24','25','26','27','28','29','30'].map(n=>({name:n,value:1}))}]}}}),
-  n:{tick:0, paint:0, fetch:0, bake:0}   /* counters, for the probe */
+  /* Florida Fish and Wildlife's lake bathymetry: 1 ft depth contours
+     (DEPTHF, negative feet) for the lakes it has surveyed. Asked for in
+     fixed squares of FWC_TILE mercator metres, generalised by the server
+     to FWC_TOL degrees (~2 m), a page of FWC_PAGE lines at a time. */
+  FWC:'https://gis.myfwc.com/hosting/rest/services/Open_Data/'
+     +'Bathymetry_of_Select_Lakes_in_Florida/MapServer/3/query',
+  FWC_TILE:32768, FWC_PAGE:1000, FWC_PAGES:30, FWC_TOL:0.00002, FWC_TO:20000,
+  FWC_ALL:45000,             /* ms: every square of one image, all pages, at most */
+  FWC_BOX:[24.3,-87.7,31.1,-79.8],   /* S W N E: nothing is asked outside Florida */
+  FWC_REACH:150,             /* m: the survey's rim, from its shallowest ring to the shore */
+  FWC_FILL:600,              /* m: how far through charted water a contour's depth carries */
+  /* The depth bake, as ink before --cht-map: one flat wash per band,
+     shallow darkest. BAND is 0-3 ft, 3-6, 6-10, deeper; LAND a low flat
+     tone, under the 6-10 wash; LINES the contours drawn as thin full-ink
+     lines, each with a clear pixel on its deep side so the edge reads
+     hard. Evenly spaced so that at night (--cht-map .58) line, bands and
+     clear are each 25 levels of red or more apart: a 3 ft line is ink
+     beside the 0-3 band, not only its clear pixel, and the 6-10 wash -
+     most of Lake Monroe - is not lost in the sector's soft fade. */
+  BAND:[.74,.48,.26,0], LAND:.16, LINES:[3,6], DOT:1,
+  n:{tick:0, paint:0, fetch:0, bake:0, fwc:0, bakeMs:0}   /* counters, for the probe */
 };
 /* Web Mercator, y DOWN (the glass's sense), metres at the equator. */
 function chtM(lat,lon){
@@ -16577,14 +16606,20 @@ function chtRoute(){
    One NOAA ENC export around the boat, 1024 px square, at a power-of-two
    scale. Snapped to a grid so the same water asks for the same picture,
    which is what lets the cache answer: every image is kept in the
-   tilecache store under cht/<level>/<x>/<y>, beside the map's tiles and
+   tilecache store under cht2/<level>/<x>/<y>, beside the map's tiles and
    under the same oldest-first trim, so a lake sailed once with a signal
-   has its chart offline every time after. Fetched again only when the
-   boat nears the edge of what it covers or the scale has moved a whole
-   level; until the new one is in, the old one stays. No image at all
-   and the route draws on clean glass. */
-const CHI={cur:null, busy:false, fail:new Map(), themeKey:null};
-const chtKey=(lv,gx,gy)=>`cht/${lv}/${gx}/${gy}`;
+   has its chart offline every time after. (cht/ was the same grid
+   fetched with the old display parameters; those are never read, and
+   are deleted the first time the chart loads.) Fetched again only when
+   the boat nears the edge of what it covers or the scale has moved a
+   whole level; until the new one is in, the old one stays. No image at
+   all and the route draws on clean glass.
+
+   The image is not shown as it comes. It is baked (chtBake) into a
+   depth chart in one ink: FWC's lake survey where there is one, the
+   ENC's own depth areas where there is not. See chtDepthBake. */
+const CHI={cur:null, busy:false, fail:new Map(), themeKey:null, swept:false};
+const chtKey=(lv,gx,gy)=>`${CHT.KEY}/${lv}/${gx}/${gy}`;
 function chtImgWant(b, upp){
   const cur=CHI.cur;
   let lv=cur?cur.lv:null;
@@ -16592,7 +16627,12 @@ function chtImgWant(b, upp){
      sitting on a boundary does not flip between two images */
   if(lv===null || upp>2**lv || upp<2**lv/2.5)
     lv=Math.max(CHT.LVL_MIN, Math.min(CHT.LVL_MAX, Math.ceil(Math.log2(Math.max(upp,1e-3)))));
-  if(cur && cur.lv===lv && chtCovers(cur, b, upp)) return;
+  if(cur && cur.lv===lv && chtCovers(cur, b, upp)){
+    /* baked without FWC because it could not be reached: try again, a
+       minute apart, and bake again only once it has answered */
+    if(cur.fwcMiss && !cur.fwcBusy && Date.now()-cur.fwcT>CHT.RETRY_MS) chtFwcRetry(cur);
+    return;
+  }
   chtImgLoad(b, upp, lv);
 }
 /* Does the image filed as cell c reach the far corner of the sector? That
@@ -16625,6 +16665,10 @@ async function chtImgLoad(b, upp, lv){
   const f=CHI.fail.get(want.k); if(f && Date.now()-f<CHT.RETRY_MS) return;
   CHI.busy=true;
   try{
+    /* the old parameters' images, once: they would only sit in the
+       store until the trim reached them */
+    if(!CHI.swept){ CHI.swept=true;
+      tileTx('readwrite',st=>st.delete(IDBKeyRange.bound('cht/','cht/￿'))).catch(()=>{}); }
     /* The cache first: this scale, or the one either side of it that the
        hysteresis in chtImgWant would have kept anyway - so water already
        seen never costs a request, even when today's scale is a level off
@@ -16633,7 +16677,8 @@ async function chtImgLoad(b, upp, lv){
     /* A kept image that will not decode - a blob file lost to a power
        cut on the Pi's SD card, say - is deleted rather than skipped:
        left in place it would win the cache lookup every second, forever,
-       and the network would never be asked for that water again. */
+       and the network would never be asked for that water again. So is
+       one with nothing to draw in it, which is never a chart worth keeping. */
     const bake=async(blob,at)=>{
       try{ await chtBake(blob, at); return true; }
       catch(e){ tileDel(at.k).catch(()=>{}); return false; } };
@@ -16647,6 +16692,8 @@ async function chtImgLoad(b, upp, lv){
       if(done && Date.now()-(h.r.t||0)>864e5) tilePut(h.c.k,h.r.b).catch(()=>{});
       break;
     }
+    /* fetched, baked, and only then kept: an export the bake refuses
+       (no water and no surveyed lake: one flat land) is never kept */
     if(!done){ const blob=await chtImgFetch(want);
       if(blob && (done=await bake(blob, want)))
         tilePut(want.k,blob).then(()=>tileTrim()).catch(()=>{}); }
@@ -16675,25 +16722,576 @@ function chtImgFetch({lv,gx,gy}){
     .then(r=>r.ok && /^image\//.test(r.headers.get('content-type')||'') ? r.blob() : null)
     .catch(()=>null).finally(()=>clearTimeout(to));
 }
-/* The ink, once per image. The chart's colours collapse to one
-   silhouette: land and marks to ink, water and the white of the sheet
-   to nothing (the alpha is .095 R - 1.048 B + 1 - the matrix the mock-up
-   ran as an SVG filter on every repaint, run here once instead). The
-   alpha is kept, so a change of theme only recolours it. */
-async function chtBake(blob, at){
+
+/* ---- the depth survey -----------------------------------------------------
+   FWC's contours for the water the image covers, in fixed squares of
+   FWC_TILE mercator metres so the same lake is the same request at every
+   scale. Each square is kept in the tilecache store under fwc1/<x>/<y>
+   - as compact JSON, integer metres from the square's corner - beside
+   the chart images and under the same trim, so a lake surveyed once with
+   a signal is surveyed offline after. A square with no survey in it is
+   kept too, as an empty one, so it is not asked again. The data is
+   FWC's and is never in this repository: the page asks for it. */
+const FWC={mem:new Map(), fail:new Map(), pend:new Map()};
+const fwcKey=(tx,ty)=>`fwc1/${tx}/${ty}`;
+const chtLL=(x,y)=>[(2*Math.atan(Math.exp(y/6378137))-Math.PI/2)*DEG, x/6378137*DEG];
+/* The survey for a mercator box (y UP): {lines:[{z,p}], miss}. miss is
+   true when a square could be neither read from the cache nor fetched.
+   With local, only what is already here (memory, IndexedDB) is read and
+   the network is not asked: what the bake waits on is never the network,
+   so a hung link (a hotspot with no backhaul) cannot hold a chart that is
+   already in the store off the glass. The squares not here are fetched
+   after, all at once, by chtFwcRetry. */
+async function chtFwcFor(x0,y0,x1,y1,local){
+  const [s,w]=chtLL(x0,y0), [n,e]=chtLL(x1,y1), F=CHT.FWC_BOX;
+  if(n<F[0] || s>F[2] || e<F[1] || w>F[3]) return {lines:[], miss:false};
+  const S=CHT.FWC_TILE, sq=[], until=Date.now()+CHT.FWC_ALL;
+  for(let tx=Math.floor(x0/S); tx*S<x1; tx++)
+    for(let ty=Math.floor(y0/S); ty*S<y1; ty++) sq.push(chtFwcTile(tx,ty,local,until));
+  const lines=[]; let miss=false;
+  for(const r of await Promise.all(sq)){
+    if(!r){ miss=true; continue; }
+    for(const l of r) lines.push(l);
+  }
+  return {lines, miss};
+}
+async function chtFwcTile(tx,ty,local,until){
+  const k=fwcKey(tx,ty);
+  if(FWC.mem.has(k)) return FWC.mem.get(k);
+  let j=null;
+  const r=await tileGet(k).catch(()=>null);
+  if(r && r.b){
+    /* one that will not parse (cut short by a power cut) is deleted, so
+       it is fetched again rather than missed on every bake */
+    try{ j=JSON.parse(await r.b.text());
+         if(!j || !Array.isArray(j.f)) throw 0;
+         if(Date.now()-(r.t||0)>864e5) tilePut(k,r.b).catch(()=>{}); }
+    catch(e){ j=null; await tileDel(k).catch(()=>{}); }
+  }
+  if(!j){
+    if(local) return null;
+    const f=FWC.fail.get(k); if(f && Date.now()-f<CHT.RETRY_MS) return null;
+    /* one request per square at a time, however many bakes want it */
+    let pr=FWC.pend.get(k);
+    if(!pr){ pr=chtFwcFetch(tx,ty,until).then(j=>{
+        if(!j){ FWC.fail.set(k,Date.now()); return null; }
+        tilePut(k,new Blob([JSON.stringify(j)],{type:'application/json'}))
+          .then(()=>tileTrim()).catch(()=>{});
+        return j; }).finally(()=>FWC.pend.delete(k));
+      FWC.pend.set(k,pr); }
+    j=await pr;
+    if(!j) return null;
+  }
+  /* back to absolute mercator metres, one Float64Array per line */
+  const ox=tx*CHT.FWC_TILE, oy=ty*CHT.FWC_TILE, out=[];
+  for(const f of j.f||[]){
+    const p=new Float64Array(f.length-1);
+    for(let i=1;i<f.length;i+=2){ p[i-1]=ox+f[i]; p[i]=oy+f[i+1]; }
+    out.push({z:f[0], p});
+  }
+  /* a few squares in memory, so a change of scale does not parse again */
+  FWC.mem.set(k,out);
+  if(FWC.mem.size>8) FWC.mem.delete(FWC.mem.keys().next().value);
+  return out;
+}
+/* Every page of one square: the server returns at most FWC_PAGE lines a
+   time and says exceededTransferLimit while there are more. null when any
+   page fails - half a survey is not kept as if it were the whole. */
+async function chtFwcFetch(tx,ty,until){
+  const S=CHT.FWC_TILE, ox=tx*S, oy=ty*S;
+  const [s,w]=chtLL(ox,oy), [n,e]=chtLL(ox+S,oy+S), R=6378137, f=[];
+  /* the next page starts after what this one actually held: a server
+     whose own cap is under FWC_PAGE sends fewer, and says there is more */
+  for(let pg=0, off=0;pg<CHT.FWC_PAGES;pg++){
+    const q=new URLSearchParams({where:'1=1', geometry:[w,s,e,n].map(v=>v.toFixed(6)).join(','),
+      geometryType:'esriGeometryEnvelope', inSR:'4326', spatialRel:'esriSpatialRelIntersects',
+      outSR:'4326', outFields:'DEPTHF', returnGeometry:'true',
+      maxAllowableOffset:String(CHT.FWC_TOL), geometryPrecision:'5',
+      orderByFields:'OBJECTID', resultOffset:String(off),
+      resultRecordCount:String(CHT.FWC_PAGE), f:'geojson'});
+    const left=Math.min(CHT.FWC_TO, (until||Infinity)-Date.now());
+    if(!(left>0)) return null;
+    const ac=new AbortController(), to=setTimeout(()=>ac.abort(),left);
+    CHT.n.fwc++;
+    const j=await fetch(CHT.FWC+'?'+q,{mode:'cors', credentials:'omit', signal:ac.signal})
+      .then(r=>r.ok?r.json():null).catch(()=>null).finally(()=>clearTimeout(to));
+    if(!j || !Array.isArray(j.features)) return null;
+    off+=j.features.length;
+    for(const ft of j.features){
+      const z=Math.round(Math.abs(+(ft.properties&&ft.properties.DEPTHF)));
+      const g=ft.geometry; if(!g || !(z>0 && z<250)) continue;
+      const parts=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
+      for(const cs of parts){
+        if(!Array.isArray(cs) || cs.length<2) continue;
+        const o=[z];
+        for(const c of cs){
+          const x=R*c[0]/DEG, y=R*Math.log(Math.tan(Math.PI/4+c[1]/DEG/2));
+          if(isFinite(x) && isFinite(y)) o.push(Math.round(x-ox), Math.round(y-oy));
+        }
+        if(o.length>=5) f.push(o);
+      }
+    }
+    if(!(j.exceededTransferLimit || (j.properties&&j.properties.exceededTransferLimit))
+       || !j.features.length) return {v:1, f};
+  }
+  return null;
+}
+
+/* ---- the bake -----------------------------------------------------------
+   Once per image, never per frame: decode NOAA's picture, find the
+   survey for its water, and turn the two into one alpha per pixel - the
+   depth chart in a single ink. Colour is not decided here: chtColour
+   paints the theme's --ink at --cht-map through this alpha, so night is
+   red like the rest of the dial and a theme change only recolours.
+   The heavy part runs in a Worker made for the one bake and ended after
+   it, so the dial does not stop for it on the Pi and the worker's memory
+   goes with it. Refuses (throws) an export with nothing to draw in it.
+   The survey it bakes with is what is already here; a square that is
+   not is fetched in the background (chtFwcRetry) and the image baked
+   again once it has come - the chart is on the glass meanwhile. was is
+   that image, when this is its second bake: kept only if it is still
+   the one shown. */
+async function chtBake(blob, at, fw, was){
   const bm=await createImageBitmap(blob);
   const w=bm.width, h=bm.height, c=document.createElement('canvas');
   c.width=w; c.height=h;
   const x=c.getContext('2d',{willReadFrequently:true});
   x.drawImage(bm,0,0); if(bm.close) bm.close();
-  const d=x.getImageData(0,0,w,h).data, a=new Uint8ClampedArray(w*h);
-  for(let i=0,j=0;i<a.length;i++,j+=4)
-    a[i]=((.095*d[j]-1.048*d[j+2])/255+1)*d[j+3];
-  CHT.n.bake++;
-  const img={...at, w, h, a, c, L:2**at.lv, cx:at.gx*128*2**at.lv, cy:at.gy*128*2**at.lv};
+  const d=x.getImageData(0,0,w,h).data;
+  const L=2**at.lv, cx=at.gx*128*L, cy=at.gy*128*L, half=w/2*L;
+  if(!fw) fw=await chtFwcFor(cx-half, cy-half, cx+half, cy+half, true);
+  let t0=performance.now();
+  const cfg={L, ox:cx-half, oy:cy+half, BAND:CHT.BAND, LAND:CHT.LAND, LINES:CHT.LINES,
+             DOT:CHT.DOT, REACH:CHT.FWC_REACH, FILL:CHT.FWC_FILL};
+  let r=await chtDepthRun(d, w, h, fw.lines, cfg);
+  /* nothing to draw from the ENC alone - a lake outside every ENC cell,
+     which only the survey can chart: then, and only then, the survey is
+     waited for, there being nothing to show meanwhile */
+  if(r && r.err && fw.miss && !fw.net){
+    fw=await chtFwcFor(cx-half, cy-half, cx+half, cy+half, false); fw.net=true;
+    if(fw.lines.length){ t0=performance.now(); r=await chtDepthRun(d, w, h, fw.lines, cfg); }
+  }
+  if(!r || r.err){ c.width=0; throw new Error(r&&r.err||'bake'); }
+  CHT.n.bake++; CHT.n.bakeMs=Math.round(performance.now()-t0);
+  const img={...at, w, h, a:r.a, c, L, cx, cy, fwc:r.fwc, stat:r.stat,
+             fwcMiss:fw.miss, fwcT:0, fwcBusy:false, blob:fw.miss?blob:null};
   await chtColour(img);
-  if(CHI.cur && CHI.cur.c){ CHI.cur.c.width=0; }
+  if(was && CHI.cur!==was){ c.width=0; if(img.url) URL.revokeObjectURL(img.url); return; }
+  if(CHI.cur && CHI.cur.c && CHI.cur.c!==c){ CHI.cur.c.width=0; }
   CHI.cur=img; chtSeq++;
+  if(fw.miss && !fw.net) chtFwcRetry(img);
+}
+/* The image was baked without some of the survey (not here yet, or it
+   could not be reached): ask for it - every square at once, under one
+   deadline, without holding CHI.busy, so a slow or hung FWC never keeps
+   the chart loader from the next image - and bake again only if every
+   square answered. Asked again RETRY_MS later by chtImgWant if not. */
+async function chtFwcRetry(img){
+  if(img.fwcBusy) return;
+  img.fwcBusy=true; img.fwcT=Date.now();
+  try{
+    const L=img.L, half=img.w/2*L;
+    const fw=await chtFwcFor(img.cx-half, img.cy-half, img.cx+half, img.cy+half, false);
+    fw.net=true;
+    if(!fw.miss && CHI.cur===img && img.blob)
+      await chtBake(img.blob, {lv:img.lv, gx:img.gx, gy:img.gy, k:img.k}, fw, img);
+  }catch(e){}
+  finally{ img.fwcBusy=false; img.fwcT=Date.now(); }
+}
+/* Into a worker and back, or here if a worker cannot be had. */
+let chtWorkerSrc=null;
+function chtDepthRun(d, w, h, lines, cfg){
+  let wk=null;
+  try{
+    if(!chtWorkerSrc) chtWorkerSrc=URL.createObjectURL(new Blob([
+      [chtClassify, chtVoronoi, chtDepthBake].map(f=>f.toString()).join('\n')
+      +'\nonmessage=e=>{ const m=e.data; let r;'
+      +' try{ r=chtDepthBake(m.d,m.w,m.h,m.lines,m.cfg); }catch(x){ r={err:String(x)}; }'
+      +' postMessage(r, r.a?[r.a.buffer]:[]); };'],{type:'text/javascript'}));
+    wk=new Worker(chtWorkerSrc);
+  }catch(e){ wk=null; }
+  if(!wk) return Promise.resolve().then(()=>chtDepthBake(d, w, h, lines, cfg));
+  return new Promise(res=>{
+    const end=r=>{ wk.terminate(); res(r); };
+    wk.onmessage=e=>end(e.data);
+    wk.onerror=e=>{ e.preventDefault(); wk.terminate();
+      res(chtDepthBake(d, w, h, lines, cfg)); };
+    wk.postMessage({d, w, h, lines, cfg});
+  });
+}
+/* NOAA's day palette, read off live exports (US4FL2LF, Lake Monroe),
+   each with the class it is baked as:
+     1 land  #cec58a land, #b09e56 built-up, #9a6f37 land marks
+     2 dry   #78b796 drying ground and marsh
+     3 VS    #82bdff depth area starting under 1.0 m (the 0-6 ft band
+             on the lake: its ENC has no 3 ft line)
+     4 MD    #bedeeb 1.8-3 m          5 DW  #ddf1ee 3 m and over
+     6 grey  #a7b5b2 spoil ground, an area of no known depth
+     7 line  #616866 coast, the 1.8 m contour, spoil edges - and any
+             dark pixel off the palette: the anti-aliased edge of a line
+     8 mark  #000000 piles, beacons, obstructions, wrecks - and, at the
+             finer levels, stretches of the coast and symbol outlines
+     9 danger #c842c6 the isolated-danger symbol (and area edges, which
+             are thin, and dropped by size)
+     0 none  outside every ENC cell: the service sends (0,0,0,0)
+   #d8acea (information and anchorage boxes) and anything unmatched take
+   their neighbour's class, so a symbol never leaves a hole in a band.
+   1.0-1.8 m (#9ecefc) never occurs on these lakes and is not kept.
+   Returns {c, dots, water}; never refuses - whether there is anything
+   to draw is chtDepthBake's to say, once it has the survey too. */
+function chtClassify(d, w, h){
+  const PAL=[[0xce,0xc5,0x8a,1],[0xb0,0x9e,0x56,1],[0x9a,0x6f,0x37,1],[0x78,0xb7,0x96,2],
+             [0x82,0xbd,0xff,3],[0xbe,0xde,0xeb,4],[0xdd,0xf1,0xee,5],[0xa7,0xb5,0xb2,6],
+             [0x61,0x68,0x66,7],[0,0,0,8],[0xc8,0x42,0xc6,9],[0xd8,0xac,0xea,15]];
+  const N=w*h, c=new Uint8Array(N), memo=new Map(), INH=15, BLOB=16;
+  let lastV=-1, lastK=0, water=0, nb=0;
+  for(let i=0,j=0;i<N;i++,j+=4){
+    /* outside the ENC cells, and the faint edge of one: clear */
+    if(d[j+3]<128){ c[i]=0; continue; }
+    const v=d[j]<<16|d[j+1]<<8|d[j+2];
+    let k;
+    if(v===lastV) k=lastK;
+    else{
+      k=memo.get(v);
+      if(k===undefined){
+        let bd=1e9; k=INH;
+        for(const p of PAL){ const a=d[j]-p[0], b=d[j+1]-p[1], e=d[j+2]-p[2], s=a*a+b*b+e*e;
+          if(s<bd){ bd=s; k=p[3]; } }
+        if(bd>120) k=(.3*d[j]+.59*d[j+1]+.11*d[j+2]<125) ? 7 : INH;
+        memo.set(v,k);
+      }
+      lastV=v; lastK=k;
+    }
+    c[i]=k;
+    if(k>=2 && k<=6) water++;
+    else if(k===8 || k===9) nb++;
+  }
+  /* The black (and magenta) blobs, each as one component: its pixels
+     kept in pool, marked BLOB until it is decided what they are. */
+  const pool=new Int32Array(nb), comps=[], st=[];
+  let pn=0;
+  for(let i=0;i<N;i++){
+    const k=c[i]; if(k!==8 && k!==9) continue;
+    let x0=1e9, x1=-1, y0=1e9, y1=-1, sx=0, sy=0;
+    const s0=pn;
+    st.push(i); c[i]=BLOB;
+    while(st.length){ const p=st.pop(), x=p%w, y=(p-x)/w;
+      pool[pn++]=p; sx+=x; sy+=y; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+        const q=Y*w+X; if(c[q]===k){ c[q]=BLOB; st.push(q); } } }
+    const n=pn-s0;
+    comps.push({s0, n, k, x0, y0, x1, y1, cx:Math.round(sx/n), cy:Math.round(sy/n)});
+  }
+  /* what a symbol's fill or an unmatched colour sits in: the class
+     before it on its row, or above it */
+  for(let y=0,i=0;y<h;y++){
+    let last=y && c[i-w]!==BLOB && c[i-w]!==INH ? c[i-w] : 1;
+    for(let x=0;x<w;x++,i++){
+      if(c[i]===INH) c[i]=last; else if(c[i]!==BLOB) last=c[i]; }
+  }
+  /* Which blobs are marks. A pile, a beacon, an obstruction is a
+     compact black shape of a few pixels or more, standing in water,
+     alone. What is not: a black fragment of the coast or of a symbol's
+     outline (the service anti-aliases both, and at the finer levels
+     the pure black left of them breaks into runs of 1-3 px specks
+     along the line), a landmark on land. Those are given back to what
+     they sit in: line work to the line (so the coast stays one gap),
+     anything else, its dark rim with it, to the area around it - never
+     to the coast, so a symbol on land is land, not a hole in it. */
+  const near=(a,b)=>Math.max(a.x0-b.x1, b.x0-a.x1, a.y0-b.y1, b.y0-a.y1)<=4;
+  const cnt=new Int32Array(8), oct=new Int32Array(8), dots=[];
+  for(const o of comps){
+    cnt.fill(0); oct.fill(0); let far7=0;
+    const X0=Math.max(0,o.x0-4), X1=Math.min(w-1,o.x1+4), Y0=Math.max(0,o.y0-4), Y1=Math.min(h-1,o.y1+4);
+    for(let y=Y0;y<=Y1;y++) for(let x=X0;x<=X1;x++){
+      const k=c[y*w+x]; if(k>7) continue;
+      if(k===7){ if(x<o.x0-2||x>o.x1+2||y<o.y0-2||y>o.y1+2) far7++; continue; }
+      cnt[k]++;
+    }
+    const bw=o.x1-o.x0+1, bh=o.y1-o.y0+1, m=Math.max(bw,bh);
+    let wat=0, wk=0, fill=1, best=-1;
+    for(let k=2;k<=6;k++){ wat+=cnt[k]; if(cnt[k]>(wk?cnt[wk]:0)) wk=k; }
+    for(let k=0;k<=6;k++) if(cnt[k]>best){ best=cnt[k]; fill=k; }
+    let chain=0;
+    if(o.k===8) for(const q of comps) if(q!==o && q.k===8 && near(o,q) && ++chain>=2) break;
+    /* a line running on from it on both sides: it is a piece of that
+       line (a speck of coast), whatever it has round it - if it is a
+       speck: a pile drawn on the coast line is bigger. The line work
+       joined to it (its anti-aliased rim and on), followed out of the
+       box round it; a pile's rim ends a pixel out, a coast goes on. */
+    const ww=X1-X0+1, wv=new Uint8Array(ww*(Y1-Y0+1));
+    for(let j=o.s0;j<o.s0+o.n;j++){ const p=pool[j], x=p%w, y=(p-x)/w;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const X=x+dx, Y=y+dy; if(X<X0||Y<Y0||X>X1||Y>Y1) continue;
+        const l=(Y-Y0)*ww+X-X0; if(c[Y*w+X]===7 && !wv[l]){ wv[l]=1; st.push(l); } } }
+    while(st.length){ const l=st.pop(), x=l%ww+X0, y=(l-l%ww)/ww+Y0;
+      if(x<o.x0-2||x>o.x1+2||y<o.y0-2||y>o.y1+2)
+        oct[(Math.round(Math.atan2(y-o.cy,x-o.cx)/(Math.PI/4))+8)%8]++;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const X=x+dx, Y=y+dy; if(X<X0||Y<Y0||X>X1||Y>Y1) continue;
+        const q=(Y-Y0)*ww+X-X0; if(c[Y*w+X]===7 && !wv[q]){ wv[q]=1; st.push(q); } } }
+    let through=false;
+    for(let j=0;j<8;j++) if(oct[j] && (oct[(j+3)%8] || oct[(j+4)%8] || oct[(j+5)%8])) through=true;
+    const mark=wat>0 && wat>=2*cnt[1] && m<=28 && chain<2 && !(through && o.n<=12)
+      && (o.k===8 ? o.n>=4 && Math.min(bw,bh)>=3 : m>=9 && Math.min(bw,bh)>=9);
+    /* line work: a speck of a line with water by it as well as land -
+       the coast, a contour. A symbol on land has land all round, and
+       goes to the land. */
+    const line=!mark && far7>=3 && wat>0 && 2*wat>=cnt[1];
+    if(mark){ dots.push(o.cx, o.cy); fill=wk; }
+    const to=line ? 7 : fill;
+    for(let j=o.s0;j<o.s0+o.n;j++){ const p=pool[j]; c[p]=to;
+      if(line) continue;
+      const x=p%w, y=(p-x)/w;
+      for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){
+        const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+        if(c[Y*w+X]===7) c[Y*w+X]=to; } }
+  }
+  /* Grey rings - the marsh's symbol, a circle of line colour round a
+     speck of land, often several touching and touching the shore - are
+     symbols, not coast. What makes a line coast below is land beside
+     it; so each speck of land shut in by line work alone, smaller than
+     SPECK px, is given to the water round it, and its ring then has no
+     land beside it. Left alone they would become rings of coast, clear
+     holes along a marsh. (An islet that small goes with them.) */
+  const V=new Uint8Array(N), rp=[], SPECK=40;
+  for(let i=0;i<N;i++){
+    if(c[i]!==1 || V[i]) continue;
+    rp.length=0; let shut=true, x0=1e9, x1=-1, y0=1e9, y1=-1;
+    st.push(i); V[i]=1;
+    while(st.length){ const p=st.pop(), x=p%w, y=(p-x)/w; rp.push(p);
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      for(const q of [x?p-1:-1, x<w-1?p+1:-1, p>=w?p-w:-1, p<N-w?p+w:-1]){
+        if(q<0){ shut=false; continue; }
+        const k=c[q];
+        if(k===1){ if(!V[q]){ V[q]=1; st.push(q); } }
+        else if(k!==7) shut=false; } }
+    if(!shut || rp.length>SPECK) continue;
+    cnt.fill(0);
+    for(let y=Math.max(0,y0-6);y<=Math.min(h-1,y1+6);y++) for(let x=Math.max(0,x0-6);x<=Math.min(w-1,x1+6);x++){
+      const k=c[y*w+x]; if(k>=2 && k<=6) cnt[k]++; }
+    let to=2, best=0; for(let k=2;k<=6;k++) if(cnt[k]>best){ best=cnt[k]; to=k; }
+    for(const p of rp) c[p]=to;
+  }
+  /* the lines: coast where land is within 2 px (10), the 1.8 m contour
+     where there is under-1.8 water one side and deeper the other (11),
+     anything else - spoil edges - the area it edges */
+  for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+    if(c[i]!==7) continue;
+    let land=0, sh=0, dp=0;
+    for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){
+      const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+      const k=c[Y*w+X];
+      if(k===1 && dx>=-2 && dx<=2 && dy>=-2 && dy<=2) land=1;
+      else if(k===2 || k===3) sh=1; else if(k===4 || k===5) dp=1;
+    }
+    c[i]=land ? 10 : (sh&&dp) ? 11 : (x ? (c[i-1]===11?3:c[i-1]) : 1);
+  }
+  return {c, dots, water};
+}
+/* Nearest labelled pixel, for every pixel: a two-pass chamfer distance
+   carrying the label with it. skip[label] leaves a label out. D and Z
+   are the caller's, so the same buffers serve twice. */
+function chtVoronoi(lab, skip, w, h, D, Z){
+  const N=w*h, S=1.4142;
+  for(let i=0;i<N;i++){ const z=lab[i];
+    if(z && !skip[z]){ D[i]=0; Z[i]=z; } else { D[i]=1e9; Z[i]=0; } }
+  for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+    let v=D[i], z=Z[i], q;
+    if(x){ q=D[i-1]+1; if(q<v){ v=q; z=Z[i-1]; } }
+    if(y){ q=D[i-w]+1; if(q<v){ v=q; z=Z[i-w]; }
+      if(x){ q=D[i-w-1]+S; if(q<v){ v=q; z=Z[i-w-1]; } }
+      if(x<w-1){ q=D[i-w+1]+S; if(q<v){ v=q; z=Z[i-w+1]; } } }
+    D[i]=v; Z[i]=z; }
+  for(let y=h-1,i=N-1;y>=0;y--) for(let x=w-1;x>=0;x--,i--){
+    let v=D[i], z=Z[i], q;
+    if(x<w-1){ q=D[i+1]+1; if(q<v){ v=q; z=Z[i+1]; } }
+    if(y<h-1){ q=D[i+w]+1; if(q<v){ v=q; z=Z[i+w]; }
+      if(x<w-1){ q=D[i+w+1]+S; if(q<v){ v=q; z=Z[i+w+1]; } }
+      if(x){ q=D[i+w-1]+S; if(q<v){ v=q; z=Z[i+w-1]; } } }
+    D[i]=v; Z[i]=z; }
+}
+/* The depth chart. d is NOAA's RGBA, lines FWC's contours ({z feet, p
+   mercator x,y,...}), cfg the image's place (ox, oy: its top-left corner,
+   L: metres per px) and the inks. Returns {a: alpha per px, fwc, stat},
+   or {err} when there is nothing to draw: no charted water and no
+   surveyed lake (one flat land, or no ENC cell and no survey).
+
+   Where FWC surveyed the lake, every pixel takes the depth of its
+   nearest contour - a 1 ft survey, so that is the depth to a foot -
+   and on a contour that is itself a band's edge (3, 6, 10) which side
+   it is on comes from what that side borders (see SD below).
+   Which pixels are the survey's (see O below): those the contours shut
+   in - the lake inside its shallowest ring, less any island - and, in
+   charted water, anything within REACH of a contour (the strip between
+   the shallowest ring and the shore). Water that is not shut in - a
+   river running off past the survey, another lake across the land, a
+   square of the survey that has not come yet - is the ENC's, however
+   deep the nearest contour; and ground outside every ENC cell is never
+   given a depth unless the survey closes round it. Where there is no
+   survey, the ENC's own depth areas give the bands, coarser: under 1.8
+   m is 3-6 ft, 1.8-3 m is 6-10, drying ground the shallowest. Land is a
+   low flat tone and the coast between it and the water a clear gap; a
+   lake surveyed where there is no ENC gets the same: a rim of land tone
+   round its shallowest ring, a clear pixel between. The 3 and 6 ft
+   contours (the ENC's 1.8 m where there is no survey) are thin full ink
+   with a clear pixel on their deep side; piles and dangers are dots. */
+function chtDepthBake(d, w, h, lines, cfg){
+  const {c, dots, water}=chtClassify(d, w, h);
+  const N=w*h, L=cfg.L, a=new Uint8ClampedArray(N);
+  const B=cfg.BAND.map(v=>Math.round(255*v)), LAND=Math.round(255*cfg.LAND);
+  const band=z=>z<3?B[0]:z<6?B[1]:z<10?B[2]:B[3];
+  let fwc=0, zmin=255;
+  /* FWC's lines, rasterised with their depth: 1 px, 8-connected */
+  const lab=new Uint8Array(N);
+  for(const ln of lines){
+    const p=ln.p, z=Math.max(1,Math.min(250,ln.z|0));
+    let hit=0;
+    for(let i=2;i<p.length;i+=2){
+      let x0=Math.round((p[i-2]-cfg.ox)/L), y0=Math.round((cfg.oy-p[i-1])/L);
+      const x1=Math.round((p[i]-cfg.ox)/L), y1=Math.round((cfg.oy-p[i+1])/L);
+      if((x0<0&&x1<0)||(y0<0&&y1<0)||(x0>=w&&x1>=w)||(y0>=h&&y1>=h)) continue;
+      const dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+      let e=dx+dy;
+      for(let n=0;n<8192;n++){
+        if(x0>=0&&y0>=0&&x0<w&&y0<h){ lab[y0*w+x0]=z; fwc++; hit=1; }
+        if(x0===x1&&y0===y1) break;
+        const e2=2*e; if(e2>=dy){ e+=dy; x0+=sx; } if(e2<=dx){ e+=dx; y0+=sy; }
+      }
+    }
+    if(hit && z<zmin) zmin=z;
+  }
+  let Z1=null, SD=null, D=null;
+  const reach=cfg.REACH/L;
+  const TS=new Uint8Array(256); TS[3]=TS[6]=TS[10]=1;
+  let surveyed=0;
+  if(fwc){
+    D=new Float32Array(N); Z1=new Uint8Array(N);
+    chtVoronoi(lab, new Uint8Array(256), w, h, D, Z1);
+    /* Which pixels are the survey's. In charted water: those the
+       contours reach through charted water alone (4-connected), within
+       FILL - a surveyed lake, and never water across the land from it,
+       a river beyond its mouth, or the rest of a lake whose square of
+       the survey has not come. */
+    const G=new Uint8Array(N), stk=new Int32Array(N), WAT=new Uint8Array(17);
+    WAT[2]=WAT[3]=WAT[4]=WAT[5]=WAT[6]=WAT[11]=1;
+    let qn=0, sp=0;
+    for(let i=0;i<N;i++) if(lab[i] && c[i]!==1 && c[i]!==10){ G[i]=1; stk[qn++]=i; }
+    for(let lv=0, q0=0, fill=cfg.FILL/L; lv<fill && q0<qn; lv++){
+      const q1=qn;
+      for(;q0<q1;q0++){ const p=stk[q0], x=p%w;
+        for(const q of [x?p-1:-1, x<w-1?p+1:-1, p-w, p+w]){
+          if(q<0 || q>=N || G[q] || !WAT[c[q]]) continue;
+          G[q]=1; stk[qn++]=q; } }
+    }
+    /* And what the contours close round. O is flooded (4-connected, so
+       not through an 8-connected contour) from what is certainly not
+       lake - charted land, and uncharted ground beyond REACH whose
+       nearest contour is the survey's shallowest, the ring a lake ends
+       at - through everything but the contours. What it cannot reach,
+       the contours shut in: the middle of a lake further than FILL from
+       any contour, and on uncharted ground (no ENC cell, so no water to
+       go by) the lake inside its shallowest ring. Not alone the test in
+       charted water: where a lake runs off the image its rings are open
+       at the edge, and the land there floods in between them. */
+    const O=new Uint8Array(N);
+    for(let i=0;i<N;i++) if(!lab[i] && (c[i]===1 || c[i]===10 || (c[i]===0 && D[i]>reach && Z1[i]<=zmin))){
+      O[i]=1; stk[sp++]=i; }
+    while(sp){ const p=stk[--sp], x=p%w;
+      if(x && !O[p-1] && !lab[p-1]){ O[p-1]=1; stk[sp++]=p-1; }
+      if(x<w-1 && !O[p+1] && !lab[p+1]){ O[p+1]=1; stk[sp++]=p+1; }
+      if(p>=w && !O[p-w] && !lab[p-w]){ O[p-w]=1; stk[sp++]=p-w; }
+      if(p<N-w && !O[p+w] && !lab[p+w]){ O[p+w]=1; stk[sp++]=p+w; } }
+    for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+      const k=c[i]; let keep;
+      if(k===1 || k===10) keep=false;
+      else if(k!==0) keep=!!G[i] || !O[i];
+      else if(lab[i]){
+        /* a contour on uncharted ground is drawn if it has the survey
+           on one side; one lying out in the land, with none, is not */
+        let out=0, inn=0;
+        for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+          const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+          const q=Y*w+X; if(lab[q]) continue; if(O[q]) out=1; else inn=1; }
+        keep=inn || !out;
+      }
+      else keep=!O[i];
+      if(!keep) Z1[i]=0;
+    }
+    /* Which side of a band's edge (3, 6, 10 ft) the water nearest it is
+       on. The line cuts its own zone in two; each piece (4-connected, so
+       it cannot slip diagonally through an 8-connected line) is on the
+       side of whatever it borders - the 7 ft zone, deep; the 5 ft zone,
+       shallow. Not the nearest other contour: on a flat bottom the 5 ft
+       line can be nearer than the 7, from the deep side of the 6. */
+    SD=new Uint8Array(N);
+    const comp=[];
+    for(let i=0;i<N;i++){
+      const T=Z1[i]; if(!TS[T] || SD[i] || lab[i]===T) continue;
+      let deep=0, shal=0; comp.length=0; stk[sp++]=i; SD[i]=3;
+      while(sp){ const p=stk[--sp], x=p%w; comp.push(p);
+        for(const q of [x?p-1:-1, x<w-1?p+1:-1, p-w, p+w]){
+          if(q<0 || q>=N) continue;
+          const z=Z1[q];
+          if(z===T){ if(!SD[q] && lab[q]!==T){ SD[q]=3; stk[sp++]=q; } }
+          else if(z && lab[q]!==T){ if(z>T) deep++; else shal++; } } }
+      const v=deep>shal?2:1;            /* nothing either side: shallow, the safe guess */
+      for(const p of comp) SD[p]=v;
+    }
+  }
+  /* the depth of a surveyed pixel, to the half foot on a band's edge */
+  const zAt=i=>{ const z=Z1[i]; return TS[z] ? (SD[i]===2 ? z+.5 : z-.5) : z; };
+  for(let i=0;i<N;i++){
+    const k=c[i];
+    let v=0;
+    if(k===1) v=LAND;
+    else if(k===10) v=0;                                    /* the coast: a gap */
+    else if(Z1 && Z1[i]){ v=band(zAt(i)); surveyed++; }
+    else if(k===2) v=B[0];                                  /* dries */
+    else if(k===0) v=D && D[i]<=reach ? LAND : 0;           /* no chart: a surveyed lake's rim */
+    else if(k===3) v=B[1];
+    else if(k===4) v=B[2];
+    else if(k===6) v=B[2];
+    else if(k===11) v=255;                                  /* the ENC's 1.8 m */
+    a[i]=v;
+  }
+  if(water<64 && surveyed<64) return {err:'no water'};
+  /* that rim kept off the lake by a clear pixel, as a coast is */
+  if(Z1) for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+    if(c[i]!==0 || Z1[i] || !a[i]) continue;
+    if((x && Z1[i-1]) || (x<w-1 && Z1[i+1]) || (y && Z1[i-w]) || (y<h-1 && Z1[i+w])) a[i]=0; }
+  /* FWC's contour lines, over the bands, each with a clear pixel on its
+     deep side - the hard edge that tells it from the dial's soft fades */
+  const DRAW=new Uint8Array(256); for(const z of cfg.LINES) DRAW[z]=1;
+  if(Z1){
+    for(let i=0;i<N;i++){ const z=lab[i];
+      if(DRAW[z] && Z1[i] && c[i]!==1 && c[i]!==10) a[i]=255; }
+    for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+      const z=lab[i]; if(!DRAW[z] || !Z1[i] || c[i]===1 || c[i]===10) continue;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+        const q=Y*w+X;
+        if(DRAW[lab[q]] || !Z1[q] || c[q]===1 || c[q]===10) continue;
+        if(zAt(q)>z) a[q]=0;
+      }
+    }
+  }
+  /* and the ENC's 1.8 m line where there is no survey: clear on its deep side */
+  for(let y=0,i=0;y<h;y++) for(let x=0;x<w;x++,i++){
+    if(c[i]!==11 || (Z1&&Z1[i])) continue;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      const X=x+dx, Y=y+dy; if(X<0||Y<0||X>=w||Y>=h) continue;
+      const q=Y*w+X; if((c[q]===4||c[q]===5) && !(Z1&&Z1[q])) a[q]=0;
+    }
+  }
+  /* piles, obstructions, wrecks: a 3 px dot each, full ink */
+  const DOT=Math.round(255*cfg.DOT);
+  for(let j=0;j<dots.length;j+=2)
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      const X=dots[j]+dx, Y=dots[j+1]+dy;
+      if(X>=0&&Y>=0&&X<w&&Y<h && c[Y*w+X]!==1) a[Y*w+X]=DOT; }
+  return {a, fwc, stat:{surveyed, dots:dots.length/2, lines:lines.length}};
 }
 /* --cht-map and --ink are the theme's; reading them is a style lookup,
    so it is done only when the body's class - which is what changes the

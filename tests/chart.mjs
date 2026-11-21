@@ -42,37 +42,87 @@ const sk=async r=>{
     return rt && ROUTE_STATUS===200 ? json(rt) : json({message:'No provider for routes'},404); }
   return r.abort();
 };
-/* NOAA: a picture with land down its left side and water on the right,
-   so the bake has something of each to do. Made by the page itself, so
-   the probe carries no binary. OFFLINE turns it into a dead network. */
-let OFFLINE=false, noaa=0, PNG=null, INK=null, BLACK=false;
+/* NOAA: a picture in the service's day palette with land down its left
+   side and water (under 1.8 m) on the right, so the bake has something
+   of each to do; a pile; and a corner outside every ENC cell, which the
+   service sends as (0,0,0,0). Made by the page itself, so the probe
+   carries no binary. OFFLINE turns it into a dead network. */
+let OFFLINE=false, noaa=0, PNG=null, INK=null, SOLIDP=null, BLACK=false, SOLID=false,
+    noaaUrl='', FLAT=null, FLATP={};
 const chartPng=async p=>PNG||(PNG=Buffer.from(await p.evaluate(()=>{
   const c=document.createElement('canvas'); c.width=c.height=1024;
   const x=c.getContext('2d');
-  x.fillStyle='#82BEFF'; x.fillRect(0,0,1024,1024);           /* water */
-  x.fillStyle='#CFC48C'; x.fillRect(0,0,560,1024);            /* land  */
-  x.fillStyle='#000';    x.fillRect(600,300,24,24);           /* a mark */
+  x.fillStyle='#82BDFF'; x.fillRect(0,0,1024,1024);           /* water */
+  x.fillStyle='#CEC58A'; x.fillRect(0,0,560,1024);            /* land  */
+  x.fillStyle='#000';    x.fillRect(600,300,24,24);           /* a pile */
+  x.clearRect(900,20,100,100);                                /* no cell */
   return c.toDataURL('image/png').split(',')[1];
 }),'base64'));
-/* and a chart that is ink from edge to edge - the worst case for
-   anything that is meant to have faded out by a line */
+/* and a chart that is ink from edge to edge - drying ground everywhere,
+   the darkest band, the worst case for anything that is meant to have
+   faded out by a line */
 const inkPng=async p=>INK||(INK=Buffer.from(await p.evaluate(()=>{
   const c=document.createElement('canvas'); c.width=c.height=1024;
-  const x=c.getContext('2d'); x.fillStyle='#000'; x.fillRect(0,0,1024,1024);
+  const x=c.getContext('2d'); x.fillStyle='#78B796'; x.fillRect(0,0,1024,1024);
+  x.fillStyle='#82BDFF'; x.fillRect(0,0,8,8);
   return c.toDataURL('image/png').split(',')[1];
 }),'base64'));
+/* and what levels 5 and 6 used to come back as: one flat land */
+const solidPng=async p=>SOLIDP||(SOLIDP=Buffer.from(await p.evaluate(()=>{
+  const c=document.createElement('canvas'); c.width=c.height=1024;
+  const x=c.getContext('2d'); x.fillStyle='#CEC58A'; x.fillRect(0,0,1024,1024);
+  return c.toDataURL('image/png').split(',')[1];
+}),'base64'));
+/* and one flat fill of any colour: FLAT='#BEDEEB' is the middle of a
+   big lake, one depth area wider than the image; 'none' is a lake with
+   no ENC cell at all, every pixel (0,0,0,0) */
+const flatPng=async(p,col)=>FLATP[col]||(FLATP[col]=Buffer.from(await p.evaluate(col=>{
+  const c=document.createElement('canvas'); c.width=c.height=1024;
+  const x=c.getContext('2d'); if(col!=='none'){ x.fillStyle=col; x.fillRect(0,0,1024,1024); }
+  return c.toDataURL('image/png').split(',')[1];
+},col),'base64'));
 let PAGE=null;
 const nos=async r=>{
-  noaa++;
+  noaa++; noaaUrl=r.request().url();
   if(OFFLINE) return r.abort('internetdisconnected');
   return r.fulfill({status:200, contentType:'image/png',
     headers:{"Access-Control-Allow-Origin":"*"},
-    body:await (BLACK?inkPng:chartPng)(PAGE||r.request().frame().page())});
+    body:FLAT ? await flatPng(PAGE||r.request().frame().page(), FLAT)
+              : await (SOLID?solidPng:BLACK?inkPng:chartPng)(PAGE||r.request().frame().page())});
+};
+/* FWC: the lake survey, as the real service answers it - GeoJSON lines
+   with DEPTHF in negative feet, only those meeting the envelope, at most
+   FWC_MAX a page with exceededTransferLimit while more remain. Synthetic
+   contours, made below; nothing of FWC's own is in the probe. */
+/* FWC_HANG: a link that takes the request and never answers (a hotspot
+   with no backhaul) - held until released; FWC_PG: a page after the
+   first that fails, 'abort' or 'error' (a 200 with ArcGIS's {error}). */
+let FWC_FEATS=[], FWC_MAX=1000, FWC_OFF=false, FWC_HANG=false, FWC_PG=null;
+const fwcAsks=[], hung=[];
+const fwc=async r=>{
+  const u=new URL(r.request().url()), q=u.searchParams;
+  fwcAsks.push({g:q.get('geometry'), o:+q.get('resultOffset'), n:+q.get('resultRecordCount'),
+                tol:q.get('maxAllowableOffset')});
+  if(FWC_OFF) return r.abort('internetdisconnected');
+  if(FWC_HANG){ await new Promise(res=>hung.push(res)); return r.abort('timedout').catch(()=>{}); }
+  if(FWC_PG && +q.get('resultOffset')>0)
+    return FWC_PG==='abort' ? r.abort('connectionreset')
+      : r.fulfill({status:200, contentType:'application/json', headers:{'Access-Control-Allow-Origin':'*'},
+          body:JSON.stringify({error:{code:500, message:'Error performing query operation'}})});
+  const [w,s,e,n]=q.get('geometry').split(',').map(Number);
+  const hit=FWC_FEATS.filter(f=>f.geometry.coordinates.some(c=>c[0]>=w&&c[0]<=e&&c[1]>=s&&c[1]<=n));
+  const o=+q.get('resultOffset')||0, k=Math.min(+q.get('resultRecordCount')||1e9, FWC_MAX);
+  const page=hit.slice(o,o+k), more=o+k<hit.length;
+  const body={type:'FeatureCollection', features:page};
+  if(more){ body.exceededTransferLimit=true; body.properties={exceededTransferLimit:true}; }
+  return r.fulfill({status:200, contentType:'application/geo+json',
+    headers:{'Access-Control-Allow-Origin':'*'}, body:JSON.stringify(body)});
 };
 
 const {b,p}=await open(t,{routes:{
   'http://localhost:3000/signalk/**':sk,
-  'https://gis.charttools.noaa.gov/**':nos}});
+  'https://gis.charttools.noaa.gov/**':nos,
+  'https://gis.myfwc.com/**':fwc}});
 PAGE=p;
 const logs=[]; p.on('console',m=>logs.push(m.type()+': '+m.text()));
 
@@ -100,12 +150,16 @@ const off=(d,rel)=>p.evaluate(([d,rel])=>{
 },[d,rel]);
 const settle=(ms=1400)=>p.waitForTimeout(ms);
 const shot=(clip)=>p.screenshot({clip:clip||{x:0,y:0,width:1080,height:1080}});
-const dropCharts=()=>p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear();
+/* The kept charts (and with fwc, the kept survey) gone from IndexedDB,
+   and from the page's memory of them. */
+const dropCharts=(fwc)=>p.evaluate(fwc=>{ CHI.cur=null; CHI.fail.clear();
+  if(fwc){ FWC.mem.clear(); FWC.fail.clear(); }
   return new Promise(res=>{ const r=indexedDB.open('confluence');
     r.onsuccess=e=>{ const db=e.target.result, tx=db.transaction('tilecache','readwrite');
       const st=tx.objectStore('tilecache'); st.getAllKeys().onsuccess=ev=>{
-        ev.target.result.filter(k=>String(k).startsWith('cht/')).forEach(k=>st.delete(k)); };
-      tx.oncomplete=()=>{ db.close(); res(); }; }; }); });
+        ev.target.result.filter(k=>/^cht2?\//.test(String(k)) || (fwc && /^fwc1\//.test(String(k))))
+          .forEach(k=>st.delete(k)); };
+      tx.oncomplete=()=>{ db.close(); res(); }; }; }); }, !!fwc);
 /* Decoded pixels of a screenshot, in the page. */
 const pixels=`async b=>{ const im=new Image(); im.src='data:image/png;base64,'+b; await im.decode();
   const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height;
@@ -645,22 +699,23 @@ const night=await p.evaluate(()=>{
           s:cs.getPropertyValue('--cht-map').trim(), href:$('cht-img').getAttribute('href')===img.url};
 });
 t.ok(night.theme==='night' && night.href, 'recoloured on the theme change, and shown');
-/* within 3: the canvas keeps its pixels premultiplied, so a colour read
-   back through a .2 alpha has lost a bit or two of every channel */
-t.ok(Math.abs(night.px[0]-0xC8)<=3 && Math.abs(night.px[1]-0x34)<=3
-     && Math.abs(night.px[2]-0x2E)<=3,
+/* within 6: the canvas keeps its pixels premultiplied, and land is
+   baked faint (an alpha of 24 or so at night), so a colour read back
+   through it has lost a few levels of every channel */
+t.ok(Math.abs(night.px[0]-0xC8)<=6 && Math.abs(night.px[1]-0x34)<=6
+     && Math.abs(night.px[2]-0x2E)<=6,
      'in night\'s ink, #C8342E', night.px.join(','));
-/* the stand-in's land is #CFC48C: .095 R - 1.048 B + 1 = .50 of ink,
-   and the strength on top of that */
-const landA=(.095*0xCF-1.048*0x8C)/255+1;
-t.ok(night.s==='.44' && Math.abs(night.px[3]-255*landA*.44)<=2,
-     'at the night strength, .44, painted into the alpha',
-     night.px[3]+' vs '+(255*landA*.44).toFixed(1));
+/* the stand-in's land is baked to the land tone, CHT.LAND of ink, and
+   the strength on top of that */
+const landA=Math.round(255*(await p.evaluate(()=>CHT.LAND)))/255;
+t.ok(night.s==='.58' && Math.abs(night.px[3]-255*landA*.58)<=2,
+     'land at its flat tone, at the night strength, .58, painted into the alpha',
+     night.px[3]+' vs '+(255*landA*.58).toFixed(1));
 const str=await p.evaluate(()=>['','dusk','night'].map(c=>{
   const was=document.body.className; document.body.className=c;
   const v=getComputedStyle(document.body).getPropertyValue('--cht-map').trim();
   document.body.className=was; return v; }));
-t.ok(eq(str,['.40','.38','.44']), 'one strength per theme: day .40, dusk .38, night .44',
+t.ok(eq(str,['.50','.46','.58']), 'one strength per theme: day .50, dusk .46, night .58',
      str.join(' '));
 const fil=await p.evaluate(()=>$('cht').querySelectorAll('[filter]').length
   + document.querySelectorAll('#cht filter, defs filter[id^="cht"]').length);
@@ -679,7 +734,7 @@ await settle(2600);
 const midPx=await p.evaluate(()=>{ const img=CHI.cur;
   return {theme:img.theme, px:[...img.c.getContext('2d').getImageData(100,500,1,1).data]}; });
 t.ok(mid.theme==='dusk' && mid.body==='night' && midPx.theme==='night'
-     && Math.abs(midPx.px[0]-0xC8)<=3 && Math.abs(midPx.px[1]-0x34)<=3,
+     && Math.abs(midPx.px[0]-0xC8)<=6 && Math.abs(midPx.px[1]-0x34)<=6,
      'a theme change during the bake: filed under the theme it was baked for, '
      +'and recoloured to the new one at the next check', JSON.stringify([mid, midPx]));
 
@@ -712,20 +767,367 @@ await p.evaluate(()=>{ chtSeq++; chtLastAt=0; });
 await p.evaluate(()=>{ CFG.theme='day'; applyTheme(); }); await settle(2500);
 
 /* ===================================================================== */
+t.head('the depth chart: FWC\'s lake survey, baked once per area');
+/* The boat held where it is, so every bake below is of the same water.
+   First an image with no survey, to learn where it lies; then a survey
+   made for it - twelve rings, 1 ft apart, 6 px apart, shoaling to the
+   edge like a lake - served the way FWC serves it: GeoJSON, DEPTHF in
+   negative feet, five lines a page. */
+/* an image on the glass, and the survey's own fetch for it (which runs
+   after the image is shown, not before) finished too */
+const waitImg=async()=>{ await p.evaluate(()=>{ chtSeq++; chtLastAt=0; });
+  await p.waitForFunction(()=>CHI.cur && CHI.cur.url && !CHI.busy && !CHI.cur.fwcBusy, null,
+    {timeout:15000}).catch(()=>{}); await settle(600); };
+await p.evaluate(()=>{ window.__df=demoT; window.__hold=setInterval(()=>{ demoT=window.__df; },20); });
+FWC_FEATS=[]; await dropCharts(true); await waitImg();
+const G=await p.evaluate(()=>({cx:CHI.cur.cx, cy:CHI.cur.cy, L:CHI.cur.L, k:CHI.cur.k}));
+const CXP=800, CYP=512, RING=d=>90-6*(d-1);
+const pxLL=(x,y)=>{ const R=6378137, mx=G.cx-512*G.L+x*G.L, my=G.cy+512*G.L-y*G.L;
+  return [mx/R*180/Math.PI, (2*Math.atan(Math.exp(my/R))-Math.PI/2)*180/Math.PI]; };
+const rings=[];
+for(let d=1;d<=12;d++){ const cs=[];
+  for(let a=0;a<=96;a++){ const th=a/96*2*Math.PI;
+    cs.push(pxLL(CXP+RING(d)*Math.cos(th), CYP+RING(d)*Math.sin(th))); }
+  rings.push({type:'Feature', properties:{DEPTHF:-d}, geometry:{type:'LineString', coordinates:cs}}); }
+FWC_FEATS=rings; FWC_MAX=5; fwcAsks.length=0;
+await dropCharts(true); await waitImg();
+/* what one run of the bake reads, from 2 px outside the 1 ft ring
+   (inside the survey's 150 m reach at every level) in to the middle,
+   each run of equal alpha once - from the east by default, or from
+   (dx,dy): the nearest-contour fill is two passes, one down and one up,
+   and a run from the north or the west is what reads the second */
+const ray=(dx=1,dy=0)=>p.evaluate(([cx,cy,dx,dy])=>{ const a=CHI.cur.a, out=[];
+  for(let k=Math.round(92/Math.hypot(dx,dy));k>=0;k--){
+    const v=a[(cy+k*dy)*1024+cx+k*dx]; if(out[out.length-1]!==v) out.push(v); }
+  return out; },[CXP,CYP,dx,dy]);
+const BANDS=await p.evaluate(()=>CHT.BAND.map(v=>Math.round(255*v)));
+const want=[BANDS[0],255,0,BANDS[1],255,0,BANDS[2],BANDS[3]];
+let rr=await ray(), img=await p.evaluate(()=>({fwc:CHI.cur.fwc, k:CHI.cur.k, miss:CHI.cur.fwcMiss}));
+t.ok(img.fwc>0 && !img.miss && eq(rr,want),
+     'from the shore in: 0-3 ft darkest, the 3 ft line, a clear pixel, 3-6 ft, the 6 ft line, '
+     +'a clear pixel, 6-10 ft light, deeper clear - each band between its own contours',
+     JSON.stringify({rr, want, img}));
+{ const runs={}; for(const [n,dx,dy] of [['N',0,-1],['S',0,1],['W',-1,0],['NE',1,-1],['SW',-1,1]])
+    runs[n]=await ray(dx,dy);
+  t.ok(Object.values(runs).every(r=>eq(r,want)),
+       'and the same from the north, the south, the west and on the diagonals', JSON.stringify(runs));
+  /* exactly where each band starts: the pixel one inside each ring is
+     that ring's band, all round - a fill that saw the rings from one
+     side only puts the edges a ring out on the other */
+  const edges=await p.evaluate(([cx,cy,B])=>{ const a=CHI.cur.a, bad=[];
+    const R=d=>90-6*(d-1), band=z=>z<3?B[0]:z<6?B[1]:z<10?B[2]:B[3];
+    for(let th=0;th<360;th+=15) for(const d of [2,4,5,7,8]){
+      const r=R(d)-3, x=Math.round(cx+r*Math.cos(th/57.2958)), y=Math.round(cy+r*Math.sin(th/57.2958));
+      const v=a[y*1024+x]; if(v!==band(d+.5)) bad.push([th,d,v]); }
+    return bad; },[CXP,CYP,BANDS]);
+  t.ok(edges.length===0, 'midway between every pair of rings, all round: the band of the ring outside it',
+       JSON.stringify(edges.slice(0,12))); }
+/* The contour is a line, not a seam. The 3 ft line is full ink beside
+   the 0-3 ft band, so it must stand out from that band by as much as
+   the bands stand out from each other - by more than its clear pixel
+   alone, or it reads the same as the coast's clear gap. And night,
+   the dimmest, still has every water tone ~25 levels of red from the
+   next: the 6-10 ft wash is not lost in the dial's soft fades. */
+{ const tone=await p.evaluate(()=>{ const was=document.body.className; document.body.className='night';
+    const cs=getComputedStyle(document.body), s=parseFloat(cs.getPropertyValue('--cht-map'));
+    const ink=parseInt(cs.getPropertyValue('--ink').trim().slice(1),16)>>16&255,
+          bg=parseInt(cs.getPropertyValue('--bg').trim().slice(1),16)>>16&255;
+    document.body.className=was;
+    const lv=a=>bg+(ink-bg)*s*a;
+    return {line:lv(1), b:CHT.BAND.map(lv), land:lv(CHT.LAND), bg}; });
+  const st=[tone.line, ...tone.b].map(v=>Math.round(v));
+  t.ok(st.every((v,i)=>i===0 || st[i-1]-v>=24),
+       'night red: 3 ft line, 0-3, 3-6, 6-10, deep - each tone 24 levels or more from the next',
+       JSON.stringify({levels:st, land:Math.round(tone.land)}));
+  t.ok(tone.land>tone.bg+10 && tone.land<tone.b[2]-8,
+       'and land a low flat tone of its own, below the 6-10 ft wash', JSON.stringify(tone)); }
+/* every page asked, once: an envelope that meets the rings in n lines
+   is asked ceil(n/5) times, at offsets 0, 5, 10; one that meets none,
+   once */
+const byEnv=new Map(); for(const a of fwcAsks){ if(!byEnv.has(a.g)) byEnv.set(a.g,[]); byEnv.get(a.g).push(a.o); }
+const pg=[...byEnv].map(([g,os])=>{ const [w,s,e,n]=g.split(',').map(Number);
+  const hits=rings.filter(f=>f.geometry.coordinates.some(c=>c[0]>=w&&c[0]<=e&&c[1]>=s&&c[1]<=n)).length;
+  const need=Math.max(1,Math.ceil(hits/5));
+  return {hits, os, ok:os.length===need && eq(os,[...Array(need)].map((_,i)=>i*5))}; });
+t.ok(pg.length>0 && pg.every(x=>x.ok) && pg.some(x=>x.hits===12 || x.os.length>1),
+     'paged: every page of every square asked once, at 5 lines a page', JSON.stringify(pg));
+t.ok(fwcAsks.every(a=>+a.tol>0 && +a.tol<1e-4),
+     'and generalised by the server to a couple of metres', fwcAsks[0]&&fwcAsks[0].tol);
+const keptF=await p.evaluate(()=>tileTx('readonly',st=>st.getAllKeys())
+  .then(ks=>Promise.all(ks.filter(k=>/^fwc1\//.test(k)).map(k=>tileGet(k)
+    .then(r=>({k, blob:r.b instanceof Blob, t:!!r.t}))))));
+t.ok(keptF.length===byEnv.size && keptF.every(r=>r.blob && r.t),
+     'every square kept in the tilecache store, as a blob under fwc1/, with the trim\'s timestamp',
+     JSON.stringify(keptF));
+t.ok(/IntendedUsage/.test(decodeURIComponent(noaaUrl)) && /SafetyContour/.test(decodeURIComponent(noaaUrl)),
+     'NOAA asked with IntendedUsage (levels 5-6 draw the lake) and the 1.8 m contour');
+/* the pile: one small dot, not a 24 px blob */
+const pile=await p.evaluate(()=>{ const a=CHI.cur.a; let n=0;
+  for(let y=290;y<340;y++) for(let x=590;x<640;x++) if(a[y*1024+x]>=250) n++; return n; });
+t.ok(pile>0 && pile<=9, 'a pile is a 3 px dot of full ink', pile+' px');
+/* outside every ENC cell the service sends (0,0,0,0): clear, not ink */
+const nocell=await p.evaluate(()=>[CHI.cur.a[70*1024+950], CHI.cur.a[200*1024+950]]);
+t.ok(nocell[0]===0 && nocell[1]===BANDS[1],
+     'a transparent pixel is clear; the charted water beside it is its band', nocell.join(','));
+
+t.head('baked once, never per frame; the survey asked once, then offline');
+const bk0=(await st()).bake; await settle(3000);
+t.ok((await st()).bake===bk0, 'three seconds at rest: not one bake', ((await st()).bake-bk0)+'');
+const ms=await p.evaluate(()=>CHT.n.bakeMs);
+t.ok(ms>0 && ms<3000, 'and one bake, timed in the page, '+ms+' ms here');
+let f0=fwcAsks.length;
+await p.evaluate(()=>{ CHI.cur=null; FWC.mem.clear(); }); await waitImg();
+t.ok(fwcAsks.length===f0 && eq(await ray(),want),
+     'baked again (a reload, a new scale): the survey from IndexedDB, not asked again',
+     (fwcAsks.length-f0)+' asks');
+FWC_OFF=true; OFFLINE=true; f0=fwcAsks.length; const nn=noaa;
+await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear(); FWC.mem.clear(); FWC.fail.clear(); });
+await waitImg();
+rr=await ray();
+t.ok(eq(rr,want) && fwcAsks.length===f0 && noaa===nn,
+     'offline: the same depth chart, from the store alone', JSON.stringify({rr, asks:fwcAsks.length-f0, noaa:noaa-nn}));
+FWC_OFF=false; OFFLINE=false;
+
+t.head('no survey: the ENC\'s own depth areas');
+FWC_FEATS=[]; await dropCharts(true); await waitImg();
+rr=await ray(); img=await p.evaluate(()=>({fwc:CHI.cur.fwc, miss:CHI.cur.fwcMiss}));
+t.ok(img.fwc===0 && !img.miss && eq(rr,[BANDS[1]]),
+     'FWC answers with nothing here: the ENC\'s under-1.8 m area is the 3-6 ft band',
+     JSON.stringify({rr, img}));
+/* FWC unreachable, and never seen: the ENC's bands now, and FWC asked
+   again a minute later - not every second */
+FWC_FEATS=rings; FWC_OFF=true; f0=fwcAsks.length;
+await dropCharts(true); await waitImg();
+img=await p.evaluate(()=>({fwc:CHI.cur.fwc, miss:CHI.cur.fwcMiss}));
+const n1=fwcAsks.length; await settle(3000);
+t.ok(img.fwc===0 && img.miss && eq(await ray(),[BANDS[1]]) && fwcAsks.length===n1,
+     'FWC unreachable: the ENC\'s bands, and not asked again every second',
+     JSON.stringify({img, asks:[n1-f0, fwcAsks.length-n1]}));
+FWC_OFF=false;
+await p.evaluate(()=>{ CHI.cur.fwcT=0; FWC.fail.clear(); chtLastAt=0; });
+await p.waitForFunction(()=>CHI.cur && CHI.cur.fwc>0 && !CHI.busy, null, {timeout:15000}).catch(()=>{});
+t.ok(eq(await ray(),want), 'and when it answers, baked again with the survey');
+
+t.head('nothing kept from before, nothing kept that is not a chart');
+/* An image cached under the old key (the old parameters: levels 5-6
+   flat land, no IntendedUsage) for this very cell is never read. */
+const oldK=G.k.replace(/^cht2\//,'cht/');
+await dropCharts(true);
+await p.evaluate(async k=>{ const c=document.createElement('canvas'); c.width=c.height=1024;
+  const x=c.getContext('2d'); x.fillStyle='#000'; x.fillRect(0,0,1024,1024);
+  await tilePut(k, await new Promise(r=>c.toBlob(r,'image/png'))); CHI.swept=false; }, oldK);
+let ob=noaa; await waitImg();
+const old=await p.evaluate(k=>tileGet(k).then(r=>({gone:!r, k:CHI.cur.k, land:CHI.cur.a[500*1024+100]})), oldK);
+t.ok(noaa===ob+1 && old.gone && /^cht2\//.test(old.k) && old.land===Math.round(255*(await p.evaluate(()=>CHT.LAND))),
+     'an image under the old cht/ key: not read, fetched anew, and the old one deleted',
+     JSON.stringify({asks:noaa-ob, ...old}));
+/* One flat colour - what levels 5-6 were without IntendedUsage: refused,
+   not shown, not kept. */
+SOLID=true; await dropCharts(true); ob=noaa;
+await p.evaluate(()=>{ chtSeq++; chtLastAt=0; }); await settle(3000);
+const solid=await p.evaluate(k=>tileGet(k).then(r=>({kept:!!r, cur:!!CHI.cur, fail:CHI.fail.has(k)})), G.k);
+t.ok(noaa>ob && !solid.kept && !solid.cur && solid.fail,
+     'an export of one flat colour, no water: refused, and never cached', JSON.stringify(solid));
+SOLID=false; FWC_MAX=1000;
+
+/* The sweep of the old cht/ images takes those and nothing else: today's
+   charts and surveys kept beside them are what the boat has offline. */
+{ await p.evaluate(async()=>{ await tilePut('cht/3/1/1', new Blob(['x']));
+    await tilePut('cht2/9/9/9', new Blob(['y']));
+    await tilePut('fwc1/0/0', new Blob(['{"v":1,"f":[]}'],{type:'application/json'}));
+    CHI.swept=false; CHI.cur=null; CHI.fail.clear(); });
+  await waitImg();
+  const sw=await p.evaluate(()=>Promise.all(['cht/3/1/1','cht2/9/9/9','fwc1/0/0'].map(k=>tileGet(k)))
+    .then(r=>r.map(x=>!!x)));
+  t.ok(!sw[0] && sw[1] && sw[2], 'the sweep takes the old cht/ images and only them: a cht2/ chart '
+       +'and a fwc1/ survey beside them are kept', JSON.stringify(sw));
+  await p.evaluate(()=>Promise.all([tileDel('cht2/9/9/9'), tileDel('fwc1/0/0')])); }
+
+/* A kept survey square that will not parse - cut short by a power cut -
+   is thrown away and fetched again, once; not missed on every bake. */
+FWC_FEATS=rings; FWC_MAX=5; await dropCharts(true); await waitImg();
+{ const ks=await p.evaluate(()=>tileTx('readonly',st=>st.getAllKeys())
+    .then(ks=>ks.filter(k=>/^fwc1\//.test(k))));
+  const bad=ks[0];
+  await p.evaluate(async k=>{ await tilePut(k,new Blob(['{"v":1,"f":[[5,1,2'],{type:'application/json'}));
+    FWC.mem.clear(); CHI.cur=null; }, bad);
+  const f0=fwcAsks.length; await waitImg();
+  const healed=await p.evaluate(k=>tileGet(k).then(async r=>{
+    try{ return Array.isArray(JSON.parse(await r.b.text()).f); }catch(e){ return false; } }), bad);
+  const f1=fwcAsks.length; rr=await ray();
+  t.ok(bad && healed && f1>f0 && eq(rr,want),
+       'a kept survey square that will not parse: deleted, fetched again, and the depth chart whole',
+       JSON.stringify({bad, healed, asks:f1-f0, rr}));
+  await p.evaluate(()=>{ CHI.cur=null; FWC.mem.clear(); }); await waitImg();
+  t.ok(fwcAsks.length===f1, 'and the bake after reads it from the store', (fwcAsks.length-f1)+' asks'); }
+
+/* One page of a square failing - not the first - must not leave the
+   pages before it kept as the whole square: that is a survey with
+   holes, and the water in them shaded by the wrong contour. */
+for(const mode of ['abort','error']){
+  FWC_PG=mode; await dropCharts(true); fwcAsks.length=0; await waitImg();
+  const paged=new Set(fwcAsks.filter(a=>a.o>0).map(a=>a.g));
+  const r=await p.evaluate(()=>tileTx('readonly',st=>st.getAllKeys()).then(ks=>({
+    kept:ks.filter(k=>/^fwc1\//.test(k)).length, miss:CHI.cur.fwcMiss, fwc:CHI.cur.fwc})));
+  t.ok(paged.size>0 && r.miss && r.fwc===0 && r.kept===byEnv.size-paged.size,
+       'a later page of a square '+(mode==='abort'?'cut off':'answered with an error')
+       +': that square not kept, and the chart the ENC\'s, not half a survey',
+       JSON.stringify({...r, squares:byEnv.size, paged:paged.size}));
+  FWC_PG=null;
+  await p.evaluate(()=>{ FWC.fail.clear(); CHI.cur.fwcT=0; chtLastAt=0; });
+  await p.waitForFunction(()=>CHI.cur && CHI.cur.fwc>0 && !CHI.cur.fwcBusy, null, {timeout:15000}).catch(()=>{});
+  const k2=await p.evaluate(()=>tileTx('readonly',st=>st.getAllKeys())
+    .then(ks=>ks.filter(k=>/^fwc1\//.test(k)).length));
+  t.ok(eq(await ray(),want) && k2===byEnv.size,
+       'and when it answers in full: every square kept, baked again with the survey', k2+'');
+}
+
+/* FWC on a link that takes the request and never answers. The chart
+   kept in the store is on the glass at once, in the ENC's bands; every
+   square of the survey is being asked at the same time, not one after
+   another; and the loader is free for the next image meanwhile. */
+{ FWC_MAX=1000; await dropCharts(true); await waitImg();
+  await p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('confluence');
+    r.onsuccess=e=>{ const db=e.target.result, tx=db.transaction('tilecache','readwrite');
+      const st=tx.objectStore('tilecache'); st.getAllKeys().onsuccess=ev=>{
+        ev.target.result.filter(k=>/^fwc1\//.test(String(k))).forEach(k=>st.delete(k)); };
+      tx.oncomplete=()=>{ db.close(); res(); }; }; }));
+  FWC_HANG=true; const nb=noaa;
+  await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear(); FWC.mem.clear(); FWC.fail.clear(); chtSeq++; chtLastAt=0; });
+  const t0=Date.now();
+  await p.waitForFunction(()=>CHI.cur && CHI.cur.url && $('cht-img').style.display!=='none',
+    null, {timeout:10000}).catch(()=>{});
+  const dt=Date.now()-t0; await settle(300);
+  const h=await p.evaluate(()=>({busy:CHI.busy, miss:!!(CHI.cur&&CHI.cur.fwcMiss),
+    asking:!!(CHI.cur&&CHI.cur.fwcBusy), fwc:CHI.cur&&CHI.cur.fwc}));
+  t.ok(dt<4000 && noaa===nb && !h.busy && h.miss && h.asking && h.fwc===0 && hung.length===byEnv.size,
+       'FWC hanging: the kept chart on the glass in '+dt+' ms, the loader free, every square asked at once',
+       JSON.stringify({dt, ...h, hung:hung.length, squares:byEnv.size, noaa:noaa-nb}));
+  FWC_HANG=false; hung.splice(0).forEach(r=>r());
+  await p.waitForFunction(()=>CHI.cur && !CHI.cur.fwcBusy, null, {timeout:15000}).catch(()=>{});
+  await p.evaluate(()=>{ FWC.fail.clear(); CHI.cur.fwcT=0; chtLastAt=0; });
+  await p.waitForFunction(()=>CHI.cur && CHI.cur.fwc>0 && !CHI.cur.fwcBusy, null, {timeout:15000}).catch(()=>{});
+  t.ok(eq(await ray(),want), 'and once it answers, the survey baked in'); }
+
+/* The middle of a big lake: an export that is one depth area from edge
+   to edge. It is water, and a chart - not "one flat colour". */
+{ FWC_FEATS=[]; FLAT='#BEDEEB'; await dropCharts(true); await waitImg();
+  const fl=await p.evaluate(()=>CHI.cur ? tileGet(CHI.cur.k).then(r=>({kept:!!r,
+    v:[CHI.cur.a[0], CHI.cur.a[512*1024+512], CHI.cur.a[1024*1024-1]]})) : {kept:false});
+  t.ok(fl.kept && fl.v.every(v=>v===BANDS[2]),
+       'one flat depth area, edge to edge: baked (1.8-3 m, the 6-10 ft band) and kept', JSON.stringify(fl)); }
+
+/* A lake FWC surveyed that no ENC cell covers - most of Florida's
+   inland lakes: the export is (0,0,0,0) everywhere, and the survey alone
+   is the chart. Outside its shallowest ring, a rim of land tone with a
+   clear pixel at the water; beyond that, nothing. */
+{ FLAT='none'; FWC_FEATS=rings; await dropCharts(true); await waitImg();
+  const fo=await p.evaluate(([cx,cy])=>CHI.cur ? tileGet(CHI.cur.k).then(r=>({kept:!!r, fwc:CHI.cur.fwc,
+    far:CHI.cur.a[20*1024+20]})) : {kept:false}, [CXP,CYP]);
+  const LANDV=Math.round(255*(await p.evaluate(()=>CHT.LAND)));
+  rr=await ray();
+  t.ok(fo.kept && fo.fwc>0 && fo.far===0 && eq(rr,[LANDV,0,...want]),
+       'no ENC cell, a surveyed lake: the survey alone - land-tone rim, clear shore, then the bands',
+       JSON.stringify({fo, rr}));
+  FWC_FEATS=[]; await dropCharts(true); ob=noaa;
+  await p.evaluate(()=>{ chtSeq++; chtLastAt=0; }); await settle(3000);
+  const nn2=await p.evaluate(k=>tileGet(k).then(r=>({kept:!!r, cur:!!CHI.cur, fail:CHI.fail.has(k)})), G.k);
+  t.ok(noaa>ob && !nn2.kept && !nn2.cur && nn2.fail,
+       'and no ENC cell and no survey: nothing to draw, refused and not kept', JSON.stringify(nn2));
+  FLAT=null; FWC_FEATS=[]; }
+
+t.head('the bake on its own: where the survey ends, and what is a mark');
+/* chtDepthBake straight, on small pictures drawn here in NOAA's day
+   palette, 10 m a pixel; FWC rings given in pixels. */
+await p.evaluate(()=>{
+  window.__bk=(W,H,draw,rings)=>{
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const x=c.getContext('2d'); draw(x);
+    const d=x.getImageData(0,0,W,H).data, L=10;
+    const lines=rings.map(([cx,cy,r,z])=>{ const p=[];
+      for(let a=0;a<=64;a++){ const th=a/64*2*Math.PI; p.push((cx+r*Math.cos(th))*L, -(cy+r*Math.sin(th))*L); }
+      return {z, p:Float64Array.from(p)}; });
+    const r=chtDepthBake(d,W,H,lines,{L, ox:0, oy:0, BAND:CHT.BAND, LAND:CHT.LAND, LINES:CHT.LINES,
+      DOT:CHT.DOT, REACH:CHT.FWC_REACH, FILL:CHT.FWC_FILL});
+    r.at=(X,Y)=>r.a[Y*W+X]; return r; };
+});
+{ /* half charted water, half outside every ENC cell; a 5 ft ring in
+     the water. Not one pixel of the uncharted half is inked - the old
+     bake gave it all the 3-6 ft band, the ring's nearest-contour zone
+     running straight on across ground no chart covers */
+  const r=await p.evaluate(()=>{ const b=__bk(300,200,x=>{ x.fillStyle='#DDF1EE'; x.fillRect(0,0,150,200); },
+      [[70,100,30,5]]);
+    let n=0; for(let y=0;y<200;y++) for(let x=150;x<300;x++) if(b.at(x,y)) n++;
+    return {n, ring:b.at(70,100), far:b.at(260,100)}; });
+  t.ok(r.n===0 && r.ring===BANDS[1], 'outside every ENC cell, a kilometre from a 5 ft ring: clear, '
+       +'every pixel of it; inside the ring, its band', JSON.stringify(r)); }
+{ /* a lake with a ring, and a river across the land from it. The river
+     is the ENC's, however deep the contour nearest it in a straight line */
+  const r=await p.evaluate(()=>{
+    const pic=(river)=>x=>{ x.fillStyle='#CEC58A'; x.fillRect(0,0,400,200);
+      x.fillStyle='#82BDFF'; x.fillRect(20,20,120,160); x.fillStyle=river; x.fillRect(300,0,20,200); };
+    const a=__bk(400,200,pic('#BEDEEB'),[[80,100,40,5]]), b=__bk(400,200,pic('#82BDFF'),[[80,100,40,12]]);
+    return {a:[a.at(310,100), a.at(80,100)], b:[b.at(310,100), b.at(80,100)]}; });
+  t.ok(r.a[0]===BANDS[2] && r.a[1]===BANDS[1],
+       'a 1.8-3 m river 2 km across land from a 5 ft ring: the ENC\'s 6-10 ft, not the ring\'s 3-6',
+       JSON.stringify(r.a));
+  t.ok(r.b[0]===BANDS[1] && r.b[1]===BANDS[3],
+       'and an under-1.8 m river beside a 12 ft lake: shallow, not clear like the deep water',
+       JSON.stringify(r.b)); }
+{ /* a diagonal coast, anti-aliased, with specks of pure black stepping
+     along it - what the service draws at the finer levels - and one
+     real pile out in the water */
+  const r=await p.evaluate(()=>{ const b=__bk(240,240,x=>{
+      x.fillStyle='#82BDFF'; x.fillRect(0,0,240,240);
+      x.fillStyle='#CEC58A'; x.beginPath(); x.moveTo(0,0); x.lineTo(170,0); x.lineTo(0,170); x.fill();
+      x.strokeStyle='#3A3F3E'; x.lineWidth=2; x.beginPath(); x.moveTo(170,0); x.lineTo(0,170); x.stroke();
+      x.fillStyle='#000';
+      for(let s=4;s<166;s+=5){ const k=(s/5|0)%3; x.fillRect(170-s, s, k?1:3, k===1?2:k?1:3); }
+      x.fillRect(180,180,6,6); }, []);
+    let full=0; for(let i=0;i<b.a.length;i++) if(b.a[i]===255) full++;
+    return {dots:b.stat.dots, pile:b.at(183,183), full}; });
+  t.ok(r.dots===1 && r.pile===255 && r.full===9,
+       'specks of black along a diagonal coast are coast, not hazards: one dot, the real pile',
+       JSON.stringify(r)); }
+{ /* a black symbol on land (a landmark, a tank): land, not a hazard in
+     a hole */
+  const r=await p.evaluate(()=>{ const b=__bk(200,160,x=>{
+      x.fillStyle='#CEC58A'; x.fillRect(0,0,120,160); x.fillStyle='#82BDFF'; x.fillRect(120,0,80,160);
+      x.strokeStyle='#000'; x.lineWidth=2.5;
+      for(const [a,rr] of [[0,8],[1,6],[2,9],[3,4]]){ x.beginPath(); x.arc(55+a,70+a%2*3,rr,0,5.5); x.stroke(); } }, []);
+    const vals=new Set(); for(let y=55;y<90;y++) for(let x=38;x<75;x++) vals.add(b.at(x,y));
+    return {dots:b.stat.dots, vals:[...vals]}; });
+  const LANDV=Math.round(255*(await p.evaluate(()=>CHT.LAND)));
+  t.ok(r.dots===0 && r.vals.length===1 && r.vals[0]===LANDV,
+       'a black symbol on land bakes to land: no dot, no clear hole', JSON.stringify(r)); }
+{ /* a symbol's outline broken into a ring of small black pieces, in
+     the water; and one pile alone */
+  const r=await p.evaluate(()=>{ const b=__bk(200,200,x=>{
+      x.fillStyle='#BEDEEB'; x.fillRect(0,0,200,200); x.fillStyle='#000';
+      for(let a=0;a<12;a++){ const th=a/12*2*Math.PI;
+        x.fillRect(Math.round(70+12*Math.cos(th)), Math.round(70+12*Math.sin(th)), 3, 3); }
+      x.fillRect(150,150,5,5); }, []);
+    return {dots:b.stat.dots, pile:b.at(152,152), ring:b.at(83,71)}; });
+  t.ok(r.dots===1 && r.pile===255 && r.ring===BANDS[2],
+       'a dotted outline is not a chain of hazards: one dot, the pile alone', JSON.stringify(r)); }
+await p.evaluate(()=>{ CHI.fail.clear(); clearInterval(window.__hold); });
+await waitImg();
+
+/* ===================================================================== */
 t.head('the chart seen once with a signal is there without one');
 /* The boat held where it is, so the same water is asked for twice. */
 await p.evaluate(()=>{ window.__df=demoT; window.__hold=setInterval(()=>{ demoT=window.__df; },20); });
 await settle(3000);
 const key=await p.evaluate(()=>CHI.cur.k);
 const kept=await p.evaluate(k=>tileGet(k).then(r=>!!(r&&r.b&&r.t)), key);
-t.ok(/^cht\/\d+\/-?\d+\/-?\d+$/.test(key) && kept,
+t.ok(/^cht2\/\d+\/-?\d+\/-?\d+$/.test(key) && kept,
      'kept in the tilecache store under its own key, with the trim\'s timestamp', key);
 OFFLINE=true;
 const n0=noaa;
 await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear(); chtSeq++; chtLastAt=0; });
 await settle(2500);
 s=await st();
-t.ok(s.img && s.imgShown && await p.evaluate(()=>/^cht\//.test(CHI.cur.k)),
+t.ok(s.img && s.imgShown && await p.evaluate(()=>/^cht2\//.test(CHI.cur.k)),
      'offline, the same water: the chart is back from IndexedDB',
      await p.evaluate(k=>JSON.stringify({k, cur:CHI.cur&&CHI.cur.k, k1:chtView&&1/chtView.k,
        fail:[...CHI.fail.keys()], busy:CHI.busy, demoT}), key));
@@ -735,7 +1137,7 @@ await p.evaluate(()=>{ CHI.cur=null; CHI.fail.clear();
   return new Promise(res=>{ const r=indexedDB.open('confluence');
     r.onsuccess=e=>{ const db=e.target.result, tx=db.transaction('tilecache','readwrite');
       const st=tx.objectStore('tilecache'); st.getAllKeys().onsuccess=ev=>{
-        ev.target.result.filter(k=>String(k).startsWith('cht/')).forEach(k=>st.delete(k)); };
+        ev.target.result.filter(k=>String(k).startsWith('cht2/')).forEach(k=>st.delete(k)); };
       tx.oncomplete=()=>{ db.close(); res(); }; }; }); });
 await p.evaluate(()=>{ chtSeq++; chtLastAt=0; });
 await settle(2500);

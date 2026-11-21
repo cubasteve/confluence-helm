@@ -89,6 +89,8 @@ export async function open(t, opts={}){
      asks NOAA for a picture. No probe should depend on a chart server
      being up; tests/chart.mjs stands one in where it needs one. */
   await p.route('https://gis.charttools.noaa.gov/**', r=>r.abort());
+  /* Nor FWC's lake survey, which the chart asks for the depth under it. */
+  await p.route('https://gis.myfwc.com/**', r=>r.abort());
 
   /* Paths that are nobody's gesture: see `posts` below. */
   const QUIET=new Set(['/status', '/remote/poll', '/remote/register']);

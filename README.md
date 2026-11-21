@@ -135,7 +135,7 @@ docs/                     everything below
 | | |
 |---|---|
 | [Readings](docs/readings.md) | every number, what each means, and the picker |
-| [The route chart](docs/chart.md) | the Freeboard-SK route, faint in the left of the dial: where it comes from, the NOAA chart and its offline cache, the one Signal K setting |
+| [The route chart](docs/chart.md) | the Freeboard-SK route, faint in the left of the dial: where it comes from, the depth chart under it (FWC lake survey + NOAA ENC) and its offline cache, the one Signal K setting |
 | [The display](docs/display.md) | pages, gestures, the panel and dock, brightness, touch lock, alerts, golden hour |
 | [Radar](docs/radar.md) | two rain services, the metered forecast, the wind layer, the memory budget |
 | [Tracks](docs/tracks.md) | recording a sail, the library, and getting one onto a phone |
