@@ -84,13 +84,6 @@ export async function open(t, opts={}){
      app from its own feed or from a stub, and a socket that half-connects
      is a race nobody wants in a test. */
   await p.route('**/signalk/**', r=>r.abort());
-  /* Nor is NOAA. The demo sails a route of its own when no Signal K has
-     ever answered - which is every probe - and the route chart under it
-     asks NOAA for a picture. No probe should depend on a chart server
-     being up; tests/chart.mjs stands one in where it needs one. */
-  await p.route('https://gis.charttools.noaa.gov/**', r=>r.abort());
-  /* Nor FWC's lake survey, which the chart asks for the depth under it. */
-  await p.route('https://gis.myfwc.com/**', r=>r.abort());
 
   /* Paths that are nobody's gesture: see `posts` below. */
   const QUIET=new Set(['/status', '/remote/poll', '/remote/register']);
