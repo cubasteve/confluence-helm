@@ -46,6 +46,7 @@ probes count on.
 | `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
 | `demotrack` | the demo sails the boat's own 6 Nov sail, in that evening's Open-Meteo wind |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
+| `chart` | Freeboard in a frame: the Signal K host and the panel's theme in its address, every theme change told to it and nothing else, only its own origin listened to, the frame gone on close, a failure line instead of a blank circle when the server or the webapp is missing or silent (35 s, past the page's own 30 s boot wait; a server that answers only without CORS counts as up), the screensaver fed by the page's `rfb-activity` while the chart is in use, and the cross and the top-edge pull still the panel's |
 | `energy` | the house bank: every reading right with a feed, and every one of them an em dash without — never a zero, which is a flat battery rather than an absent one |
 | `gpsfilter` | a noisy receiver reaching the dial calm: resends ignored, one logged point per fix on its own time, the flicker gone, a tack still showing, no lag on a leg, a spike held, and the dial's averaging window from the panel |
 | `score` | the card, what it posts, and the fallback when nothing answers |

@@ -76,19 +76,39 @@ await p.evaluate(()=>openApps()); await p.waitForTimeout(500);
    only pinned the course to slot two would let everything around it
    drift. */
 t.ok(await p.evaluate(()=>APPS.map(a=>a.id).join())===
-       'tracks,course,radar,sonar,energy,golden',
-     'the dock reads Tracks, Course, Radar, Sonar, Energy, Golden Hour',
+       'tracks,chart,course,radar,sonar,energy,golden',
+     'the dock reads Tracks, Chart, Course, Radar, Sonar, Energy, Golden Hour',
      await p.evaluate(()=>APPS.map(a=>a.id).join()));
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('#app-row [data-app]')]
        .map(e=>e.querySelector('span').textContent.replace(/\n/g,' ')).join('|'))
-     ==='TRACKS|COURSE|RADAR|SONAR|ENERGY|GOLDEN HOUR',
+     ==='TRACKS|CHART|COURSE|RADAR|SONAR|ENERGY|GOLDEN HOUR',
      'and the tiles on the glass are drawn in that order');
-t.ok(await p.evaluate(()=>{ const r=$('app-row');
-       return r.scrollWidth<=r.clientWidth; }),
-     'and every tile still fits the 600 px row without it scrolling - the '
-     +'tiles share the row, so an app costs all of them a few pixels rather '
-     +'than pushing the last one off the end',
-     await p.evaluate(()=>$('app-row').scrollWidth+' of '+$('app-row').clientWidth));
+/* Seven is past the floor: seven tiles would want 70 px each and the
+   widest label is 81, so the row scrolls rather than squeezing - which
+   is what the floor is for. What must hold is that it scrolls from its
+   START: every tile at full width, the first one whole at the left edge
+   (a centred row pushed half of TRACKS past it, out of scroll's reach),
+   the fade on the far end only, and the last one reachable. */
+const dockRow=await p.evaluate(()=>{ const r=$('app-row'); r.scrollLeft=0;
+  r.dispatchEvent(new Event('scroll'));
+  const rb=r.getBoundingClientRect(), k=[...r.children];
+  const first=k[0].getBoundingClientRect();
+  const w=k.map(e=>Math.round(e.getBoundingClientRect().width));
+  r.scrollLeft=r.scrollWidth; r.dispatchEvent(new Event('scroll'));
+  const last=k[k.length-1].getBoundingClientRect();
+  const out={first:Math.round(first.left-rb.left), w,
+    over:r.classList.contains('over'),
+    lastIn:last.right<=rb.right+0.5 && last.left>=rb.left-0.5};
+  r.scrollLeft=0; r.dispatchEvent(new Event('scroll'));
+  out.za=r.classList.contains('over-a'); out.zz=r.classList.contains('over-z');
+  return out; });
+t.ok(dockRow.first===0 && dockRow.w.every(x=>x>=84),
+     'the row starts at its first tile, every tile at its 84 px floor',
+     JSON.stringify(dockRow));
+t.ok(dockRow.over && !dockRow.za && dockRow.zz,
+     'and fades only at the far end, where the rest of it is', JSON.stringify(dockRow));
+t.ok(dockRow.lastIn, 'and the last tile can be scrolled fully onto the glass',
+     JSON.stringify(dockRow));
 t.ok(!await p.evaluate(()=>!!document.getElementById('trk-course')),
      'with nothing left on the track rail to reach it by');
 await p.evaluate(()=>{ const i=APPS.findIndex(a=>a.id==='course');
