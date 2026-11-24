@@ -16010,18 +16010,6 @@ const APPS=[
       +'<path fill="currentColor" stroke="none"'
       +' d="M14.6 7.1L8 13.2L11.2 13.5L13.2 16.1Z"/>',
    open:tracksOpen, close:tracksClose},
-  /* A chart folded the way one lives in a chart table, which is what
-     says CHART rather than map-in-general beside the tracks' band. Three
-     panels and their two creases, all open strokes; the only zig-zag
-     outline on the dock, so at 42 px it is not the battery's box and
-     not anybody's ring. Next to Tracks because it is the other map -
-     and with seven tiles the row scrolls, so Golden Hour is the one that
-     waits at the far end rather than the chart. */
-  {id:'chart', name:'Chart',
-   ico:'<path d="M2.8 6.2L8.9 3.6L15.1 6.2L21.2 3.6V17.8L15.1 20.4'
-      +'L8.9 17.8L2.8 20.4Z"/>'
-      +'<path d="M8.9 3.6V17.8"/><path d="M15.1 6.2V20.4"/>',
-   open:chartOpen, close:chartClose},
   /* Two marks and the way between them, curved because nothing on the
      water is a straight line. Quiet on purpose: it sits next to the
      radar, and the three candidates that read loudest - a triangle of
@@ -16033,6 +16021,18 @@ const APPS=[
    ico:'<circle cx="5.8" cy="17.6" r="2.4"/><circle cx="18.2" cy="6.4" r="2.4"/>'
       +'<path d="M5.8 15.2C5.8 9.4 18.2 14.6 18.2 8.8"/>',
    open:courseOpen, close:courseClose},
+  /* A chart folded the way one lives in a chart table, which is what
+     says CHART rather than map-in-general beside the tracks' band. Three
+     panels and their two creases, all open strokes; the only zig-zag
+     outline on the dock, so at 42 px it is not the battery's box and
+     not anybody's ring. Third, after Tracks and Course, by the
+     helm's own choice; with seven tiles the row scrolls, so Golden Hour
+     is the one that waits at the far end. */
+  {id:'chart', name:'Chart',
+   ico:'<path d="M2.8 6.2L8.9 3.6L15.1 6.2L21.2 3.6V17.8L15.1 20.4'
+      +'L8.9 17.8L2.8 20.4Z"/>'
+      +'<path d="M8.9 3.6V17.8"/><path d="M15.1 6.2V20.4"/>',
+   open:chartOpen, close:chartClose},
   /* A cloud and its rain, because this radar is the WEATHER radar
      (RainViewer and the futurecast), not one that finds other boats. It
      used to be a ring and a sweep, which on a boat says "targets". The

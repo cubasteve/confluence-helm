@@ -76,12 +76,12 @@ await p.evaluate(()=>openApps()); await p.waitForTimeout(500);
    only pinned the course to slot two would let everything around it
    drift. */
 t.ok(await p.evaluate(()=>APPS.map(a=>a.id).join())===
-       'tracks,chart,course,radar,sonar,energy,golden',
-     'the dock reads Tracks, Chart, Course, Radar, Sonar, Energy, Golden Hour',
+       'tracks,course,chart,radar,sonar,energy,golden',
+     'the dock reads Tracks, Course, Chart, Radar, Sonar, Energy, Golden Hour',
      await p.evaluate(()=>APPS.map(a=>a.id).join()));
 t.ok(await p.evaluate(()=>[...document.querySelectorAll('#app-row [data-app]')]
        .map(e=>e.querySelector('span').textContent.replace(/\n/g,' ')).join('|'))
-     ==='TRACKS|CHART|COURSE|RADAR|SONAR|ENERGY|GOLDEN HOUR',
+     ==='TRACKS|COURSE|CHART|RADAR|SONAR|ENERGY|GOLDEN HOUR',
      'and the tiles on the glass are drawn in that order');
 /* Seven is past the floor: seven tiles would want 70 px each and the
    widest label is 81, so the row scrolls rather than squeezing - which
