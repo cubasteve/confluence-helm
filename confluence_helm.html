@@ -9724,7 +9724,16 @@ const PK_SLOP=10, PK_FLICK=0.15;      /* px, and px per ms */
    drag it can actually absorb - and at the end of its travel it hands
    the gesture back, which is how a swipe up from the bottom still
    closes the panel. */
-function dragScroll(list, lazy, wheel){
+/* `side` is for the one list that scrolls sideways - the dock's row of
+   apps. Same drag, same coast, same tap-that-was-a-drag answer; only
+   the axis is scrollLeft and clientX. It is always lazy as well, and
+   lazy in TWO ways: a finger that goes mostly down is the dock's own
+   dismiss swipe and is handed straight back, and one that goes sideways
+   with no row left that way is nobody's. Claiming on pointerdown would
+   have taken the dismiss swipe from every tile, which is most of the
+   dock. Behind the same accessors as the wheel, so every vertical
+   caller's path through here is the code it was. */
+function dragScroll(list, lazy, wheel, side){
   const st={drag:null, moved:0, glide:null};
   /* The one box that turns rather than scrolls answers all of this with
      its wheel offset instead of its scrollTop. Behind two accessors, so
@@ -9733,8 +9742,10 @@ function dragScroll(list, lazy, wheel){
      was: the control panel's dismiss swipe depends on this function and
      is no part of what was being changed. */
   const spin=()=>{ const w=wheel&&WHEEL.get(list); return (w&&w.on)?w:null; };
-  const at=()=>{ const w=spin(); return w?w.off:list.scrollTop; };
-  const put=v=>{ const w=spin();
+  const at=()=>{ if(side) return list.scrollLeft;
+    const w=spin(); return w?w.off:list.scrollTop; };
+  const put=v=>{ if(side){ list.scrollLeft=v; return; }
+    const w=spin();
     if(!w){ list.scrollTop=v; return; }
     w.off=w.cyc?((v%w.cyc)+w.cyc)%w.cyc:v;
     drumPaint(list);
@@ -9751,7 +9762,7 @@ function dragScroll(list, lazy, wheel){
          going nowhere. A wheel always moves, and asking it whether it
          did would stop it the one frame its offset wrapped to the same
          number it started on. */
-      st.glide=(Math.abs(v)>0.02 && (w || list.scrollTop!==was))
+      st.glide=(Math.abs(v)>0.02 && (w || at()!==was))
                ? requestAnimationFrame(step) : null; };
     st.glide=requestAnimationFrame(step); };
   /* Nothing else on the sheet held the wheel still: stop() is reached
@@ -9769,10 +9780,23 @@ function dragScroll(list, lazy, wheel){
      a different middle. The only way to move this grid is to turn it. */
   if(wheel) list.addEventListener('scroll',()=>{
     if(list.scrollTop) list.scrollTop=0; }, {passive:true});
+  if(side) lazy=true;
+  /* The finger's position along the axis that scrolls. */
+  const pos=e=>side?e.clientX:e.clientY;
   list.addEventListener('pointerdown',e=>{ if(!lazy) gClaim(); stop(); st.moved=0;
-    st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(),
-             top:at(), v:0, held:!lazy, s:[]}; });
+    st.drag={id:e.pointerId, y0:pos(e), y:pos(e), t:performance.now(),
+             top:at(), v:0, held:!lazy, s:[], x0:e.clientX, c0:e.clientY}; });
   addEventListener('pointermove',e=>{ const d=st.drag; if(!d||e.pointerId!==d.id) return;
+    if(!d.held && side){
+      const dx=e.clientX-d.x0, dy=e.clientY-d.c0;
+      if(Math.hypot(dx,dy)<5) return;          /* too early to tell */
+      if(Math.abs(dx)<=Math.abs(dy)){ st.drag=null; return; }  /* the dock's swipe */
+      /* A finger going LEFT pulls the row left, which needs room to the right. */
+      const room = dx<0 ? list.scrollWidth-list.clientWidth-list.scrollLeft
+                        : list.scrollLeft;
+      if(room<=1){ st.drag=null; return; }
+      d.held=true; gClaim();
+    }
     if(!d.held){
       const dy=e.clientY-d.y0;
       if(Math.abs(dy)<5) return;              /* too early to tell */
@@ -9790,6 +9814,9 @@ function dragScroll(list, lazy, wheel){
        frames happened to say, and the same gesture comes out at half
        speed or twice it. Averaged over the last 70ms it is the stroke
        rather than its final twitch. */
+    if(side){ const x=e.clientX; if(dt>0) d.v=(d.y-x)/dt;
+      d.y=x; d.t=now; st.moved=Math.max(st.moved, Math.abs(x-d.y0));
+      return put(d.top-(x-d.y0)); }
     if(wheel){ d.s.push({t:now, y:e.clientY}); d.v=wheelV(d.s, now, e.clientY); }
     d.y=e.clientY; d.t=now; st.moved=Math.max(st.moved, Math.abs(e.clientY-d.y0));
     put(d.top-(e.clientY-d.y0)); });
@@ -10243,6 +10270,11 @@ rimWatch($('course-list'), true, true);
 rimWatch($('lib-list'),    true, true);
 rimWatch($('p-sheet'));               /* cards, and a card does not tilt */
 rimWatch($('app-row'), false);        /* sideways, so it fades but has no arc */
+/* And it is driven, like every other list here: under #stage the browser
+   scrolls nothing for a finger, so overflow-x:auto alone left the row
+   unreachable past its sixth tile on the glass - GOLDEN HOUR could be
+   seen half-faded at the end and never got to. */
+const appDragged=dragScroll($('app-row'), true, false, true);
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
@@ -16097,7 +16129,8 @@ function drawApps(){
     .join('');
   scrollFit(row);                 /* more apps than the 600 px row holds */
   row.querySelectorAll('[data-app]').forEach(b=>
-    b.addEventListener('click',()=>openApp(APPS[+b.dataset.app])));
+    b.addEventListener('click',()=>{ if(appDragged()) return;   /* a scroll */
+      openApp(APPS[+b.dataset.app]); }));
 }
 
 function openApp(a){

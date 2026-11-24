@@ -55,6 +55,7 @@ probes count on.
 | `phone` | the page in a pocket: its GPS as an instrument, MOUNT, and what it never invents |
 | `icons` | the home-screen set, and the page still working without any of it |
 | `click` | the noise the glass makes under a finger: which controls make one, which gestures do not, the cycle that chooses it, and that it is remembered |
+| `dock` | the row of apps under a real finger (CDP touch, not synthetic pointers): a sideways drag scrolls it and coasts, the fades follow, GOLDEN HOUR comes fully onto the glass and back, the dock stays up and the page stays put throughout, a drag opens nothing, a downward swipe on a tile still dismisses the dock, and a tap still opens what it lands on |
 | `scroll` | no native scrollbar anywhere, the fade on the edge that has something behind it, and the arc on the rim |
 | `pick` | the menu the dial's readings and the course sheet's settings share: where it opens, what a tap on a row does, and the veil |
 | `sonar` | the echogram: that the gain measures the transmit pulse instead of assuming it, that now is at the right-hand edge, that night is a red ramp which repaints what is already drawn, and that the big number is the dial's number rather than one worked out from the picture |
