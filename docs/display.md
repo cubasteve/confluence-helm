@@ -1485,12 +1485,20 @@ for a ten-second blast has a bug and the boat should not wear it.
 ### Two ways of making the noise
 
 `HELM_BUZZER_MODE` picks: `auto` (the default), `audio`, `gpio` or `off`.
-`auto` takes audio when there is an `aplay` to send it to, and falls back
-to the pin.
+`auto` takes audio when there is an `aplay` and an output to send it to —
+the jack, a USB or I2S card, or an output chosen on the panel or pinned
+with `HELM_AUDIO_DEV` — and falls back to the pin. With no output and no
+pin either, it still tries `default`.
+
+**Pi 4 only: the 3.5 mm jack.** A Pi 5 has no jack. There, use a USB
+audio adapter (found by itself at start-up, and wired to the amp exactly
+as the jack is below, from the adapter's green output) or the GPIO 17
+buzzer. A Pi 5 with neither plugged in drives GPIO 17 rather than
+beeping into HDMI, so keep that pin free for the buzzer.
 
 | | `audio` | `gpio` |
 |---|---|---|
-| Output | the Pi's 3.5 mm jack | one GPIO pin |
+| Output | the Pi 4's 3.5 mm jack (a USB adapter on a Pi 5) | one GPIO pin |
 | Needs | a powered amp and a speaker | an active piezo and a MOSFET |
 | Voices | two — the gun is not the warning | one |
 | Unplugging it | the plug is the connector | do not; see below |
@@ -1526,6 +1534,10 @@ The plug in the middle is the only thing anyone handles.
   reads the card out of `aplay -l` and plays to
   `plughw:CARD=Headphones,DEV=0`; `plughw:` rather than `hw:` so ALSA
   converts rather than refusing a rate the bcm2835 device will not take.
+  On a board with no jack (a Pi 5) it takes the first card that is not
+  HDMI instead — a USB adapter, shown as `USB AUDIO`, or an I2S DAC,
+  shown as `AUDIO OUT` — and a saved choice naming a card this Pi has
+  not got (the Pi 4's jack, read back after the drive moved) is ignored.
   `HELM_AUDIO_DEV` overrides the whole thing for a rig with something
   else in front, and when it is set the panel shows the output as
   `PINNED` and will not change it.
@@ -1653,7 +1665,7 @@ through a relay is mostly clicking.
 
 The control panel carries a **SOUNDER** section whenever `netd` reports
 one, with a TEST button and the output it is actually driving beside it —
-`3.5 MM JACK` or `GPIO 17`. The button sounds the **gun**, because the
+`3.5 MM JACK`, `USB AUDIO` or `GPIO 17`. The button sounds the **gun**, because the
 question you cannot answer any other way is whether the loudest noise the
 boat makes carries to the back of the cockpit, and that is a thing to
 find out before a start rather than during one. It goes through the same

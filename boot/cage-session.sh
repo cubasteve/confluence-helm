@@ -27,7 +27,16 @@ LOG="${LOG:-/tmp/cage-session.log}"
 DM="${DM:-lightdm}"
 GOOD_RUN="${GOOD_RUN:-20}"            # a session shorter than this is a failure
 WAIT_AVNAV="${WAIT_AVNAV:-60}"        # seconds before starting anyway
-: "${CAGE:=cage}" "${CHROME:=chromium-browser}" "${SYSTEMCTL:=systemctl}"
+: "${CAGE:=cage}" "${SYSTEMCTL:=systemctl}"
+# Raspberry Pi OS names the browser chromium-browser; Debian, and a
+# fresh Trixie image, name it chromium - the same lookup as
+# start-kiosk.sh. Still overridable from the environment.
+if [ -z "${CHROME:-}" ]; then
+  for c in chromium-browser chromium; do
+    command -v "$c" >/dev/null 2>&1 && { CHROME="$c"; break; }
+  done
+  : "${CHROME:=chromium-browser}"   # keep the old name so the failure log says what was tried
+fi
 
 log(){ printf '[cage] %s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$LOG"; }
 

@@ -614,6 +614,21 @@ ls -l /dev/serial/by-path/
 HELM_SONAR=serial:/dev/serial/by-path/platform-xhci-hcd.0-usb-0:1.2:1.0-port0:250000
 ```
 
+A `by-path` name is full of colons, so in `HELM_SONAR` it **must carry
+the baud** at the end, as above: netd reads the last field as the baud,
+and without one it reads the tail of the name as the baud and refuses
+the whole thing (the sonar stays off, and the startup line says why).
+
+The name itself is only an example: it depends on the Pi model and the
+USB layout, so copy yours from `ls -l /dev/serial/by-path/` and read it
+again after any hardware change. A Pi 4 goes through its internal hub
+(`...usb-0:1.<port>:1.0-port0`); a Pi 5 has no hub, two controllers and
+a different platform name (`platform-xhci-hcd.<n>-usb-0:<port>:1.0-port0`),
+so a name from one board never matches the other. Where the adapter
+does have a unique serial number - or it is the only CH340 aboard - the
+`by-id` name (as `boat/sonar/flash-open-echo.sh` uses) has no colons and
+survives both a socket move and a board change.
+
 **Two programs on one port is silent.** Linux does not make a `ttyUSB`
 exclusive by itself, so an Arduino IDE serial monitor left open takes a
 random half of the bytes and neither side is told — it arrives as

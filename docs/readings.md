@@ -195,8 +195,9 @@ the line does not flap it. A hand that closed it stays respected until
 the next thing happens. Reset closes it.
 
 The countdown also sounds. The face flashes and the sounder goes, on
-the pattern a race committee sounds — out of the Pi's 3.5 mm jack into
-an amp and a speaker, or off a GPIO pin into a piezo.
+the pattern a race committee sounds — out of the Pi 4's 3.5 mm jack (a
+Pi 5 has none: a USB audio adapter there) into an amp and a speaker, or
+off a GPIO pin into a piezo.
 → [Countdown signals](display.md#countdown-signals)
 
 **The box covers the big cell**, so its first slot carries whatever

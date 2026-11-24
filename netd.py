@@ -436,6 +436,14 @@ def dev_mac(dev):
         return ''
 
 
+# The OUIs Raspberry Pi has registered (IEEE MA-L, "Raspberry Pi
+# Foundation" / "Raspberry Pi (Trading) Ltd"), which is what an onboard
+# radio on a Pi 3, 4 or 5 carries. Used only to recognise a hotspot pin
+# carried over from ANOTHER Pi - see hotspot_pin().
+RPI_ONBOARD_OUI = ('B8:27:EB', 'DC:A6:32', 'E4:5F:01', '28:CD:C1',
+                   'D8:3A:DD', '2C:CF:67', '88:A2:9E', '98:FE:54')
+
+
 def hotspot_pin():
     """Make the boat's own hotspot come up by itself, on the onboard radio.
 
@@ -456,8 +464,12 @@ def hotspot_pin():
     Deliberately narrow. It never creates a hotspot and never decides
     which profile is one: it acts only on a profile con_is_ap() already
     recognises, refuses if there is more than one, and will not move a
-    pin that somebody has already set. Returns what it did, for the
-    startup line.
+    pin that somebody has already set - except a pin to a Raspberry Pi
+    onboard radio this board does not have. That is a profile carried
+    over from another Pi (the drive moved from a Pi 4 to a Pi 5, or
+    back), it can never match, and left alone the hotspot never comes
+    up; it is moved to this board's onboard radio. Returns what it did,
+    for the startup line.
     """
     onboard = [d for d in wifi_devices() if d['bus'] == 'onboard']
     if not onboard:
@@ -479,18 +491,45 @@ def hotspot_pin():
             if f[0] == 'connection.autoconnect':
                 auto = f[1]
             elif f[0] == '802-11-wireless.mac-address':
-                pinned = '' if f[1] in ('', '--') else f[1].upper()
+                # Rejoined, so an unescaped MAC reads whole as well.
+                v = ':'.join(f[1:])
+                pinned = '' if v in ('', '--') else v.upper()
     argv = []
     if auto != 'yes':
         argv += ['connection.autoconnect', 'yes',
                  'connection.autoconnect-priority', '100']
-    if not pinned and mac:
+    # A pin to a Raspberry Pi ONBOARD radio that this machine does not
+    # have is a profile carried over from another board (Pi 4 -> Pi 5,
+    # or back). It can never match, so the hotspot would never come up.
+    # A pin to anything else - a dongle that has not enumerated yet - is
+    # somebody's deliberate choice and is still left alone. Nor is it
+    # moved onto a locally administered (randomised) address, which
+    # dev_mac() reads if MAC randomisation is on for the onboard radio:
+    # that one would not match tomorrow either.
+    stale = False
+    if pinned and mac and pinned != mac:
+        present = {dev_mac(n) for n in kernel_wifi()}
+        try:
+            local = bool(int(mac[:2], 16) & 2)
+        except ValueError:
+            local = True
+        stale = (pinned not in present
+                 and pinned.startswith(RPI_ONBOARD_OUI) and not local)
+    if (not pinned or stale) and mac:
         argv += ['802-11-wireless.mac-address', mac]
     if not argv:
         return '%s already comes up on its own' % name
     rc, _, err = run(['nmcli', 'connection', 'modify', 'uuid', uuid] + argv, 15)
     if rc:
         return 'could not set up %s: %s' % (name, err[:80])
+    if stale:
+        # It could not have been up on this board, so bring it up now
+        # rather than trust NM to re-read autoconnect after a modify.
+        rc, _, err = run(['nmcli', 'connection', 'up', 'uuid', uuid], 20)
+        return ('%s was pinned to %s, a Pi radio this board does not have - '
+                'moved to %s%s' % (name, pinned, mac,
+                                   '' if rc == 0 else
+                                   ', but it did not come up: %s' % err[:80]))
     if pinned and pinned != mac:
         return ('%s now autoconnects, but it is pinned to %s and the onboard '
                 'radio is %s - left as found' % (name, pinned, mac))
@@ -1100,7 +1139,8 @@ def backlight_set(pct):
 #           by feel, good for thousands of insertions - which is what you
 #           want on the thing you unplug after every race. It also lets
 #           the gun have a different voice from the warnings, which one
-#           piezo frequency cannot.
+#           piezo frequency cannot. A Pi 5 has no jack: there it is
+#           a USB audio adapter (or an I2S DAC), found by itself.
 #   gpio    an ACTIVE piezo buzzer - the kind with its own oscillator,
 #           which sounds as soon as it has voltage - switched by a MOSFET
 #           off a pin. A passive one needs a square wave and would need
@@ -1110,7 +1150,9 @@ def backlight_set(pct):
 #
 # HELM_BUZZER_MODE picks: auto (the default), audio, gpio or off. auto
 # takes audio when there is a player and an output to send it to, and
-# falls back to the pin.
+# falls back to the pin - so a Pi 5 with no audio adapter drives the
+# buzzer on HELM_BUZZER_GPIO (17 unless set) rather than beeping into
+# HDMI.
 #
 # Stdlib only, which is the rule for everything in this file: the tones
 # are synthesised with `wave` and handed to aplay, and aplay ships with
@@ -1161,20 +1203,48 @@ def _audio_player():
     return 'aplay' if shutil.which('aplay') else None
 
 
-def _audio_card():
-    """The card name of the 3.5 mm jack, from `aplay -l`.
-
-    HDMI is a separate card and is usually the default one, so naming
-    the jack is not optional - a beep out of a monitor nobody has the
-    volume up on is the same as no beep."""
+def _audio_cards():
+    """The playback cards `aplay -l` lists, as (id, description), in its
+    order and once each - or None if aplay could not be asked."""
     rc, out, _ = run(['aplay', '-l'], 5)
     if rc != 0:
         return None
+    cards = []
     for line in out.splitlines():
         m = re.match(r'^card \d+: (\S+) \[([^]]*)\]', line)
-        if m and 'headphone' in (m.group(1) + m.group(2)).lower():
-            return m.group(1)
-    return None
+        if m and m.group(1) not in [c[0] for c in cards]:
+            cards.append((m.group(1), m.group(2)))
+    return cards
+
+
+def _audio_card():
+    """The card name of the 3.5 mm jack, from `aplay -l` - or, on a board
+    without one (a Pi 5), the first card that is not HDMI.
+
+    HDMI is a separate card and is usually the default one, so naming
+    the jack is not optional - a beep out of a monitor nobody has the
+    volume up on is the same as no beep. A Pi 5 has no jack: its
+    analogue way out is a USB adapter ("card 2: Device [USB Audio
+    Device]") or an I2S DAC, and HDMI is never it. `aplay -l` lists
+    playback cards only, so a USB microphone or webcam is not picked; a
+    USB display or dock with its own playback would be, which is a known
+    limit. The jack, where there is one, wins whatever the card order."""
+    other = None
+    for cid, desc in _audio_cards() or ():
+        name = (cid + desc).lower()
+        if 'headphone' in name:
+            return cid
+        if other is None and 'hdmi' not in name:
+            other = cid
+    return other
+
+
+def _audio_card_label(card):
+    """What the panel calls the card _audio_card() found."""
+    if 'headphone' in card.lower():
+        return '3.5 MM JACK'
+    desc = dict(_audio_cards() or ()).get(card, '')
+    return 'USB AUDIO' if 'usb' in (card + desc).lower() else 'AUDIO OUT'
 
 
 # Env-overridable for the same reason HELM_SPOTIFY_CMD is: a test rig
@@ -1201,6 +1271,13 @@ def _audio_device():
     if d:
         return d
     d = _audio_saved()
+    if d and _audio_card_gone(d):
+        # A choice saved on another board - the Pi 4's jack, read back on
+        # a Pi 5 - names a card this one has not got. Honoured, it would
+        # be silence that reports OK.
+        print('[netd] sounder: saved output %s names a card this Pi does '
+              'not have - ignored' % d, flush=True)
+        d = ''
     if d:
         return d
     c = AUDIO_CARD
@@ -1209,6 +1286,16 @@ def _audio_device():
     # means whatever the system thinks is the output - right on a rig
     # with PipeWire in front, wrong on a bare one with HDMI first.
     return ('plughw:CARD=%s,DEV=0' % c) if c else 'default'
+
+
+def _audio_card_gone(dev):
+    """True for a `plughw:CARD=X,...` / `hw:CARD=X,...` naming a card
+    `aplay -l` does not list. False whenever that cannot be told."""
+    m = re.match(r'^(?:plug)?hw:CARD=([^,]+)', dev)
+    if not m:
+        return False
+    cards = _audio_cards()
+    return cards is not None and m.group(1) not in [c[0] for c in cards]
 
 
 # The outputs worth offering, in the order they are offered. aplay can
@@ -1246,7 +1333,7 @@ def audio_outs():
     outs = []
     if AUDIO_CARD:
         outs.append({'dev': 'plughw:CARD=%s,DEV=0' % AUDIO_CARD,
-                     'name': '3.5 MM JACK'})
+                     'name': AUDIO_LABEL})
     have = _aplay_pcms()
     for pcm, label in AUDIO_LABELS:
         if any(p == pcm or p.startswith(pcm + ':') for p in have):
@@ -1285,6 +1372,7 @@ def audio_out_set(dev):
 
 AUDIO_CARD = _audio_card() if (SOUND_MODE in ('auto', 'audio')
                                and _audio_player()) else None
+AUDIO_LABEL = _audio_card_label(AUDIO_CARD) if AUDIO_CARD else ''
 AUDIO_DEV = _audio_device()
 _snd = {'lock': threading.Lock(), 'busy': False, 'dir': None,
         'wav': {}, 'armed': 0.0, 'arm_proc': None}
@@ -1549,7 +1637,18 @@ def _resolve_mode():
     if SOUND_MODE == 'off':
         return {'mode': 'off', 'why': 'OFF'}
     if SOUND_MODE in ('auto', 'audio'):
-        if _audio_player():
+        # auto takes audio only when there is somewhere for it to go: the
+        # jack, a USB or I2S card, or an output somebody named. With none
+        # of those - a Pi 5 with nothing plugged in - 'default' is HDMI,
+        # which is silence that reports OK, so a wired buzzer wins. With
+        # no buzzer either, 'default' is still the best guess.
+        saved = _audio_saved()
+        has_out = bool(AUDIO_CARD
+                       or os.environ.get('HELM_AUDIO_DEV', '').strip()
+                       or (saved and not _audio_card_gone(saved)))
+        gpio_ok = BUZZER_GPIO is not None and bool(buzzer_tool())
+        if _audio_player() and (SOUND_MODE == 'audio' or has_out
+                                or not gpio_ok):
             return {'mode': 'audio', 'device': AUDIO_DEV, 'card': AUDIO_CARD}
         if SOUND_MODE == 'audio':
             return {'mode': 'off', 'why': 'NO APLAY'}
@@ -2627,10 +2726,17 @@ def sonar_spec(spec, dflt='0.0.0.0'):
         except ValueError:
             return None
         return {'kind': 'udp', 'host': host, 'port': port} if 0 < port < 65536 else None
-    if parts[0] == 'serial' and len(parts) in (2, 3):
-        dev = parts[1]
+    if parts[0] == 'serial' and len(parts) >= 2:
+        # by-path names are full of colons (...-usb-0:1.2:1.0-port0), so
+        # the baud is the LAST field. With more than one field after
+        # 'serial', the last must be the baud: a by-path name needs one.
+        rest = parts[1:]
+        if len(rest) == 1:
+            dev, b = rest[0], '250000'
+        else:
+            dev, b = ':'.join(rest[:-1]), rest[-1]
         try:
-            baud = int(parts[2]) if len(parts) == 3 else 250000
+            baud = int(b)
         except ValueError:
             return None
         return {'kind': 'serial', 'dev': dev, 'baud': baud} if dev and baud > 0 else None
@@ -3336,7 +3442,21 @@ def route(path, body):
 # theme. Nothing else - not the radios, not power, not the marks. The
 # hotspot is the owner's own phone, so "anyone" is whoever he has let
 # onto it.
-REMOTE_DEV = os.environ.get('HELM_REMOTE_DEV', 'wlan1')
+# Which adapter is the dongle. HELM_REMOTE_DEV pins it; otherwise it is
+# worked out each time remote_up() runs, from /sys alone (no nmcli, and
+# above all no scan, on a 30 s timer): the first USB wifi adapter, or
+# wlan1 if there is none. Not a fixed wlan1, because wlan0 and wlan1 can
+# swap between boots (see dev_mac) - and swapped, the door would be
+# bound to the onboard radio, which carries the boat's own hotspot.
+REMOTE_DEV = os.environ.get('HELM_REMOTE_DEV', '').strip()
+
+
+def _remote_dev():
+    if REMOTE_DEV:
+        return REMOTE_DEV
+    usb = [n for n in kernel_wifi() if dev_bus(n) == 'usb']
+    return usb[0] if usb else 'wlan1'
+
 REMOTE_PORT = int(os.environ.get('HELM_REMOTE_PORT', PORT + 2))
 REMOTE_CFG = os.environ.get('HELM_REMOTE_CFG') or os.path.expanduser(
     '~/.config/confluence-remote.json')
@@ -3421,14 +3541,14 @@ def _same_subnet(ip, cidr):
         return False
 
 
-def remote_socket():
+def remote_socket(dev):
     """A listening socket on the dongle, by the strongest means available."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     how = 'subnet'
     try:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE,
-                     REMOTE_DEV.encode())
+                     dev.encode())
         how = 'device'
     except OSError:
         pass                      # pre-5.9, or no permission: see the fallback
@@ -3441,7 +3561,7 @@ def remote_status():
     r = _remote
     return {'ok': True, 'armed': r['armed'], 'how': r['how'],
             'url': r.get('url', ''), 'token': r['token'],
-            'dev': REMOTE_DEV, 'port': REMOTE_PORT}
+            'dev': r.get('dev') or REMOTE_DEV or 'wlan1', 'port': REMOTE_PORT}
 
 
 def _geom(v, d=0):
@@ -3782,18 +3902,22 @@ def remote_up():
     that goes stale, not the socket."""
     if _remote.get('held'):
         return False                  # shut by hand; see remote_disarm
-    cidr = _dev_subnet(REMOTE_DEV)
+    dev = _remote_dev()               # once per call: see _remote_dev
+    cidr = _dev_subnet(dev)
     with _rlock:
         if not cidr:
             if _remote['armed']:
                 _remote_stop()        # the dongle went; so does the door
+            _remote['dev'] = dev
             return False
-        if _remote['armed'] and cidr == _remote.get('cidr'):
-            return True               # already up, same subnet
+        if (_remote['armed'] and cidr == _remote.get('cidr')
+                and _remote.get('dev', dev) == dev):
+            return True               # already up, same subnet, same radio
         if _remote['armed']:
             _remote_stop()
+        _remote['dev'] = dev
         try:
-            sock, how = remote_socket()
+            sock, how = remote_socket(dev)
         except OSError:
             return False
         srv = ThreadingHTTPServer.__new__(ThreadingHTTPServer)
@@ -6003,11 +6127,12 @@ if __name__ == '__main__':
     except Exception as e:
         up, _ = False, print('[netd] remote: %s' % str(e)[:80], flush=True)
     print('[netd] remote: %s' % (_remote.get('url') or
-                                 'waiting for an address on ' + REMOTE_DEV),
+                                 'waiting for an address on '
+                                 + remote_status()['dev']),
           flush=True)
     if up:
         print('[netd] remote: %s'
-              % ('pinned to %s by the kernel' % REMOTE_DEV
+              % ('pinned to %s by the kernel' % remote_status()['dev']
                  if remote_how() == 'device' else
                  'SO_BINDTODEVICE unavailable - falling back to a subnet '
                  'check, which this file enforces rather than the kernel'),

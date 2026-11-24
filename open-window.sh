@@ -72,4 +72,11 @@ else
   fi
 fi
 
-exec chromium-browser --app="$URL?v=$(date +%s)" --window-size=1080,1080 "$@"
+# Raspberry Pi OS names the browser chromium-browser; Debian, and a
+# fresh Trixie image, name it chromium. The same lookup as start-kiosk.sh.
+CHROME=""
+for c in chromium-browser chromium; do
+  command -v "$c" >/dev/null 2>&1 && { CHROME="$c"; break; }
+done
+[ -n "$CHROME" ] || { echo "[open-window] neither chromium-browser nor chromium is installed" >&2; exit 1; }
+exec "$CHROME" --app="$URL?v=$(date +%s)" --window-size=1080,1080 "$@"

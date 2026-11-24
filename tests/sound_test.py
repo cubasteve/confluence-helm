@@ -17,18 +17,31 @@ sys.path.insert(0, ROOT)
 
 LOG = None                      # where the pretend tools write their argv
 
+# What `aplay -l` says on each board. A Pi 4 has the jack; a Pi 5 has
+# only its two HDMI ports, and a USB adapter is a card of its own.
+PI4_CARDS = ('card 0: Headphones [bcm2835 Headphones],'
+             ' device 0: bcm2835 Headphones [bcm2835 Headphones]',)
+PI5_CARDS = ('card 0: vc4hdmi0 [vc4-hdmi-0], device 0: MAI PCM'
+             ' i2s-hifi-0 [MAI PCM i2s-hifi-0]',
+             'card 1: vc4hdmi1 [vc4-hdmi-1], device 0: MAI PCM'
+             ' i2s-hifi-0 [MAI PCM i2s-hifi-0]')
+USB_CARD = 'card 2: Device [USB Audio Device], device 0: USB Audio [USB Audio]'
+
 
 @contextlib.contextmanager
-def rig(tools=(), **env):
+def rig(tools=(), cards=PI4_CARDS, **env):
     """netd, imported fresh, with `tools` on the PATH as shell scripts
-    that log what they were called with."""
+    that log what they were called with - and NOTHING else on it, so a
+    run on a real Pi does not find the real aplay or pinctrl. `cards`
+    is what the pretend `aplay -l` lists."""
     global LOG
     d = tempfile.mkdtemp(prefix='helm-sound-test-')
     LOG = os.path.join(d, 'calls')
     open(LOG, 'w').close()
     for name in tools:
         p = os.path.join(d, name)
-        body = ('#!/bin/sh\nprintf "%s %s\\n" "$(basename "$0")" "$*" >> '
+        # ${0##*/} rather than basename: the PATH holds only the stubs.
+        body = ('#!/bin/sh\nprintf "%s %s\\n" "${0##*/}" "$*" >> '
                 + LOG + '\n')
         if name == 'aplay':
             # Two enquiries to answer. `-l` names the cards, which is how
@@ -36,20 +49,20 @@ def rig(tools=(), **env):
             # how it finds what else it could be pointed at. Names at
             # column 0, descriptions indented under them.
             body += ('if [ "$1" = "-l" ]; then\n'
-                     '  printf "card 0: Headphones [bcm2835 Headphones],'
-                     ' device 0: bcm2835 Headphones []\\n"\n'
-                     'elif [ "$1" = "-L" ]; then\n'
+                     + ''.join('  printf "%s\\n"\n' % c for c in cards)
+                     + 'elif [ "$1" = "-L" ]; then\n'
                      '  printf "default\\n    Default\\n"\n'
                      '  printf "pulse\\n    PulseAudio Sound Server\\n"\n'
-                     '  printf "plughw:CARD=Headphones,DEV=0\\n'
-                     '    bcm2835 Headphones\\n"\n'
-                     'fi\n')
+                     + ''.join('  printf "plughw:CARD=%s,DEV=0\\n'
+                               '    %s\\n"\n' % (c.split()[2], c.split()[2])
+                               for c in cards)
+                     + 'fi\n')
         body += 'exit 0\n'
         with open(p, 'w') as f:
             f.write(body)
         os.chmod(p, 0o755)
     old = dict(os.environ)
-    os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH', '')
+    os.environ['PATH'] = d
     # Never the real one: a test must not write into the home directory
     # of whoever is running it.
     os.environ['HELM_AUDIO_CFG'] = os.path.join(d, 'audio.json')
@@ -345,6 +358,76 @@ class Outs(unittest.TestCase):
             self.assertNotIn('outs', st)
             self.assertEqual(n.route('/buzz/out', {'dev': 'pulse'})['error'],
                              'NO AUDIO OUT')
+
+
+class NoJack(unittest.TestCase):
+    """A Pi 5: no 3.5 mm jack, two HDMI cards. 'default' there is HDMI,
+    and a start sequence beeped into a monitor is silence that the panel
+    reports as OK."""
+
+    def test_the_buzzer_wins_over_hdmi(self):
+        with rig(('aplay', 'pinctrl'), cards=PI5_CARDS,
+                 HELM_BUZZER_MODE='auto') as n:
+            self.assertIsNone(n.AUDIO_CARD)
+            self.assertEqual(n.SOUND['mode'], 'gpio')
+            self.assertEqual(n.SOUND['gpio'], 17)
+            self.assertNotIn('3.5 MM JACK',
+                             [o['name'] for o in n.audio_outs()])
+
+    def test_a_usb_adapter_is_found_by_itself(self):
+        with rig(('aplay', 'pinctrl'), cards=PI5_CARDS + (USB_CARD,),
+                 HELM_BUZZER_MODE='auto') as n:
+            self.assertEqual(n.SOUND['mode'], 'audio')
+            self.assertEqual(n.AUDIO_CARD, 'Device')
+            self.assertEqual(n.AUDIO_DEV, 'plughw:CARD=Device,DEV=0')
+            outs = n.audio_outs()
+            self.assertEqual(outs[0]['name'], 'USB AUDIO')
+            self.assertNotIn('3.5 MM JACK', [o['name'] for o in outs])
+
+    def test_with_no_buzzer_tool_default_is_still_the_best_guess(self):
+        with rig(('aplay',), cards=PI5_CARDS, HELM_BUZZER_MODE='auto') as n:
+            self.assertEqual(n.SOUND['mode'], 'audio')
+            self.assertEqual(n.SOUND['device'], 'default')
+
+    def test_audio_asked_for_is_still_audio(self):
+        with rig(('aplay', 'pinctrl'), cards=PI5_CARDS,
+                 HELM_BUZZER_MODE='audio') as n:
+            self.assertEqual(n.SOUND['mode'], 'audio')
+
+    def test_an_output_somebody_chose_is_kept(self):
+        with rig(('aplay', 'pinctrl'), cards=PI5_CARDS,
+                 HELM_BUZZER_MODE='auto', HELM_AUDIO_DEV='pulse') as n:
+            self.assertEqual(n.SOUND['mode'], 'audio')
+            self.assertEqual(n.AUDIO_DEV, 'pulse')
+
+    def test_the_pi4_jack_saved_on_the_old_board_is_ignored(self):
+        with rig(('aplay', 'pinctrl'), cards=PI5_CARDS,
+                 HELM_BUZZER_MODE='auto') as n:
+            with open(n.AUDIO_CFG, 'w') as f:
+                json.dump({'dev': 'plughw:CARD=Headphones,DEV=0'}, f)
+            sys.modules.pop('netd', None)
+            n2 = importlib.import_module('netd')
+            self.assertEqual(n2.AUDIO_DEV, 'default')
+            self.assertEqual(n2.SOUND['mode'], 'gpio')
+
+    def test_the_jack_wins_whatever_order_the_cards_come_in(self):
+        """The Pi 4, with a USB adapter plugged in as well and listed
+        first: still the jack, as today."""
+        usb0 = USB_CARD.replace('card 2', 'card 0')
+        with rig(('aplay', 'pinctrl'),
+                 cards=(usb0, PI4_CARDS[0].replace('card 0', 'card 1')),
+                 HELM_BUZZER_MODE='auto') as n:
+            self.assertEqual(n.AUDIO_CARD, 'Headphones')
+            self.assertEqual(n.audio_outs()[0]['name'], '3.5 MM JACK')
+
+    def test_the_pi4_saved_jack_is_kept_on_the_pi4(self):
+        with rig(('aplay', 'pinctrl'), HELM_BUZZER_MODE='auto') as n:
+            with open(n.AUDIO_CFG, 'w') as f:
+                json.dump({'dev': 'plughw:CARD=Headphones,DEV=0'}, f)
+            sys.modules.pop('netd', None)
+            n2 = importlib.import_module('netd')
+            self.assertEqual(n2.AUDIO_DEV, 'plughw:CARD=Headphones,DEV=0')
+            self.assertEqual(n2.SOUND['mode'], 'audio')
 
 
 class Arm(unittest.TestCase):

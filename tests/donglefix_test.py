@@ -134,7 +134,10 @@ class Rig:
             # hotspot down and lock the owner out.
             'modprobe': 'echo "modprobe $@" >> %s\nexit 0\n' % self.calls,
             'dmesg': 'cat <<\'D\'\n%s\nD\n' % self.DMESG[dmesg],
-            'vcgencmd': 'echo throttled=0x0\n',
+            'vcgencmd': ('case "$1" in\n'
+                         '  pmic_read_adc) echo "EXT5V_V volt(24)=5.10000000V";;\n'
+                         '  *) echo throttled=0x0;;\n'
+                         'esac\n'),
             'uname': 'echo 6.6.51+rpt-rpi-v8\n',
             'modinfo': ('echo "modinfo $@" >> %s\n'
                         'case "$*" in *r8188eu*) %s;; esac\n'
@@ -165,6 +168,9 @@ class Rig:
     def run(self, *args, rounds=3, attempts=4):
         env = dict(os.environ)
         env['DONGLE_SYSFS'] = self.d
+        # Never the real device tree: on a Pi 5 running these, the power
+        # lines would come and go with the machine. pi5_psu() fills it.
+        env['DONGLE_DT'] = os.path.join(self.d, 'dt')
         # Small but REAL. The rig advances the pretend kernel when it
         # reads a rung heading off the pipe, so the script must pause
         # after printing one or it can ask nmcli before the parent has
@@ -197,6 +203,13 @@ class Rig:
         proc.wait()
         return ''.join(out), proc.returncode
 
+    def pi5_psu(self, ma):
+        """What a Pi 5's firmware says the supply negotiated."""
+        d = os.path.join(self.d, 'dt', 'chosen', 'power')
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, 'max_current'), 'wb') as f:
+            f.write(ma.to_bytes(4, 'big'))
+
     def ran(self):
         with open(self.calls) as f:
             return [l.strip() for l in f if l.strip()]
@@ -218,6 +231,31 @@ class Fix(unittest.TestCase):
             # it without that caveat is how "it is not power" became an
             # overclaim the first time.
             self.assertIn("says nothing about the socket", out)
+        finally:
+            r.close()
+
+    def test_a_pi4_report_has_no_pi5_power_lines(self):
+        r = Rig(nm_states=('disconnected',), rfkill='none')
+        try:
+            out, _ = r.run('--look')
+            self.assertNotIn('psu max', out)
+            self.assertNotIn('5V input     :', out)
+        finally:
+            r.close()
+
+    def test_a_pi5_says_what_its_supply_negotiated(self):
+        """A Pi 5 on a supply that did not negotiate 5 A caps USB at
+        600 mA for all four ports - the first thing to know about a
+        dongle that will not come up there. Port 3-1 is RP1's naming:
+        no hub, so no 1-1.x."""
+        r = Rig(nm_states=('disconnected',), rfkill='none', port='3-1')
+        try:
+            r.pi5_psu(3000)
+            out, rc = r.run('--look')
+            self.assertEqual(rc, 0, out)
+            self.assertIn('psu max      : 3000 mA', out)
+            self.assertIn('5V input     : EXT5V_V', out)
+            self.assertIn('3-1', out)
         finally:
             r.close()
 
@@ -472,6 +510,9 @@ class Fix(unittest.TestCase):
             self.assertEqual(rc, 1, out)
             self.assertIn('different USB port', out)
             self.assertIn('NOT for power', out)
+            # Both boards' controller layout, not the Pi 4's alone.
+            self.assertIn('VL805', out)
+            self.assertIn('Pi 5 has two controllers', out)
             self.assertIn('6.12', out)
             self.assertNotIn('marginal', out)
             self.assertNotIn('powered hub', out)

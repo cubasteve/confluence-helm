@@ -46,6 +46,7 @@ probes count on.
 | `course` | the sheet: taps, repeats, numbers, sides, CLEAR, EDIT, the line row |
 | `demotrack` | the demo sails the boat's own 6 Nov sail, in that evening's Open-Meteo wind |
 | `gpx` | the file parsed back, where the button sends it, and RACES |
+| `chart` | Freeboard in a frame: the Signal K host and the panel's theme in its address, every theme change told to it and nothing else, only its own origin listened to, the frame gone on close, a failure line instead of a blank circle when the server or the webapp is missing or silent (35 s, past the page's own 30 s boot wait; a server that answers only without CORS counts as up), the screensaver fed by the page's `rfb-activity` while the chart is in use, and the cross and the top-edge pull still the panel's |
 | `energy` | the house bank: every reading right with a feed, and every one of them an em dash without — never a zero, which is a flat battery rather than an absent one |
 | `gpsfilter` | a noisy receiver reaching the dial calm: resends ignored, one logged point per fix on its own time, the flicker gone, a tack still showing, no lag on a leg, a spike held, and the dial's averaging window from the panel |
 | `score` | the card, what it posts, and the fallback when nothing answers |
@@ -54,10 +55,10 @@ probes count on.
 | `phone` | the page in a pocket: its GPS as an instrument, MOUNT, and what it never invents |
 | `icons` | the home-screen set, and the page still working without any of it |
 | `click` | the noise the glass makes under a finger: which controls make one, which gestures do not, the cycle that chooses it, and that it is remembered |
+| `dock` | the row of apps under a real finger (CDP touch, not synthetic pointers): a sideways drag scrolls it and coasts, the fades follow, GOLDEN HOUR comes fully onto the glass and back, the dock stays up and the page stays put throughout, a drag opens nothing, a downward swipe on a tile still dismisses the dock, and a tap still opens what it lands on |
 | `scroll` | no native scrollbar anywhere, the fade on the edge that has something behind it, and the arc on the rim |
 | `pick` | the menu the dial's readings and the course sheet's settings share: where it opens, what a tap on a row does, and the veil |
 | `sonar` | the echogram: that the gain measures the transmit pulse instead of assuming it, that now is at the right-hand edge, that night is a red ramp which repaints what is already drawn, and that the big number is the dial's number rather than one worked out from the picture |
-| `chart` | the route chart in the left of the dial: no route is the same pixels as no feature at all, not a word on it, the course API's index and direction (v2, v1, reversed, go-to, a 404, no API), a route edited while active, no `minPeriod` on the course paths, the ring whole for a waypoint to starboard, the marks weaker than the TWS strip in every theme, the chart gone by the TWS rule, the deltas over a real socket, the wind holes, wide speeds measured off the glass and on the first frame of 10.0, night's ink and a theme change mid-bake, a cached image that will not decode, the chart offline from IndexedDB, and nothing at all while the dial is covered |
 
 ## The helper
 
@@ -67,9 +68,10 @@ is the only way to test a machine you are not sitting at.
 
 | test | what it holds to account |
 |---|---|
-| `sound_test` | which sounder this Pi has, the tone itself, the pattern, and the pin never left high |
-| `sonar_test` | Open Echo's frames, which carry no length and no sequence number: the little-endian read, the checksum, the resync that steps ONE byte past a bad candidate because 0xAA is also a loud echo, the squeeze that takes the loudest sample rather than the average, and the ring |
+| `sound_test` | which sounder this Pi has — the Pi 4's jack, or on a Pi 5 with no jack a USB adapter, else the buzzer rather than a beep into HDMI — the tone itself, the pattern, and the pin never left high |
+| `sonar_test` | Open Echo's frames, which carry no length and no sequence number: the little-endian read, the checksum, the resync that steps ONE byte past a bad candidate because 0xAA is also a loud echo, the squeeze that takes the loudest sample rather than the average, the ring, and a `by-path` port name full of colons in `HELM_SONAR` |
 | `backlight_test` | the only thing that changes how much light a panel puts out: the slider's 5% floor, the scaling, and a device that is there but not writable |
 | `score_test` | the times the club's form takes, what goes over the wire, and the limits pointed at somebody else's server |
 | `dongle_test` | the rescue for a USB wifi adapter whose driver did not initialise it: that an interface existing is not success, and that a working one is never yanked |
-| `wifi_test` | the locale every child is given, a saved network acted on by uuid — including the one already on the glass with a `?` where its apostrophe should be — the switch that turns a radio on without being asked to join anything, an unadopted dongle still reaching the list, the hotspot pinned to come up on the onboard radio by itself, and an adapter the kernel has but NetworkManager never mentions being named rather than silently missing |
+| `browser_test` | the window and cage scripts finding the browser by either of its names, `chromium-browser` or `chromium` |
+| `wifi_test` | the locale every child is given, a saved network acted on by uuid — including the one already on the glass with a `?` where its apostrophe should be — the switch that turns a radio on without being asked to join anything, an unadopted dongle still reaching the list, the hotspot pinned to come up on the onboard radio by itself — and moved when the drive goes to another Pi, whose onboard radio has a different MAC — and an adapter the kernel has but NetworkManager never mentions being named rather than silently missing |

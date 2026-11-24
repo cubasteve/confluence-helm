@@ -421,10 +421,26 @@ class Spec(unittest.TestCase):
     def test_serial_without_one_takes_the_boards_own(self):
         self.assertEqual(self.n.sonar_spec('serial:/dev/ttyACM0')['baud'], 250000)
 
+    def test_a_by_path_name_full_of_colons(self):
+        """The docs' own example. Split on every colon it was five fields
+        and refused, and the sonar was off with nothing on the glass."""
+        dev = '/dev/serial/by-path/platform-xhci-hcd.0-usb-0:1.2:1.0-port0'
+        self.assertEqual(self.n.sonar_spec('serial:%s:250000' % dev),
+                         {'kind': 'serial', 'dev': dev, 'baud': 250000})
+        self.assertEqual(self.n.sonar_spec('serial:%s:115200' % dev)['baud'],
+                         115200)
+
+    def test_a_by_path_name_must_carry_its_baud(self):
+        """Without one, the last piece of the name is read as the baud -
+        and refused, rather than opening half a path."""
+        self.assertIsNone(self.n.sonar_spec(
+            'serial:/dev/serial/by-path/platform-xhci-hcd.0-usb-0:1.2:1.0-port0'))
+
     def test_what_it_refuses(self):
         for bad in ('', '  ', 'udp', 'udp:', 'udp:no', 'udp:0', 'udp:70000',
                     'serial', 'serial:', 'serial:/dev/x:no', 'tcp:1234',
-                    'udp:1:2:3:4'):
+                    'udp:1:2:3:4', 'serial::250000', 'serial:/dev/x:0',
+                    'serial:/dev/x:'):
             self.assertIsNone(self.n.sonar_spec(bad), bad)
 
 

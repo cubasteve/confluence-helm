@@ -192,37 +192,6 @@ svg{width:100%;height:100%;display:block}
   letter-spacing:-.06em;pointer-events:none}
 body.dusk #mark{opacity:.055}
 body.night #mark{opacity:.07}
-/* The route chart, in the left of the dial: the one sector nothing else
-   claims, between the bezel's 60-120 and the SOG digits. See CHT.
-   Opacities are the whole design - the chart is a watermark with a
-   route on it, and it has to lose to every reading on the glass.
-   --cht-map is the chart image's strength. It is read by chtBake(),
-   which paints it into the image's own alpha once per image and theme,
-   rather than set as an opacity here: group opacity on a masked image
-   is one more offscreen layer to composite on every repaint, and on
-   the Pi that is the expensive part. The marks run stronger than the
-   map, but each is drawn in a colour no brighter than the dimmest
-   reading (the TWS strip, in --ink-dim) and short of full strength, so
-   even a mark lying on chart ink loses to it. That is why the boat is
-   --ink-dim and not --ink: it is a solid shape, not a stroke, and at
-   dusk --ink at .72 was brighter than the strip. And why at night the
-   route is --ink-dim and not --accent: night's accent is the brightest
-   red in the palette, brighter than --ink. tests/chart.mjs measures
-   the marks against the strip off the glass in all three themes. */
-body{--cht-map:.40}
-body.dusk{--cht-map:.38}
-body.night{--cht-map:.44}
-.cht-leg{fill:none;stroke:var(--label);stroke-width:3;stroke-dasharray:2 9;
-  stroke-linecap:round;stroke-linejoin:round;opacity:.66}
-.cht-ahead{opacity:.42}
-.cht-leg-next{stroke:var(--accent);opacity:.56;stroke-dasharray:none}
-.cht-act{stroke:var(--accent);stroke-width:5;stroke-linecap:round;opacity:.68}
-.cht-wp{fill:none;stroke:var(--accent);stroke-width:3.5;opacity:.85}
-.cht-boat{fill:var(--ink-dim);opacity:.8}
-body.night .cht-wp,body.night .cht-act,body.night .cht-leg-next{stroke:var(--ink-dim)}
-body.night .cht-wp{opacity:.8}
-body.night .cht-act{opacity:.62}
-body.night .cht-leg-next{opacity:.5}
 .sen{stroke:var(--label);fill:var(--label);opacity:.28;
   transition:opacity .3s,stroke .3s,fill .3s}
 .sen.live{stroke:var(--stbd);fill:var(--stbd);opacity:1}
@@ -315,8 +284,14 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 /* One row. More apps than fit scroll sideways rather than growing the
    dock into the drawer it just stopped being - and the row is held to
    600 rather than the dock's full inner width, so its ends cannot reach
-   the rim when a second app arrives. */
-.approw{display:flex;align-items:flex-start;justify-content:center;gap:26px;
+   the rim when a second app arrives.
+   flex-start, not center. The tiles grow to share the row, so while they
+   fit there is no free space for either to place and the two look the
+   same - but the day they do not, center pushes the overflow out of BOTH
+   ends, and the half past the left edge is where scrolling cannot go:
+   the seventh app (Chart) left TRACKS at -48 px, cut to CKS and out of
+   reach. Overflow belongs at the end the row scrolls towards. */
+.approw{display:flex;align-items:flex-start;justify-content:flex-start;gap:26px;
   flex-wrap:nowrap;overflow-x:auto;padding:0;width:600px;max-width:100%;
   margin:0 auto}
 /* Four apps since the course got its own tile, and four at 150 with 26
@@ -425,6 +400,19 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
   font-variant-numeric:tabular-nums;text-shadow:0 1px 12px rgba(0,0,0,.5)}
 #gh-row span{display:block;margin-top:2px;font-size:15px;font-weight:600;
   letter-spacing:.14em;color:rgba(255,255,255,.62)}
+
+/* --- the chart app ---
+   Freeboard, laid out for the circle by the signalk-round-freeboard
+   webapp on the Signal K server, in a frame that fills the body. The
+   frame's own furniture stays on top of it: #app-name and #app-close are
+   siblings of #app-body with a z-index, so the cross is never inside
+   the frame and a tap on it is the panel's, wherever focus is.
+   A frame swallows every touch that lands on it, judge and all. #ch-top
+   gives the top cap back - see chartOpen. */
+#ch-frame{position:absolute;inset:0;width:100%;height:100%;border:0;
+  background:var(--bg)}
+#ch-top{position:absolute;left:0;right:0;top:0;height:110px;z-index:1;
+  touch-action:none}
 
 /* --- the radar app --- */
 #rad-cv{position:absolute;inset:0;touch-action:none}
@@ -2520,104 +2508,6 @@ document.body.className = THEME_EFF==='day' ? '' : THEME_EFF;
        positions this run itself works out. -->
   <text id="mark" x="488" y="672" text-anchor="middle">45</text>
 
-  <!-- ROUTE CHART, left. The route planned in Freeboard-SK and made
-       active through Signal K's course API, drawn faint in the left of
-       the glass: heading-up, the boat low and right in it just clear of
-       the SOG digits, the leg ahead running up and away into the fade.
-       With no active route the group stays display:none and the dial is
-       exactly what it was. No words anywhere in it - a name or a
-       distance on this side of the glass is one more reading to tell
-       apart from the real ones, and the chart is not a reading.
-       The NOAA chart under the route is baked once per image by
-       chtBake() into one silhouette in the theme's own --ink, so night
-       is red like everything else and no filter runs on the Pi.
-       Where a wind mark stands on the left of the bezel the chart gives
-       way (#cht-wind punches a soft hole under each mark). -->
-  <defs>
-    <!-- the sector: full out at the bezel, gone before the digits -->
-    <radialGradient id="cht-fade-g" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1"
-        gradientTransform="translate(175 410) scale(250 300)">
-      <stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#fff" stop-opacity=".95"/>
-      <stop offset=".8" stop-color="#fff" stop-opacity=".4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <!-- and a soft stop on the inboard side, ending at the digits. x1/x2
-         are moved by chtEdge() with the digits' own left edge, so a wide
-         speed (12.4) pushes the fade out of their way rather than under them -->
-    <linearGradient id="cht-fade-x" gradientUnits="userSpaceOnUse" x1="250" y1="0" x2="350" y2="0">
-      <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </linearGradient>
-    <!-- and top and bottom: clear of the clock's +, and gone by the TWS
-         rule (y 606) - zero at 600, so no land reaches the rule or the
-         strip under it -->
-    <linearGradient id="cht-fade-y" gradientUnits="userSpaceOnUse" x1="0" y1="230" x2="0" y2="600">
-      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".227" stop-color="#fff"/>
-      <stop offset=".838" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="cht-fade-r" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1"
-        gradientTransform="translate(290 400) scale(240 240)">
-      <stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#fff"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="cht-hole" cx=".5" cy=".5" r=".5">
-      <stop offset="0" stop-color="#000"/><stop offset=".55" stop-color="#000"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </radialGradient>
-    <mask id="cht-mask-g" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-g)"/></mask>
-    <mask id="cht-mask-x" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-x)"/></mask>
-    <mask id="cht-mask-y" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-y)"/></mask>
-    <!-- the route's own inboard edge: a short fade to nothing just
-         before the clip, so a leg running off towards the digits ends
-         soft, the way the chart under it does, rather than cut. Black
-         over the radial, so it is still one mask; moved by chtEdge() -->
-    <linearGradient id="cht-fade-rt">
-      <stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000"/>
-    </linearGradient>
-    <mask id="cht-mask-r" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-r)"/>
-      <rect id="cht-fade-rt-r" x="340" y="0" width="12" height="1080" fill="url(#cht-fade-rt)"/></mask>
-    <mask id="cht-wind" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="#fff"/>
-      <circle id="cht-hole-a" r="0" fill="url(#cht-hole)"/>
-      <circle id="cht-hole-t" r="0" fill="url(#cht-hole)"/></mask>
-    <!-- and outboard: gone before the bezel numerals (r 435) and the
-         ticks, so 60 / 90 / 120 and the wind marks stand on clean glass -->
-    <radialGradient id="cht-fade-o" gradientUnits="userSpaceOnUse" cx="540" cy="540" r="420">
-      <stop offset="0" stop-color="#fff"/><stop offset=".86" stop-color="#fff"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <mask id="cht-mask-o" maskUnits="userSpaceOnUse" x="0" y="0" width="1080" height="1080">
-      <rect width="1080" height="1080" fill="url(#cht-fade-o)"/></mask>
-    <!-- The whole chart lives in this box and paints nothing outside it.
-         It is what keeps it cheap: the SOG digits redraw twenty times a
-         second just to the right of it, and a dirty rect that does not
-         touch the box never re-runs the masks above. Width set by chtEdge(). -->
-    <clipPath id="cht-clip"><rect id="cht-clip-r" x="100" y="230" width="252" height="370"/></clipPath>
-    <!-- the route, inside that box: above the rule, and off the clock's +
-         (a hole the size of the button's ring), so the route behind or far
-         ahead never runs over a control. The hole lies wholly inside the
-         rect, which is what makes evenodd mean "minus" here -->
-    <clipPath id="cht-clip-rt"><path clip-rule="evenodd"
-      d="M0 0H1080V600H0Z M302 258a54 54 0 1 0 108 0a54 54 0 1 0 -108 0Z"/></clipPath>
-  </defs>
-  <g id="cht" style="display:none" clip-path="url(#cht-clip)" pointer-events="none">
-   <g mask="url(#cht-wind)"><g mask="url(#cht-mask-o)">
-    <g mask="url(#cht-mask-y)"><g mask="url(#cht-mask-x)">
-    <g mask="url(#cht-mask-g)"><image id="cht-img" preserveAspectRatio="none"
-       style="display:none"/></g></g></g>
-    <g mask="url(#cht-mask-r)" clip-path="url(#cht-clip-rt)">
-      <polyline id="cht-past" class="cht-leg"/>
-      <polyline id="cht-ahead" class="cht-leg cht-ahead"/>
-      <polyline id="cht-next" class="cht-leg cht-leg-next"/>
-      <line id="cht-act" class="cht-act"/>
-      <circle id="cht-wp" class="cht-wp" r="13"/>
-    </g>
-   </g></g>
-    <path id="cht-boat" class="cht-boat" d="M0 -17 L10 11 L0 5 L-10 11 Z"/>
-  </g>
-
   <g id="rose"></g>
   <path id="groove-s" fill="var(--accent)" opacity=".12"/>
   <path id="groove-p" fill="var(--accent)" opacity=".12"/>
@@ -3947,23 +3837,6 @@ const PATHS=[...BAT_PATHS,
  'environment.wind.angleTrueWater','environment.wind.speedTrue',
  'performance.velocityMadeGood',
  'confluence.track.recording','confluence.track.points'];
-/* The course, for the route chart (see CHT). Objects, not numbers, and
-   they change when somebody activates a route or a waypoint is reached -
-   so 'instant' rather than the readings' fixed 4 Hz beat, which would
-   resend the same route object four times a second for nothing.
-   And no minPeriod. The server applies it as a debounce that passes the
-   first value and DROPS the rest of the window - it never sends the
-   last one late - and the course API routinely sends two course deltas
-   back to back: activating a route over a plotter's course clears the
-   old one first (nextPoint null) and then sends the new one. With a
-   minPeriod the panel kept the null and showed no route while one was
-   active. These paths only change on a course command, so there is
-   nothing to throttle; chtCheck() runs at 1 Hz whatever arrives. */
-const CHT_PATHS=['navigation.course.activeRoute','navigation.course.nextPoint',
- 'navigation.course.previousPoint',
- 'navigation.courseGreatCircle.activeRoute.href',
- 'navigation.courseGreatCircle.nextPoint.position',
- 'navigation.courseGreatCircle.previousPoint.position'];
 let ws,retry=1000;
 const setLink=(c,t)=>{ document.getElementById('sensors').style.opacity =
   (t==='SIGNAL K'||t==='DEMO') ? '1' : '.35'; };
@@ -3977,7 +3850,6 @@ function skMessage(data){
     puts[m.requestId](m); delete puts[m.requestId]; }
   (m.updates||[]).forEach(u=>{ let sogNew=null; const tms=gpsMs(u.timestamp);
    (u.values||[]).forEach(v=>{
-    if(CHT_PATHS.indexOf(v.path)>=0){ chtFeed(v.path, v.value); return; }
     /* GPS paths go through the conditioner above, and only when they
        are a new sample rather than the 250 ms resend. */
     if(v.path==='navigation.courseOverGroundTrue' && typeof v.value==='number'){
@@ -4046,11 +3918,8 @@ function connect(){
          NMEA rates is a continuous drizzle of small deltas landing at
          random moments, and each one is a task that can skip an
          animation frame. 'fixed' batches them onto a predictable 4 Hz
-         beat instead. Slower data, smoother glass - a deliberate trade.
-         The course paths are 'instant' with NO minPeriod - see CHT_PATHS. */
-      subscribe:PATHS.map(p=>({path:p,period:250,policy:'fixed'}))
-        .concat(CHT_PATHS.map(p=>({path:p,policy:'instant'})))}));
-    skEver=true; chtCourseGet();};
+         beat instead. Slower data, smoother glass - a deliberate trade. */
+      subscribe:PATHS.map(p=>({path:p,period:250,policy:'fixed'}))}));};
   /* Mid-slide the dial is completely hidden, so parsing a delta right
      now buys nothing visible and costs a frame: the parse is a discrete
      task that can land between two rAF callbacks and skip the animation
@@ -4164,6 +4033,10 @@ function applyTheme(){
   $('theme-lbl').textContent = CFG.theme.toUpperCase();
   $('theme-sub').textContent = CFG.theme==='auto' ? eff.toUpperCase() : '';
   $('theme-btn').classList.toggle('on', CFG.theme!=='auto');
+  /* The chart is a page of its own in a frame, and hears about the
+     theme only by being told - every minute on auto, which it ignores
+     when nothing changed. */
+  chartSend();
 }
 setInterval(()=>{ if(CFG.theme==='auto') applyTheme(); }, 60000);
 
@@ -4376,9 +4249,6 @@ function render(){
   if(twa!==null)tg.setAttribute('transform',`rotate(${twa} ${CX} ${CY})`);
 
   paintDialCells();
-  /* after the cells, so a SOG that has just grown a digit moves the
-     chart out of its way in this same frame - see chtTick */
-  chtTick(awa,twa);                 /* the route chart, left - see CHT */
 
   /* ---- RACE ---- */
   paintRace(met);
@@ -9854,7 +9724,16 @@ const PK_SLOP=10, PK_FLICK=0.15;      /* px, and px per ms */
    drag it can actually absorb - and at the end of its travel it hands
    the gesture back, which is how a swipe up from the bottom still
    closes the panel. */
-function dragScroll(list, lazy, wheel){
+/* `side` is for the one list that scrolls sideways - the dock's row of
+   apps. Same drag, same coast, same tap-that-was-a-drag answer; only
+   the axis is scrollLeft and clientX. It is always lazy as well, and
+   lazy in TWO ways: a finger that goes mostly down is the dock's own
+   dismiss swipe and is handed straight back, and one that goes sideways
+   with no row left that way is nobody's. Claiming on pointerdown would
+   have taken the dismiss swipe from every tile, which is most of the
+   dock. Behind the same accessors as the wheel, so every vertical
+   caller's path through here is the code it was. */
+function dragScroll(list, lazy, wheel, side){
   const st={drag:null, moved:0, glide:null};
   /* The one box that turns rather than scrolls answers all of this with
      its wheel offset instead of its scrollTop. Behind two accessors, so
@@ -9863,8 +9742,10 @@ function dragScroll(list, lazy, wheel){
      was: the control panel's dismiss swipe depends on this function and
      is no part of what was being changed. */
   const spin=()=>{ const w=wheel&&WHEEL.get(list); return (w&&w.on)?w:null; };
-  const at=()=>{ const w=spin(); return w?w.off:list.scrollTop; };
-  const put=v=>{ const w=spin();
+  const at=()=>{ if(side) return list.scrollLeft;
+    const w=spin(); return w?w.off:list.scrollTop; };
+  const put=v=>{ if(side){ list.scrollLeft=v; return; }
+    const w=spin();
     if(!w){ list.scrollTop=v; return; }
     w.off=w.cyc?((v%w.cyc)+w.cyc)%w.cyc:v;
     drumPaint(list);
@@ -9881,7 +9762,7 @@ function dragScroll(list, lazy, wheel){
          going nowhere. A wheel always moves, and asking it whether it
          did would stop it the one frame its offset wrapped to the same
          number it started on. */
-      st.glide=(Math.abs(v)>0.02 && (w || list.scrollTop!==was))
+      st.glide=(Math.abs(v)>0.02 && (w || at()!==was))
                ? requestAnimationFrame(step) : null; };
     st.glide=requestAnimationFrame(step); };
   /* Nothing else on the sheet held the wheel still: stop() is reached
@@ -9899,10 +9780,23 @@ function dragScroll(list, lazy, wheel){
      a different middle. The only way to move this grid is to turn it. */
   if(wheel) list.addEventListener('scroll',()=>{
     if(list.scrollTop) list.scrollTop=0; }, {passive:true});
+  if(side) lazy=true;
+  /* The finger's position along the axis that scrolls. */
+  const pos=e=>side?e.clientX:e.clientY;
   list.addEventListener('pointerdown',e=>{ if(!lazy) gClaim(); stop(); st.moved=0;
-    st.drag={id:e.pointerId, y0:e.clientY, y:e.clientY, t:performance.now(),
-             top:at(), v:0, held:!lazy, s:[]}; });
+    st.drag={id:e.pointerId, y0:pos(e), y:pos(e), t:performance.now(),
+             top:at(), v:0, held:!lazy, s:[], x0:e.clientX, c0:e.clientY}; });
   addEventListener('pointermove',e=>{ const d=st.drag; if(!d||e.pointerId!==d.id) return;
+    if(!d.held && side){
+      const dx=e.clientX-d.x0, dy=e.clientY-d.c0;
+      if(Math.hypot(dx,dy)<5) return;          /* too early to tell */
+      if(Math.abs(dx)<=Math.abs(dy)){ st.drag=null; return; }  /* the dock's swipe */
+      /* A finger going LEFT pulls the row left, which needs room to the right. */
+      const room = dx<0 ? list.scrollWidth-list.clientWidth-list.scrollLeft
+                        : list.scrollLeft;
+      if(room<=1){ st.drag=null; return; }
+      d.held=true; gClaim();
+    }
     if(!d.held){
       const dy=e.clientY-d.y0;
       if(Math.abs(dy)<5) return;              /* too early to tell */
@@ -9920,6 +9814,9 @@ function dragScroll(list, lazy, wheel){
        frames happened to say, and the same gesture comes out at half
        speed or twice it. Averaged over the last 70ms it is the stroke
        rather than its final twitch. */
+    if(side){ const x=e.clientX; if(dt>0) d.v=(d.y-x)/dt;
+      d.y=x; d.t=now; st.moved=Math.max(st.moved, Math.abs(x-d.y0));
+      return put(d.top-(x-d.y0)); }
     if(wheel){ d.s.push({t:now, y:e.clientY}); d.v=wheelV(d.s, now, e.clientY); }
     d.y=e.clientY; d.t=now; st.moved=Math.max(st.moved, Math.abs(e.clientY-d.y0));
     put(d.top-(e.clientY-d.y0)); });
@@ -10373,6 +10270,11 @@ rimWatch($('course-list'), true, true);
 rimWatch($('lib-list'),    true, true);
 rimWatch($('p-sheet'));               /* cards, and a card does not tilt */
 rimWatch($('app-row'), false);        /* sideways, so it fades but has no arc */
+/* And it is driven, like every other list here: under #stage the browser
+   scrolls nothing for a finger, so overflow-x:auto alone left the row
+   unreachable past its sixth tile on the glass - GOLDEN HOUR could be
+   seen half-faded at the end and never got to. */
+const appDragged=dragScroll($('app-row'), true, false, true);
 
 const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
@@ -10937,7 +10839,6 @@ function tileTx(mode,fn){
 const tileGet  =k    =>tileTx('readonly', st=>st.get(k));
 const tilePut  =(k,b)=>tileTx('readwrite',st=>st.put({k,b,t:Date.now()}));
 const tileCount=()   =>tileTx('readonly', st=>st.count());
-const tileDel  =k    =>tileTx('readwrite',st=>st.delete(k));
 
 /* Oldest-first eviction, the same discipline the in-memory blobURL map
    two functions down has always had. Nothing evicted this store at all
@@ -13302,7 +13203,7 @@ function ssTick(){
   }
   // auto-blank after the chosen idle delay, if one is set
   const d=SS_DELAYS[ssStep];
-  if(d && !ssOn && Date.now()-lastTouch>d) ssStart();
+  if(d && !ssOn && Date.now()-lastTouch>d && !chartHoldsSaver()) ssStart();
   setTimeout(ssTick,500);
 }
 
@@ -15995,6 +15896,137 @@ function tracksClose(){
   $('stage').appendChild(tmap);
 }
 
+/* ---- Chart --------------------------------------------------------
+   Freeboard-SK, the Signal K server's chart plotter, through the
+   signalk-round-freeboard webapp installed beside it. That page is the
+   circle: it frames Freeboard on its own origin and lays its buttons out
+   on the rim, its strip above the cross and its sheets below the name
+   pill, so the panel only has to give it the body and say the theme.
+
+   Same host as the socket - CFG.host, which is SK_HOST unless somebody
+   set one. That is not a detail: with Signal K's security on, the login
+   cookie is SameSite=Strict, and http://pi:8090 and http://pi:3000 are
+   one site while localhost and the boat's address are two. A frame on
+   the other name opens a Freeboard that is not logged in.
+
+   The page says how it is doing with {type:'rfb-status', mode} -
+   round, square (its fallback: Freeboard as shipped, in the inscribed
+   square) or error - and takes {type:'rfb-theme', theme}. Its themes
+   are the panel's own names, day / dusk / night, so nothing is
+   translated; anything else is sent as day, which is what the page
+   does with a name it does not know anyway.
+
+   What it must never be is a blank circle. A server that does not
+   answer, a webapp that is not installed, or a page that has said
+   nothing at all in CH_WAIT, and the frame goes and the frame's own
+   failure line says what to check. The frame goes on close too, and with
+   it the whole of Freeboard: an OpenLayers map with its tile cache is
+   the heaviest thing this panel ever holds on a Pi 4.
+
+   CH_WAIT is longer than the page's own patience: it gives Freeboard
+   30 s to boot (BOOT_TIMEOUT_MS in round.js) and then says round or
+   square either way, so a cold start on a slow Pi is never cut short
+   here while the page would still have answered.
+
+   The screensaver. Its idle clock is the panel's pointerdown, and a
+   touch on the chart lands in the frame and never reaches this window -
+   so the page says {type:'rfb-activity'} (at most every 2 s) while it is
+   being used, and that counts as a touch. A page that has never said it
+   (one from before 0.3.1) holds the saver off while the chart is open,
+   rather than letting it come up every few seconds under a hand that is
+   panning. */
+const CH_PATH='/signalk-round-freeboard/';
+const CH_WAIT=35000;
+let CH=null;
+function chartHoldsSaver(){ return !!CH && !CH.act; }
+const chartTheme=()=>['day','dusk','night'].includes(THEME_EFF)?THEME_EFF:'day';
+const chartHost=()=>CFG.host||SK_HOST;
+function chartFail(why){
+  if(!CH) return;
+  const h=chartHost();
+  chartDrop();
+  appFail('Chart not available — '+(why||'is Signal K running on '+h+'?'));
+}
+/* Everything the app holds, given back. Idempotent: an error, the cross
+   and a theme change racing each other all end up here. */
+function chartDrop(){
+  const c=CH; if(!c) return;
+  CH=null;
+  clearTimeout(c.timer);
+  try{ c.ac.abort(); }catch(e){}
+  removeEventListener('message', c.onMsg);
+  /* Blank before removing: a detached frame mid-navigation can keep its
+     renderer alive until the collector gets round to it. */
+  try{ c.f.src='about:blank'; }catch(e){}
+  c.f.remove();
+  if(c.top) c.top.remove();
+}
+function chartSend(force){
+  if(!CH || !CH.f.contentWindow) return;
+  /* applyTheme runs every minute on auto. The page re-themes Freeboard's
+     whole document when told, so it is told only when there is news -
+     and once more when it has loaded, because a message posted while the
+     frame still held its first empty document went nowhere. */
+  const t=chartTheme();
+  if(t===CH.theme && !force) return;
+  CH.theme=t;
+  try{ CH.f.contentWindow.postMessage({type:'rfb-theme', theme:t},
+                                      CH.origin); }catch(e){}
+}
+function chartOpen(host){
+  const src=new URL(`http://${chartHost()}${CH_PATH}`);
+  src.searchParams.set('theme', chartTheme());
+  const f=document.createElement('iframe');
+  f.id='ch-frame'; f.title='Chart';
+  f.allow='screen-wake-lock; autoplay';
+  const c={f, origin:src.origin, theme:chartTheme(), ok:false, act:false,
+           ac:new AbortController(),
+           timer:null, top:null, onMsg:null};
+  /* Only the page we opened, from the server we opened it on. */
+  c.onMsg=e=>{
+    if(CH!==c || e.origin!==c.origin || e.source!==f.contentWindow) return;
+    const d=e.data;
+    if(d && d.type==='rfb-activity'){ c.act=true; lastTouch=Date.now(); return; }
+    if(!d || d.type!=='rfb-status') return;
+    c.ok=true; clearTimeout(c.timer);
+    if(d.mode==='error') chartFail(String(d.reason||'').slice(0,140)||null);
+  };
+  addEventListener('message', c.onMsg);
+  CH=c;
+  /* Nothing answers the frame's own load event that would tell a chart
+     from Chromium's "refused to connect" page - a cross-origin frame
+     fires it for both. So the server is asked first, and in parallel:
+     not running fails in a moment rather than after the wait. A 404 is
+     a server without the webapp. A refusal under CORS is a server that
+     IS there and only declines to say more, so that is asked again
+     without it: an answer of any kind is a server that is up, and from
+     there the page's own status decides. */
+  const sig=c.ac.signal;
+  fetch(src.href,{cache:'no-store', credentials:'omit', signal:sig})
+    .then(r=>{ if(CH!==c) return;
+      if(r.status===404) return chartFail('the round chart page is not '
+        +'installed on '+chartHost()+' (signalk-round-freeboard)');
+      if(r.ok) c.ok=true; })
+    .catch(()=>{ if(CH!==c || sig.aborted) return;
+      return fetch(src.href,{mode:'no-cors', cache:'no-store', signal:sig})
+        .then(()=>{ if(CH===c) c.ok=true; },
+              ()=>{ if(CH===c && !sig.aborted) chartFail(); }); });
+  c.timer=setTimeout(()=>{ if(CH===c && !c.ok) chartFail(); }, CH_WAIT);
+  f.addEventListener('load',()=>{ if(CH===c) chartSend(true); });
+  f.src=src.href;
+  host.appendChild(f);
+  /* The top edge is the control panel's on every app - see fromTop and
+     the radar's pointerdown. Over a frame the judge never sees a touch at
+     all, so the cap above the page's own furniture (nothing of the round
+     layout is drawn above 118) is kept on the panel's side: a touch that
+     starts there stays with this element for its whole travel, frame or
+     no frame, and a pull from it is the panel's pull like anywhere else.
+     It costs the map nothing but the strip under the name pill. */
+  c.top=document.createElement('div'); c.top.id='ch-top';
+  host.appendChild(c.top);
+}
+function chartClose(){ chartDrop(); }
+
 /* Left to right on the dock, in the order the owner asked for. */
 const APPS=[
   /* The route cutting across the glass with the boat riding it, the way
@@ -16021,9 +16053,28 @@ const APPS=[
    ico:'<circle cx="5.8" cy="17.6" r="2.4"/><circle cx="18.2" cy="6.4" r="2.4"/>'
       +'<path d="M5.8 15.2C5.8 9.4 18.2 14.6 18.2 8.8"/>',
    open:courseOpen, close:courseClose},
+  /* A chart folded the way one lives in a chart table, which is what
+     says CHART rather than map-in-general beside the tracks' band. Three
+     panels and their two creases, all open strokes; the only zig-zag
+     outline on the dock, so at 42 px it is not the battery's box and
+     not anybody's ring. Third, after Tracks and Course, by the
+     helm's own choice; with seven tiles the row scrolls, so Golden Hour
+     is the one that waits at the far end. */
+  {id:'chart', name:'Chart',
+   ico:'<path d="M2.8 6.2L8.9 3.6L15.1 6.2L21.2 3.6V17.8L15.1 20.4'
+      +'L8.9 17.8L2.8 20.4Z"/>'
+      +'<path d="M8.9 3.6V17.8"/><path d="M15.1 6.2V20.4"/>',
+   open:chartOpen, close:chartClose},
+  /* A cloud and its rain, because this radar is the WEATHER radar
+     (RainViewer and the futurecast), not one that finds other boats. It
+     used to be a ring and a sweep, which on a boat says "targets". The
+     rain is three short slants, not drops, so at 42 px it stays apart
+     from the sonar's wave and the golden hour's half sun. */
   {id:'radar', name:'Radar',
-   ico:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/>'
-      +'<path d="M12 12l6.4-6.4"/>',
+   ico:'<path d="M7.2 14.6h9.6a3.6 3.6 0 0 0 .5-7.2a5.4 5.4 0 0 0-10.3 1.3'
+      +'a3 3 0 0 0 .2 5.9z"/>'
+      +'<path d="M8.6 17.6l-1.2 2.6"/><path d="M12.6 17.6l-1.2 2.6"/>'
+      +'<path d="M16.6 17.6l-1.2 2.6"/>',
    open:radarOpen, close:radarClose},
   /* A hull, the cone under it and the bottom it is looking for. The
      only wavy line on the dock, which is what makes it readable at
@@ -16078,7 +16129,8 @@ function drawApps(){
     .join('');
   scrollFit(row);                 /* more apps than the 600 px row holds */
   row.querySelectorAll('[data-app]').forEach(b=>
-    b.addEventListener('click',()=>openApp(APPS[+b.dataset.app])));
+    b.addEventListener('click',()=>{ if(appDragged()) return;   /* a scroll */
+      openApp(APPS[+b.dataset.app]); }));
 }
 
 function openApp(a){
@@ -16335,554 +16387,6 @@ setTimeout(helmMoved, 2500);
      that beat us here keeps its own shorter timer. */
   if(BOOT.up && !BOOT.timer) BOOT.timer=setTimeout(bootSettle, BOOT.CEIL);
 })();
-
-/* ==================================================================
-   ROUTE CHART  (the left of the dial)
-   The route planned in Freeboard-SK, drawn faint in the one sector of
-   the dial nothing else claims: between the bezel's 60-120 and the SOG
-   digits. It is the corner of the map a car shows beside its speed -
-   where the next turn is, which way the leg runs - and nothing more.
-   No name, no distance, no turn text: the dial already has readings,
-   and a number in this corner is one more thing to tell apart from
-   them at a glance. The chart only draws.
-
-   It belongs to Signal K's course API and to nothing else on the
-   panel. The race course - marks, the start line, the course page -
-   is the panel's own and never appears here; a route here is never a
-   course there. Two features that happen to both have waypoints.
-
-   WHERE THE ROUTE COMES FROM. Freeboard-SK's "activate route" and "go
-   to waypoint" both go through the server's course API, which
-   publishes the result as deltas (signalk-server src/api/course,
-   emitCourseInfo):
-     v2  navigation.course.activeRoute    {href, pointIndex, pointTotal,
-                                           reverse, name}
-         navigation.course.nextPoint      {type, position, href?, name?}
-         navigation.course.previousPoint  {type, position, name?}
-     v1  navigation.courseGreatCircle.activeRoute.href,
-         .nextPoint.position, .previousPoint.position - the old
-         compatibility paths, which have no index and no direction.
-   The v2 ones are preferred once any has been seen; v1 is the fallback
-   for a server older than the v2 API, and there the index and the
-   direction are worked out from where the next point is on the route.
-   The route's shape is a resource, not a delta: one GET of
-   /signalk/v2/api/resources/routes/<id> (a GeoJSON LineString,
-   [lon,lat]), which needs the server's resources provider plugin. A
-   go-to-waypoint has no route behind it and draws one leg.
-
-   The page is served by netd on :8090 and Signal K is on :3000, so the
-   GETs are cross-origin. Signal K's own default (no allowedCorsOrigins
-   set) answers every origin; credentials:'omit' is what lets that
-   answer count - a wildcard reply is refused for a credentialed request
-   - and it also keeps a stale login cookie out of it, which with
-   allow_readonly on is the difference between reading and a 401 (see
-   skHeal). If the GET is refused anyway the deltas still arrive over
-   the socket, so the active leg draws and only the rest of the route is
-   missing. docs/chart.md has the one setting that can cause that.
-
-   Anything missing - no route, a 404, no resources plugin, no fix -
-   and the group is display:none and the dial is exactly as it was.
-
-   COST. This is a Pi. chtTick() is called from render()'s DRAW block,
-   so nothing at all runs while the dial is covered; with no route it
-   is one check a second; with one it repaints at most once a second
-   and only when the picture would move. The NOAA chart under the route
-   is one fetched image, baked once (chtBake) into a silhouette in the
-   theme's --ink with its strength in its own alpha, so the only thing
-   that changes per paint is a transform - no filter runs over it. */
-const CHT={
-  BX:322, BY:470,            /* the boat on the glass, beside the digits' top */
-  BX_MIN:196,                /* as far left as it steps for a mark to starboard */
-  WP_R:16,                   /* the ring's reach, stroke and a hair: what must fit */
-  RT_FADE:12,                /* the route's soft inboard edge, px, ending at the clip */
-  EDGE:355,                  /* the digits' left edge the geometry was drawn around */
-  FIT:150, FIT_TURN:120,     /* px from the boat to the next waypoint */
-  MPP_MIN:2.5, MPP_MAX:26,   /* metres per screen px, closest and furthest */
-  NEXT_PX:46,                /* the stub of the next leg, near a turn */
-  TURN_M:650, TURN_S:240,    /* near a turn: this close, or this soon */
-  HOLE_R:95, HOLE_R0:434,    /* the soft hole under a wind mark, and where marks ride */
-  PAINT_MS:1000, MOVE_PX:1.5, TURN_DEG:1.5,
-  RETRY_MS:60000,            /* a refused GET is not asked again for a minute */
-  IMG:1024, IMG_TO:15000,    /* the chart image, px square, and its patience */
-  LVL_MIN:1, LVL_MAX:6,      /* image metres-per-pixel as powers of two */
-  DEMO_LEG_S:900,            /* the demo route: a waypoint every 15 minutes of the sail */
-  NOAA:'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer'
-      +'/exts/MaritimeChartService/MapServer/export',
-  /* The chart without its words. The ENC service draws place names,
-     light descriptions and soundings by default; these turn the text
-     groups and the "other" display category (soundings, contour labels)
-     off, which leaves the coast, the shoals, the channels and the marks:
-     a shape, not something to read. */
-  NOAA_DP:JSON.stringify({ECDISParameters:{version:'10.9.1',DynamicParameters:{
-    Parameter:[{name:'DisplayCategory',value:'1,2'},{name:'DisplayNOBJNM',value:1},
-               {name:'LabelContours',value:1}],
-    ParameterGroup:[{name:'TextGroups',Parameter:
-      ['11','21','23','24','25','26','27','28','29','30'].map(n=>({name:n,value:1}))}]}}}),
-  n:{tick:0, paint:0, fetch:0, bake:0}   /* counters, for the probe */
-};
-/* Web Mercator, y DOWN (the glass's sense), metres at the equator. */
-function chtM(lat,lon){
-  const R=6378137;
-  return [R*lon/DEG, -R*Math.log(Math.tan(Math.PI/4+lat/DEG/2))];
-}
-
-/* ---- the feed --------------------------------------------------------- */
-const CHK={v2:{}, v1:{}, seen2:false};   /* the course as the server last said it */
-const CHR=new Map();                     /* route href -> {c:coords} | {t:failedAt} */
-let chtSeq=0;                            /* bumped whenever the route might differ */
-const chtPos=o=>(o && isFinite(o.latitude) && isFinite(o.longitude)
-                 && Math.abs(o.latitude)<85) ? [+o.latitude, +o.longitude] : null;
-function chtFeed(path,v){
-  const P=path.slice('navigation.'.length);
-  if(P.startsWith('course.')){
-    CHK.seen2=true;
-    if(P==='course.activeRoute'){   CHK.v2.route=(v&&typeof v.href==='string')?v:null;
-                                    chtStale(CHK.v2.route&&CHK.v2.route.href); }
-    if(P==='course.nextPoint')      CHK.v2.next=chtPos(v&&v.position);
-    if(P==='course.previousPoint')  CHK.v2.prev=chtPos(v&&v.position);
-  } else {
-    if(P.endsWith('activeRoute.href')){       CHK.v1.href=typeof v==='string'?v:null;
-                                              chtStale(CHK.v1.href); }
-    if(P.endsWith('nextPoint.position'))      CHK.v1.next=chtPos(v);
-    if(P.endsWith('previousPoint.position'))  CHK.v1.prev=chtPos(v);
-  }
-  chtSeq++;
-}
-/* The route's shape is cached per href, but the course API sends
-   activeRoute again every time it emits the course - and one of those
-   times is an edit: when the active route is changed in Freeboard
-   (a waypoint dragged, one added) the server re-reads it and re-emits
-   with the same href. That delta is the only word the panel gets of it,
-   so every one marks the shape stale and it is fetched again. They are
-   rare - a course command or an edit, never a stream - so this is a
-   request per command. The old shape keeps drawing until the new one
-   is in, so an advance does not blink the route off. */
-function chtStale(href){
-  const e=href && CHR.get(href);
-  if(e && (e.c || e.busy)) e.stale=true;
-}
-/* What the server says we are steering for, in one shape whichever
-   version said it. idx is null when nobody said (v1). */
-function chtCourse(){
-  if(CHK.seen2){
-    const a=CHK.v2; if(!a.next) return null;
-    const r=a.route;
-    return {href:r?r.href:null, idx:r&&Number.isInteger(r.pointIndex)?r.pointIndex:null,
-            rev:!!(r&&r.reverse), next:a.next, prev:a.prev||null};
-  }
-  const a=CHK.v1; if(!a.next) return null;
-  return {href:a.href||null, idx:null, rev:null, next:a.next, prev:a.prev||null};
-}
-/* The points to draw, in sailing order, and which of them is next.
-   coords is the route resource's LineString ([lon,lat]) or null. The
-   server's own rule (getRoutePoint): reversed, point i is the i-th
-   from the END, so the index counts along the order the boat sails.
-   On the first leg the previous point is where the boat was when the
-   route was started, not a point of the route, so it goes in front. */
-function chtLegs(c, coords){
-  if(!c) return null;
-  const same=(p,q)=>!!p&&!!q&&Math.abs(p[0]-q[0])<1e-6&&Math.abs(p[1]-q[1])<1e-6;
-  const leg=()=>c.prev ? {pts:[c.prev,c.next], n:1} : {pts:[c.next], n:0};
-  if(!c.href || !Array.isArray(coords) || coords.length<2) return leg();
-  let pts=coords.map(q=>[q[1],q[0]]), n=-1;
-  if(c.rev!==null){
-    if(c.rev) pts.reverse();
-    n=(c.idx!==null && same(pts[c.idx],c.next)) ? c.idx : pts.findIndex(q=>same(q,c.next));
-  } else {
-    /* v1: no index and no direction, only where next and previous are */
-    n=pts.findIndex(q=>same(q,c.next));
-    if(n>=0 && !same(pts[n-1],c.prev) && (same(pts[n+1],c.prev) || n===pts.length-1)){
-      pts.reverse(); n=pts.length-1-n; }
-  }
-  /* the route was edited, or is not the one the course is on - the leg
-     the server is actually steering is still worth drawing */
-  if(n<0) return leg();
-  if(n===0) return c.prev ? {pts:[c.prev,...pts], n:1} : {pts, n:0};
-  return {pts, n};
-}
-const chtHost=()=>`http://${CFG.host||location.host}`;
-const chtGet=url=>fetch(url,{mode:'cors', credentials:'omit', cache:'no-store'})
-  .then(r=>r.ok?r.json():null).catch(()=>null);
-/* The route's shape, fetched once per href and again when chtStale()
-   says it may have changed. Not asked again for a minute after a
-   refusal, so a server without the resources plugin costs one failed
-   request a minute while a route is active, not one a second - and
-   nothing at all is written to the console by us. A refused refetch
-   keeps the shape it had. */
-function chtRouteCoords(href){
-  if(!href) return null;
-  const e=CHR.get(href), old=(e&&e.c)||null;
-  if(old && !e.stale) return old;
-  if(e && (e.busy || (!old && Date.now()-e.t<CHT.RETRY_MS))) return old;
-  const h=href.split('/').slice(-3);
-  if(h.length<3 || h[0]!=='resources' || h[1]!=='routes' || !h[2]){
-    CHR.set(href,{t:Date.now()}); return null; }
-  CHR.set(href,{busy:true, c:old});
-  chtGet(`${chtHost()}/signalk/v2/api/resources/routes/${encodeURIComponent(h[2])}`)
-    .then(j=>{
-      const g=j&&j.feature&&j.feature.geometry, cs=g&&g.coordinates;
-      const ok=Array.isArray(cs) && cs.length>=2 && cs.every(q=>Array.isArray(q)
-               && isFinite(q[0]) && isFinite(q[1]));
-      /* a newer stale mark that landed while this was in flight wins */
-      const now=CHR.get(href), again=!!(now && now.stale);
-      CHR.set(href, ok ? {c:cs, stale:again} : old ? {c:old, stale:false, t:Date.now()}
-                       : {t:Date.now()});
-      chtSeq++;
-    });
-  return old;
-}
-/* On every (re)connect: what the course is now, in case the deltas that
-   carry it were sent before we subscribed, and a fresh look at every
-   route - it may have been edited while we were away. */
-function chtCourseGet(){
-  CHR.clear(); chtSeq++;
-  return chtGet(`${chtHost()}/signalk/v2/api/vessels/self/navigation/course`).then(j=>{
-    if(!j || typeof j!=='object' || !('nextPoint' in j)) return;
-    chtFeed('navigation.course.activeRoute',  j.activeRoute||null);
-    chtFeed('navigation.course.nextPoint',    j.nextPoint||null);
-    chtFeed('navigation.course.previousPoint',j.previousPoint||null);
-  });
-}
-
-/* ---- the demo route ----------------------------------------------------
-   So the feature can be seen on a desktop with no Signal K at all. Only
-   while the demo is playing the FIX and no socket has ever opened: on
-   the boat Signal K answers within seconds of boot, and from then on a
-   route here is only ever one somebody planned. The waypoints are the
-   demo sail itself, sampled every DEMO_LEG_S, so the boat is always
-   somewhere on the leg it is shown sailing. */
-let skEver=false, chtDemoW=null;
-function chtDemo(){
-  if(!CFG.windDemo || skEver || !feedOwns('pos.lat','demo') || get('pos.lat')===null)
-    return null;
-  const T=DEMO_TRACK.dlat.length*DEMO_TRACK.step;
-  if(!chtDemoW){ chtDemoW=[];
-    for(let t=0;t<T;t+=CHT.DEMO_LEG_S){ const q=demoTrack(t); chtDemoW.push([q.lat,q.lon]); }
-    const q=demoTrack(T); chtDemoW.push([q.lat,q.lon]); }
-  return {pts:chtDemoW, n:Math.min(chtDemoW.length-1, Math.floor(demoT/CHT.DEMO_LEG_S)+1),
-          demo:true};
-}
-function chtRoute(){
-  const d=chtDemo(); if(d) return d;
-  const c=chtCourse(); if(!c) return null;
-  return chtLegs(c, chtRouteCoords(c.href));
-}
-
-/* ---- the chart image ---------------------------------------------------
-   One NOAA ENC export around the boat, 1024 px square, at a power-of-two
-   scale. Snapped to a grid so the same water asks for the same picture,
-   which is what lets the cache answer: every image is kept in the
-   tilecache store under cht/<level>/<x>/<y>, beside the map's tiles and
-   under the same oldest-first trim, so a lake sailed once with a signal
-   has its chart offline every time after. Fetched again only when the
-   boat nears the edge of what it covers or the scale has moved a whole
-   level; until the new one is in, the old one stays. No image at all
-   and the route draws on clean glass. */
-const CHI={cur:null, busy:false, fail:new Map(), themeKey:null};
-const chtKey=(lv,gx,gy)=>`cht/${lv}/${gx}/${gy}`;
-function chtImgWant(b, upp){
-  const cur=CHI.cur;
-  let lv=cur?cur.lv:null;
-  /* hysteresis: down a level only well past the halfway, so a scale
-     sitting on a boundary does not flip between two images */
-  if(lv===null || upp>2**lv || upp<2**lv/2.5)
-    lv=Math.max(CHT.LVL_MIN, Math.min(CHT.LVL_MAX, Math.ceil(Math.log2(Math.max(upp,1e-3)))));
-  if(cur && cur.lv===lv && chtCovers(cur, b, upp)) return;
-  chtImgLoad(b, upp, lv);
-}
-/* Does the image filed as cell c reach the far corner of the sector? That
-   corner is ~330 px from the boat, at upp mercator metres per px. */
-const chtCovers=(c,b,upp)=>{ const st=128*2**c.lv;
-  return Math.max(Math.abs(b[0]-c.gx*st),Math.abs(b[1]-c.gy*st))+330*upp < 512*2**c.lv; };
-/* The grid cell an image at level lv around b is filed under. */
-function chtCell(b,lv){
-  const st=128*2**lv, gx=Math.round(b[0]/st), gy=Math.round(b[1]/st);
-  return {lv, gx, gy, k:chtKey(lv,gx,gy)};
-}
-const chtCached=c=>tileGet(c.k).then(r=>r&&r.b?r:null).catch(()=>null);
-/* Any cached image at level lv that covers b: the boat's own cell, or
-   one of the three others whose corner it is nearest - the boat will
-   rarely be back on the exact spot it was when the image was fetched. */
-async function chtCachedNear(b,lv,upp){
-  const st=128*2**lv, fx=b[0]/st, fy=b[1]/st, seen=new Set();
-  for(const gx of [Math.round(fx), Math.floor(fx), Math.ceil(fx)])
-    for(const gy of [Math.round(fy), Math.floor(fy), Math.ceil(fy)]){
-      const c={lv, gx, gy, k:chtKey(lv,gx,gy)};
-      if(seen.has(c.k) || !chtCovers(c,b,upp)) continue;
-      seen.add(c.k);
-      const r=await chtCached(c); if(r) return {c, r};
-    }
-  return null;
-}
-async function chtImgLoad(b, upp, lv){
-  const want=chtCell(b,lv);
-  if(CHI.busy || (CHI.cur&&CHI.cur.k===want.k)) return;
-  const f=CHI.fail.get(want.k); if(f && Date.now()-f<CHT.RETRY_MS) return;
-  CHI.busy=true;
-  try{
-    /* The cache first: this scale, or the one either side of it that the
-       hysteresis in chtImgWant would have kept anyway - so water already
-       seen never costs a request, even when today's scale is a level off
-       the day it was cached. */
-    const fits=l=>l>=CHT.LVL_MIN && l<=CHT.LVL_MAX && upp<=2**l && upp>=2**l/2.5;
-    /* A kept image that will not decode - a blob file lost to a power
-       cut on the Pi's SD card, say - is deleted rather than skipped:
-       left in place it would win the cache lookup every second, forever,
-       and the network would never be asked for that water again. */
-    const bake=async(blob,at)=>{
-      try{ await chtBake(blob, at); return true; }
-      catch(e){ tileDel(at.k).catch(()=>{}); return false; } };
-    let done=false;
-    for(const l of [lv, lv+1, lv-1]){
-      if(l!==lv && !fits(l)) continue;
-      const h=await chtCachedNear(b,l,upp);
-      if(!h) continue;
-      done=await bake(h.r.b, h.c);
-      /* used again, so it is not the oldest: keep it out of the trim */
-      if(done && Date.now()-(h.r.t||0)>864e5) tilePut(h.c.k,h.r.b).catch(()=>{});
-      break;
-    }
-    if(!done){ const blob=await chtImgFetch(want);
-      if(blob && (done=await bake(blob, want)))
-        tilePut(want.k,blob).then(()=>tileTrim()).catch(()=>{}); }
-    if(!done){
-      CHI.fail.set(want.k,Date.now());
-      /* offline and never here at this scale: a coarser picture of the
-         same water is better than none */
-      for(const l of [lv+1, lv+2]){
-        if(l>CHT.LVL_MAX) break;
-        const h=await chtCachedNear(b,l,0);
-        if(h && !(CHI.cur&&CHI.cur.k===h.c.k) && await bake(h.r.b, h.c)) break;
-        if(h) break;
-      }
-    }
-  }catch(e){}
-  finally{ CHI.busy=false; }
-}
-function chtImgFetch({lv,gx,gy}){
-  const L=2**lv, cx=gx*128*L, cy=gy*128*L, h=512*L;   /* EPSG:3857 is y UP */
-  const q=new URLSearchParams({bbox:[cx-h,cy-h,cx+h,cy+h].map(v=>v.toFixed(1)).join(','),
-    bboxSR:'3857', imageSR:'3857', size:CHT.IMG+','+CHT.IMG, format:'png',
-    transparent:'false', display_params:CHT.NOAA_DP, f:'image'});
-  const ac=new AbortController(), to=setTimeout(()=>ac.abort(),CHT.IMG_TO);
-  CHT.n.fetch++;
-  return fetch(CHT.NOAA+'?'+q,{mode:'cors', credentials:'omit', signal:ac.signal})
-    .then(r=>r.ok && /^image\//.test(r.headers.get('content-type')||'') ? r.blob() : null)
-    .catch(()=>null).finally(()=>clearTimeout(to));
-}
-/* The ink, once per image. The chart's colours collapse to one
-   silhouette: land and marks to ink, water and the white of the sheet
-   to nothing (the alpha is .095 R - 1.048 B + 1 - the matrix the mock-up
-   ran as an SVG filter on every repaint, run here once instead). The
-   alpha is kept, so a change of theme only recolours it. */
-async function chtBake(blob, at){
-  const bm=await createImageBitmap(blob);
-  const w=bm.width, h=bm.height, c=document.createElement('canvas');
-  c.width=w; c.height=h;
-  const x=c.getContext('2d',{willReadFrequently:true});
-  x.drawImage(bm,0,0); if(bm.close) bm.close();
-  const d=x.getImageData(0,0,w,h).data, a=new Uint8ClampedArray(w*h);
-  for(let i=0,j=0;i<a.length;i++,j+=4)
-    a[i]=((.095*d[j]-1.048*d[j+2])/255+1)*d[j+3];
-  CHT.n.bake++;
-  const img={...at, w, h, a, c, L:2**at.lv, cx:at.gx*128*2**at.lv, cy:at.gy*128*2**at.lv};
-  await chtColour(img);
-  if(CHI.cur && CHI.cur.c){ CHI.cur.c.width=0; }
-  CHI.cur=img; chtSeq++;
-}
-/* --cht-map and --ink are the theme's; reading them is a style lookup,
-   so it is done only when the body's class - which is what changes the
-   theme - has changed. */
-async function chtColour(img){
-  /* the theme this ink is FOR, taken with the ink: a theme change during
-     the encode below then leaves img.theme behind the body's class, and
-     the next chtCheck recolours it */
-  const theme=document.body.className, cs=getComputedStyle(document.body);
-  const s=Math.max(0,Math.min(1,parseFloat(cs.getPropertyValue('--cht-map'))||0));
-  const x=img.c.getContext('2d',{willReadFrequently:true});
-  x.fillStyle=cs.getPropertyValue('--ink').trim()||'#000';
-  const m=/^#([0-9a-f]{6})$/i.exec(x.fillStyle), v=m?parseInt(m[1],16):0;
-  const r=v>>16&255, g=v>>8&255, b=v&255;
-  const id=x.createImageData(img.w,img.h), o=id.data, a=img.a;
-  for(let i=0,j=0;i<a.length;i++,j+=4){ o[j]=r; o[j+1]=g; o[j+2]=b; o[j+3]=a[i]*s; }
-  x.putImageData(id,0,0);
-  const bl=await new Promise(res=>img.c.toBlob(res,'image/png'));
-  /* the old url is revoked by chtPaint once nothing shows it */
-  img.url=bl?URL.createObjectURL(bl):null;
-  img.theme=theme;
-}
-
-/* ---- painting ------------------------------------------------------------ */
-/* The digits' left edge, from the same measured width the unit beside
-   them is placed by, to 4 px. Everything inboard - the boat, the fade,
-   the clip - is set from it, so 12.4 pushes the chart left rather than
-   the chart running under the 1.
-   Measured against the three-character reading the geometry was drawn
-   around (a 2.7; CHT.EDGE is where the mock-up had its ink): shapeW is
-   the advance, not the ink, and the face moves the ink, so it is the
-   DIFFERENCE between two widths that is trusted, never a width. In
-   Poppins that leaves the boat some 40-50 px clear of the ink at 2.7,
-   12.4 and 10.0 alike - tests/chart.mjs measures the real ink off the
-   glass rather than trusting this. Narrower than three
-   characters leaves the chart where it is. */
-let chtEdgeAt=null;
-function chtEdge(){
-  const t=$('spd').textContent||'';
-  const d=t ? (shapeW('8.8')-shapeW(t))/2 : 0;
-  const e=CHT.EDGE+Math.min(0, 4*Math.floor(d/4));
-  if(e!==chtEdgeAt){ chtEdgeAt=e;
-    const g=$('cht-fade-x'); g.setAttribute('x1',e-105); g.setAttribute('x2',e-5);
-    $('cht-fade-rt-r').setAttribute('x',e-3-CHT.RT_FADE);
-    $('cht-fade-rt-r').setAttribute('width',CHT.RT_FADE);
-    $('cht-clip-r').setAttribute('width',Math.max(0,e-3-100)); }
-  return e;
-}
-let chtOn=false, chtLastAt=0, chtView=null, chtCog=0, chtHref=null, chtSpdT=null;
-function chtHide(){
-  if(!chtOn) return;
-  chtOn=false; chtView=null; $('cht').style.display='none';
-}
-/* From render()'s DRAW block - the dial is on screen. awa and twa are the
-   smoothed marks' angles in degrees, null when the mark is not drawn. */
-function chtTick(awa,twa){
-  CHT.n.tick++;
-  const now=Date.now();
-  /* The digits are rewritten every frame and the chart only once a
-     second, so a SOG crossing 9.9 to 10.0 would have its new 1 under
-     the boat and the leg for up to a second. A changed reading is
-     measured now (two cached widths), and if the edge has moved the
-     chart is repainted in this same frame rather than at the next beat. */
-  const t=$('spd').textContent;
-  if(t!==chtSpdT){ chtSpdT=t;
-    if(chtOn && chtView && chtEdge()!==chtView.edge) chtLastAt=0; }
-  if(now-chtLastAt>=CHT.PAINT_MS){ chtLastAt=now; chtCheck(); }
-  if(chtOn) chtWind(awa,twa);
-}
-function chtCheck(){
-  const R=chtRoute(), la=get('pos.lat'), lo=get('pos.lon');
-  if(!R || la===null || lo===null || !R.pts.length){ chtHide(); return; }
-  const cog=get('navigation.courseOverGroundTrue'), sog=get('navigation.speedOverGround')||0;
-  /* heading-up, strictly. Below half a knot a GPS course is noise, so
-     the chart holds the last one rather than spin at the dock */
-  if(cog!==null && sog>0.25) chtCog=cog*DEG;
-  const edge=chtEdge();
-  const boat=chtM(la,lo), cl=Math.cos(la/DEG);
-  const W=R.pts.map(q=>chtM(q[0],q[1])), n=R.n, nx=W[n];
-  const dist=Math.hypot(nx[0]-boat[0],nx[1]-boat[1])*cl;
-  const turn=n+1<W.length && (dist<CHT.TURN_M || (sog>0.3 && dist/sog<CHT.TURN_S));
-  /* near a turn the mark sits lower (FIT_TURN), so the next leg - which
-     heads up and right after a right turn - stays clear of the clock's + */
-  const mpp=Math.max(CHT.MPP_MIN, Math.min(CHT.MPP_MAX, dist/(turn?CHT.FIT_TURN:CHT.FIT)));
-  const [BX, fk]=chtPlace(nx, boat, cl/mpp, -chtCog, edge);
-  const k=cl/mpp*fk;                               /* screen px per mercator m */
-  chtImgWant([boat[0],-boat[1]], 1/k);
-  const img=CHI.cur;
-  if(img && img.theme!==document.body.className && !CHI.busy){
-    CHI.busy=true; chtColour(img).finally(()=>{ CHI.busy=false; chtSeq++; }); }
-  const v={b:boat, k, th:-chtCog, edge, BX, seq:chtSeq, n, turn, url:img&&img.url};
-  const o=chtView;
-  if(o && o.seq===v.seq && o.n===v.n && o.turn===v.turn && o.edge===v.edge && o.url===v.url
-     && o.BX===v.BX
-     && Math.hypot(o.b[0]-v.b[0],o.b[1]-v.b[1])*v.k<CHT.MOVE_PX
-     && Math.abs(o.th-v.th)<CHT.TURN_DEG && Math.abs(o.k/v.k-1)<.01) return;
-  chtView=v;
-  chtPaint(W, n, boat, k, -chtCog, turn, BX, img);
-}
-/* Where the boat stands, and how far the scale gives, so the next
-   waypoint's ring is whole on the glass. Heading-up puts a waypoint
-   off the starboard bow to the right of the boat, and the boat is only
-   30 px from the digits: anything more than a few degrees to starboard
-   would have its ring cut by the clip, or by the hole round the clock's
-   +, and the leg chopped beside the digits. So the boat steps left
-   (6 px at a time, so it does not creep every second), and only when
-   that is not enough - a mark abeam or astern - the scale comes in too.
-   The places the ring must keep inside are the chart's own: left of
-   the inboard fade, above the rule, off the +, inside the radial fades.
-   Twelve sizes by twenty positions, once a second at most. Returns
-   [boat x, scale factor]. */
-function chtPlace(nx, boat, k, th, edge){
-  const base=Math.min(CHT.BX, edge-(CHT.EDGE-CHT.BX)), BY=CHT.BY, R=CHT.WP_R;
-  const c=Math.cos(th/DEG), s=Math.sin(th/DEG);
-  const dx=(nx[0]-boat[0])*k, dy=(nx[1]-boat[1])*k;
-  const ux=dx*c-dy*s, uy=dx*s+dy*c;               /* the waypoint, from the boat, px */
-  const xmax=edge-3-CHT.RT_FADE-R;
-  const ok=(x,y)=>x<=xmax && x>=100+R && y>=230+R && y<=600-R
-    && Math.hypot(x-356,y-258)>=54+R               /* the + (cht-clip-rt) */
-    && Math.hypot(x-290,y-400)<=190                /* cht-fade-r, still ~.7 */
-    && Math.hypot(x-CX,y-CY)<=361-R;               /* cht-fade-o, full */
-  /* a waypoint past the furthest scale stays past the edge, as it always
-     has: the leg runs out into the fade, and the scale is not stretched
-     beyond MPP_MAX to fetch it in */
-  const far=Math.hypot(ux,uy)>CHT.FIT+1;
-  for(let i=0;i<=(far?0:11);i++){ const f=1-i*.05;
-    for(let bx=base;bx>=CHT.BX_MIN;bx-=6)
-      if(ok(bx+ux*f, BY+uy*f)) return [bx, f]; }
-  return [base, 1];        /* nowhere it fits whole: as it falls, into the fades */
-}
-function chtPaint(W, n, boat, k, th, turn, BX, img){
-  CHT.n.paint++;
-  const BY=CHT.BY;
-  const c=Math.cos(th/DEG), s=Math.sin(th/DEG);
-  const P=q=>{ const dx=(q[0]-boat[0])*k, dy=(q[1]-boat[1])*k;
-    return [BX+dx*c-dy*s, BY+dx*s+dy*c]; };
-  const f=v=>v.toFixed(1);
-  const pts=a=>a.map(q=>{ const p=P(q); return f(p[0])+','+f(p[1]); }).join(' ');
-  const im=$('cht-img');
-  if(img && img.url){
-    /* relative to the boat, so the numbers the GPU sees are hundreds of
-       metres and not millions - float32 at 9e6 is a metre's jitter */
-    const h=512*img.L;
-    if(chtHref!==img.url){
-      if(chtHref) URL.revokeObjectURL(chtHref);
-      chtHref=img.url; im.setAttribute('href',img.url); }
-    im.setAttribute('x',f(img.cx-h-boat[0])); im.setAttribute('y',f(-img.cy-h-boat[1]));
-    im.setAttribute('width',2*h); im.setAttribute('height',2*h);
-    im.setAttribute('transform',`translate(${f(BX)} ${BY}) rotate(${th.toFixed(2)}) scale(${k.toPrecision(6)})`);
-    im.style.display='';
-  } else im.style.display='none';
-  $('cht-past').setAttribute('points', n>0 ? pts([...W.slice(0,n), boat]) : '');
-  $('cht-ahead').setAttribute('points', n+1<W.length ? pts(W.slice(n)) : '');
-  let nx='';
-  if(turn){ const p0=P(W[n]), p1=P(W[n+1]);
-    const L=Math.hypot(p1[0]-p0[0],p1[1]-p0[1])||1, t=Math.min(1,CHT.NEXT_PX/L);
-    nx=f(p0[0])+','+f(p0[1])+' '+f(p0[0]+(p1[0]-p0[0])*t)+','+f(p0[1]+(p1[1]-p0[1])*t); }
-  $('cht-next').setAttribute('points', nx);
-  const N=P(W[n]), a=$('cht-act');
-  a.setAttribute('x1',f(BX)); a.setAttribute('y1',BY);
-  a.setAttribute('x2',f(N[0])); a.setAttribute('y2',f(N[1]));
-  $('cht-wp').setAttribute('cx',f(N[0])); $('cht-wp').setAttribute('cy',f(N[1]));
-  $('cht-boat').setAttribute('transform',`translate(${f(BX)} ${BY})`);
-  if(!chtOn){ chtOn=true; $('cht').style.display=''; CHW.a=CHW.t=undefined; }
-}
-/* The wind marks ride the bezel; when the wind is from port they come
-   round to the left, onto the chart. The chart gives way under each
-   one - a soft hole at the mark, following it.
-   A write here is not cheap: the holes are inside the mask that wraps
-   the whole chart, so moving one re-rasters the image and every mask
-   under it, wherever the hole is. So a hole is on only while its circle
-   actually reaches the chart's box (#cht-clip-r) - close-hauled or
-   broad on port the mark is above or below the box, and there is
-   nothing to hole - and it moves in whole degrees (7 px at the bezel,
-   on a soft hole 95 px across), not every half degree the mark does. */
-const CHW={};
-function chtWind(awa,twa){
-  const x1=(chtEdgeAt||CHT.EDGE)-3;
-  [['a',awa,'cht-hole-a'],['t',twa,'cht-hole-t']].forEach(([w,ang,id])=>{
-    let on=ang!==null, hx=0, hy=0;
-    if(on){ const a=Math.round(ang);
-      hx=CX+CHT.HOLE_R0*Math.sin(a/DEG); hy=CY-CHT.HOLE_R0*Math.cos(a/DEG);
-      const ex=Math.max(100-hx,0,hx-x1), ey=Math.max(230-hy,0,hy-600);
-      on=ex*ex+ey*ey<CHT.HOLE_R*CHT.HOLE_R; }
-    const key=on ? Math.round(ang) : 'off';
-    if(CHW[w]===key) return;
-    CHW[w]=key;
-    const e=$(id);
-    if(!on){ e.setAttribute('r',0); return; }
-    e.setAttribute('cx',hx.toFixed(1));
-    e.setAttribute('cy',hy.toFixed(1));
-    e.setAttribute('r',CHT.HOLE_R);
-  });
-}
 
 drawDepth(); paintTrack(); applyTheme(); connect(); render(); tick();
 remoteStart();
