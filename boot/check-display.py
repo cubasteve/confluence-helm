@@ -223,12 +223,17 @@ def main():
     for f in ('/boot/firmware/config.txt', '/boot/config.txt'):
         if os.path.isfile(f):
             try:
+                # Section headers too ([pi4], [pi5], [all]): a line under
+                # [pi4] does nothing on a Pi 5, and without the header it
+                # reads as though it applies.
                 keep = [l.strip() for l in open(f)
-                        if re.match(r'\s*(hdmi_|dtoverlay=vc4|framebuffer_|'
-                                    r'display_|max_framebuffer)', l)]
+                        if re.match(r'\s*(\[|hdmi_|dtoverlay=vc4|framebuffer_|'
+                                    r'display_|max_framebuffer|usb_max_current)',
+                                    l)]
             except Exception:
                 keep = []
-            say(f, '%d relevant lines' % len(keep))
+            say(f, '%d relevant lines' % sum(1 for l in keep
+                                             if not l.startswith('[')))
             for l in keep:
                 print('   ' + l)
 

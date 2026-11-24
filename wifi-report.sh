@@ -58,12 +58,14 @@ done
 [ -n "$(ls -d /sys/class/net/*/phy80211 2>/dev/null)" ] || echo "  no phy at all"
 
 line "is the rescue installed, and has it run"
-if systemctl list-unit-files 2>/dev/null | grep -q '^dongle-rescue'; then
-  systemctl is-enabled dongle-rescue.timer 2>/dev/null \
+# The units are named by boot/install-dongle-rescue.sh, not after the
+# script they run: confluence-dongle.service and .timer.
+if systemctl list-unit-files 2>/dev/null | grep -q '^confluence-dongle'; then
+  systemctl is-enabled confluence-dongle.timer 2>/dev/null \
     | sed 's/^/  timer: /'
-  systemctl list-timers dongle-rescue.timer --no-pager 2>/dev/null | sed -n '2p;3p' \
+  systemctl list-timers confluence-dongle.timer --no-pager 2>/dev/null | sed -n '2p;3p' \
     | sed 's/^/  /'
-  journalctl -u dongle-rescue --since '30 min ago' --no-pager 2>/dev/null \
+  journalctl -u confluence-dongle --since '30 min ago' --no-pager 2>/dev/null \
     | tail -12 | sed 's/^/  /' || echo "  (journal needs sudo)"
 else
   echo "  NOT INSTALLED - sudo bash ~/helm/boot/install-dongle-rescue.sh"

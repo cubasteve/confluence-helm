@@ -87,13 +87,15 @@ else
      "$HERE/theme/wordmark.png" "$THEME_DIR/"
   cp "$HERE/theme/confluence.plymouth" "$THEME_DIR/"
   ok "installed to $THEME_DIR"
-  # -R rebuilds the initramfs. Raspberry Pi OS usually has no initramfs
-  # to rebuild, and the plain form is enough there - so try the loud one
-  # and fall back rather than failing the whole install on it.
+  # -R rebuilds the initramfs. Bookworm boots one (auto_initramfs=1:
+  # initramfs8 for a Pi 4, initramfs_2712 for a Pi 5) and plymouth runs
+  # from it, so a theme that is not in there is not the one shown. Try
+  # the loud form, and if only the plain one works, say the splash did
+  # not reach the startup image rather than reporting plain success.
   if plymouth-set-default-theme -R confluence >/dev/null 2>&1; then
     ok "set as default (initramfs rebuilt)"
   elif plymouth-set-default-theme confluence >/dev/null 2>&1; then
-    ok "set as default"
+    ok "set as default - but the initramfs was NOT rebuilt; run: sudo update-initramfs -u -k all"
   else
     echo "   WARNING: could not set the default theme" >&2
   fi

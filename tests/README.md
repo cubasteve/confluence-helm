@@ -68,9 +68,10 @@ is the only way to test a machine you are not sitting at.
 
 | test | what it holds to account |
 |---|---|
-| `sound_test` | which sounder this Pi has, the tone itself, the pattern, and the pin never left high |
-| `sonar_test` | Open Echo's frames, which carry no length and no sequence number: the little-endian read, the checksum, the resync that steps ONE byte past a bad candidate because 0xAA is also a loud echo, the squeeze that takes the loudest sample rather than the average, and the ring |
+| `sound_test` | which sounder this Pi has — the Pi 4's jack, or on a Pi 5 with no jack a USB adapter, else the buzzer rather than a beep into HDMI — the tone itself, the pattern, and the pin never left high |
+| `sonar_test` | Open Echo's frames, which carry no length and no sequence number: the little-endian read, the checksum, the resync that steps ONE byte past a bad candidate because 0xAA is also a loud echo, the squeeze that takes the loudest sample rather than the average, the ring, and a `by-path` port name full of colons in `HELM_SONAR` |
 | `backlight_test` | the only thing that changes how much light a panel puts out: the slider's 5% floor, the scaling, and a device that is there but not writable |
 | `score_test` | the times the club's form takes, what goes over the wire, and the limits pointed at somebody else's server |
 | `dongle_test` | the rescue for a USB wifi adapter whose driver did not initialise it: that an interface existing is not success, and that a working one is never yanked |
-| `wifi_test` | the locale every child is given, a saved network acted on by uuid — including the one already on the glass with a `?` where its apostrophe should be — the switch that turns a radio on without being asked to join anything, an unadopted dongle still reaching the list, the hotspot pinned to come up on the onboard radio by itself, and an adapter the kernel has but NetworkManager never mentions being named rather than silently missing |
+| `browser_test` | the window and cage scripts finding the browser by either of its names, `chromium-browser` or `chromium` |
+| `wifi_test` | the locale every child is given, a saved network acted on by uuid — including the one already on the glass with a `?` where its apostrophe should be — the switch that turns a radio on without being asked to join anything, an unadopted dongle still reaching the list, the hotspot pinned to come up on the onboard radio by itself — and moved when the drive goes to another Pi, whose onboard radio has a different MAC — and an adapter the kernel has but NetworkManager never mentions being named rather than silently missing |

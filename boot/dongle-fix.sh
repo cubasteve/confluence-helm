@@ -39,6 +39,7 @@ LOOK=0; [ "${1:-}" = "--look" ] && LOOK=1
 # tests/donglefix_test.py drives it. Unset, it is the real thing and the
 # root check applies.
 SYS="${DONGLE_SYSFS:-/sys}"
+DT="${DONGLE_DT:-/proc/device-tree}"   # the Pi 5's PSU figure lives here
 ROUNDS="${DONGLE_ROUNDS:-3}"
 SETTLE="${DONGLE_SETTLE:-4}"   # after a rung, for NM to catch up
 NAP="${DONGLE_NAP:-2}"         # inside a rung, between unbind and bind
@@ -155,7 +156,7 @@ say "  rtl8xxxu     : $(modinfo -n rtl8xxxu 2>/dev/null || echo 'not found?')"
 say "  firmware     : $(ls /lib/firmware/rtlwifi/rtl8188eufw.bin 2>/dev/null || echo MISSING)"
 
 hr "what the kernel said about it"
-dmesg 2>/dev/null | grep -iE 'rtl8|8188|usb 1-|insufficient' | tail -14 \
+dmesg 2>/dev/null | grep -iE 'rtl8|8188|usb [0-9]+-[0-9]|insufficient|over-current' | tail -14 \
   | sed 's/^/  /' || say "  (dmesg needs sudo)"
 
 # The one line that decides which of two completely different problems
@@ -235,11 +236,17 @@ hr "power"
 # 0x0 means the Pi's own 5V INPUT never sagged past threshold since
 # boot. It says nothing about a droop across the USB connector, a thin
 # extension lead or a corroded contact - which is where this class of
-# fault actually lives. There is no per-port USB current telemetry on a
-# Pi 4, and its downstream budget is about 1.1 A SHARED across all four
-# sockets. bMaxPower below is a declared descriptor figure, not a
-# measurement.
+# fault actually lives. There is no per-port USB current telemetry. A
+# Pi 4's downstream budget is about 1.1 A SHARED across all four sockets;
+# a Pi 5's is 1.6 A on a supply that negotiated 5 A, and 600 mA TOTAL on
+# anything else unless usb_max_current_enable=1. bMaxPower below is a
+# declared descriptor figure, not a measurement.
 say "  throttled    : $(vcgencmd get_throttled 2>/dev/null || echo '(no vcgencmd)')  (0x0 = the Pi's own 5V input was fine; says nothing about the socket)"
+# Only a Pi 5 has this node, so a Pi 4's report is unchanged.
+if [ -r "$DT/chosen/power/max_current" ]; then
+  say "  psu max      : $(od -An -tu4 --endian=big "$DT/chosen/power/max_current" 2>/dev/null | tr -d ' ') mA  (under 5000 = USB capped at 600 mA total unless usb_max_current_enable=1)"
+  say "  5V input     : $(vcgencmd pmic_read_adc EXT5V_V 2>/dev/null || echo '?')"
+fi
 say "  bMaxPower    : $(cat "$SYS"/bus/usb/devices/"$PORT"/bMaxPower 2>/dev/null)"
 say "  speed        : $(cat "$SYS"/bus/usb/devices/"$PORT"/speed 2>/dev/null) Mb/s"
 
@@ -403,9 +410,11 @@ say "    1. Move it to a different USB port and take other USB devices off"
 say "       the bus. NOT for power - the failure is a timing race on a"
 say "       control transfer, and the detailed reports of it have the"
 say "       dongle sharing a bus with something busy. Worth trying because"
-say "       it is free, not because it is known to work: all four of the"
-say "       Pi 4's ports are on the one VL805 controller, so changing"
-say "       ports changes less than it sounds like it does."
+say "       it is free, not because it is known to work. On a Pi 4 all"
+say "       four ports share one VL805 controller, so it changes little;"
+say "       a Pi 5 has two controllers (one blue and one black port each;"
+say "       lsusb -t shows buses 1-2 and 3-4), so a port on the OTHER"
+say "       controller really is a different bus."
 say "    2. Unplug it, wait ten seconds, plug it back in. A cold start"
 say "       does things a soft reset cannot."
 say "    3. Reboot."

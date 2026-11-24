@@ -145,7 +145,14 @@ two settings that had simply never been set.
 hotspot and never decides which profile is one. It acts only on a profile
 `con_is_ap()` already recognises, refuses outright if there is more than
 one, and will not move a pin somebody else has set — it says so and
-leaves it.
+leaves it. The one exception is a pin to a Raspberry Pi onboard radio
+that this board does not have: a profile carried over from another Pi
+(the drive moved from a Pi 4 to a Pi 5, or back). That can never match,
+so it is moved to this board's onboard radio and brought up, and the
+startup line says `pinned to <old>, a Pi radio this board does not have
+- moved to <new>`. A pin to anything else that is absent — a dongle that
+has not enumerated yet — is still left alone, and so is a move onto a
+randomised (locally administered) address.
 
 ### The dongle that enumerates and never appears
 

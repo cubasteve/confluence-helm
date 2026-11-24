@@ -1207,6 +1207,39 @@ class AlwaysOn(unittest.TestCase):
             finally:
                 netd.remote_disarm()
 
+    def test_the_door_follows_the_dongle_when_the_names_swap(self):
+        """wlan0 and wlan1 can swap at boot. Bound to a fixed wlan1, the
+        door would then sit on the onboard radio - the boat's hotspot."""
+        on = dict(ONBOARD, dev='wlan1')
+        usb = dict(DONGLE, dev='wlan0')
+        with rig([], devices=[on, usb]) as netd:
+            asked = []
+            real = netd._dev_subnet
+            netd._dev_subnet = lambda dev: (asked.append(dev), real(dev))[1]
+            bound, real_sock = [], netd.remote_socket
+            netd.remote_socket = lambda dev: (bound.append(dev),
+                                              real_sock(dev))[1]
+            try:
+                self.assertTrue(netd.remote_up())
+                self.assertEqual(asked, ['wlan0'])
+                self.assertEqual(bound, ['wlan0'])
+                self.assertEqual(netd.remote_status()['dev'], 'wlan0')
+            finally:
+                netd.remote_disarm()
+
+    def test_the_environment_still_pins_it(self):
+        with rig([], devices=[dict(ONBOARD), dict(DONGLE, dev='wlan2')]) as netd:
+            netd.REMOTE_DEV = 'wlan7'
+            self.assertEqual(netd._remote_dev(), 'wlan7')
+            netd.REMOTE_DEV = ''
+            self.assertEqual(netd._remote_dev(), 'wlan2')
+
+    def test_with_no_dongle_it_is_wlan1_as_before(self):
+        with rig([], devices=[dict(ONBOARD)]) as netd:
+            self.assertEqual(netd._remote_dev(), 'wlan1')
+            netd.remote_up()
+            self.assertEqual(netd.remote_status()['dev'], 'wlan1')
+
     def test_disarm_stays_disarmed(self):
         """The first version just closed the socket and the thirty
         second watcher reopened it, which is not an escape hatch - it is

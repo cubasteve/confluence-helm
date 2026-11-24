@@ -93,7 +93,9 @@ elif 'connection' in argv and 'show' in argv and 'connection.autoconnect' in fie
     for c in spec['profiles']:
         if key in (c['uuid'], show(c['name']), c['name']):
             emit('connection.autoconnect:' + c.get('autoconnect', 'no'))
-            emit('802-11-wireless.mac-address:' + (c.get('mac') or '--'))
+            # Terse mode escapes the colons in a value, as nmcli does.
+            emit('802-11-wireless.mac-address:'
+                 + (c.get('mac') or '--').replace(':', r'\:'))
 elif 'connection' in argv and 'modify' in argv:
     sys.exit(0)
 elif 'connection' in argv and 'delete' in argv and 'uuid' in argv:
@@ -606,6 +608,72 @@ class Hotspot(unittest.TestCase):
         self.assertEqual(len(mods()), 1, mods())
         self.assertIn('ap-uuid-0001', mods()[0])
         self.assertNotIn(UU, mods()[0])
+
+
+# Real Raspberry Pi prefixes. MAC_ON/MAC_USB above start AA, which is a
+# locally administered address and no Pi's.
+PI4_MAC = 'DC:A6:32:11:22:33'           # a Pi 4's onboard radio
+PI5_MAC = '2C:CF:67:44:55:66'           # a Pi 5's onboard radio
+
+
+class HotspotNewBoard(unittest.TestCase):
+    """The drive moved to another Pi, and the hotspot came with it.
+
+    The profile is pinned to the old board's onboard MAC, which this board
+    does not have, so NetworkManager matches no device to it and the
+    hotspot - and with it SSH and the remote - stays down."""
+
+    PI5 = dict(ONBOARD, mac=PI5_MAC)
+
+    def test_a_pi4_pin_on_a_pi5_is_moved(self):
+        with rig([dict(AP, autoconnect='yes', mac=PI4_MAC)],
+                 devices=[self.PI5]) as netd:
+            msg = netd.hotspot_pin()
+        self.assertEqual(len(mods()), 1, mods())
+        self.assertIn('802-11-wireless.mac-address ' + PI5_MAC, mods()[0])
+        self.assertIn('moved to ' + PI5_MAC, msg)
+        self.assertTrue(any('connection up uuid ap-uuid-0001' in c[1]
+                            for c in calls()), calls())
+
+    def test_and_back_again(self):
+        """A rollback to the Pi 4 is the same case the other way round."""
+        with rig([dict(AP, autoconnect='yes', mac=PI5_MAC)],
+                 devices=[dict(ONBOARD, mac=PI4_MAC)]) as netd:
+            netd.hotspot_pin()
+        self.assertIn(PI4_MAC, mods()[0])
+
+    def test_the_pi4_today_is_left_exactly_as_it_is(self):
+        with rig([dict(AP, autoconnect='yes', mac=PI4_MAC)],
+                 devices=[dict(ONBOARD, mac=PI4_MAC)]) as netd:
+            msg = netd.hotspot_pin()
+        self.assertEqual(mods(), [])
+        self.assertFalse(any('connection up' in c[1] for c in calls()))
+        self.assertIn('already', msg)
+
+    def test_a_pi_radio_that_is_present_is_not_stolen(self):
+        """Pinned to a Pi MAC this board DOES have - a second Pi radio on
+        USB, say. That is a choice, not a leftover."""
+        other = dict(DONGLE, mac='D8:3A:DD:00:00:07')
+        with rig([dict(AP, autoconnect='yes', mac=other['mac'])],
+                 devices=[self.PI5, other]) as netd:
+            msg = netd.hotspot_pin()
+        self.assertEqual(mods(), [])
+        self.assertIn('already', msg)
+
+    def test_an_absent_dongle_pin_is_not_moved(self):
+        """Not a Pi prefix: a dongle that has not enumerated yet."""
+        with rig([dict(AP, autoconnect='no', mac='00:13:EF:00:00:01')],
+                 devices=[self.PI5]) as netd:
+            msg = netd.hotspot_pin()
+        self.assertNotIn(PI5_MAC, mods()[0])
+        self.assertIn('left as found', msg)
+
+    def test_never_onto_a_randomised_address(self):
+        with rig([dict(AP, autoconnect='yes', mac=PI4_MAC)],
+                 devices=[dict(ONBOARD, mac='3A:35:41:00:00:01')]) as netd:
+            msg = netd.hotspot_pin()
+        self.assertEqual(mods(), [])
+        self.assertNotIn('moved', msg)
 
 
 class Kernel(unittest.TestCase):
