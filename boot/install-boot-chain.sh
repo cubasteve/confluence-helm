@@ -11,7 +11,7 @@
 #   session    desktop wallpaper         -> painted #0B0C0E
 #   session    a mouse pointer           -> a transparent cursor theme
 #   kiosk      waiting for AvNav         -> same colour behind it
-#   chromium   a white flash             -> --default-background-color
+#   chromium   a white window            -> boot/launch.html, --force-dark-mode
 #
 # Everything it touches is backed up next to the original with a
 # .confluence-bak suffix, and uninstall-boot-chain.sh puts it all back.
@@ -202,8 +202,9 @@ ok "through - move those to ~/.local/share/applications to keep them in"
 ok "the menu without putting them on the desktop."
 
 say "8/8  Chromium"
-ok "start-kiosk.sh already passes --default-background-color, so the"
-ok "browser paints $BG instead of white while the page loads."
+ok "start-kiosk.sh opens the dark boot/launch.html first and passes"
+ok "--force-dark-mode, so the browser is dark rather than white while"
+ok "the page loads. Nothing to install."
 
 say "Done - reboot to see it"
 cat <<'EOT'

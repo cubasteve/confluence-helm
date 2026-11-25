@@ -15,6 +15,7 @@
 
 URL="http://localhost:8090/confluence_helm.html"
 FALLBACK="file://$HOME/helm/confluence_helm.html"
+LAUNCH="$HOME/helm/boot/launch.html"         # the dark springboard, below
 
 # Debian ships the browser as `chromium`; Raspberry Pi OS ships it as
 # `chromium-browser`. This script used to name only the second, so on an
@@ -106,15 +107,31 @@ while true; do
   [ "$first" = 1 ] || pick_url 10
   first=0
   started=$(date +%s)
-  # --default-background-color is what the browser paints before the page
-  # has anything to show. Left alone it is white, which after a whole
-  # boot chain deliberately kept dark is the one frame you notice. The
-  # value is ARGB and matches the dusk palette's --bg (#0B0C0E), the
-  # same colour Plymouth and the desktop are set to.
+  # The white frame between the window appearing and the panel painting
+  # is Chromium's EMPTY window while the first http request is pending -
+  # --default-background-color, which used to be here, is a headless-only
+  # switch and never changed it. Two things do (see cage-session.sh,
+  # which carries the long version of every flag here):
+  #   - boot/launch.html, a local dark page that goes straight on to the
+  #     real URL, so there is a dark frame to keep on the glass;
+  #   - --force-dark-mode, so even the moment before THAT is dark grey.
+  # --disable-features=PreloadTopChromeWebUI stops the Tab Search UI being
+  # preloaded in its own renderer during the page load; --no-first-run
+  # and --disable-component-update are start-up work a kiosk never needs.
+  # Not --disable-renderer-accessibility here, unlike cage: this is a
+  # desktop, where a screen reader or an on-screen keyboard may be the
+  # thing reading that tree.
+  open="$URL?v=$(date +%s)"
+  case "$open" in
+    http://*) [ -r "$LAUNCH" ] && open="file://$LAUNCH#$open";;
+  esac
   "$CHROME" --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
-    --default-background-color=FF0B0C0E \
-    "$URL?v=$(date +%s)"
+    --password-store=basic \
+    --force-dark-mode \
+    --disable-features=PreloadTopChromeWebUI,Translate,OptimizationHints \
+    --no-first-run --disable-component-update \
+    "$open"
 
   if [ $(( $(date +%s) - started )) -ge 5 ]; then
     quick=0                                   # it ran; an ordinary restart

@@ -487,7 +487,7 @@ wrong guesses, a dark panel that brightens is the forgivable one.
 | Plymouth | the raspberry logo and dots | the Confluence theme |
 | Session | desktop wallpaper | painted `#0B0C0E` |
 | `start-kiosk.sh` | whatever was behind it, waiting for AvNav | same colour behind it |
-| Chromium | a white flash | `--default-background-color=FF0B0C0E` |
+| Chromium | a white window until the first request answers | `boot/launch.html`, then `--force-dark-mode` |
 | **The app** | — | **`#boot`** |
 
 ```bash
@@ -586,6 +586,76 @@ why in the log rather than leaving you to guess.
 depending on `xcursorgen` being installed - it is a 16-byte header, a
 table of contents, and one 1x1 ARGB pixel per nominal size.
 
+The theme carries **every name anything can ask for** (`SHAPES` in
+`make-blank-cursor.py`, 105 of them): all 34 names wlroots 0.18 maps a
+`wp_cursor_shape_v1` shape to, and the legacy X11 names wlroots and
+Chromium fall back to. A name the theme lacks is not "nothing drawn" —
+the caller substitutes an arrow of its own. `check-cursor.py --all`
+checks the lot and exits **2** for an installed theme older than the
+repo's: no pointer today, but re-run `install-cursor.sh`.
+
+### The pointer Chromium draws itself
+
+After the November 2026 update (cage 0.2.0, wlroots 0.18.2, Chromium
+156) an arrow sat in the middle of the glass and ignored every touch,
+while the session log said `pointer: hidden`. Both were true. The arrow
+was **Chromium's**, not cage's:
+
+- cage 0.2.0 offers no cursor-shape protocol, so Chromium cannot ask the
+  compositor for a named shape. It draws its own pointer and hands it
+  over as a surface (`wl_pointer.set_cursor`).
+- It takes the theme for that from **GTK's**
+  `org.gnome.desktop.interface cursor-theme` — Adwaita unless the
+  desktop changed it. `XCURSOR_THEME` and `XCURSOR_SIZE` are never
+  consulted on that path, and nor is `gtk-cursor-theme-name` in
+  `settings.ini` under Wayland.
+- cage centres the cursor and gives Chromium pointer focus as soon as
+  its window maps, so Chromium answers with its `left_ptr` there.
+- The page's `cursor:none` only takes over on real pointer motion, and
+  cage turns a touch into touch events, never motion — so tapping never
+  hid it.
+
+Reproduced under cage with Chrome 153: Adwaita on the path gives a
+24×24 cursor buffer and a visible arrow; the blank theme installed under
+the name `Adwaita` gives a 1×1 buffer and nothing.
+
+So `cage-session.sh` makes every theme **name** that is asked for mean
+the blank theme, in a directory of symlinks in the runtime dir that goes
+first on `XCURSOR_PATH` (libwayland-cursor, which Chromium uses, and
+wlroots both read it, and cage passes its environment on):
+
+| name | who asks for it |
+|---|---|
+| whatever `gsettings` reports, and `Adwaita` | Chromium, through GTK |
+| `default` | cage's own cursor (wlroots resolves its NULL theme to it) |
+| `left_ptr` | cage's **Xwayland** cursor: cage 0.2.0 passes the cursor name as the theme name, no such theme exists, and wlroots used its built-in arrow over X11 windows |
+
+It lives in `$XDG_RUNTIME_DIR`, is rebuilt every session and touches
+nothing the desktop reads, so the desktop keeps its pointer. Not
+`gsettings set`, which would hide it there too.
+
+The log line now checks the names actually requested, including GTK's:
+
+```
+pointer: theme names aliased to /usr/share/icons/Confluence-blank: Adwaita default left_ptr
+pointer: hidden (all blank: default, left_ptr, Confluence-blank, Adwaita (Chromium))
+```
+
+`python3 ~/helm/boot/check-cursor.py --gtk --all -v` asks the same
+question by hand — but from an SSH shell without the session's
+`XCURSOR_PATH` it will (rightly) say the GTK theme draws an arrow;
+the session log is the answer that counts.
+
+An alternative that also works, tested and not used: run Chromium with
+`GSETTINGS_BACKEND=keyfile` and a keyfile naming `Confluence-blank`.
+It replaces *every* GSettings value Chromium sees (fonts, text scaling)
+with defaults, which is more than the pointer is worth.
+
+The page also says `*{cursor:none!important}` now, not just on
+`html,body`: an element with a cursor of its own, or a UA default (the
+I-beam over text), overrode the inherited one, and `cursor:none` is what
+makes Chromium hand Wayland an *empty* pointer whatever the theme.
+
 ### What is still visible, and why
 
 `start-kiosk.sh` waits for AvNav to answer before it launches Chromium,
@@ -636,6 +706,74 @@ is already running, so ssh and a running desktop are unaffected.
 
 **`cage -s`.** VT switching has to be allowed or the Desktop tile cannot
 work - starting a display manager needs another VT to switch to.
+
+### From cage to the panel: the white screen, and the flags
+
+On the Pi after the November 2026 update the screen was **white for
+20 s** between Chromium's window and the panel. That white is Chromium's
+*empty* window while its first http navigation is pending. It is not the
+page, and `--default-background-color` — which used to be on the
+command line for exactly this — is a headless-only switch that does
+nothing here. It is gone from all three launchers.
+
+What fixes it:
+
+- **`boot/launch.html`**, a tiny dark local page that does nothing but
+  `location.replace()` to the URL after its `#`. A local file paints
+  almost at once, and Chromium keeps that dark frame on the glass until
+  the panel paints. Plymouth → black → panel, never white. The panel
+  still loads from the page server, same origin, same storage. Used for
+  a served (http) URL only; the file fallback is already local.
+- **`--force-dark-mode`**: the instant before even that is dark grey,
+  not white.
+
+And what made the wait long, from the owner's capture (browser start to
+first request ~20 s, a `--top-chrome-webui` renderer at 40% of a core):
+
+| flag | why |
+|---|---|
+| `--disable-features=PreloadTopChromeWebUI,…` | that renderer is Chromium **preloading its Tab Search UI**, which a kiosk never shows. Translate, MediaRouter and OptimizationHints share the switch: Chromium honours only one `--disable-features`, so never add a second |
+| `--disable-renderer-accessibility` | Raspberry Pi OS's `/etc/chromium.d` adds `--force-renderer-accessibility`, a full accessibility tree in every renderer. This one wins. cage only: on the desktop a screen reader or on-screen keyboard may need it |
+| `--no-first-run`, `--disable-component-update`, `--disable-background-networking` | start-up work a page on localhost has no use for |
+
+None of these can stop Chromium starting — an unknown switch, or an
+unknown feature name, is ignored — so they cannot push the session into
+the desktop fallback. Both flag sets carry them (`FLAGS_B` is `FLAGS_A`
+without `--ozone-platform=wayland`, and the test holds it to that).
+`start-kiosk.sh` has the same minus the accessibility and networking
+ones; `open-window.sh` has `--force-dark-mode --no-first-run`.
+
+The first boot or two after a jump of 30 Chromium versions is slower
+again (profile migrations, GPU and shader caches rebuilt); compare the
+third boot, not the first.
+
+**The timing is in the log now**, both ends of the gap:
+
+```
+[cage] 07:41:12 chromium launched (uptime 36.1s, FLAGS_A): file:///home/…/boot/launch.html#http://localhost:8090/confluence_helm.html?v=…
+[netd] 07:41:24 www: page requested (uptime 48.3s)
+```
+
+netd writes the second line only for a request from this Pi carrying
+the `?v=` every launcher adds — not phones, tiles or liveness checks.
+
+### Nothing starts Xwayland any more
+
+The Xwayland that appeared just as the panel loaded, and vanished 10 s
+later, was **netd**. Its `/status` asks whether there is an X server to
+fit the desktop's corners into (`x_env()`), by running `xrandr` against
+`:0`. cage 0.2 starts Xwayland lazily, on the first X11 client to
+connect — and that xrandr was it: a whole X server and its `xkbcomp` in
+the middle of the page load, and again on every 20 s re-probe. Xwayland
+even answered `XWAYLAND0 connected`, which netd took for a display.
+
+So `x_env()` does not probe at all while cage is running (`pgrep -x
+cage`), and anywhere it no longer accepts an output called `XWAYLAND*`
+— a transform on Xwayland reshapes nothing, as `check-display.py`
+already says. The Desktop tile's auto-fit still finds the real X server
+once cage has gone. This is a netd change, so it takes effect when
+netd restarts — which autopull does on the push that delivers it, and
+which also restarts the kiosk.
 
 ### Fitting the desktop's corners into the circle
 

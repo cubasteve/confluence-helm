@@ -1923,19 +1923,44 @@ def _x_candidates():
                 yield {'DISPLAY': disp, 'XAUTHORITY': xa}
 
 
+def _cage_running():
+    """cage is the compositor right now. One pgrep, exact name."""
+    rc, _, _ = run(['pgrep', '-x', 'cage'], 5)
+    return rc == 0
+
+
+def _real_x(out):
+    """xrandr's answer came from a real X server driving the panel, not
+    from Xwayland. Xwayland names its outputs XWAYLAND0, XWAYLAND1, ...
+    and a transform on those reshapes nothing on the glass - see
+    check-display.py, which calls it a decoy for the same reason."""
+    m = _OUT_RE.search(out or '')
+    return bool(m) and not m.group(1).upper().startswith('XWAYLAND')
+
+
 def x_env():
     """An env that can reach an X server, or None. Re-probed sparingly.
 
     A negative is cached too, and briefly: on a Wayland or cage Pi this
     would otherwise try every candidate on every /status poll, which is
-    two subprocesses a second for an answer that is always no."""
+    two subprocesses a second for an answer that is always no.
+
+    Under cage it does not probe at all, and that is not an optimisation.
+    cage 0.2 starts Xwayland LAZILY, on the first X11 client to connect
+    to :0 - and this xrandr was that client. So every re-probe started a
+    whole X server (and its xkbcomp) inside the kiosk, right as the panel
+    loaded and every 20-30 s after, Xwayland exiting again 10 s later.
+    And it answered "XWAYLAND0 connected", which this then took for a
+    display it could fit."""
     if time.time() - _xenv['at'] < 20:
         return _xenv['env']
     _xenv['at'] = time.time()
     _xenv['env'] = None
+    if _cage_running():
+        return None
     for env in _x_candidates():
         rc, out, _ = run(['xrandr', '--query'], 8, env=env)
-        if rc == 0 and 'connected' in out:
+        if rc == 0 and _real_x(out):
             _xenv['env'] = env
             break
     return _xenv['env']
@@ -5948,6 +5973,34 @@ def www_resolve(urlpath, root=None):
     return f
 
 
+def _uptime():
+    try:
+        with open('/proc/uptime') as f:
+            return f.read().split()[0]
+    except (OSError, IndexError):
+        return '?'
+
+
+def _www_note_page(h):
+    """One line when a browser on this Pi asks for the panel itself.
+
+    The other end of cage-session.sh's "chromium launched" line: the gap
+    between the two is how long Chromium took to get as far as asking,
+    which after the November 2026 update was most of a 20 s white screen.
+    Only the kiosk's own launches - from loopback, with the ?v= every
+    launcher adds - so a phone, a tile or a liveness curl says nothing."""
+    try:
+        path, _, query = h.path.partition('?')
+        if h.command != 'GET' or not query.startswith('v=') or \
+                path not in ('/', '/' + WWW_INDEX) or \
+                h.client_address[0] not in ('127.0.0.1', '::1'):
+            return
+        print('[netd] %s www: page requested (uptime %ss)'
+              % (time.strftime('%H:%M:%S'), _uptime()), flush=True)
+    except Exception:
+        pass
+
+
 class WwwHandler(BaseHTTPRequestHandler):
     server_version = 'helm'
     sys_version = ''
@@ -5973,6 +6026,7 @@ class WwwHandler(BaseHTTPRequestHandler):
         f = www_resolve(self.path)
         if not f:
             return self._plain(404, 'not found')
+        _www_note_page(self)
         ctype, cache = WWW_TYPES[os.path.splitext(f)[1].lower()]
         try:
             fh = open(f, 'rb')
