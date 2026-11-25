@@ -19,8 +19,9 @@ the pointer you actually see: cage offers no cursor-shape protocol, so
 Chromium renders its own arrow from the GTK setting
 org.gnome.desktop.interface cursor-theme - not XCURSOR_THEME, not the
 compositor's theme. It is read the way GTK would read it in THIS
-environment: from the keyfile when GSETTINGS_BACKEND=keyfile (what
-cage-session.sh gives Chromium), from `gsettings` otherwise.
+environment: from the keyfile when GSETTINGS_BACKEND=keyfile, from
+`gsettings` otherwise. (cage-session.sh does not set GSETTINGS_BACKEND;
+it aliases whatever name this reports to the blank theme instead.)
 
 --all also checks every name in make-blank-cursor.py's SHAPES list,
 not only "default" and "left_ptr".
@@ -61,6 +62,7 @@ def shapes():
     this one."""
     try:
         import importlib.util
+        sys.dont_write_bytecode = True     # no __pycache__ beside the theme
         spec = importlib.util.spec_from_file_location(
             'make_blank_cursor', os.path.join(HERE, 'make-blank-cursor.py'))
         m = importlib.util.module_from_spec(spec)

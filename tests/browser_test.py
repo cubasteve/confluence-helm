@@ -12,7 +12,7 @@ real chromium on it is not what gets tested.
 
     python3 tests/browser_test.py
 """
-import os, shutil, subprocess, tempfile, unittest
+import os, shutil, subprocess, tempfile, time, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WINDOW = os.path.join(ROOT, 'open-window.sh')
@@ -22,7 +22,8 @@ CAGE = os.path.join(ROOT, 'boot', 'cage-session.sh')
 # system, one by one, rather than putting /usr/bin on the PATH - which is
 # where a real chromium would be.
 NEEDS = ('bash', 'date', 'sleep', 'tty', 'pgrep', 'grep', 'head', 'curl',
-         'sed', 'tr', 'sort', 'ls', 'find', 'mkdir', 'ln', 'cut', 'python3')
+         'sed', 'tr', 'sort', 'ls', 'find', 'mkdir', 'ln', 'cut', 'python3',
+         'timeout')
 KIOSK = os.path.join(ROOT, 'start-kiosk.sh')
 
 
@@ -244,6 +245,29 @@ class Cage(unittest.TestCase):
         self.assertEqual(env[0], 'env %s:%s' % (self.alias, self.icons), r_calls)
         self.assertIn('pointer: hidden (all blank: default, left_ptr, '
                       "Confluence-blank, PiXflat (Chromium))", self.session_log)
+
+    def test_a_hung_gsettings_does_not_hold_the_kiosk_back(self):
+        # It runs before cage. No session bus yet, a wedged dconf: the
+        # session must still start, with Adwaita aliased regardless.
+        def setup(r):
+            icons = os.path.join(r.d, 'icons')
+            subprocess.run(['python3', os.path.join(ROOT, 'boot',
+                            'make-blank-cursor.py'),
+                            os.path.join(icons, 'Confluence-blank')],
+                           check=True, capture_output=True)
+            r.stub('gsettings', 'exec sleep 60')
+            r.stub('cage', 'shift 2; printf "cage %s\\n" "$*" >> ' + r.log
+                   + '; kill -TERM $PPID')
+            self.alias = os.path.join(r.d, 'run', 'al')
+            return {'XCURSOR_PATH': icons, 'CURSOR_ALIASES': self.alias}
+        def inspect(r):
+            self.aliases = sorted(os.listdir(self.alias)) \
+                if os.path.isdir(self.alias) else []
+        t = time.time()
+        calls = self.launched(['chromium-browser'], setup=setup, inspect=inspect)
+        self.assertLess(time.time() - t, 30)
+        self.assertTrue(calls, self.session_log)
+        self.assertEqual(self.aliases, ['Adwaita', 'default', 'left_ptr'])
 
 
 class Flags(unittest.TestCase):

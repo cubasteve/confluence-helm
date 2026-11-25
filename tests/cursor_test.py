@@ -31,6 +31,7 @@ WLROOTS_SHAPES = (
 
 
 def module():
+    sys.dont_write_bytecode = True         # no boot/__pycache__ left behind
     spec = importlib.util.spec_from_file_location('mbc', MAKE)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)

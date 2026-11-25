@@ -5993,7 +5993,8 @@ def _www_note_page(h):
         path, _, query = h.path.partition('?')
         if h.command != 'GET' or not query.startswith('v=') or \
                 path not in ('/', '/' + WWW_INDEX) or \
-                h.client_address[0] not in ('127.0.0.1', '::1'):
+                h.client_address[0] not in ('127.0.0.1', '::1',
+                                         '::ffff:127.0.0.1'):
             return
         print('[netd] %s www: page requested (uptime %ss)'
               % (time.strftime('%H:%M:%S'), _uptime()), flush=True)

@@ -83,7 +83,13 @@ CURSOR_ALIASES="${CURSOR_ALIASES:-${XDG_RUNTIME_DIR:-$HOME/.cache}/confluence-cu
 gtk_cursor_names(){
   local n
   if command -v gsettings >/dev/null 2>&1; then
-    n=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)
+    # Bounded: this runs before cage, and a gsettings that hangs (no
+    # session bus yet, a wedged dconf) must not hold the kiosk back.
+    if command -v timeout >/dev/null 2>&1; then
+      n=$(timeout 5 gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)
+    else
+      n=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)
+    fi
     n=${n//\'/}; [ -n "$n" ] && echo "$n"
   fi
   for f in "${XDG_CONFIG_HOME:-$HOME/.config}"/gtk-{3,4}.0/settings.ini; do
