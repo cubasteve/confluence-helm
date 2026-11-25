@@ -79,4 +79,6 @@ for c in chromium-browser chromium; do
   command -v "$c" >/dev/null 2>&1 && { CHROME="$c"; break; }
 done
 [ -n "$CHROME" ] || { echo "[open-window] neither chromium-browser nor chromium is installed" >&2; exit 1; }
-exec "$CHROME" --app="$URL?v=$(date +%s)" --window-size=1080,1080 "$@"
+# --password-store=basic: no "default keyring" prompt (see cage-session.sh).
+exec "$CHROME" --app="$URL?v=$(date +%s)" --window-size=1080,1080 \
+  --password-store=basic "$@"

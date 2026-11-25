@@ -171,11 +171,20 @@ RELAUNCH_WAIT="${RELAUNCH_WAIT:-20}"
 # Wayland backend named explicitly or may pick it up itself, and being
 # wrong means a black panel on a boat. So if the first exits at once,
 # the second is tried before anything is declared broken.
+#
+# --password-store=basic: the November 2026 system update brought a
+# keyring with Chromium, and with one present Chromium stops before the
+# page to ask for a "default keyring" password - a dialog cage shows
+# full-screen, square, with a pointer, which looks exactly like the
+# desktop coming back. The panel stores no passwords, so it has no use
+# for a keyring: basic keeps Chromium from ever asking.
 FLAGS_A=(--ozone-platform=wayland --kiosk --noerrdialogs --disable-infobars
          --disable-session-crashed-bubble --check-for-update-interval=31536000
+         --password-store=basic
          --default-background-color=FF0B0C0E)
 FLAGS_B=(--kiosk --noerrdialogs --disable-infobars
          --disable-session-crashed-bubble --check-for-update-interval=31536000
+         --password-store=basic
          --default-background-color=FF0B0C0E)
 
 run_kiosk(){

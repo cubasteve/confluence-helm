@@ -93,6 +93,12 @@ class Window(unittest.TestCase):
         _, _, calls = self.launched(['chromium-browser', 'chromium'])
         self.assertTrue(calls[0].startswith('chromium-browser '), calls)
 
+    def test_never_asks_for_a_keyring(self):
+        # The Nov 2026 update brought a keyring; without this Chromium
+        # stops before the page with a "default keyring" dialog.
+        _, _, calls = self.launched(['chromium-browser'])
+        self.assertIn('--password-store=basic', calls[0], calls)
+
     def test_neither_says_so(self):
         rc, out, calls = self.launched([])
         self.assertEqual(rc, 1)
@@ -118,6 +124,10 @@ class Cage(unittest.TestCase):
     def test_debian_name(self):
         calls = self.launched(['chromium'])
         self.assertTrue(calls[0].startswith('cage chromium --'), calls)
+
+    def test_never_asks_for_a_keyring(self):
+        calls = self.launched(['chromium-browser'])
+        self.assertIn('--password-store=basic', calls[0], calls)
 
     def test_the_environment_still_names_it(self):
         calls = self.launched(['chromium-browser', 'chromium'],

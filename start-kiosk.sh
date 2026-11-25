@@ -113,6 +113,7 @@ while true; do
   # same colour Plymouth and the desktop are set to.
   "$CHROME" --kiosk --noerrdialogs --disable-infobars \
     --disable-session-crashed-bubble --check-for-update-interval=31536000 \
+    --password-store=basic \
     --default-background-color=FF0B0C0E \
     "$URL?v=$(date +%s)"
 
