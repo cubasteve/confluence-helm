@@ -80,5 +80,9 @@ for c in chromium-browser chromium; do
 done
 [ -n "$CHROME" ] || { echo "[open-window] neither chromium-browser nor chromium is installed" >&2; exit 1; }
 # --password-store=basic: no "default keyring" prompt (see cage-session.sh).
+# --force-dark-mode: the window is dark grey, not white, until the panel
+# paints. --no-first-run: no first-run work on a fresh profile. Both are
+# ignored when the kiosk already owns the profile - this launch is then
+# only a message to that browser, whose flags stand.
 exec "$CHROME" --app="$URL?v=$(date +%s)" --window-size=1080,1080 \
-  --password-store=basic "$@"
+  --password-store=basic --force-dark-mode --no-first-run "$@"

@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+  The kiosk's first page, and only for a moment: it goes straight on to
+  the URL after the '#'.
+
+    file://$HOME/helm/boot/launch.html#http://localhost:8090/confluence_helm.html?v=1
+
+  Why it exists: Chromium shows an EMPTY, white window for as long as its
+  first http navigation is pending - on a Pi 4 after a big update that was
+  20 s of white. A local file paints almost at once, and Chromium then
+  keeps this dark frame on the glass until the panel paints its own. So
+  the screen goes Plymouth -> black -> panel and is never white.
+
+  cage-session.sh and start-kiosk.sh open it; nothing else does. Kept
+  tiny and self-contained on purpose: no fonts, no script beyond the
+  redirect, nothing that can fail before it has painted.
+-->
+<html style="background:#0B0C0E">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<title>CONFLUENCE</title>
+<style>
+html,body{margin:0;height:100%;background:#0B0C0E;overflow:hidden}
+*,*::before,*::after{cursor:none!important}
+</style>
+</head>
+<body>
+<script>
+// Only somewhere the kiosk would go anyway. Anything else stays on this
+// dark page rather than being followed.
+(function () {
+  var t = location.hash.slice(1);
+  if (/^(https?|file):\/\//.test(t)) location.replace(t);
+})();
+</script>
+</body>
+</html>

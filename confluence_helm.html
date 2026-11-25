@@ -90,6 +90,12 @@ body.night{
 }
 
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* No pointer, on anything. html,body alone is not enough: an element with
+   a cursor of its own, or a UA default (the I-beam over text, the hand
+   over a link), overrides what it inherits. And it matters past cosmetics:
+   cursor:none is what makes Chromium hand the compositor an EMPTY pointer
+   on Wayland, whatever cursor theme the system has. */
+*,*::before,*::after{cursor:none!important}
 html,body{width:100%;height:100%;background:#000;font-family:var(--font);
   overflow:hidden;-webkit-user-select:none;user-select:none;cursor:none;
   touch-action:none}
@@ -434,7 +440,7 @@ text{font-variant-numeric:tabular-nums;dominant-baseline:middle}
 #rad-hud{position:absolute;top:106px;left:50%;transform:translateX(-50%);
   width:460px;text-align:center;pointer-events:none;
   padding:6px 20px 8px;border-radius:18px;background:rgba(0,0,0,.55)}
-#rad-head{pointer-events:auto;cursor:pointer}
+#rad-head{pointer-events:auto}
 /* Ten net pixels of affordance. The HUD was just trimmed to 67 and a
    full-sized chevron would have handed a third of that straight back. */
 #rad-chev{width:20px;height:20px;display:block;margin:-1px auto -5px;

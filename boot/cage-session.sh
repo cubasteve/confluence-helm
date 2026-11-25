@@ -55,6 +55,81 @@ export XCURSOR_THEME="${XCURSOR_THEME:-Confluence-blank}"
 export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 export XCURSOR_PATH="${XCURSOR_PATH:-$HOME/.local/share/icons:$HOME/.icons:/usr/share/icons:/usr/share/pixmaps}"
 
+# ---- and the pointer CHROMIUM draws ---------------------------------
+# The arrow in the middle of the glass after the November 2026 update
+# was not cage's at all. cage 0.2.0 offers no cursor-shape protocol, so
+# Chromium draws its own pointer and attaches it as a surface - and it
+# picks the theme for that from GTK's setting
+# org.gnome.desktop.interface cursor-theme (Adwaita unless the desktop
+# changed it), NOT from XCURSOR_THEME. cage's own cursor was blank the
+# whole time, which is why the line in this log said "hidden".
+#
+# Every theme NAME anything here can ask for is therefore made to mean
+# the blank theme, in a directory of symlinks put first on XCURSOR_PATH:
+#   - whatever GTK reports for this user (gsettings), and Adwaita, its
+#     default - what Chromium asks for;
+#   - "default" - what cage asks for (see above);
+#   - "left_ptr" - cage 0.2.0 names its Xwayland cursor THEME "left_ptr"
+#     (wlr_xcursor_manager_create(DEFAULT_XCURSOR, ...)), which no theme
+#     is called, so wlroots used its built-in arrow for X11 windows.
+# libwayland-cursor (Chromium) and wlroots (cage) both read XCURSOR_PATH,
+# and cage passes its environment on to Chromium. The directory is in
+# the runtime dir: rebuilt every session, gone at power-off, touches
+# nothing the desktop session reads - its own pointer is left alone.
+#
+# Not by changing the setting itself: `gsettings set` would hide the
+# pointer on the desktop too, where a mouse may be the way in.
+CURSOR_ALIASES="${CURSOR_ALIASES:-${XDG_RUNTIME_DIR:-$HOME/.cache}/confluence-cursors}"
+gtk_cursor_names(){
+  local n
+  if command -v gsettings >/dev/null 2>&1; then
+    # Bounded: this runs before cage, and a gsettings that hangs (no
+    # session bus yet, a wedged dconf) must not hold the kiosk back.
+    if command -v timeout >/dev/null 2>&1; then
+      n=$(timeout 5 gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)
+    else
+      n=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)
+    fi
+    n=${n//\'/}; [ -n "$n" ] && echo "$n"
+  fi
+  for f in "${XDG_CONFIG_HOME:-$HOME/.config}"/gtk-{3,4}.0/settings.ini; do
+    [ -r "$f" ] || continue
+    sed -n 's/^[[:space:]]*gtk-cursor-theme-name[[:space:]]*=[[:space:]]*//p' "$f" |
+      tr -d '"' | head -1
+  done
+  echo Adwaita
+}
+alias_cursor_themes(){
+  local blank="" d n
+  local IFS=:
+  for d in $XCURSOR_PATH; do
+    [ "$d" = "$CURSOR_ALIASES" ] && continue
+    [ -d "$d/$XCURSOR_THEME/cursors" ] && { blank="$d/$XCURSOR_THEME"; break; }
+  done
+  unset IFS
+  if [ -z "$blank" ]; then
+    log "no $XCURSOR_THEME theme on XCURSOR_PATH - cannot alias the pointer away"
+    return 1
+  fi
+  # Links only, and never recursively: a stale alias from the last
+  # session goes, and a CURSOR_ALIASES pointed somewhere by mistake
+  # loses nothing but symlinks.
+  mkdir -p "$CURSOR_ALIASES" &&
+    find "$CURSOR_ALIASES" -mindepth 1 -maxdepth 1 -type l -delete || {
+    log "could not set up $CURSOR_ALIASES - the pointer may be drawn"; return 1; }
+  { gtk_cursor_names; echo default; echo left_ptr; } | sort -u |
+  while IFS= read -r n; do
+    # A theme name is one path component; anything else is ignored.
+    case "$n" in ''|.*|*/*|"$XCURSOR_THEME") continue;; esac
+    ln -s "$blank" "$CURSOR_ALIASES/$n"
+  done
+  case ":$XCURSOR_PATH:" in
+    *":$CURSOR_ALIASES:"*) ;;
+    *) export XCURSOR_PATH="$CURSOR_ALIASES:$XCURSOR_PATH";;
+  esac
+  log "pointer: theme names aliased to $blank: $(ls "$CURSOR_ALIASES" | tr '\n' ' ')"
+}
+
 # The installer's ONLY sudoers grant is the helper below - it is written
 # with the display manager already baked in, and it is root-owned so that
 # a NOPASSWD grant is not also a way to become root by editing a file in
@@ -178,20 +253,72 @@ RELAUNCH_WAIT="${RELAUNCH_WAIT:-20}"
 # full-screen, square, with a pointer, which looks exactly like the
 # desktop coming back. The panel stores no passwords, so it has no use
 # for a keyring: basic keeps Chromium from ever asking.
-FLAGS_A=(--ozone-platform=wayland --kiosk --noerrdialogs --disable-infobars
+#
+# The rest is about the 20 s of white between Chromium's window and the
+# panel, measured on the Pi after the same update. Each flag here only
+# turns something off that a one-page kiosk has no use for, and none of
+# them can make Chromium refuse to start - an unknown switch, or an
+# unknown name inside --disable-features, is ignored, not an error.
+#
+# --force-dark-mode: until the first frame of a page, Chromium fills its
+#   window with the browser theme's web-contents background - WHITE in
+#   light mode. This turns that dark grey. (--default-background-color,
+#   which used to be here, is a headless-only switch and did nothing.)
+#   The panel has no prefers-color-scheme rules, so it is unaffected.
+# --disable-renderer-accessibility: /etc/chromium.d on Raspberry Pi OS
+#   adds --force-renderer-accessibility, which makes every renderer
+#   build a full accessibility tree. This one is checked first and wins.
+#   Nothing in cage can read that tree: no screen reader, no other app.
+# --disable-features=PreloadTopChromeWebUI: the "--top-chrome-webui"
+#   renderer that burnt 40% of a core for 10 s during the page load is
+#   Chromium preloading its Tab Search UI, which a kiosk never shows.
+#   Translate, MediaRouter and OptimizationHints go in the same list
+#   because Chromium honours only ONE --disable-features: keep them all
+#   here, never in a second switch.
+# --no-first-run, --disable-component-update,
+# --disable-background-networking: no first-run work, no component
+#   downloads (no Widevine is wanted), no Safe Browsing list or variations
+#   fetches - all of it extra start-up work for a page on localhost.
+KIOSK_FLAGS=(--kiosk --noerrdialogs --disable-infobars
          --disable-session-crashed-bubble --check-for-update-interval=31536000
          --password-store=basic
-         --default-background-color=FF0B0C0E)
-FLAGS_B=(--kiosk --noerrdialogs --disable-infobars
-         --disable-session-crashed-bubble --check-for-update-interval=31536000
-         --password-store=basic
-         --default-background-color=FF0B0C0E)
+         --force-dark-mode
+         --disable-renderer-accessibility
+         --disable-features=PreloadTopChromeWebUI,Translate,MediaRouter,OptimizationHints
+         --no-first-run --disable-component-update
+         --disable-background-networking)
+FLAGS_A=(--ozone-platform=wayland "${KIOSK_FLAGS[@]}")
+FLAGS_B=("${KIOSK_FLAGS[@]}")
+
+# A dark page that does nothing but go to the real one. The white was
+# Chromium's EMPTY window shown while the first http navigation was still
+# pending; a local file has a frame to show almost at once, and once it
+# has, Chromium keeps showing it until the panel itself paints. So the
+# screen goes Plymouth -> black -> the panel, never white. It is only a
+# springboard: the panel still loads from the page server, with its
+# origin, storage and tiles exactly as before. Used only for an http(s)
+# URL - FILE_URL already is a local file.
+LAUNCH="${LAUNCH:-$REPO/boot/launch.html}"
+launch_url(){
+  local target="$1"
+  case "$target" in
+    http://*|https://*) [ -r "$LAUNCH" ] && { echo "file://$LAUNCH#$target"; return; };;
+  esac
+  echo "$target"
+}
+
+uptime_s(){ cut -d' ' -f1 /proc/uptime 2>/dev/null || echo '?'; }
 
 run_kiosk(){
   local -n flags=$1
+  local open; open="$(launch_url "$URL?v=$(date +%s)")"
+  # Timestamped, and with the uptime, so a slow boot can be laid against
+  # the rest of it. netd logs the first page request it serves the same
+  # way ("www: page requested"), which is the other end of the gap.
+  log "chromium launched (uptime $(uptime_s)s, $1): $open"
   # -s allows VT switching. Without it the Desktop tile cannot work:
   # starting a display manager needs another VT to switch to.
-  "$CAGE" -s -- "$CHROME" "${flags[@]}" "$URL?v=$(date +%s)" >>"$LOG" 2>&1
+  "$CAGE" -s -- "$CHROME" "${flags[@]}" "$open" >>"$LOG" 2>&1
 }
 
 main(){
@@ -201,16 +328,22 @@ main(){
   case "$on" in /dev/*) ;; *) on='no tty';; esac
   log "session starting on $on"
   # Whether the pointer will be visible, answered in the log rather than
-  # on the glass. It has silently come back twice; three separate things
+  # on the glass. It has silently come back three times; several things
   # have to line up and none of them announces itself when it is wrong.
+  # The names checked are the ones actually asked for: cage's "default",
+  # Xwayland's "left_ptr", XCURSOR_THEME, and (--gtk) the one GTK
+  # reports, which is what Chromium draws its own pointer from.
+  alias_cursor_themes
   if [ -r "$REPO/boot/check-cursor.py" ]; then
-    if python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" >/dev/null 2>&1; then
-      log "pointer: hidden (themes 'default' and '$XCURSOR_THEME' both blank)"
-    else
-      log "pointer: WILL BE DRAWN - run: sudo bash $REPO/boot/install-cursor.sh"
-      python3 "$REPO/boot/check-cursor.py" default "$XCURSOR_THEME" 2>&1 |
-        while IFS= read -r l; do log "  $l"; done
-    fi
+    local out rc
+    out=$(python3 "$REPO/boot/check-cursor.py" --gtk --all \
+            default left_ptr "$XCURSOR_THEME" 2>&1); rc=$?
+    case "$rc" in
+      0) log "pointer: hidden (all blank: ${out##*checked: })";;
+      2) log "pointer: hidden, but the installed theme is out of date - run: sudo bash $REPO/boot/install-cursor.sh";;
+      *) log "pointer: WILL BE DRAWN - run: sudo bash $REPO/boot/install-cursor.sh";;
+    esac
+    [ "$rc" = 0 ] || printf '%s\n' "$out" | while IFS= read -r l; do log "  $l"; done
   fi
   command -v "$CAGE" >/dev/null 2>&1 || {
     fall_back_to_desktop "cage is not installed"; return 1; }

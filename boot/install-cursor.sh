@@ -55,7 +55,10 @@ cp -r "$HERE/cursor/." "$CURSOR_THEME/"
 ok "installed $CURSOR_THEME"
 
 mkdir -p /usr/share/icons/default
-cursor_ok(){ python3 "$HERE/check-cursor.py" default Confluence-blank >/dev/null 2>&1; }
+# --all: every shape name in make-blank-cursor.py, not only the two the
+# compositor asks for today. The theme was just copied from this repo, so
+# anything short of that is a broken copy.
+cursor_ok(){ python3 "$HERE/check-cursor.py" --all default Confluence-blank >/dev/null 2>&1; }
 
 # /usr/share/icons/default/index.theme is where "default" lives, and on
 # Debian it is NOT an ordinary file: it is the tail of the x-cursor-theme
@@ -112,10 +115,16 @@ fi
 # other place the answer shows up is on the panel at the next boot.
 if [ -n "$USED" ]; then
   ok "verified: no pointer is drawn for theme 'default' or 'Confluence-blank' ($USED)"
+  # The theme CHROMIUM draws its own pointer from is a different name
+  # (GTK's cursor-theme, usually Adwaita) and is not set here: the cage
+  # session aliases that name to this theme at every start, and says so
+  # in /tmp/cage-session.log. See docs/kiosk.md, "The pointer Chromium
+  # draws itself".
+  ok "Chromium's own pointer: aliased to it by cage-session.sh at each start"
   printf '\n   Takes effect at the next session start - reboot, or restart cage.\n\n'
 else
   printf '\n   POINTER NOT HIDDEN. The details:\n\n'
-  python3 "$HERE/check-cursor.py" default Confluence-blank 2>&1 | sed 's/^/   /'
+  python3 "$HERE/check-cursor.py" --all default Confluence-blank 2>&1 | sed 's/^/   /'
   printf '\n'
   exit 1
 fi

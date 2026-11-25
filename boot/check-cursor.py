@@ -10,10 +10,30 @@ for a couple of seconds at boot, with no log line anywhere.
 
     python3 boot/check-cursor.py                    # check both names
     python3 boot/check-cursor.py Confluence-blank   # check one
+    python3 boot/check-cursor.py --gtk              # and the one Chromium uses
+    python3 boot/check-cursor.py --all              # every shape name, too
     python3 boot/check-cursor.py --verbose
 
-Exit status is 0 only if every theme checked resolves to a cursor whose
-every pixel is fully transparent.
+--gtk adds the theme Chromium itself draws from. Under cage 0.2.0 that is
+the pointer you actually see: cage offers no cursor-shape protocol, so
+Chromium renders its own arrow from the GTK setting
+org.gnome.desktop.interface cursor-theme - not XCURSOR_THEME, not the
+compositor's theme. It is read the way GTK would read it in THIS
+environment: from the keyfile when GSETTINGS_BACKEND=keyfile, from
+`gsettings` otherwise. (cage-session.sh does not set GSETTINGS_BACKEND;
+it aliases whatever name this reports to the blank theme instead.)
+
+--all also checks every name in make-blank-cursor.py's SHAPES list,
+not only "default" and "left_ptr".
+
+Exit status:
+  0  every theme checked resolves to cursors whose every pixel is
+     fully transparent
+  1  "default" or "left_ptr" draws something (or is missing): a pointer
+     WILL be on the glass
+  2  only with --all: those two are blank, but some other shape name is
+     missing or visible - an installed theme older than this repo's.
+     Re-run install-cursor.sh.
 
 The search path and the inheritance rules below are libxcursor's, from
 XcursorLibraryPath() and _XcursorThemeInherits(). Keep them that way: a
@@ -25,8 +45,78 @@ import struct
 import sys
 
 VERBOSE = '--verbose' in sys.argv or '-v' in sys.argv
+GTK = '--gtk' in sys.argv
+ALL = '--all' in sys.argv
 NAMES = [a for a in sys.argv[1:] if not a.startswith('-')] or \
         ['default', 'Confluence-blank']
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+# The two names every stack asks for. wlroots asks for "default"; X11
+# stacks, cage's own cursor and Chromium's pointer ask for "left_ptr".
+CORE = ('default', 'left_ptr')
+
+
+def shapes():
+    """make-blank-cursor.py's list, so the check and the theme it checks
+    cannot drift apart. Only the core two if that file is not beside
+    this one."""
+    try:
+        import importlib.util
+        sys.dont_write_bytecode = True     # no __pycache__ beside the theme
+        spec = importlib.util.spec_from_file_location(
+            'make_blank_cursor', os.path.join(HERE, 'make-blank-cursor.py'))
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return tuple(m.SHAPES)
+    except Exception:
+        return CORE
+
+# GTK's schema default, which is what it uses when nothing is set.
+GTK_DEFAULT = 'Adwaita'
+
+
+def _unquote(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+        v = v[1:-1]
+    return v
+
+
+def gtk_theme():
+    """(name, where it came from) for the cursor theme GTK - and so
+    Chromium - will ask for in this environment."""
+    if os.environ.get('GSETTINGS_BACKEND') == 'keyfile':
+        base = os.environ.get('XDG_CONFIG_HOME') or \
+            os.path.expanduser('~/.config')
+        kf = os.path.join(base, 'glib-2.0', 'settings', 'keyfile')
+        group = None
+        try:
+            with open(kf, errors='replace') as f:
+                for line in f:
+                    t = line.strip()
+                    if t.startswith('[') and t.endswith(']'):
+                        group = t[1:-1]
+                    elif group == 'org/gnome/desktop/interface' and \
+                            t.partition('=')[0].strip() == 'cursor-theme':
+                        v = _unquote(t.partition('=')[2])
+                        if v:
+                            return v, 'keyfile %s' % kf
+        except OSError:
+            return GTK_DEFAULT, 'no keyfile at %s: the schema default' % kf
+        return GTK_DEFAULT, 'not set in %s: the schema default' % kf
+    import shutil, subprocess
+    if not shutil.which('gsettings'):
+        return GTK_DEFAULT, 'no gsettings here: assuming the schema default'
+    try:
+        p = subprocess.run(['gsettings', 'get', 'org.gnome.desktop.interface',
+                            'cursor-theme'], capture_output=True, text=True,
+                           timeout=10)
+        v = _unquote(p.stdout)
+        if p.returncode == 0 and v:
+            return v, 'gsettings'
+    except Exception:
+        pass
+    return GTK_DEFAULT, 'gsettings gave no answer: assuming the schema default'
 
 # XCURSOR_PATH, or libxcursor's compiled-in default. The env var wins
 # whole, it does not append - same as the library.
@@ -137,19 +227,17 @@ def transparent(path):
     return True, '%d sizes, all fully transparent' % images
 
 
-def check(theme):
-    print('theme %r' % theme)
+def check(theme, why=''):
+    """0 if blank, 1 if a core name draws, 2 if only another shape does."""
+    print('theme %r%s' % (theme, ('  <- ' + why) if why else ''))
     say('search path:', ':'.join(DIRS))
-    bad = 0
-    # The names that matter. wlroots asks for "default"; X11 stacks and
-    # older toolkits ask for "left_ptr". Both have to be blank, because
-    # which one you get depends on the compositor, not on us.
-    for name in ('default', 'left_ptr'):
+    core_bad = 0
+    for name in CORE:
         p = find_cursor(theme, name)
         if not p:
             print('   %-10s NOT FOUND - the compositor falls back to its '
                   'own arrow' % name)
-            bad += 1
+            core_bad += 1
             continue
         real = os.path.realpath(p)
         ok, detail = transparent(p)
@@ -157,17 +245,53 @@ def check(theme):
         print('   %-10s %s  %s' % (name, 'blank ' if ok else 'VISIBLE', where))
         if not ok:
             print('              %s' % detail)
-            bad += 1
-    return bad == 0
+            core_bad += 1
+    if core_bad:
+        return 1
+    if not ALL:
+        return 0
+    missing, visible = [], []
+    for name in shapes():
+        if name in CORE:
+            continue
+        p = find_cursor(theme, name)
+        if not p:
+            missing.append(name)
+        elif not transparent(p)[0]:
+            visible.append(name)
+    n = len(shapes()) - len(CORE)
+    if not missing and not visible:
+        print('   and all %d other shape names blank' % n)
+        return 0
+    if missing:
+        print('   %d of %d other shape names MISSING: %s'
+              % (len(missing), n, ' '.join(missing[:8])
+                 + (' ...' if len(missing) > 8 else '')))
+    if visible:
+        print('   %d other shape names VISIBLE: %s'
+              % (len(visible), ' '.join(visible[:8])
+                 + (' ...' if len(visible) > 8 else '')))
+    return 2
 
 
 if __name__ == '__main__':
-    allok = True
-    for n in NAMES:
-        allok &= check(n)
+    todo = [(n, '') for n in NAMES]
+    if GTK:
+        g, src = gtk_theme()
+        todo.append((g, 'what Chromium draws its own pointer from (%s)' % src))
+    worst = 0
+    checked = []
+    for n, why in todo:
+        worst = max(worst, check(n, why))
+        checked.append(n + (' (Chromium)' if why else ''))
         print()
-    if allok:
-        print('OK - the pointer is invisible for every theme checked.')
+    if worst == 0:
+        print('OK - the pointer is invisible for every theme checked: %s'
+              % ', '.join(checked))
+    elif worst == 2:
+        print('INCOMPLETE - no pointer for the names in use today, but the '
+              'installed theme lacks some shape names. Re-run '
+              'install-cursor.sh.')
     else:
         print('FAILED - a pointer will be drawn. See above for which name.')
-    sys.exit(0 if allok else 1)
+    sys.exit(worst)
