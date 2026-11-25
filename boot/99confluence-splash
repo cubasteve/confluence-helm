@@ -1,0 +1,6 @@
+// Confluence boot chain: after every dpkg run, put the Plymouth splash
+// back if a package update reset it (it has: a full-upgrade set 'pix').
+// Installed by boot/install-splash-guard.sh. The guard never fails, the
+// -x test keeps a left-behind hook quiet if the script is gone, and
+// "|| true" means this line can never fail apt either.
+DPkg::Post-Invoke { "if [ -x /usr/local/sbin/confluence-splash-guard ]; then /usr/local/sbin/confluence-splash-guard; fi || true"; };

@@ -7,7 +7,8 @@
 #
 #   firmware   rainbow test square       -> disable_splash=1
 #   kernel     four raspberries, console -> logo.nologo quiet loglevel=3
-#   plymouth   raspberry logo and dots   -> the Confluence theme
+#   plymouth   raspberry logo and dots   -> the Confluence theme,
+#                                           kept there through apt upgrades
 #   session    desktop wallpaper         -> painted #0B0C0E
 #   session    a mouse pointer           -> a transparent cursor theme
 #   kiosk      waiting for AvNav         -> same colour behind it
@@ -56,7 +57,7 @@ backup(){
   fi
 }
 
-say "1/8  Poppins"
+say "1/9  Poppins"
 # The app has always asked for Poppins and the Pi has never had it, so
 # every reading you have ever seen has been DejaVu. The splash images
 # are rendered in Poppins, so without this the boot chain and the app
@@ -76,7 +77,7 @@ else
   echo "   WARNING: fontconfig still does not match Poppins" >&2
 fi
 
-say "2/8  Plymouth theme"
+say "2/9  Plymouth theme"
 if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then
   echo "   plymouth is not installed - skipping the theme." >&2
   echo "   sudo apt install plymouth plymouth-themes, then re-run." >&2
@@ -92,7 +93,13 @@ else
   # from it, so a theme that is not in there is not the one shown. Try
   # the loud form, and if only the plain one works, say the splash did
   # not reach the startup image rather than reporting plain success.
-  if plymouth-set-default-theme -R confluence >/dev/null 2>&1; then
+  # -k all, not -R: -R rebuilds only the highest kernel's initramfs,
+  # and v8 (Pi 4) sorts above 2712 (Pi 5), so a Pi 5 kept raspberries.
+  if command -v update-initramfs >/dev/null 2>&1 \
+     && plymouth-set-default-theme confluence >/dev/null 2>&1 \
+     && update-initramfs -u -k all >/dev/null 2>&1; then
+    ok "set as default (initramfs rebuilt for every kernel)"
+  elif plymouth-set-default-theme -R confluence >/dev/null 2>&1; then
     ok "set as default (initramfs rebuilt)"
   elif plymouth-set-default-theme confluence >/dev/null 2>&1; then
     ok "set as default - but the initramfs was NOT rebuilt; run: sudo update-initramfs -u -k all"
@@ -102,7 +109,14 @@ else
   ok "now default: $(plymouth-set-default-theme 2>/dev/null || echo '?')"
 fi
 
-say "3/8  firmware splash"
+say "3/9  keep the splash through updates"
+# A Raspberry Pi OS full-upgrade has reset the default theme to pix
+# while leaving ours installed. An apt hook puts it back after every
+# dpkg run - see install-splash-guard.sh, which is also how to add just
+# this to a Pi that already has the rest.
+bash "$HERE/install-splash-guard.sh" || ok "the splash guard step failed - see above"
+
+say "4/9  firmware splash"
 backup "$CONFIG"
 if grep -qE '^\s*disable_splash=' "$CONFIG"; then
   sed -i 's/^\s*disable_splash=.*/disable_splash=1/' "$CONFIG"
@@ -111,7 +125,7 @@ else
 fi
 ok "disable_splash=1"
 
-say "4/8  kernel messages"
+say "5/9  kernel messages"
 backup "$CMDLINE"
 # cmdline.txt MUST stay a single line. sed on a file with no trailing
 # newline is the classic way to break that, so this goes through python
@@ -139,7 +153,7 @@ os.replace(tmp, path)
 print('   ' + line)
 PY
 
-say "5/8  desktop background"
+say "6/9  desktop background"
 # Only when there is a desktop config to edit. On a Wayland session
 # (labwc or wayfire) this file is not what paints the screen, so say so
 # rather than writing something that does nothing.
@@ -165,7 +179,7 @@ else
   ok "set the background to $BG by hand in Appearance Settings."
 fi
 
-say "6/8  the mouse pointer"
+say "7/9  the mouse pointer"
 # Its own script, because install-cage-kiosk.sh needs exactly the same
 # thing and neither installer owns it. See install-cursor.sh for why a
 # theme, and why "default" has to be one of them.
@@ -193,7 +207,7 @@ else
   ok "could not identify the session; the theme applies either way."
 fi
 
-say "7/8  the gap before Chromium"
+say "8/9  the gap before Chromium"
 ok "start-kiosk.sh waits for AvNav to answer before it launches, and the"
 ok "desktop is what is on screen during that wait. It is now the same"
 ok "colour as the splash with no pointer, so it should read as a pause"
@@ -201,7 +215,7 @@ ok "rather than as a different screen. Anything in ~/Desktop still shows"
 ok "through - move those to ~/.local/share/applications to keep them in"
 ok "the menu without putting them on the desktop."
 
-say "8/8  Chromium"
+say "9/9  Chromium"
 ok "start-kiosk.sh opens the dark boot/launch.html first and passes"
 ok "--force-dark-mode, so the browser is dark rather than white while"
 ok "the page loads. Nothing to install."

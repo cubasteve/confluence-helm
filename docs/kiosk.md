@@ -498,6 +498,24 @@ sudo bash ~/helm/boot/uninstall-boot-chain.sh  # puts it all back
 Everything it touches is backed up alongside the original with a
 `.confluence-bak` suffix.
 
+**The splash survives apt upgrades.** A Raspberry Pi OS full-upgrade
+once reset Plymouth's default theme to `pix` — the Confluence theme was
+still installed, only the choice was lost — and the fix was
+`sudo plymouth-set-default-theme -R confluence` by hand. Now an apt hook,
+`/etc/apt/apt.conf.d/99confluence-splash`, runs
+`/usr/local/sbin/confluence-splash-guard` (a root-owned copy of
+`boot/splash-guard.sh`, not the file in `~/helm`, because apt runs it as
+root) after every dpkg run. If the theme is installed and something else
+is the default, it runs `-R confluence` — which rebuilds the initramfs,
+so the long pause at the end of an upgrade is that — and logs one line
+(`journalctl -t confluence-splash`). Otherwise it does nothing, and it
+always exits 0 so it can never fail apt. The chain installs it as its
+own step; on a Pi that already has the rest,
+`sudo bash ~/helm/boot/install-splash-guard.sh` adds just this. The
+uninstaller removes it. Because it puts `confluence` back after *any*
+package change, choosing another theme by hand only lasts until the next
+apt run while the guard is installed.
+
 **If it boots black, nothing is bricked.** Power off, put the card in
 another machine, and on the small FAT partition rename
 `cmdline.txt.confluence-bak` back over `cmdline.txt`. That is the whole
