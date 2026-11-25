@@ -1,8 +1,9 @@
 #!/bin/bash
 # Put the Raspberry Pi boot chain back exactly as it was.
 #
-# Restores every file install-boot-chain.sh backed up, returns Plymouth
-# to the stock theme, and removes the Confluence theme. Poppins is left
+# Restores every file install-boot-chain.sh backed up, removes the apt
+# hook that keeps the splash, returns Plymouth to the stock theme, and
+# removes the Confluence theme. Poppins is left
 # installed on purpose - the helm app wants it, and it is not part of
 # the boot chain.
 #
@@ -29,6 +30,11 @@ restore "$BOOTDIR/cmdline.txt"
 restore "$OWNER_HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$HERE/uninstall-cursor.sh"
+
+# The splash guard first: it would otherwise put confluence back at the
+# next apt run, and it must not outlive the theme it guards.
+rm -f /etc/apt/apt.conf.d/99confluence-splash /usr/local/sbin/confluence-splash-guard
+echo "   removed the splash guard (apt hook and /usr/local/sbin script)"
 
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   # pix is the Raspberry Pi OS stock theme; fall back to whatever else
